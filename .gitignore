@@ -1,0 +1,23 @@
+node_modules/
+dist/
+*.tsbuildinfo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Environment & secrets
+.env
+.env.*
+
+# Windsurf
+.windsurf/
+
+# Logs
+*.log

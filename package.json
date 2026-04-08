@@ -1,0 +1,19 @@
+{
+  "name": "server-log-console",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:gateway": "npm --workspace @server-log-console/gateway run dev",
+    "dev:extension": "npm --workspace @server-log-console/extension run dev",
+    "start": "npm run build && npm --workspace @server-log-console/gateway run start",
+    "start:gateway": "npm --workspace @server-log-console/gateway run start",
+    "build": "npm run build --workspaces",
+    "build:extension": "npm --workspace @server-log-console/extension run build",
+    "build:gateway": "npm --workspace @server-log-console/gateway run build",
+    "typecheck": "npm run typecheck --workspaces"
+  }
+}
