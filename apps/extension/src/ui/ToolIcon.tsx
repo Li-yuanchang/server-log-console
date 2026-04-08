@@ -1,4 +1,4 @@
-export function ToolIcon({ kind }: { kind: "search" | "tail" | "files" | "more" | "open" | "refresh" | "filter" | "settings" | "terminal" }) {
+export function ToolIcon({ kind }: { kind: "search" | "tail" | "files" | "more" | "open" | "refresh" | "filter" | "settings" | "terminal" | "sparkle" | "undo" }) {
   const common = {
     width: 14,
     height: 14,
@@ -85,6 +85,19 @@ export function ToolIcon({ kind }: { kind: "search" | "tail" | "files" | "more" 
           <path d="M2.2 3.4H13.8V12.6H2.2z" />
           <path d="M4.4 6.3L6.6 8L4.4 9.7" />
           <path d="M7.7 9.8H11.5" />
+        </svg>
+      );
+    case "sparkle":
+      return (
+        <svg {...common}>
+          <path d="M8 2L9.2 6.8L14 8L9.2 9.2L8 14L6.8 9.2L2 8L6.8 6.8Z" />
+        </svg>
+      );
+    case "undo":
+      return (
+        <svg {...common}>
+          <path d="M3.5 5.5V2.8H6.2" />
+          <path d="M4 3.2A5.4 5.4 0 1 1 2.7 9" />
         </svg>
       );
   }

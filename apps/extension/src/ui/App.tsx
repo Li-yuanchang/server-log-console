@@ -112,6 +112,14 @@ export function App() {
   const [localServiceState, setLocalServiceState] = useState<"checking" | "online" | "offline">("checking");
   const [localServiceStatusText, setLocalServiceStatusText] = useState("正在检查本地连接服务...");
   const [isBusy, setIsBusy] = useState(false);
+  const [uiTheme, setUiTheme] = useState<"classic" | "modern">(() => {
+    try { return (localStorage.getItem("ui-theme") as "classic" | "modern") || "classic"; } catch { return "classic"; }
+  });
+  const toggleUiTheme = () => setUiTheme((prev) => {
+    const next = prev === "classic" ? "modern" : "classic";
+    try { localStorage.setItem("ui-theme", next); } catch { /* ignore */ }
+    return next;
+  });
   const [showConnectionSettings, setShowConnectionSettings] = useState(false);
   const [expandedSettingsSection, setExpandedSettingsSection] = useState<"import" | "credential" | "route">("import");
   const [showQueryAdvanced, setShowQueryAdvanced] = useState(false);
@@ -2279,7 +2287,7 @@ export function App() {
   }
 
   return (
-    <main className="app-shell">
+    <main className={`app-shell${uiTheme === "modern" ? " theme-modern" : ""}`}>
       <section className="shell-layout">
         <aside className="sidebar-panel">
           <div className="sidebar-head">
@@ -2288,13 +2296,22 @@ export function App() {
                 <p className="eyebrow">日志控制台</p>
                 <h1 className="topbar-title">日志控制台</h1>
               </div>
-              <button
-                className="ghost-button icon-button"
-                title={showConnectionSettings ? "收起设置" : "打开设置"}
-                onClick={() => setShowConnectionSettings((current) => !current)}
-              >
-                <ToolIcon kind="settings" />
-              </button>
+              <div style={{ display: "flex", gap: "2px" }}>
+                <button
+                  className="ghost-button icon-button"
+                  title={uiTheme === "classic" ? "切换到现代风格" : "切换到经典风格"}
+                  onClick={toggleUiTheme}
+                >
+                  <ToolIcon kind={uiTheme === "classic" ? "sparkle" : "undo"} />
+                </button>
+                <button
+                  className="ghost-button icon-button"
+                  title={showConnectionSettings ? "收起设置" : "打开设置"}
+                  onClick={() => setShowConnectionSettings((current) => !current)}
+                >
+                  <ToolIcon kind="settings" />
+                </button>
+              </div>
             </div>
             <p className="status-inline">{actionStatus}</p>
           </div>
