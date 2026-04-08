@@ -76,9 +76,13 @@ textarea {
   padding: 2px;
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr) auto auto;
-  gap: 1px;
+  gap: 0;
   min-height: 0;
   overflow: hidden;
+}
+
+.server-groups {
+  align-content: start;
 }
 
 .main-panel {
@@ -129,6 +133,10 @@ textarea {
   min-height: 0;
 }
 
+.pane-section input {
+  font-size: 11px;
+}
+
 .pane-title,
 .pane-title-row strong {
   font-size: 10px;
@@ -138,7 +146,16 @@ textarea {
 }
 
 .pane-title-row {
+  display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.pane-title-row span {
+  font-size: 10px;
+  color: var(--ink-muted);
+  font-weight: 400;
 }
 
 .topbar-title,
@@ -533,6 +550,8 @@ button:disabled {
 
 .server-item {
   min-height: 30px;
+  padding-left: 12px;
+  position: relative;
 }
 
 .server-item-main,
@@ -552,6 +571,36 @@ button:disabled {
 .file-entry span {
   font-size: 10px;
   color: var(--ink-muted);
+}
+
+.server-status-dot {
+  position: absolute;
+  left: 2px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #9ca3af;
+}
+
+.server-status-dot.dot-connected {
+  background: #34d399;
+  box-shadow: 0 0 4px rgba(52, 211, 153, 0.5);
+}
+
+.server-status-dot.dot-idle {
+  background: #d1d5db;
+}
+
+.server-status-dot.dot-pending {
+  background: #fbbf24;
+  animation: dot-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes dot-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
 }
 
 .server-item-meta {
@@ -619,6 +668,9 @@ button:disabled {
 
 .compact-connection-card {
   gap: 3px;
+  margin-top: 2px;
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
 }
 
 .status-row {
@@ -813,30 +865,27 @@ button:disabled {
   min-height: 0;
   max-height: 100%;
   height: 100%;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(173, 184, 195, 0.85) transparent;
-  padding-right: 12px;
+  overflow: hidden auto;
+  padding: 2px 0;
 }
 
-.viewer-console::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+.virtuoso-scroller {
+  scrollbar-width: none;
 }
 
-.viewer-console::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.viewer-console::-webkit-scrollbar-thumb {
-  border-radius: 999px;
-  background: rgba(173, 184, 195, 0.78);
-  border: 2px solid transparent;
-  background-clip: padding-box;
+.virtuoso-scroller::-webkit-scrollbar {
+  display: none;
 }
 
 .viewer-console-markup {
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.log-line {
+  white-space: pre-wrap;
+  word-break: break-word;
+  padding: 0 8px 0 6px;
 }
 
 .viewer-console-markup .log-highlight {
@@ -910,6 +959,9 @@ button:disabled {
 
 .compact-activity-panel {
   gap: 3px;
+  margin-top: 2px;
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
 }
 
 .browser-grid {
@@ -971,6 +1023,20 @@ body.is-resizing-tree {
   padding: 4px 6px;
   border-bottom: 1px solid #d9e0e8;
   background: linear-gradient(180deg, #fdfefe, #eef3f7);
+  font-size: 11px;
+}
+
+.browser-column-head strong {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--ink-muted);
+  letter-spacing: 0.03em;
+}
+
+.browser-column-head span {
+  font-size: 10px;
+  color: var(--ink-muted);
+  font-weight: 400;
 }
 
 .workspace-panel-files {
@@ -1168,6 +1234,7 @@ body.is-resizing-tree {
 
 .xterm-container .xterm-viewport {
   overflow-y: auto;
+  background-color: var(--shell) !important;
 }
 
 .workspace-startup-card {
@@ -1213,15 +1280,15 @@ body.is-resizing-tree {
 }
 
 .viewer-shell {
-  display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  display: flex;
+  flex-direction: column;
   gap: 2px;
   min-height: 0;
   height: 100%;
 }
 
-.jump-terminal-shell {
-  grid-template-rows: minmax(0, 1fr);
+.jump-terminal-shell .jump-terminal-surface {
+  flex: 1;
 }
 
 .jump-terminal-surface {
@@ -1279,12 +1346,13 @@ body.is-resizing-tree {
 .viewer-content-shell {
   position: relative;
   display: grid;
+  flex: 1;
   min-height: 0;
-  height: 100%;
 }
 
 .viewer-content-shell-with-rail {
   grid-template-columns: minmax(0, 1fr);
+  padding-right: 14px;
 }
 
 .live-back-to-bottom {
@@ -1723,9 +1791,9 @@ body.is-resizing-tree {
 
 .reader-rail {
   position: absolute;
-  top: 2px;
-  right: 2px;
-  bottom: 2px;
+  top: 0;
+  right: 0;
+  bottom: 0;
   width: 14px;
   display: grid;
   grid-template-rows: minmax(0, 1fr);
@@ -1735,6 +1803,7 @@ body.is-resizing-tree {
   user-select: none;
   pointer-events: none;
   z-index: 4;
+  background: rgba(26, 35, 50, 0.25);
 }
 
 .reader-rail-head {
@@ -1751,11 +1820,9 @@ body.is-resizing-tree {
   position: relative;
   min-height: 0;
   height: 100%;
-  width: 8px;
-  margin-left: auto;
-  border-radius: 999px;
-  background: linear-gradient(180deg, #eef2f6, #dfe5eb);
-  box-shadow: inset 0 0 0 1px rgba(184, 194, 204, 0.75);
+  width: 100%;
+  border-radius: 0;
+  background: transparent;
   cursor: ns-resize;
   pointer-events: auto;
 }
@@ -1767,24 +1834,26 @@ body.is-resizing-tree {
 
 .reader-rail-slice {
   position: absolute;
-  left: 1px;
-  right: 1px;
-  min-height: 12px;
+  left: 2px;
+  right: 2px;
+  min-height: 8px;
   border-radius: 999px;
-  background: linear-gradient(180deg, #6e91b6, #4a7198);
+  background: rgba(90, 140, 190, 0.45);
   transform: translateY(-50%);
+  pointer-events: none;
 }
 
 .reader-rail-thumb {
   position: absolute;
   left: 50%;
-  width: 10px;
-  height: 10px;
-  border: 1px solid #58799b;
+  width: 8px;
+  height: 8px;
+  border: 1.5px solid rgba(100, 160, 220, 0.9);
   border-radius: 999px;
-  background: linear-gradient(180deg, #ffffff, #deebf6);
-  box-shadow: 0 0 0 1px rgba(93, 129, 165, 0.12);
+  background: #fff;
+  box-shadow: 0 0 3px rgba(0, 0, 0, 0.3);
   transform: translate(-50%, -50%);
+  pointer-events: none;
 }
 
 .reader-rail-thumb-dragging {
@@ -1794,14 +1863,13 @@ body.is-resizing-tree {
 
 .reader-rail-badge {
   position: absolute;
-  right: calc(100% + 4px);
-  min-width: 32px;
+  right: calc(100% + 2px);
+  min-width: 28px;
   padding: 1px 4px;
-  border: 1px solid #c7d3de;
-  border-radius: 999px;
-  background: linear-gradient(180deg, #ffffff, #eef3f7);
-  color: #334759;
-  font-size: 10px;
+  border-radius: 3px;
+  background: rgba(26, 35, 50, 0.82);
+  color: rgba(200, 215, 230, 0.95);
+  font-size: 9px;
   line-height: 1.45;
   text-align: center;
   pointer-events: none;

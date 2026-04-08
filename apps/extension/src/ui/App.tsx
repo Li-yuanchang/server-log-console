@@ -22,9 +22,9 @@ import { TerminalPanel } from "./TerminalWorkspace.js";
 import { ToolIcon } from "./ToolIcon.js";
 import { looksLikeJumpServer } from "./terminal-utils.js";
 import { useTerminalSession } from "./useTerminalSession.js";
+import { VirtualLogViewer, type VirtualLogViewerHandle } from "./VirtualLogViewer.js";
 import {
   buildConnectionSummary,
-  buildHighlightHtml,
   clampPercent,
   clampSliceStart,
   copyText,
@@ -148,7 +148,7 @@ export function App() {
   const [lineContextState, setLineContextState] = useState<LineContextState | null>(null);
   const keywordInputRef = useRef<HTMLInputElement | null>(null);
   const directoryInputRef = useRef<HTMLInputElement | null>(null);
-  const viewerConsoleRef = useRef<HTMLDivElement | null>(null);
+  const virtualViewerRef = useRef<VirtualLogViewerHandle | null>(null);
   const browserGridRef = useRef<HTMLDivElement | null>(null);
   const readerRailRef = useRef<HTMLDivElement | null>(null);
   const initializedRef = useRef(false);
@@ -461,51 +461,33 @@ export function App() {
   }, [activeLogView, activeViewerTabId, filePath, keywordInput, sliceData?.nextOffset, sliceLength, sliceOffset]);
 
   useEffect(() => {
-    const viewer = viewerConsoleRef.current;
-    if (!viewer || !sliceData) {
+    if (!sliceData) return;
+    const anchor = sliceScrollAnchorRef.current;
+    sliceScrollAnchorRef.current = null;
+    if (!anchor) {
+      wheelSliceLockRef.current = false;
       return;
     }
-
-    if (sliceScrollAnchorRef.current === "top") {
-      viewer.scrollTop = 0;
-    } else if (sliceScrollAnchorRef.current === "bottom") {
-      viewer.scrollTop = viewer.scrollHeight;
-    }
-
-    sliceScrollAnchorRef.current = null;
-    wheelSliceLockRef.current = false;
+    requestAnimationFrame(() => {
+      if (anchor === "top") {
+        virtualViewerRef.current?.scrollToTop();
+      } else if (anchor === "bottom") {
+        virtualViewerRef.current?.scrollToBottom();
+      }
+      wheelSliceLockRef.current = false;
+    });
   }, [sliceData]);
 
   useEffect(() => {
-    if (!liveFollowEnabled || liveFollowPaused) {
-      return;
-    }
-
-    const viewer = viewerConsoleRef.current;
-    if (!viewer) {
-      return;
-    }
-
-    viewer.scrollTop = viewer.scrollHeight;
+    if (!liveFollowEnabled || liveFollowPaused) return;
+    virtualViewerRef.current?.scrollToBottom();
   }, [liveFollowContent, liveFollowEnabled, liveFollowPaused]);
 
   useEffect(() => {
     setActiveHighlightIndex(0);
   }, [activeViewerTabId, resultTabs, sliceData?.content, results?.rawOutput, keywordInput, useRegex]);
 
-  useEffect(() => {
-    const viewer = viewerConsoleRef.current;
-    if (!viewer) {
-      return;
-    }
-
-    const activeMark = viewer.querySelector("mark.log-highlight-active");
-    if (!(activeMark instanceof HTMLElement)) {
-      return;
-    }
-
-    activeMark.scrollIntoView({ block: "center", behavior: "smooth" });
-  }, [activeHighlightIndex, activeViewerTabId, resultTabs, sliceData?.content, results?.rawOutput, keywordInput, useRegex]);
+  // VirtualLogViewer handles scrollToHighlight internally via activeHighlightIndex prop
 
   async function fetchServers() {
     try {
@@ -1545,14 +1527,7 @@ export function App() {
   const viewerEmptyHint = !filePath
     ? "先在目录中选择日志文件，系统会自动打开尾部片段。"
     : "输入关键字后点击“搜索”，或直接看尾部。";
-  const highlightedLogContent = useMemo(
-    () => buildHighlightHtml(currentLogContent, keywordTerms, useRegex, activeHighlightIndex),
-    [activeHighlightIndex, currentLogContent, keywordTerms, useRegex]
-  );
-  const highlightCount = useMemo(() => {
-    const content = highlightedLogContent.match(/class="log-highlight"/g);
-    return content?.length ?? 0;
-  }, [highlightedLogContent]);
+  const [highlightCount, setHighlightCount] = useState(0);
   const commandPreviewLabel = activeViewerCommandPreview ? truncateText(activeViewerCommandPreview.replace(/\s+/g, " "), 96) : "--";
   const liveStrategyLabel =
     searchTask?.strategyLabel ||
@@ -1563,7 +1538,7 @@ export function App() {
     activeViewerScopeLabel ||
     describeSearchScopeClient(filePath, startDate, endDate, startTime, endTime, keywordTerms);
   const searchElapsedLabel = searchStartedAt ? formatDurationLabel(searchStartedAt, searchNow) : "";
-  const toolbarSummaryLabel = `${selectedServer?.name || "--"} · ${selectedFileName || "--"}${highlightCount ? ` · ${Math.min(activeHighlightIndex + 1, highlightCount)}/${highlightCount}` : ""}`;
+  const toolbarSummaryLabel = highlightCount ? `${Math.min(activeHighlightIndex + 1, highlightCount)}/${highlightCount} 命中` : (selectedFileName || "--");
   const compactConnectionLabel = selectedServer ? `${selectedServer.host} · ${directoryPath || "/"}` : (directoryPath || "/");
   const compactReaderHint = activeViewerTabId === "file"
     ? (liveFollowEnabled
@@ -1622,7 +1597,7 @@ export function App() {
   function applySlicePayload(payload: LogSliceResponse, options?: { status?: string; activity?: string }) {
     setLineContextState(null);
     setSliceOffset(payload.actualOffset);
-    setSliceData(payload);
+    setSliceData({ ...payload });
     setActiveLogView("search");
     setActiveViewerTabId("file");
     if (options?.status) {
@@ -1793,22 +1768,14 @@ export function App() {
     });
   }
 
-  function handleLiveViewerScroll() {
-    if (!liveFollowEnabled || !viewerConsoleRef.current) {
-      return;
-    }
-
-    const viewer = viewerConsoleRef.current;
-    const nearBottom = viewer.scrollHeight - viewer.scrollTop - viewer.clientHeight < 40;
+  function handleLiveNearBottomChange(nearBottom: boolean) {
+    if (!liveFollowEnabled) return;
     setLiveFollowPaused(!nearBottom);
   }
 
   function scrollLiveToBottom() {
     setLiveFollowPaused(false);
-    const viewer = viewerConsoleRef.current;
-    if (viewer) {
-      viewer.scrollTop = viewer.scrollHeight;
-    }
+    virtualViewerRef.current?.scrollToBottom();
   }
 
   function clearLiveContent() {
@@ -2097,19 +2064,20 @@ export function App() {
       return;
     }
 
-    const target = event.currentTarget;
-    const maxScrollTop = Math.max(0, target.scrollHeight - target.clientHeight);
-    const nearTop = target.scrollTop <= 4;
-    const nearBottom = target.scrollTop >= maxScrollTop - 4;
+    const scrollState = virtualViewerRef.current?.getScrollState();
+    if (!scrollState) return;
+
+    const { scrollTop, scrollHeight, clientHeight } = scrollState;
+    const maxScrollTop = Math.max(0, scrollHeight - clientHeight);
+    const nearTop = scrollTop <= 4;
+    const nearBottom = scrollTop >= maxScrollTop - 4;
 
     if (event.deltaY < 0 && nearTop && sliceOffset > 0) {
-      event.preventDefault();
       void navigateSlice("prev", "wheel");
       return;
     }
 
     if (event.deltaY > 0 && nearBottom && !sliceData?.isEnd) {
-      event.preventDefault();
       void navigateSlice("next", "wheel");
     }
   }
@@ -2119,6 +2087,7 @@ export function App() {
     if (!targetFilePath.trim()) {
       return;
     }
+    sliceScrollAnchorRef.current = "bottom";
 
     const meta = activeFileMeta;
     const cachedTailOffset = meta ? Math.max(0, meta.size - sliceLength) : null;
@@ -2170,6 +2139,7 @@ export function App() {
     if (!targetFilePath.trim()) {
       return;
     }
+    sliceScrollAnchorRef.current = "top";
     if (liveFollowEnabled) {
       stopLiveFollow();
       pushActivity(`检测到手动跳到文件头，已退出实时跟随：${targetFilePath}。`);
@@ -2204,6 +2174,7 @@ export function App() {
     if (!targetFilePath.trim()) {
       return;
     }
+    sliceScrollAnchorRef.current = "top";
     if (liveFollowEnabled) {
       stopLiveFollow();
       pushActivity(`检测到手动跳转位置，已退出实时跟随：${targetFilePath}。`);
@@ -2359,6 +2330,7 @@ export function App() {
                             setServerId(server.id);
                           }}
                         >
+                          <span className={`server-status-dot ${server.id === serverId ? (connectionTestStatus?.connected ? "dot-connected" : "dot-pending") : "dot-idle"}`} />
                           <span className="server-item-main">
                             <strong>{server.name}</strong>
                             <span>{server.host}</span>
@@ -2607,10 +2579,10 @@ export function App() {
               </div>
             ) : null}
 
-            {!showQueryAdvanced ? (
+            {!showQueryAdvanced && (highlightCount || results?.matches.length || liveFollowEnabled) ? (
               <div className="toolbar-inline toolbar-hint toolbar-summary">
                 <span>{toolbarSummaryLabel}</span>
-                <span>{liveFollowEnabled ? (liveFollowConnected ? "实时中" : "实时连接中") : `命中 ${formatNumber(results?.matches.length ?? 0)} 条`}</span>
+                <span>{liveFollowEnabled ? (liveFollowConnected ? "实时中" : "实时连接中") : (results?.matches.length ? `共 ${formatNumber(results.matches.length)} 条结果` : "")}</span>
               </div>
             ) : null}
 
@@ -2673,11 +2645,7 @@ export function App() {
               </div>
             ) : null}
 
-            <div className="status-bar compact-status-bar">
-              <span>{connectionStateText}</span>
-              <span>{compactConnectionLabel}</span>
-              <span>{formatBytes(activeFileMeta?.size)}</span>
-            </div>
+            {/* connection info in sidebar */}
 
             {searchStartedAt ? (
               <div className="search-progress-panel">
@@ -2773,7 +2741,7 @@ export function App() {
                 </div>
 
                 <div className="viewer-shell">
-                {viewerTabs.length ? (
+                {viewerTabs.length > 1 ? (
                   <div className="result-tab-strip">
                     {viewerTabs.map((tab) => (
                       <div key={tab.id} className={`result-tab-chip ${tab.id === activeViewerTabId ? "result-tab-chip-active" : ""}`}>
@@ -2788,7 +2756,7 @@ export function App() {
                       </div>
                     ))}
                   </div>
-                ) : null}
+                ) : <div />}
 
                 {showFileTools && filePath && activeLogView === "search" && activeViewerTabId === "file" ? (
                   <div className="meta-list file-tools-panel">
@@ -2816,11 +2784,8 @@ export function App() {
                         <option value={262144}>256 KB</option>
                       </select>
                     </label>
-                    <span>当前文件：{selectedFileName || "--"}</span>
                     <span>文件大小：{formatBytes(activeFileMeta?.size)}</span>
-                    <span>当前位置：{activeSliceData ? formatNumber(activeSliceData.actualOffset) : "--"}</span>
-                    <span>下一位置：{activeSliceData ? formatNumber(activeSliceData.nextOffset) : "--"}</span>
-                    <span>当前位置占比：{formatSliceProgressLabel(sliceProgress)}</span>
+                    <span>偏移：{activeSliceData ? `${formatNumber(activeSliceData.actualOffset)} → ${formatNumber(activeSliceData.nextOffset)}` : "--"}</span>
                     <span>边界状态：{activeSliceData ? `${activeSliceData.isStart ? "文件头" : "中段"} / ${activeSliceData.isEnd ? "文件尾" : "可下翻"}` : "--"}</span>
                     <div className="inline-actions file-tools-actions">
                       <div className="file-tools-strip">
@@ -2850,11 +2815,13 @@ export function App() {
 
                 {!showViewerEmptyState ? (
                   <>
-                    <div className="meta-list compact-meta">
-                      <span>{activeResultTab ? activeResultTab.sourceLabel : (selectedFileName || "--")}</span>
-                      <span>{activeViewerTabId === "file" ? formatSliceProgressLabel(sliceProgress) : "结果页"}</span>
-                      <span>{compactReaderHint}</span>
-                    </div>
+                    {!(showFileTools && filePath && activeLogView === "search" && activeViewerTabId === "file") ? (
+                      <div className="meta-list compact-meta">
+                        <span>{activeResultTab ? activeResultTab.sourceLabel : (selectedFileName || "--")}</span>
+                        <span>{activeViewerTabId === "file" ? formatSliceProgressLabel(sliceProgress) : "结果页"}</span>
+                        <span>{compactReaderHint}</span>
+                      </div>
+                    ) : null}
                     {activeViewerTabId !== "file" && activeViewerMatches.length ? (
                       <div className="search-match-list">
                         {activeViewerMatches.map((match, index) => (
@@ -2872,12 +2839,17 @@ export function App() {
                       </div>
                     ) : null}
                     <div className={`viewer-content-shell ${showReaderRail ? "viewer-content-shell-with-rail" : ""}`}>
-                      <div
-                        ref={viewerConsoleRef}
-                        className="console-block viewer-console viewer-console-markup"
+                      <VirtualLogViewer
+                        ref={virtualViewerRef}
+                        content={currentLogContent}
+                        keywordTerms={keywordTerms}
+                        useRegex={useRegex}
+                        activeHighlightIndex={activeHighlightIndex}
+                        onHighlightCountChange={setHighlightCount}
                         onWheel={handleViewerWheel}
-                        onScroll={liveFollowEnabled ? handleLiveViewerScroll : undefined}
-                        dangerouslySetInnerHTML={{ __html: highlightedLogContent }}
+                        onNearBottomChange={liveFollowEnabled ? handleLiveNearBottomChange : undefined}
+                        followOutput={liveFollowEnabled && !liveFollowPaused}
+                        className="console-block viewer-console viewer-console-markup"
                       />
                       {liveFollowEnabled && liveFollowPaused ? (
                         <button className="live-back-to-bottom ghost-button" onClick={scrollLiveToBottom}>
@@ -2896,6 +2868,13 @@ export function App() {
                             onPointerDown={(event) => {
                               event.preventDefault();
                               startReaderRailDrag(event.clientY);
+                            }}
+                            onWheel={(event) => {
+                              const scroller = virtualViewerRef.current?.getScrollerElement();
+                              if (scroller) {
+                                scroller.scrollTop += event.deltaY;
+                              }
+                              handleViewerWheel(event);
                             }}
                           >
                             <span

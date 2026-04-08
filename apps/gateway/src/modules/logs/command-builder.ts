@@ -146,6 +146,7 @@ export function buildSearchCommand(server: ServerSummary, request: LogSearchRequ
     keywordTerms: normalizedTerms
   };
 
+  const currentYear = new Date().getFullYear().toString();
   const awkVariables = [
     `-v file=${shellEscape(filePath)}`,
     `-v context=${shellEscape(String(payload.contextLines))}`,
@@ -153,7 +154,8 @@ export function buildSearchCommand(server: ServerSummary, request: LogSearchRequ
     `-v use_regex=${shellEscape(payload.useRegex ? "1" : "0")}`,
     `-v range_start=${shellEscape(payload.rangeStart)}`,
     `-v range_end=${shellEscape(payload.rangeEnd)}`,
-    `-v term_count=${shellEscape(String(payload.keywordTerms.length))}`
+    `-v term_count=${shellEscape(String(payload.keywordTerms.length))}`,
+    `-v currentYear=${shellEscape(currentYear)}`
   ];
 
   payload.keywordTerms.forEach((term, index) => {
@@ -167,7 +169,6 @@ export function buildSearchCommand(server: ServerSummary, request: LogSearchRequ
     ...termAssignments,
     "  termsCount = term_count + 0;",
     "  context += 0;",
-    "  currentYear = strftime(\"%Y\");",
     "  pendingAfter = 0; lastPrinted = 0;",
     "}",
     "function normalizeTime(line,   ts) {",
@@ -227,7 +228,14 @@ export function buildSearchCommand(server: ServerSummary, request: LogSearchRequ
     "    lastPrinted = NR;",
     "    pendingAfter--;",
     "  }",
-    "  bufLine[NR] = line;",
+    "  if (context > 0) { bufLine[NR] = line; delete bufLine[NR - context - 1]; }",
+    "}",
+    "END {",
+    "  if (context > 0) {",
+    "    for (i in bufLine) {",
+    "      print file \":\" i \":\" bufLine[i];",
+    "    }",
+    "  }",
     "}' " + shellEscape(filePath)
   ].join("\n");
 
@@ -241,6 +249,7 @@ export function buildStreamingSearchCommand(server: ServerSummary, request: LogS
   const keywordTerms = (request.keywordTerms?.filter((item) => item.trim()) ?? []).map((item) => item.trim());
   const normalizedTerms = keywordTerms.length ? keywordTerms : request.keyword?.trim() ? [request.keyword.trim()] : [];
 
+  const currentYear = new Date().getFullYear().toString();
   const awkVariables = [
     `-v file=${shellEscape(filePath)}`,
     `-v context=${shellEscape(String(context))}`,
@@ -248,7 +257,8 @@ export function buildStreamingSearchCommand(server: ServerSummary, request: LogS
     `-v use_regex=${shellEscape(request.useRegex ? "1" : "0")}`,
     `-v range_start=${shellEscape(rangeStart)}`,
     `-v range_end=${shellEscape(rangeEnd)}`,
-    `-v term_count=${shellEscape(String(normalizedTerms.length))}`
+    `-v term_count=${shellEscape(String(normalizedTerms.length))}`,
+    `-v currentYear=${shellEscape(currentYear)}`
   ];
 
   normalizedTerms.forEach((term, index) => {
@@ -262,7 +272,6 @@ export function buildStreamingSearchCommand(server: ServerSummary, request: LogS
     ...termAssignments,
     "  termsCount = term_count + 0;",
     "  context += 0;",
-    "  currentYear = strftime(\"%Y\");",
     "  pendingAfter = 0;",
     "  lastPrinted = 0;",
     "  scannedBytes = 0;",
@@ -338,7 +347,7 @@ export function buildStreamingSearchCommand(server: ServerSummary, request: LogS
     "    lastPrinted = NR;",
     "    pendingAfter--;",
     "  }",
-    "  bufLine[NR] = line;",
+    "  if (context > 0) { bufLine[NR] = line; delete bufLine[NR - context - 1]; }",
     "  if (scannedBytes - lastReported >= reportStep) emitProgress();",
     "}",
     "END {",
