@@ -19,6 +19,7 @@ interface UseTerminalSessionOptions {
 
 export function useTerminalSession(options: UseTerminalSessionOptions) {
   const [connected, setConnected] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
@@ -26,29 +27,37 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
   const expectedCloseRef = useRef(false);
   const sessionKeyRef = useRef("");
   const onDataDisposableRef = useRef<{ dispose: () => void } | null>(null);
+  const onResizeDisposableRef = useRef<{ dispose: () => void } | null>(null);
+  const reconnectTimerRef = useRef<number | null>(null);
+  const retryCountRef = useRef(0);
+  const reconnectDesiredRef = useRef(false);
 
   const ensureTerminal = useCallback(() => {
     if (terminalRef.current) {
       return terminalRef.current;
     }
 
+    const cs = getComputedStyle(document.documentElement);
+    const shellBg = cs.getPropertyValue("--shell").trim() || "#1a2332";
+    const shellInk = cs.getPropertyValue("--shell-ink").trim() || "#d4dde8";
+
     const terminal = new Terminal({
       cursorBlink: true,
-      fontSize: 13,
-      fontFamily: "'JetBrains Mono', 'Fira Code', 'Menlo', 'Consolas', monospace",
+      fontSize: 12,
+      fontFamily: "'SFMono-Regular', 'Consolas', monospace",
       theme: {
-        background: "#1a2332",
-        foreground: "#d4dde8",
+        background: shellBg,
+        foreground: shellInk,
         cursor: "#7ec8e3",
         selectionBackground: "#2a4a6a",
-        black: "#1a2332",
+        black: shellBg,
         red: "#e06c75",
         green: "#98c379",
         yellow: "#e5c07b",
         blue: "#61afef",
         magenta: "#c678dd",
         cyan: "#56b6c2",
-        white: "#d4dde8",
+        white: shellInk,
         brightBlack: "#5c6370",
         brightRed: "#e06c75",
         brightGreen: "#98c379",
@@ -123,8 +132,40 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
     stopTerminal();
   }, []);
 
-  function stopTerminal(optionsArg?: { keepContent?: boolean; preserveSessionKey?: boolean }) {
+  function clearReconnectTimer() {
+    if (reconnectTimerRef.current !== null) {
+      window.clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+    }
+  }
+
+  function scheduleReconnect() {
+    if (!reconnectDesiredRef.current) return;
+    clearReconnectTimer();
+    const next = retryCountRef.current + 1;
+    retryCountRef.current = next;
+    setRetryCount(next);
+    const delay = Math.min(10000, 1500 * next);
+    const terminal = terminalRef.current;
+    terminal?.writeln(`\r\n\x1b[33m${Math.round(delay / 1000)} 秒后自动重连（第 ${next} 次）...\x1b[0m`);
+    options.onStatus(`终端已断开，${Math.round(delay / 1000)} 秒后重连...`);
+    options.onActivity(`终端已断开，准备第 ${next} 次重连。`);
+    reconnectTimerRef.current = window.setTimeout(() => {
+      if (!reconnectDesiredRef.current) return;
+      startTerminal({ auto: true, isReconnect: true });
+    }, delay);
+  }
+
+  function stopTerminal(optionsArg?: { keepContent?: boolean; preserveSessionKey?: boolean; preserveRetryCount?: boolean }) {
     expectedCloseRef.current = true;
+    clearReconnectTimer();
+    reconnectDesiredRef.current = false;
+    if (!optionsArg?.preserveRetryCount) {
+      retryCountRef.current = 0;
+      setRetryCount(0);
+    }
+    onResizeDisposableRef.current?.dispose();
+    onResizeDisposableRef.current = null;
     socketRef.current?.close();
     socketRef.current = null;
     setConnected(false);
@@ -136,7 +177,7 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
     }
   }
 
-  function startTerminal(startOptions?: { auto?: boolean }) {
+  function startTerminal(startOptions?: { auto?: boolean; isReconnect?: boolean }) {
     if (!options.serverId) {
       return;
     }
@@ -153,18 +194,29 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
       return;
     }
 
-    stopTerminal({ keepContent: false, preserveSessionKey: true });
+    stopTerminal({ keepContent: startOptions?.isReconnect, preserveSessionKey: true, preserveRetryCount: startOptions?.isReconnect });
+    reconnectDesiredRef.current = true;
     sessionKeyRef.current = sessionKey;
     setConnected(false);
 
     const terminal = ensureTerminal();
-    terminal.clear();
+    if (!startOptions?.isReconnect) {
+      terminal.clear();
+    }
 
     onDataDisposableRef.current?.dispose();
     onDataDisposableRef.current = terminal.onData((data: string) => {
       const socket = socketRef.current;
       if (socket?.readyState === WebSocket.OPEN) {
         socket.send(JSON.stringify({ action: "input", data }));
+      }
+    });
+
+    onResizeDisposableRef.current?.dispose();
+    onResizeDisposableRef.current = terminal.onResize(({ cols, rows }) => {
+      const socket = socketRef.current;
+      if (socket?.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({ action: "resize", cols, rows }));
       }
     });
 
@@ -181,8 +233,8 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
           bastionId
         })
       );
-      options.onStatus(startOptions?.auto ? "正在打开终端..." : "正在连接终端...");
-      options.onActivity(`正在打开终端：${options.selectedServer?.name || options.serverId}`);
+      options.onStatus(startOptions?.isReconnect ? "正在重连终端..." : (startOptions?.auto ? "正在打开终端..." : "正在连接终端..."));
+      options.onActivity(startOptions?.isReconnect ? `正在重连终端：${options.selectedServer?.name || options.serverId}` : `正在打开终端：${options.selectedServer?.name || options.serverId}`);
     });
 
     socket.addEventListener("message", (event) => {
@@ -211,6 +263,8 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
 
         if (payload.type === "ready") {
           setConnected(true);
+          retryCountRef.current = 0;
+          setRetryCount(0);
           if (payload.chunk) {
             terminal.write(payload.chunk);
           }
@@ -222,6 +276,10 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
           options.onActivity(`终端已连接：${options.selectedServer?.name || options.serverId}`);
           terminal.focus();
           fitAddonRef.current?.fit();
+          const sock = socketRef.current;
+          if (sock?.readyState === WebSocket.OPEN) {
+            sock.send(JSON.stringify({ action: "resize", cols: terminal.cols, rows: terminal.rows }));
+          }
           return;
         }
 
@@ -247,9 +305,7 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
       }
 
       setConnected(false);
-      terminal.writeln("\r\n\x1b[33m终端已断开。\x1b[0m");
-      options.onStatus("终端已断开。");
-      options.onActivity("终端已断开。");
+      scheduleReconnect();
     });
   }
 
@@ -258,11 +314,17 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
   }
 
   function fitTerminal() {
+    const terminal = terminalRef.current;
+    const container = containerRef.current;
+    if (terminal?.element && container && !container.contains(terminal.element)) {
+      container.appendChild(terminal.element);
+    }
     fitAddonRef.current?.fit();
   }
 
   return {
     connected,
+    retryCount,
     containerRef,
     startTerminal,
     stopTerminal,

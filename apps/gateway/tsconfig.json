@@ -4,6 +4,8 @@
     "module": "ES2022",
     "moduleResolution": "Bundler",
     "strict": true,
+    "noImplicitAny": false,
+    "skipLibCheck": true,
     "esModuleInterop": true,
     "outDir": "dist",
     "baseUrl": "./src"

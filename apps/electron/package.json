@@ -1,0 +1,77 @@
+{
+  "name": "@server-log-console/electron",
+  "version": "0.2.5",
+  "description": "Server Log Console desktop app",
+  "author": "lyc",
+  "private": true,
+  "main": "main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "prepare-gateway": "node prepare-gateway.cjs",
+    "predist": "node prepare-gateway.cjs",
+    "predist:mac": "node prepare-gateway.cjs",
+    "dist": "electron-builder",
+    "dist:mac": "electron-builder --mac",
+    "dist:win": "electron-builder --win",
+    "dist:linux": "electron-builder --linux"
+  },
+  "build": {
+    "appId": "com.server-log-console.app",
+    "electronVersion": "33.4.11",
+    "productName": "日志控制台",
+    "files": [
+      "main.cjs",
+      "preload.cjs"
+    ],
+    "extraResources": [
+      {
+        "from": ".electron-build/gateway",
+        "to": "gateway",
+        "filter": [
+          "**/*",
+          "!package-lock.json"
+        ]
+      },
+      {
+        "from": ".electron-build/extension/dist",
+        "to": "extension/dist"
+      },
+      {
+        "from": "resources",
+        "to": "resources",
+        "filter": [
+          "**/*.png",
+          "**/*.icns",
+          "**/*.ico"
+        ]
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "icon": "resources/icon.icns",
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    },
+    "win": {
+      "icon": "resources/icon.ico",
+      "target": [
+        "nsis",
+        "zip"
+      ]
+    },
+    "linux": {
+      "icon": "resources/icons",
+      "target": [
+        "AppImage"
+      ],
+      "category": "Development"
+    }
+  },
+  "devDependencies": {
+    "app-builder-bin": "^4.0.0",
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8"
+  }
+}

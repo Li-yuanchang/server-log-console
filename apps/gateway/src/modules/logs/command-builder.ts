@@ -1,7 +1,7 @@
 import type { LogSearchRequest, ServerSummary } from "@server-log-console/shared";
 import { shellEscape } from "./remote-shell.js";
 
-function toIsoRange(request: LogSearchRequest) {
+export function toIsoRange(request: LogSearchRequest) {
   if (request.startDate || request.endDate) {
     const startDate = request.startDate || request.endDate || "";
     const endDate = request.endDate || request.startDate || "";
@@ -52,16 +52,16 @@ function buildFastSearchCommand(filePath: string, term: string, context: number,
 
   if (!singleDayValue) {
     if (context <= 0) {
-      const script = `grep -nF -- ${shellEscape(term)} ${shellEscape(filePath)} || true`;
+      const script = `LC_ALL=C grep -nF -- ${shellEscape(term)} ${shellEscape(filePath)} || true`;
       return `bash -lc ${shellEscape(script)}`;
     }
 
-    const script = `grep -nF -C ${Math.max(0, context)} -- ${shellEscape(term)} ${shellEscape(filePath)} || true`;
+    const script = `LC_ALL=C grep -nF -C ${Math.max(0, context)} -- ${shellEscape(term)} ${shellEscape(filePath)} || true`;
     return `bash -lc ${shellEscape(script)}`;
   }
 
   if (context <= 0) {
-    const script = `(grep -nE ${shellEscape(dayPattern)} ${shellEscape(filePath)} | grep -F -- ${shellEscape(term)}) || true`;
+    const script = `(LC_ALL=C grep -nE ${shellEscape(dayPattern)} ${shellEscape(filePath)} | LC_ALL=C grep -F -- ${shellEscape(term)}) || true`;
     return `bash -lc ${shellEscape(script)}`;
   }
 
@@ -71,7 +71,7 @@ function buildFastSearchCommand(filePath: string, term: string, context: number,
     `context=${shellEscape(String(Math.max(0, context)))}`,
     `pattern=${shellEscape(dayPattern)}`,
     'tmp_hits=$(mktemp)',
-    'grep -nE "$pattern" "$file" | grep -F -- "$term" | cut -d: -f1 | head -n 200 > "$tmp_hits"',
+    'LC_ALL=C grep -nE "$pattern" "$file" | LC_ALL=C grep -F -- "$term" | cut -d: -f1 | head -n 200 > "$tmp_hits"',
     'if [ ! -s "$tmp_hits" ]; then',
     '  rm -f "$tmp_hits"',
     "  exit 0",
@@ -164,7 +164,8 @@ export function buildSearchCommand(server: ServerSummary, request: LogSearchRequ
   const termAssignments = payload.keywordTerms.map((_, index) => `  terms[${index + 1}] = term_${index + 1};`);
 
   const script = [
-    `awk ${awkVariables.join(" ")} '`,
+    `AWK_BIN=$(command -v mawk 2>/dev/null || echo awk)`,
+    `LC_ALL=C $AWK_BIN ${awkVariables.join(" ")} '`,
     "BEGIN {",
     ...termAssignments,
     "  termsCount = term_count + 0;",
@@ -242,12 +243,13 @@ export function buildSearchCommand(server: ServerSummary, request: LogSearchRequ
   return `bash -lc ${shellEscape(script)}`;
 }
 
-export function buildStreamingSearchCommand(server: ServerSummary, request: LogSearchRequest): string {
+export function buildStreamingSearchCommand(server: ServerSummary, request: LogSearchRequest, totalBytes = 0): string {
   const context = Number.isFinite(request.contextLines) ? Math.max(0, request.contextLines ?? 0) : 0;
   const filePath = request.filePath || `${server.basePath}/catalina.out`;
   const { rangeStart, rangeEnd } = toIsoRange(request);
   const keywordTerms = (request.keywordTerms?.filter((item) => item.trim()) ?? []).map((item) => item.trim());
   const normalizedTerms = keywordTerms.length ? keywordTerms : request.keyword?.trim() ? [request.keyword.trim()] : [];
+  const hasDateRange = Boolean(rangeStart || rangeEnd);
 
   const currentYear = new Date().getFullYear().toString();
   const awkVariables = [
@@ -255,29 +257,25 @@ export function buildStreamingSearchCommand(server: ServerSummary, request: LogS
     `-v context=${shellEscape(String(context))}`,
     `-v keyword_mode=${shellEscape(request.keywordMode || "phrase")}`,
     `-v use_regex=${shellEscape(request.useRegex ? "1" : "0")}`,
-    `-v range_start=${shellEscape(rangeStart)}`,
-    `-v range_end=${shellEscape(rangeEnd)}`,
     `-v term_count=${shellEscape(String(normalizedTerms.length))}`,
-    `-v currentYear=${shellEscape(currentYear)}`
+    `-v total_bytes=${shellEscape(String(totalBytes))}`
   ];
+
+  if (hasDateRange) {
+    awkVariables.push(
+      `-v range_start=${shellEscape(rangeStart)}`,
+      `-v range_end=${shellEscape(rangeEnd)}`,
+      `-v currentYear=${shellEscape(currentYear)}`
+    );
+  }
 
   normalizedTerms.forEach((term, index) => {
     awkVariables.push(`-v term_${index + 1}=${shellEscape(term)}`);
   });
 
   const termAssignments = normalizedTerms.map((_, index) => `  terms[${index + 1}] = term_${index + 1};`);
-  const script = [
-    `awk ${awkVariables.join(" ")} '`,
-    "BEGIN {",
-    ...termAssignments,
-    "  termsCount = term_count + 0;",
-    "  context += 0;",
-    "  pendingAfter = 0;",
-    "  lastPrinted = 0;",
-    "  scannedBytes = 0;",
-    "  lastReported = 0;",
-    "  reportStep = 4 * 1024 * 1024;",
-    "}",
+
+  const dateRangeFunctions = hasDateRange ? [
     "function normalizeTime(line,   ts) {",
     "  if (match(line, /^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}/)) {",
     "    ts = substr(line, RSTART, 19); gsub(/ /, \"T\", ts); return ts;",
@@ -287,6 +285,35 @@ export function buildStreamingSearchCommand(server: ServerSummary, request: LogS
     "  }",
     "  return \"\";",
     "}",
+    "function inRange(line,   ts) {",
+    "  ts = normalizeTime(line);",
+    "  if (ts == \"\") return 0;",
+    "  if (range_start != \"\" && ts < range_start) return 0;",
+    "  if (range_end != \"\" && ts > range_end) return 0;",
+    "  return 1;",
+    "}"
+  ] : [];
+
+  const hitExpression = hasDateRange
+    ? "keywordHit(line) && inRange(line)"
+    : "keywordHit(line)";
+
+  const script = [
+    `AWK_BIN=$(command -v mawk 2>/dev/null || echo awk)`,
+    `LC_ALL=C $AWK_BIN ${awkVariables.join(" ")} '`,
+    "BEGIN {",
+    ...termAssignments,
+    "  termsCount = term_count + 0;",
+    "  context += 0;",
+    "  pendingAfter = 0;",
+    "  lastPrinted = 0;",
+    "  scannedBytes = 0;",
+    "  lastReported = 0;",
+    "  tb = total_bytes + 0;",
+    "  reportStep = 1024;",
+    "  if (tb > 0 && int(tb / 50) > 1024) reportStep = int(tb / 50);",
+    "}",
+    ...dateRangeFunctions,
     "function keywordHit(line,   i, found) {",
     "  if (termsCount == 0) return 1;",
     "  if (keyword_mode == \"phrase\") {",
@@ -306,49 +333,36 @@ export function buildStreamingSearchCommand(server: ServerSummary, request: LogS
     "  }",
     "  return 0;",
     "}",
-    "function inRange(line,   ts) {",
-    "  if (range_start == \"\" && range_end == \"\") return 1;",
-    "  ts = normalizeTime(line);",
-    "  if (ts == \"\") return 0;",
-    "  if (range_start != \"\" && ts < range_start) return 0;",
-    "  if (range_end != \"\" && ts > range_end) return 0;",
-    "  return 1;",
-    "}",
-    "function emitProgress(   chunkStart) {",
-    "  chunkStart = lastReported + 1;",
-    "  if (chunkStart < 1) chunkStart = 1;",
-    "  printf \"__PROGRESS__\\t%d\\t%d\\t%d\\t%d\\n\", scannedBytes, NR, chunkStart, scannedBytes;",
+    "function emitProgress() {",
+    "  printf \"__PROGRESS__\\t%d\\t%d\\t%d\\t%d\\n\", scannedBytes, NR, lastReported + 1, scannedBytes;",
     "  fflush();",
     "  lastReported = scannedBytes;",
     "}",
-    "function emitMatch(no, value) {",
-    "  printf \"__MATCH__\\t%d\\t%s\\n\", no, value;",
-    "  fflush();",
-    "}",
     "{",
     "  line = $0;",
-    "  scannedBytes += length($0) + 1;",
-    "  hit = inRange(line) && keywordHit(line);",
+    "  scannedBytes += length(line) + 1;",
+    `  hit = ${hitExpression};`,
     "  if (hit) {",
     "    if (context > 0) {",
     "      start = NR - context; if (start < 1) start = 1;",
     "      for (i = start; i < NR; i++) {",
     "        if ((i in bufLine) && lastPrinted != i) {",
-    "          emitMatch(i, bufLine[i]);",
+    "          printf \"__CTX__\\t%d\\t%s\\n\", i, bufLine[i];",
     "          lastPrinted = i;",
     "        }",
     "      }",
     "    }",
-    "    emitMatch(NR, line);",
+    "    printf \"__MATCH__\\t%d\\t%s\\n\", NR, $0;",
+    "    fflush();",
     "    lastPrinted = NR;",
     "    pendingAfter = context;",
     "  } else if (pendingAfter > 0 && lastPrinted != NR) {",
-    "    emitMatch(NR, line);",
+    "    printf \"__CTX__\\t%d\\t%s\\n\", NR, $0;",
     "    lastPrinted = NR;",
     "    pendingAfter--;",
     "  }",
-    "  if (context > 0) { bufLine[NR] = line; delete bufLine[NR - context - 1]; }",
-    "  if (scannedBytes - lastReported >= reportStep) emitProgress();",
+    "  if (context > 0) { bufLine[NR] = $0; delete bufLine[NR - context - 1]; }",
+    "  if (NR == 1 || scannedBytes - lastReported >= reportStep) emitProgress();",
     "}",
     "END {",
     "  if (scannedBytes != lastReported) emitProgress();",

@@ -3,15 +3,26 @@
   "name": "日志控制台",
   "version": "0.1.0",
   "description": "通过本地连接服务读取远程服务器日志，支持目录浏览、搜索、实时日志与结果下载。",
+  "icons": {
+    "16": "icon-16.png",
+    "32": "icon-32.png",
+    "48": "icon-48.png",
+    "128": "icon-128.png"
+  },
   "action": {
-    "default_popup": "popup.html",
-    "default_title": "日志控制台"
+    "default_title": "日志控制台",
+    "default_icon": {
+      "16": "icon-16.png",
+      "32": "icon-32.png",
+      "48": "icon-48.png",
+      "128": "icon-128.png"
+    }
   },
-  "side_panel": {
-    "default_path": "popup.html"
+  "background": {
+    "service_worker": "background.js"
   },
-  "permissions": ["storage", "downloads", "sidePanel"],
-  "host_permissions": ["http://localhost:4040/*", "ws://localhost:4040/*"],
+  "permissions": ["storage", "downloads"],
+  "host_permissions": ["http://localhost:4040/*", "http://127.0.0.1:4040/*"],
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'"
   }

@@ -1,4 +1,30 @@
-export function ToolIcon({ kind }: { kind: "search" | "tail" | "files" | "more" | "open" | "refresh" | "filter" | "settings" | "terminal" | "sparkle" | "undo" }) {
+import {
+  Search,
+  ArrowDownToLine,
+  FileText,
+  SlidersHorizontal,
+  FolderUp,
+  RefreshCw,
+  Filter,
+  Settings,
+  TerminalSquare,
+  Sparkles,
+  Undo2,
+  History,
+  Download,
+  Upload,
+  Trash2,
+  Pencil,
+} from "lucide-react";
+
+type IconKind = "search" | "tail" | "files" | "more" | "open" | "refresh" | "filter" | "settings" | "terminal" | "sparkle" | "undo" | "history" | "download" | "upload" | "delete" | "rename";
+
+export function ToolIcon({ kind, theme }: { kind: IconKind; theme?: "classic" | "modern" }) {
+  if (theme === "modern") return <ModernIcon kind={kind} />;
+  return <ClassicIcon kind={kind} />;
+}
+
+function ClassicIcon({ kind }: { kind: IconKind }) {
   const common = {
     width: 14,
     height: 14,
@@ -100,5 +126,84 @@ export function ToolIcon({ kind }: { kind: "search" | "tail" | "files" | "more" 
           <path d="M4 3.2A5.4 5.4 0 1 1 2.7 9" />
         </svg>
       );
+    case "history":
+      return (
+        <svg {...common}>
+          <circle cx="8" cy="8" r="5.5" />
+          <path d="M8 4.5V8L10.5 10" />
+        </svg>
+      );
+    case "download":
+      return (
+        <svg {...common}>
+          <path d="M8 2.5V10" />
+          <path d="M4.5 7L8 10.5L11.5 7" />
+          <path d="M3 13H13" />
+        </svg>
+      );
+    case "upload":
+      return (
+        <svg {...common}>
+          <path d="M8 10.5V3" />
+          <path d="M4.5 6L8 2.5L11.5 6" />
+          <path d="M3 13H13" />
+        </svg>
+      );
+    case "delete":
+      return (
+        <svg {...common}>
+          <path d="M4 4.5H12" />
+          <path d="M6.5 4.5V3.2H9.5V4.5" />
+          <path d="M5 4.5L5.5 13H10.5L11 4.5" />
+          <path d="M7 7V10.5" />
+          <path d="M9 7V10.5" />
+        </svg>
+      );
+    case "rename":
+      return (
+        <svg {...common}>
+          <path d="M4 12.5L10.5 3.5L13 6L6.5 15H4V12.5Z" />
+          <path d="M9 5L11.5 7.5" />
+        </svg>
+      );
+  }
+}
+
+const LUCIDE_PROPS = { size: 16, strokeWidth: 1.8, "aria-hidden": true } as const;
+
+function ModernIcon({ kind }: { kind: IconKind }) {
+  switch (kind) {
+    case "search":
+      return <Search {...LUCIDE_PROPS} />;
+    case "tail":
+      return <ArrowDownToLine {...LUCIDE_PROPS} />;
+    case "files":
+      return <FileText {...LUCIDE_PROPS} />;
+    case "more":
+      return <SlidersHorizontal {...LUCIDE_PROPS} />;
+    case "open":
+      return <FolderUp {...LUCIDE_PROPS} />;
+    case "refresh":
+      return <RefreshCw {...LUCIDE_PROPS} />;
+    case "filter":
+      return <Filter {...LUCIDE_PROPS} />;
+    case "settings":
+      return <Settings {...LUCIDE_PROPS} />;
+    case "terminal":
+      return <TerminalSquare {...LUCIDE_PROPS} />;
+    case "sparkle":
+      return <Sparkles {...LUCIDE_PROPS} />;
+    case "undo":
+      return <Undo2 {...LUCIDE_PROPS} />;
+    case "history":
+      return <History {...LUCIDE_PROPS} />;
+    case "download":
+      return <Download {...LUCIDE_PROPS} />;
+    case "upload":
+      return <Upload {...LUCIDE_PROPS} />;
+    case "delete":
+      return <Trash2 {...LUCIDE_PROPS} />;
+    case "rename":
+      return <Pencil {...LUCIDE_PROPS} />;
   }
 }

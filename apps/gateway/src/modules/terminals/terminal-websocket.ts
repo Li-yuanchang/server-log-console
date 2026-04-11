@@ -3,10 +3,12 @@ import { RawData, WebSocket, WebSocketServer } from "ws";
 import { SshExecutorService } from "../logs/ssh-executor.service.js";
 
 interface TerminalMessagePayload {
-  action?: "start" | "input" | "close";
+  action?: "start" | "input" | "close" | "resize";
   serverId?: string;
   bastionId?: string;
   data?: string;
+  cols?: number;
+  rows?: number;
 }
 
 export function registerTerminalWebsocket(terminalWsServer: WebSocketServer, sshExecutorService: SshExecutorService) {
@@ -101,6 +103,13 @@ export function registerTerminalWebsocket(terminalWsServer: WebSocketServer, ssh
             return;
           }
           jumpShellStream.write(text);
+          return;
+        }
+
+        if (payload.action === "resize") {
+          if (jumpShellStream && payload.cols && payload.rows) {
+            jumpShellStream.setWindow(payload.rows, payload.cols, payload.rows * 16, payload.cols * 8);
+          }
           return;
         }
 

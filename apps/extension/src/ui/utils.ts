@@ -271,6 +271,7 @@ export interface ViewerResultTab {
   label: string;
   sourceLabel: string;
   content: string;
+  fullContent?: string;
   matches: LogSearchResponse["matches"];
   commandPreview?: string;
   strategyLabel?: string;

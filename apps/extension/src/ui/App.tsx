@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { CodeEditor } from "./CodeEditor";
 import type { PointerEvent as ReactPointerEvent, WheelEvent as ReactWheelEvent } from "react";
 import type { ReactNode } from "react";
 import type {
@@ -18,6 +19,7 @@ import type {
   ServerCredentialStatus,
   ServerSummary
 } from "@server-log-console/shared";
+import { Radio, Wrench, Download, Copy, Pin, PinOff } from "lucide-react";
 import { TerminalPanel } from "./TerminalWorkspace.js";
 import { ToolIcon } from "./ToolIcon.js";
 import { looksLikeJumpServer } from "./terminal-utils.js";
@@ -54,64 +56,84 @@ import {
   trimLiveContent,
   truncateText,
 } from "./utils.js";
-import type { LineContextState, SearchSettingsState, ViewerResultTab } from "./utils.js";
+import type { LineContextState, ViewerResultTab } from "./utils.js";
 import {
   clampBrowserTreeWidth,
+  pushDirectoryHistory,
   readBrowserTreeWidth,
+  readDirectoryHistory,
   readLastDirectoryMap,
   readLastServerId,
-  readSavedSearchSettings,
   rememberDirectoryIfUseful,
   writeBrowserTreeWidth,
   writeLastDirectory,
   writeLastServerId,
-  writeSavedSearchSettings,
 } from "./storage.js";
 
 const runtimeOrigin = globalThis.location?.origin ?? "";
 const localServiceBase = !runtimeOrigin || !/:4040$/.test(runtimeOrigin) ? "http://localhost:4040" : runtimeOrigin;
 const defaultDirectoryPath = "";
 
+function computeAutoSliceLength(fileSize: number): number {
+  if (fileSize <= 0) return 65536;
+  if (fileSize <= 65536) return 65536;         // ≤ 64 KB → whole file
+  if (fileSize <= 131072) return 131072;       // ≤ 128 KB → whole file
+  if (fileSize <= 262144) return 262144;       // ≤ 256 KB → whole file
+  return 262144;                                // > 256 KB → fixed 256 KB slices
+}
+
 export function App() {
-  const savedSearchSettings = useMemo(() => readSavedSearchSettings(), []);
   const [servers, setServers] = useState<ServerSummary[]>([]);
   const [serverId, setServerId] = useState("");
   const [filePath, setFilePath] = useState("");
   const [serverFilter, setServerFilter] = useState("");
   const [fileFilter, setFileFilter] = useState("");
-  const [keywordInput, setKeywordInput] = useState(() => savedSearchSettings?.keywordInput || "");
-  const [keywordMode, setKeywordMode] = useState<"phrase" | "any" | "all">(() => savedSearchSettings?.keywordMode || "phrase");
-  const [contextLines, setContextLines] = useState(() => savedSearchSettings?.contextLines ?? 3);
-  const [useRegex, setUseRegex] = useState(() => savedSearchSettings?.useRegex ?? false);
-  const [selectedPreset, setSelectedPreset] = useState(() => savedSearchSettings?.selectedPreset || "未选择");
-  const [startDate, setStartDate] = useState(() => savedSearchSettings?.startDate || getLocalDateString());
-  const [endDate, setEndDate] = useState(() => savedSearchSettings?.endDate || getLocalDateString());
-  const [startTime, setStartTime] = useState(() => savedSearchSettings?.startTime || "");
-  const [endTime, setEndTime] = useState(() => savedSearchSettings?.endTime || "");
+  const [keywordInput, setKeywordInput] = useState("");
+  const [keywordMode, setKeywordMode] = useState<"phrase" | "any" | "all">("phrase");
+  const [contextLines, setContextLines] = useState(3);
+  const [useRegex, setUseRegex] = useState(false);
+  const [selectedPreset, setSelectedPreset] = useState("未选择");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [startTime, setStartTime] = useState("");
+  const [endTime, setEndTime] = useState("");
   const [results, setResults] = useState<LogSearchResponse | null>(null);
   const [resultTabs, setResultTabs] = useState<ViewerResultTab[]>([]);
   const [searchTask, setSearchTask] = useState<LogSearchTaskResponse | null>(null);
   const [activeLogView, setActiveLogView] = useState<"search" | "files">("files");
   const [terminalPanelOpen, setTerminalPanelOpen] = useState(false);
+  const [terminalDetached, setTerminalDetached] = useState(false);
   const [activeViewerTabId, setActiveViewerTabId] = useState("file");
   const [fileEntries, setFileEntries] = useState<LogFileEntry[]>([]);
   const [directoryPath, setDirectoryPath] = useState(defaultDirectoryPath);
   const [fileMeta, setFileMeta] = useState<LogFileMetaResponse | null>(null);
   const [sliceOffset, setSliceOffset] = useState(0);
   const [sliceLength, setSliceLength] = useState(64 * 1024);
+  const [sliceLengthMode, setSliceLengthMode] = useState<"auto" | "manual">("auto");
   const [sliceData, setSliceData] = useState<LogSliceResponse | null>(null);
   const [searchStartedAt, setSearchStartedAt] = useState<number | null>(null);
   const [searchNow, setSearchNow] = useState(() => Date.now());
   const [activityLines, setActivityLines] = useState<string[]>(["系统已启动，等待选择服务器与日志文件。"]);
-  const [importStatus, setImportStatus] = useState("尚未导入 FinalShell 连接。");
-  const [importPath, setImportPath] = useState("尚未解析 FinalShell 配置目录。");
+  const [selectedImportTool, setSelectedImportTool] = useState<"finalshell" | "xshell">("finalshell");
+  const [importStatus, setImportStatus] = useState("尚未导入连接。");
+  const [importPath, setImportPath] = useState("尚未解析配置目录。");
   const [finalShellPath, setFinalShellPath] = useState("");
   const [finalShellDetectedPaths, setFinalShellDetectedPaths] = useState<string[]>([]);
   const [finalShellLastImportedAt, setFinalShellLastImportedAt] = useState("");
+  const [xshellPath, setXshellPath] = useState("");
+  const [xshellDetectedPaths, setXshellDetectedPaths] = useState<string[]>([]);
+  const [xshellLastImportedAt, setXshellLastImportedAt] = useState("");
+  const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number; fileName: string } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; entry: LogFileEntry } | null>(null);
+  const [confirmDialog, setConfirmDialog] = useState<{ title: string; message: string; danger?: boolean; onConfirm: () => void } | null>(null);
+  const [renameDialog, setRenameDialog] = useState<{ entry: LogFileEntry; newName: string } | null>(null);
+  const [moveDialog, setMoveDialog] = useState<{ entry: LogFileEntry; targetDir: string } | null>(null);
+  const [previewDialog, setPreviewDialog] = useState<{ filePath: string; fileName: string; content: string; originalContent: string; size: number; saving?: boolean; loading?: boolean; maximized?: boolean; readOnly?: boolean } | null>(null);
   const [actionStatus, setActionStatus] = useState("就绪，可开始检索日志。");
   const [localServiceState, setLocalServiceState] = useState<"checking" | "online" | "offline">("checking");
   const [localServiceStatusText, setLocalServiceStatusText] = useState("正在检查本地连接服务...");
   const [isBusy, setIsBusy] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
   const [uiTheme, setUiTheme] = useState<"classic" | "modern">(() => {
     try { return (localStorage.getItem("ui-theme") as "classic" | "modern") || "classic"; } catch { return "classic"; }
   });
@@ -134,9 +156,12 @@ export function App() {
   const [jumpSearchKeyword, setJumpSearchKeyword] = useState("");
   const [jumpAssetId, setJumpAssetId] = useState("");
   const [jumpAssetOptions, setJumpAssetOptions] = useState<JumpServerAssetOption[]>([]);
+  const [isElectron] = useState(() => !!(window as any).electronAPI || /Electron/.test(navigator.userAgent));
+  const [isPinned, setIsPinned] = useState(false);
   const [showFileTools, setShowFileTools] = useState(false);
   const [showKeywordBar, setShowKeywordBar] = useState(true);
   const [showDirectoryFilter, setShowDirectoryFilter] = useState(false);
+  const [showPathHistory, setShowPathHistory] = useState(false);
   const [directoryInput, setDirectoryInput] = useState("");
   const [browserTreeWidth, setBrowserTreeWidth] = useState(() => readBrowserTreeWidth());
   const [resultTabCounter, setResultTabCounter] = useState(1);
@@ -148,6 +173,7 @@ export function App() {
   const [liveFollowContent, setLiveFollowContent] = useState("");
   const [liveFollowRetryCount, setLiveFollowRetryCount] = useState(0);
   const [liveFollowPaused, setLiveFollowPaused] = useState(false);
+  const [viewerNotAtBottom, setViewerNotAtBottom] = useState(false);
   const [readerPositionDraft, setReaderPositionDraft] = useState(0);
   const [readerPositionDragging, setReaderPositionDragging] = useState(false);
   const [readerPreviewContent, setReaderPreviewContent] = useState("");
@@ -201,6 +227,12 @@ export function App() {
   }
 
   useEffect(() => {
+    if (isElectron) {
+      document.body.classList.add("is-electron");
+    }
+  }, [isElectron]);
+
+  useEffect(() => {
     if (initializedRef.current) {
       return;
     }
@@ -208,6 +240,12 @@ export function App() {
     initializedRef.current = true;
     void initializeWorkbench();
 
+    // Fade out and remove the inline loading overlay from index.html
+    const splash = document.getElementById("app-loading");
+    if (splash) {
+      splash.style.opacity = "0";
+      setTimeout(() => splash.remove(), 350);
+    }
   }, []);
 
   useEffect(() => {
@@ -262,19 +300,6 @@ export function App() {
     writeBrowserTreeWidth(browserTreeWidth);
   }, [browserTreeWidth]);
 
-  useEffect(() => {
-    writeSavedSearchSettings({
-      keywordInput,
-      keywordMode,
-      contextLines,
-      useRegex,
-      selectedPreset,
-      startDate,
-      endDate,
-      startTime,
-      endTime
-    });
-  }, [contextLines, endDate, endTime, keywordInput, keywordMode, selectedPreset, startDate, startTime, useRegex]);
 
   useEffect(() => {
     if (!searchStartedAt) {
@@ -299,7 +324,7 @@ export function App() {
         await fetchServers();
         await fetchFinalShellSettings();
       }
-    }, 4000);
+    }, 1500);
 
     return () => window.clearInterval(timer);
   }, [localServiceState]);
@@ -488,8 +513,11 @@ export function App() {
 
   useEffect(() => {
     if (!liveFollowEnabled || liveFollowPaused) return;
-    virtualViewerRef.current?.scrollToBottom();
+    requestAnimationFrame(() => {
+      virtualViewerRef.current?.scrollToBottom();
+    });
   }, [liveFollowContent, liveFollowEnabled, liveFollowPaused]);
+
 
   useEffect(() => {
     setActiveHighlightIndex(0);
@@ -934,8 +962,8 @@ export function App() {
 
   function renderSortLabel(key: "name" | "size" | "kind" | "modifiedTime", label: string) {
     const active = fileSortKey === key;
-    const arrow = !active ? "" : fileSortDirection === "asc" ? " ↑" : " ↓";
-    return `${label}${arrow}`;
+    const arrow = active ? (fileSortDirection === "asc" ? "↑" : "↓") : "";
+    return <>{label}<span style={{ display: "inline-block", width: "1em", textAlign: "center" }}>{arrow}</span></>;
   }
 
   function renderSettingsSectionHeader(
@@ -1294,31 +1322,35 @@ export function App() {
       return;
     }
 
-    const previewLength = Math.min(sliceLength, previewSliceLength);
-    const baseOffset = clampSliceStart(meta.size, Math.floor(meta.size * (readerPositionDraft / 100)), previewLength);
-    const neighborOffsets = [-1, 0, 1].map((index) => clampSliceStart(meta.size, baseOffset + index * previewBucketSize, previewLength));
+    const timer = window.setTimeout(() => {
+      const previewLength = Math.min(sliceLength, previewSliceLength);
+      const baseOffset = clampSliceStart(meta.size, Math.floor(meta.size * (readerPositionDraft / 100)), previewLength);
+      const neighborOffsets = [-1, 0, 1].map((index) => clampSliceStart(meta.size, baseOffset + index * previewBucketSize, previewLength));
 
-    neighborOffsets.forEach((offset) => {
-      const cacheKey = getPreviewCacheKey(filePath, offset);
-      if (previewCacheRef.current.has(cacheKey) || previewWarmRef.current.has(cacheKey)) {
-        return;
-      }
-
-      previewWarmRef.current.add(cacheKey);
-      void (async () => {
-        try {
-          const previewSlice = await fetchLogSlice(filePath, offset, previewLength);
-          previewCacheRef.current.set(cacheKey, {
-            offset: previewSlice.actualOffset,
-            content: formatPreviewSnippet(previewSlice.content) || "这一段没有完整日志行。"
-          });
-        } catch {
+      neighborOffsets.forEach((offset) => {
+        const cacheKey = getPreviewCacheKey(filePath, offset);
+        if (previewCacheRef.current.has(cacheKey) || previewWarmRef.current.has(cacheKey)) {
           return;
-        } finally {
-          previewWarmRef.current.delete(cacheKey);
         }
-      })();
-    });
+
+        previewWarmRef.current.add(cacheKey);
+        void (async () => {
+          try {
+            const previewSlice = await fetchLogSlice(filePath, offset, previewLength);
+            previewCacheRef.current.set(cacheKey, {
+              offset: previewSlice.actualOffset,
+              content: formatPreviewSnippet(previewSlice.content) || "这一段没有完整日志行。"
+            });
+          } catch {
+            return;
+          } finally {
+            previewWarmRef.current.delete(cacheKey);
+          }
+        })();
+      });
+    }, 150);
+
+    return () => { window.clearTimeout(timer); };
   }, [activeFileMeta, canDragReaderPosition, filePath, readerPositionDragging, readerPositionDraft, sliceLength]);
 
   useEffect(() => {
@@ -1331,12 +1363,16 @@ export function App() {
       return;
     }
 
-    const baseOffset = clampSliceStart(meta.size, Math.floor(meta.size * (readerPositionDraft / 100)), sliceLength);
-    const neighborOffsets = [-1, 0, 1].map((index) => clampSliceStart(meta.size, baseOffset + index * sliceLength, sliceLength));
+    const timer = window.setTimeout(() => {
+      const baseOffset = clampSliceStart(meta.size, Math.floor(meta.size * (readerPositionDraft / 100)), sliceLength);
+      const neighborOffsets = [-1, 0, 1].map((index) => clampSliceStart(meta.size, baseOffset + index * sliceLength, sliceLength));
 
-    neighborOffsets.forEach((offset) => {
-      void warmSlice(filePath, offset, sliceLength);
-    });
+      neighborOffsets.forEach((offset) => {
+        void warmSlice(filePath, offset, sliceLength);
+      });
+    }, 200);
+
+    return () => { window.clearTimeout(timer); };
   }, [activeFileMeta, canDragReaderPosition, filePath, readerPositionDragging, readerPositionDraft, sliceLength]);
 
   useEffect(() => {
@@ -1383,7 +1419,7 @@ export function App() {
       window.removeEventListener("pointermove", handlePointerMove);
       window.removeEventListener("pointerup", handlePointerEnd);
       window.removeEventListener("pointercancel", handlePointerEnd);
-      void commitReaderPosition(nextPercent ?? readerPositionDraft);
+      void commitReaderPosition(nextPercent ?? readerPendingDraftRef.current ?? 0);
     }
 
     window.addEventListener("pointermove", handlePointerMove);
@@ -1395,30 +1431,9 @@ export function App() {
       window.removeEventListener("pointerup", handlePointerEnd);
       window.removeEventListener("pointercancel", handlePointerEnd);
     };
-  }, [readerPositionDragging, readerPositionDraft]);
+  }, [readerPositionDragging]);
 
   const searchPresets = [
-    {
-      label: "恢复上次",
-      apply: () => {
-        const saved = readSavedSearchSettings();
-        if (!saved) {
-          setActionStatus("当前还没有可恢复的搜索设置。");
-          return;
-        }
-
-        setKeywordInput(saved.keywordInput);
-        setKeywordMode(saved.keywordMode);
-        setContextLines(saved.contextLines);
-        setUseRegex(saved.useRegex);
-        setSelectedPreset(saved.selectedPreset || "恢复上次");
-        setStartDate(saved.startDate);
-        setEndDate(saved.endDate);
-        setStartTime(saved.startTime);
-        setEndTime(saved.endTime);
-        setActionStatus("已恢复上次搜索设置。");
-      }
-    },
     {
       label: "常规",
       apply: () => {
@@ -1527,10 +1542,13 @@ export function App() {
     }
   }, [terminalPanelOpen, canOpenTerminal]);
 
-  const currentFileContent = liveFollowEnabled && activeViewerTabId === "file"
+  const currentFileContent = liveFollowEnabled && !liveFollowPaused && activeViewerTabId === "file"
     ? liveFollowContent || lineContextState?.content || activeSliceData?.content || ""
-    : lineContextState?.content || activeSliceData?.content || "请选择日志文件后开始搜索，或直接读取尾部日志。";
-  const currentLogContent = activeResultTab?.content ?? currentFileContent;
+    : lineContextState?.content || activeSliceData?.content || (liveFollowEnabled ? liveFollowContent || "" : "请选择日志文件后开始搜索，或直接读取尾部日志。");
+  const [resultContextMode, setResultContextMode] = useState(false);
+  const currentLogContent = activeResultTab
+    ? (resultContextMode && activeResultTab.fullContent ? activeResultTab.fullContent : activeResultTab.content)
+    : currentFileContent;
   const viewerEmptyTitle = "还没有日志内容";
   const viewerEmptyHint = !filePath
     ? "先在目录中选择日志文件，系统会自动打开尾部片段。"
@@ -1565,6 +1583,7 @@ export function App() {
       label: nextLabel,
       sourceLabel,
       content: formatSearchViewerContent(payload, undefined),
+      fullContent: payload.contextOutput,
       matches: payload.matches,
       commandPreview: payload.commandPreview,
       strategyLabel: payload.strategyLabel,
@@ -1759,9 +1778,11 @@ export function App() {
     });
 
     socket.addEventListener("close", () => {
-      if (liveSocketRef.current === socket) {
+      const isCurrentSocket = liveSocketRef.current === socket;
+      if (isCurrentSocket) {
         liveSocketRef.current = null;
       }
+      if (!isCurrentSocket) return;
       setLiveFollowConnected(false);
       if (liveFollowExpectedCloseRef.current) {
         liveFollowExpectedCloseRef.current = false;
@@ -1771,19 +1792,27 @@ export function App() {
     });
 
     socket.addEventListener("error", () => {
+      if (liveSocketRef.current !== socket) return;
       setActionStatus("实时跟随连接异常。");
       pushActivity(`实时跟随连接异常：${targetFilePath}。`);
     });
   }
 
-  function handleLiveNearBottomChange(nearBottom: boolean) {
-    if (!liveFollowEnabled) return;
-    setLiveFollowPaused(!nearBottom);
+  function handleViewerNearBottomChange(nearBottom: boolean) {
+    setViewerNotAtBottom(!nearBottom);
+    if (liveFollowEnabled) {
+      setLiveFollowPaused(!nearBottom);
+    }
   }
 
-  function scrollLiveToBottom() {
-    setLiveFollowPaused(false);
-    virtualViewerRef.current?.scrollToBottom();
+  function scrollViewerToBottom() {
+    setViewerNotAtBottom(false);
+    if (liveFollowEnabled) {
+      setLiveFollowPaused(false);
+    }
+    setTimeout(() => {
+      virtualViewerRef.current?.scrollToBottom();
+    }, 0);
   }
 
   function clearLiveContent() {
@@ -1904,10 +1933,11 @@ export function App() {
     }
   }
 
-  async function importFromFinalShell() {
-    await withBusy("正在导入 FinalShell 连接...", async () => {
-      const response = await fetch(`${localServiceBase}/api/import/finalshell`);
-      const payload = await readPayload<FinalShellImportResponse>(response, "导入 FinalShell 失败");
+  async function importFromTool(toolId: string = selectedImportTool) {
+    const toolLabel = toolId === "finalshell" ? "FinalShell" : toolId === "xshell" ? "Xshell" : toolId;
+    await withBusy(`正在导入 ${toolLabel} 连接...`, async () => {
+      const response = await fetch(`${localServiceBase}/api/import/${toolId}`);
+      const payload = await readPayload<FinalShellImportResponse>(response, `导入 ${toolLabel} 失败`);
       setServers(payload.servers);
       setServerId(payload.servers[0]?.id ?? "");
       if (payload.servers[0]?.id) {
@@ -1915,19 +1945,26 @@ export function App() {
       }
       setFilePath("");
       setImportStatus(`已导入 ${payload.servers.length} 台服务器，时间 ${payload.importedAt}`);
-      setFinalShellLastImportedAt(payload.importedAt);
+      if (toolId === "finalshell") setFinalShellLastImportedAt(payload.importedAt);
+      if (toolId === "xshell") setXshellLastImportedAt(payload.importedAt);
       setImportPath(
         payload.resolvedPath
           ? `配置目录：${payload.resolvedPath}`
-          : `未发现 FinalShell 配置目录，已检查：${payload.searchedPaths.join(" | ")}`
+          : `未发现 ${toolLabel} 配置目录，已检查：${payload.searchedPaths.join(" | ")}`
       );
-      setActionStatus("FinalShell 连接导入完成。");
-      pushActivity(`FinalShell 配置已导入，共 ${payload.servers.length} 台，选择服务器后会自动连接。`);
+      setActionStatus(`${toolLabel} 连接导入完成。`);
+      pushActivity(`${toolLabel} 配置已导入，共 ${payload.servers.length} 台，选择服务器后会自动连接。`);
     });
   }
 
+  async function importFromFinalShell() {
+    return importFromTool("finalshell");
+  }
+
   async function browseLogFiles(nextDirectoryPath?: string, options?: { manual?: boolean }) {
+    if (!serverId) return;
     stopLiveFollow();
+    setShowPathHistory(false);
     await withBusy("正在读取远程目录...", async () => {
       const payload = await fetchDirectoryListing(nextDirectoryPath || directoryPath || "/");
       setDirectoryPath(payload.directoryPath);
@@ -1935,21 +1972,263 @@ export function App() {
       setFileEntries(payload.entries);
       setActiveLogView("files");
       rememberDirectoryIfUseful(serverId, payload.directoryPath, payload.entries.length);
+      pushDirectoryHistory(serverId, payload.directoryPath);
       setActionStatus(`目录读取完成，共 ${payload.entries.length} 项。`);
       pushActivity(`已打开目录：${payload.directoryPath}，共 ${payload.entries.length} 项。`);
     });
   }
 
   async function openDirectoryFromInput() {
+    if (!serverId) return;
     const nextDirectory = directoryInput.trim() || "/";
     await browseLogFiles(nextDirectory, { manual: true });
   }
 
   async function browseParentDirectory() {
+    if (!serverId) return;
     await browseLogFiles(getParentDirectoryPath(directoryPath || directoryInput || "/"), { manual: true });
   }
 
+  async function downloadFile(targetFilePath: string) {
+    if (!serverId) return;
+    await withBusy("正在下载文件...", async () => {
+      const response = await fetch(`${localServiceBase}/api/files/download`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ serverId, filePath: targetFilePath })
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({ message: "下载失败" })) as { message?: string };
+        throw new Error(err.message || "下载失败");
+      }
+      const blob = await response.blob();
+      const fileName = targetFilePath.split("/").pop() || "download";
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 200);
+      setActionStatus(`已下载 ${fileName}`);
+      pushActivity(`已下载文件：${targetFilePath}`);
+    });
+  }
+
+  function uploadOneFile(file: File, targetPath: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("serverId", serverId!);
+      formData.append("filePath", targetPath);
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", `${localServiceBase}/api/files/upload`);
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) {
+          setUploadProgress((prev) => prev ? { ...prev, current: Math.round((e.loaded / e.total) * 100) } : null);
+        }
+      };
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve();
+        } else {
+          try {
+            const body = JSON.parse(xhr.responseText) as { message?: string };
+            reject(new Error(body.message || `上传失败 (${xhr.status})`));
+          } catch {
+            reject(new Error(`上传失败 (${xhr.status})`));
+          }
+        }
+      };
+      xhr.onerror = () => reject(new Error("网络错误，上传失败"));
+      xhr.send(formData);
+    });
+  }
+
+  async function uploadFileList(fileList: File[]) {
+    if (!serverId || !directoryPath || fileList.length === 0) return;
+    const total = fileList.length;
+    await withBusy(`正在上传 ${total} 个文件...`, async () => {
+      for (let i = 0; i < fileList.length; i++) {
+        const file = fileList[i];
+        const targetPath = directoryPath.endsWith("/") ? `${directoryPath}${file.name}` : `${directoryPath}/${file.name}`;
+        setUploadProgress({ current: 0, total, fileName: `(${i + 1}/${total}) ${file.name}` });
+        await uploadOneFile(file, targetPath);
+        pushActivity(`已上传文件：${targetPath}`);
+      }
+      setUploadProgress(null);
+      setActionStatus(`已上传 ${total} 个文件到 ${directoryPath}`);
+      await browseLogFiles(directoryPath);
+    });
+    setUploadProgress(null);
+  }
+
+  async function uploadFiles() {
+    if (!serverId || !directoryPath) return;
+    const input = document.createElement("input");
+    input.type = "file";
+    input.multiple = true;
+    input.onchange = async () => {
+      const files = input.files;
+      if (!files || files.length === 0) return;
+      await uploadFileList(Array.from(files));
+    };
+    input.click();
+  }
+
+  function handleFileDrop(e: React.DragEvent) {
+    e.preventDefault();
+    setIsDragOver(false);
+    if (!serverId || !directoryPath || isBusy) return;
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length === 0) return;
+    void uploadFileList(files);
+  }
+
+  function deleteRemoteFile(targetFilePath: string) {
+    if (!serverId) return;
+    const fileName = targetFilePath.split("/").pop() || targetFilePath;
+    setConfirmDialog({
+      title: "删除文件",
+      message: `确定删除远程文件？\n${targetFilePath}`,
+      danger: true,
+      onConfirm: () => {
+        void withBusy(`正在删除 ${fileName}...`, async () => {
+          const response = await fetch(`${localServiceBase}/api/files/delete`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ serverId, filePath: targetFilePath })
+          });
+          if (!response.ok) {
+            const err = await response.json().catch(() => ({ message: "删除失败" })) as { message?: string };
+            throw new Error(err.message || "删除失败");
+          }
+          setActionStatus(`已删除 ${fileName}`);
+          pushActivity(`已删除文件：${targetFilePath}`);
+          if (directoryPath) await browseLogFiles(directoryPath);
+        });
+      }
+    });
+  }
+
+  function openRenameDialog(entry: LogFileEntry) {
+    setRenameDialog({ entry, newName: entry.name });
+  }
+
+  async function renameRemoteFile(entry: LogFileEntry, newName: string) {
+    if (!serverId || !newName.trim() || newName === entry.name) return;
+    const parentDir = entry.path.substring(0, entry.path.lastIndexOf("/")) || "/";
+    const newPath = parentDir + "/" + newName.trim();
+    await withBusy(`正在重命名 ${entry.name}...`, async () => {
+      const response = await fetch(`${localServiceBase}/api/files/rename`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ serverId, oldPath: entry.path, newPath })
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({ message: "重命名失败" })) as { message?: string };
+        throw new Error(err.message || "重命名失败");
+      }
+      setActionStatus(`已重命名 ${entry.name} → ${newName.trim()}`);
+      pushActivity(`重命名：${entry.name} → ${newName.trim()}`);
+      if (directoryPath) await browseLogFiles(directoryPath);
+    });
+  }
+
+  function openMoveDialog(entry: LogFileEntry) {
+    setMoveDialog({ entry, targetDir: directoryPath || "/" });
+  }
+
+  async function moveRemoteFile(entry: LogFileEntry, targetDir: string) {
+    if (!serverId || !targetDir.trim()) return;
+    const newPath = targetDir.replace(/\/+$/, "") + "/" + entry.name;
+    if (newPath === entry.path) return;
+    await withBusy(`正在移动 ${entry.name}...`, async () => {
+      const response = await fetch(`${localServiceBase}/api/files/rename`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ serverId, oldPath: entry.path, newPath })
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({ message: "移动失败" })) as { message?: string };
+        throw new Error(err.message || "移动失败");
+      }
+      setActionStatus(`已移动 ${entry.name} → ${targetDir}`);
+      pushActivity(`移动：${entry.path} → ${newPath}`);
+      if (directoryPath) await browseLogFiles(directoryPath);
+    });
+  }
+
+  async function previewFile(entry: LogFileEntry) {
+    if (isBusy || !serverId || entry.kind !== "file") return;
+    const sizeBytes = typeof entry.size === "number" ? entry.size : 0;
+    const editLimit = 10 * 1024 * 1024;
+    if (sizeBytes > editLimit) {
+      setConfirmDialog({
+        title: "大文件预览",
+        message: `文件较大（${formatBytes(sizeBytes)}），将以只读模式显示尾部内容。`,
+        onConfirm: () => void doLoadFile(entry),
+      });
+      return;
+    }
+    const warnLimit = 2 * 1024 * 1024;
+    if (sizeBytes > warnLimit) {
+      setConfirmDialog({
+        title: "大文件编辑",
+        message: `文件较大（${formatBytes(sizeBytes)}），加载可能需要较长时间，是否继续？`,
+        onConfirm: () => void doLoadFile(entry),
+      });
+      return;
+    }
+    void doLoadFile(entry);
+  }
+
+  async function doLoadFile(entry: LogFileEntry) {
+    setPreviewDialog({ filePath: entry.path, fileName: entry.name, content: "", originalContent: "", size: typeof entry.size === "number" ? entry.size : 0, loading: true });
+    try {
+      const response = await fetch(`${localServiceBase}/api/files/preview`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ serverId, filePath: entry.path })
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({ message: "加载失败" })) as { message?: string };
+        throw new Error(err.message || "加载失败");
+      }
+      const data = await response.json() as { filePath: string; content: string; size: number; readOnly?: boolean };
+      setPreviewDialog({ filePath: data.filePath, fileName: entry.name, content: data.content, originalContent: data.content, size: data.size, readOnly: data.readOnly });
+      pushActivity(`${data.readOnly ? "预览" : "打开"}文件：${entry.name}（${formatBytes(data.size)}）`);
+    } catch (error) {
+      setPreviewDialog(null);
+      setActionStatus(`加载失败：${error instanceof Error ? error.message : "未知错误"}`);
+    }
+  }
+
+  async function saveFileContent() {
+    if (!previewDialog || !serverId) return;
+    if (previewDialog.content === previewDialog.originalContent) return;
+    setPreviewDialog((prev) => prev ? { ...prev, saving: true } : null);
+    try {
+      const response = await fetch(`${localServiceBase}/api/files/save`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ serverId, filePath: previewDialog.filePath, content: previewDialog.content })
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({ message: "保存失败" })) as { message?: string };
+        throw new Error(err.message || "保存失败");
+      }
+      setPreviewDialog((prev) => prev ? { ...prev, originalContent: prev.content, saving: false } : null);
+      setActionStatus(`已保存 ${previewDialog.fileName}`);
+      pushActivity(`保存文件：${previewDialog.filePath}`);
+    } catch (error) {
+      setPreviewDialog((prev) => prev ? { ...prev, saving: false } : null);
+      setActionStatus(`保存失败：${error instanceof Error ? error.message : "未知错误"}`);
+    }
+  }
+
   async function openEntry(entry: LogFileEntry) {
+    if (isBusy) return;
     if (entry.kind === "directory") {
       await browseLogFiles(entry.path, { manual: true });
       return;
@@ -1969,13 +2248,17 @@ export function App() {
         return;
       }
       setFileMeta(metaPayload);
-      const nextOffset = Math.max(0, metaPayload.size - sliceLength);
-      const slicePayload = await fetchLogSlice(entry.path, nextOffset, sliceLength);
+      const effectiveLength = sliceLengthMode === "auto" ? computeAutoSliceLength(metaPayload.size) : sliceLength;
+      if (sliceLengthMode === "auto" && effectiveLength !== sliceLength) {
+        setSliceLength(effectiveLength);
+      }
+      const nextOffset = Math.max(0, metaPayload.size - effectiveLength);
+      const slicePayload = await fetchLogSlice(entry.path, nextOffset, effectiveLength);
       if (openFileRequestRef.current !== requestId || slicePayload.filePath !== entry.path) {
         return;
       }
-      cacheSlicePayload(slicePayload, nextOffset, sliceLength);
-      warmNeighborSlices(entry.path, slicePayload, sliceLength);
+      cacheSlicePayload(slicePayload, nextOffset, effectiveLength);
+      warmNeighborSlices(entry.path, slicePayload, effectiveLength);
       sliceRequestRef.current += 1;
       setSliceOffset(slicePayload.actualOffset);
       setSliceData(slicePayload);
@@ -2039,13 +2322,13 @@ export function App() {
       return;
     }
 
-    if (liveFollowEnabled) {
-      stopLiveFollow();
-      pushActivity(`检测到手动翻页，已退出实时跟随：${filePath}。`);
+    if (liveFollowEnabled && !liveFollowPaused) {
+      setLiveFollowPaused(true);
+      pushActivity(`翻页浏览中，实时跟随已暂停。滚到底部可恢复。`);
     }
 
     if (direction === "prev") {
-      if (sliceOffset <= 0) {
+      if (sliceOffset <= 0 || sliceData?.isStart) {
         return;
       }
       sliceScrollAnchorRef.current = "bottom";
@@ -2068,7 +2351,7 @@ export function App() {
   }
 
   function handleViewerWheel(event: ReactWheelEvent<HTMLDivElement>) {
-    if (activeLogView !== "search" || !filePath.trim() || isBusy || wheelSliceLockRef.current) {
+    if (activeLogView !== "search" || activeViewerTabId !== "file" || !filePath.trim() || isBusy || wheelSliceLockRef.current) {
       return;
     }
 
@@ -2080,7 +2363,7 @@ export function App() {
     const nearTop = scrollTop <= 4;
     const nearBottom = scrollTop >= maxScrollTop - 4;
 
-    if (event.deltaY < 0 && nearTop && sliceOffset > 0) {
+    if (event.deltaY < 0 && nearTop && sliceOffset > 0 && !sliceData?.isStart) {
       void navigateSlice("prev", "wheel");
       return;
     }
@@ -2149,8 +2432,7 @@ export function App() {
     }
     sliceScrollAnchorRef.current = "top";
     if (liveFollowEnabled) {
-      stopLiveFollow();
-      pushActivity(`检测到手动跳到文件头，已退出实时跟随：${targetFilePath}。`);
+      setLiveFollowPaused(true);
     }
     const cachedPayload = getCachedSlice(targetFilePath, 0, sliceLength);
     if (cachedPayload) {
@@ -2184,8 +2466,7 @@ export function App() {
     }
     sliceScrollAnchorRef.current = "top";
     if (liveFollowEnabled) {
-      stopLiveFollow();
-      pushActivity(`检测到手动跳转位置，已退出实时跟随：${targetFilePath}。`);
+      setLiveFollowPaused(true);
     }
     const directMeta = activeFileMeta?.filePath === targetFilePath ? activeFileMeta : null;
     if (directMeta) {
@@ -2287,29 +2568,30 @@ export function App() {
   }
 
   return (
-    <main className={`app-shell${uiTheme === "modern" ? " theme-modern" : ""}`}>
+    <main className={`app-shell${uiTheme === "modern" ? " theme-modern" : ""}${isElectron ? " electron-immersive" : ""}`}>
       <section className="shell-layout">
-        <aside className="sidebar-panel">
+        <aside className="sidebar-panel" style={isElectron ? { paddingTop: 38, position: 'relative' } : undefined}>
+          {isElectron && <div className="electron-sidebar-drag" />}
           <div className="sidebar-head">
             <div className="sidebar-head-row">
               <div>
                 <p className="eyebrow">日志控制台</p>
                 <h1 className="topbar-title">日志控制台</h1>
               </div>
-              <div style={{ display: "flex", gap: "2px" }}>
+              <div className="sidebar-head-buttons" style={isElectron ? { position: 'absolute', top: 8, right: 8, zIndex: 2 } : undefined}>
                 <button
                   className="ghost-button icon-button"
                   title={uiTheme === "classic" ? "切换到现代风格" : "切换到经典风格"}
                   onClick={toggleUiTheme}
                 >
-                  <ToolIcon kind={uiTheme === "classic" ? "sparkle" : "undo"} />
+                  <ToolIcon theme={uiTheme} kind={uiTheme === "classic" ? "sparkle" : "undo"} />
                 </button>
                 <button
                   className="ghost-button icon-button"
                   title={showConnectionSettings ? "收起设置" : "打开设置"}
                   onClick={() => setShowConnectionSettings((current) => !current)}
                 >
-                  <ToolIcon kind="settings" />
+                  <ToolIcon theme={uiTheme} kind="settings" />
                 </button>
               </div>
             </div>
@@ -2317,7 +2599,7 @@ export function App() {
           </div>
 
           <section className="pane-section">
-            <div className="pane-title">服务器</div>
+            <div className="pane-title-row"><strong className="pane-title">服务器</strong>{servers.length > 0 && <span>{servers.length} 台</span>}</div>
             <input
               value={serverFilter}
               onChange={(event) => setServerFilter(event.target.value)}
@@ -2379,7 +2661,16 @@ export function App() {
               <strong className="pane-title">操作记录</strong>
               <span>{recentActivityLines.length} 条</span>
             </div>
-            <pre className="console-block activity-block">{recentActivityLines.join("\n")}</pre>
+            <div className="activity-log-list">
+              {recentActivityLines.map((line, i) => {
+                const match = line.match(/^(\[[\d:]+\])\s(.+)$/);
+                return (
+                  <div key={i} className="activity-log-line">
+                    {match ? <><span className="activity-log-time">{match[1]}</span><span className="activity-log-msg">{match[2]}</span></> : <span className="activity-log-msg">{line}</span>}
+                  </div>
+                );
+              })}
+            </div>
           </section>
 
           {showConnectionSettings ? (
@@ -2392,31 +2683,67 @@ export function App() {
                     <button className="ghost-button slim-button" type="button" onClick={() => void checkLocalServiceHealth()} disabled={isBusy}>
                       检查服务
                     </button>
-                    <button className="ghost-button slim-button" onClick={saveFinalShellPath} disabled={isBusy}>
+                    <button className="ghost-button slim-button" onClick={() => { if (selectedImportTool === "finalshell") void saveFinalShellPath(); }} disabled={isBusy}>
                       保存
                     </button>
-                    <button className="ghost-button slim-button" type="button" onClick={importFromFinalShell} disabled={isBusy || localServiceState !== "online"}>
+                    <button className="ghost-button slim-button" type="button" onClick={() => void importFromTool()} disabled={isBusy || localServiceState !== "online"}>
                       导入
                     </button>
                   </>
                 )}
                 {expandedSettingsSection === "import" ? (
                   <>
-                    <label>
-                      FinalShell 目录
-                      <input
-                        value={finalShellPath}
-                        onChange={(event) => setFinalShellPath(event.target.value)}
-                        placeholder="~/Library/FinalShell/conn"
-                      />
-                    </label>
-                    <div className="meta-list settings-meta-list">
-                      <span>本地服务：{localServiceStatusText}</span>
-                      <span>导入情况：{importStatus}</span>
-                      <span>识别目录：{importPath}</span>
-                      <span>上次导入：{finalShellLastImportedAt || "--"}</span>
-                      <span>检测路径：{formatNumber(finalShellDetectedPaths.length)}</span>
+                    <div className="import-tool-tabs">
+                      <button
+                        className={`ghost-button slim-button ${selectedImportTool === "finalshell" ? "tab-active" : ""}`}
+                        onClick={() => setSelectedImportTool("finalshell")}
+                      >
+                        FinalShell
+                      </button>
+                      <button
+                        className={`ghost-button slim-button ${selectedImportTool === "xshell" ? "tab-active" : ""}`}
+                        onClick={() => setSelectedImportTool("xshell")}
+                      >
+                        Xshell
+                      </button>
                     </div>
+                    {selectedImportTool === "finalshell" ? (
+                      <>
+                        <label>
+                          FinalShell 目录
+                          <input
+                            value={finalShellPath}
+                            onChange={(event) => setFinalShellPath(event.target.value)}
+                            placeholder="~/Library/FinalShell/conn"
+                          />
+                        </label>
+                        <div className="meta-list settings-meta-list">
+                          <span>本地服务：{localServiceStatusText}</span>
+                          <span>导入情况：{importStatus}</span>
+                          <span>识别目录：{importPath}</span>
+                          <span>上次导入：{finalShellLastImportedAt || "--"}</span>
+                          <span>检测路径：{formatNumber(finalShellDetectedPaths.length)}</span>
+                        </div>
+                      </>
+                    ) : null}
+                    {selectedImportTool === "xshell" ? (
+                      <>
+                        <label>
+                          Xshell Sessions 目录
+                          <input
+                            value={xshellPath}
+                            onChange={(event) => setXshellPath(event.target.value)}
+                            placeholder="%APPDATA%\NetSarang\Xshell\Sessions"
+                          />
+                        </label>
+                        <div className="meta-list settings-meta-list">
+                          <span>本地服务：{localServiceStatusText}</span>
+                          <span>导入情况：{importStatus}</span>
+                          <span>上次导入：{xshellLastImportedAt || "--"}</span>
+                          <span>检测路径：{formatNumber(xshellDetectedPaths.length)}</span>
+                        </div>
+                      </>
+                    ) : null}
                   </>
                 ) : null}
               </div>
@@ -2518,7 +2845,7 @@ export function App() {
                   <button
                     key={view.key}
                     className={view.key === activeLogView ? "ghost-button tab-active" : "ghost-button"}
-                    onClick={() => setActiveLogView(view.key)}
+                    onClick={(e) => { setActiveLogView(view.key); (e.target as HTMLElement).blur(); }}
                     type="button"
                   >
                     {view.label}
@@ -2534,21 +2861,30 @@ export function App() {
                 />
               </div>
               <div className="toolbar-inline toolbar-search-actions">
+                {isElectron ? (
+                  <button
+                    className={`ghost-button toolbar-action-button${isPinned ? " tab-active" : ""}`}
+                    title={isPinned ? "取消置顶 (Cmd+Shift+T)" : "窗口置顶 (Cmd+Shift+T)"}
+                    onClick={async () => { const p = await (window as any).electronAPI.togglePin(); setIsPinned(p); }}
+                  >
+                    {isPinned ? <PinOff size={14} /> : <Pin size={14} />}<span>{isPinned ? "已置顶" : "置顶"}</span>
+                  </button>
+                ) : null}
                 {activeLogView === "search" ? (
                   <>
-                    <button className="ghost-button toolbar-action-button" onClick={() => void runSearch()} disabled={isBusy || !filePath.trim()}>
-                      <ToolIcon kind="search" /><span>搜索</span>
+                    <button className="ghost-button toolbar-action-button" onClick={() => void runSearch()} disabled={isBusy || !serverId || !filePath.trim()}>
+                      <ToolIcon theme={uiTheme} kind="search" /><span>搜索</span>
                     </button>
-                    <button className="ghost-button toolbar-action-button" onClick={loadTailSlice} disabled={isBusy || !filePath.trim()}>
-                      <ToolIcon kind="tail" /><span>看尾部</span>
+                    <button className="ghost-button toolbar-action-button" onClick={loadTailSlice} disabled={isBusy || !serverId || !filePath.trim()}>
+                      <ToolIcon theme={uiTheme} kind="tail" /><span>看尾部</span>
                     </button>
                     {canOpenTerminal ? (
                       <button className="ghost-button toolbar-action-button" onClick={() => terminalPanelOpen ? setTerminalPanelOpen(false) : openTerminalView()} disabled={!serverId}>
-                        <ToolIcon kind="terminal" /><span>{terminalPanelOpen ? "收起终端" : "终端"}</span>
+                        <ToolIcon theme={uiTheme} kind="terminal" /><span>{terminalPanelOpen ? "收起终端" : "终端"}</span>
                       </button>
                     ) : null}
-                    <button className="ghost-button toolbar-action-button" onClick={() => setActiveLogView("files")}>
-                      <ToolIcon kind="files" /><span>选文件</span>
+                    <button className="ghost-button toolbar-action-button" onClick={() => setActiveLogView("files")} disabled={!serverId}>
+                      <ToolIcon theme={uiTheme} kind="files" /><span>选文件</span>
                     </button>
                     <button className="ghost-button toolbar-action-button slim-action" title="上一个命中" onClick={() => focusHighlight("prev")} disabled={!highlightCount}>
                       上一个
@@ -2556,19 +2892,19 @@ export function App() {
                     <button className="ghost-button toolbar-action-button slim-action" title="下一个命中" onClick={() => focusHighlight("next")} disabled={!highlightCount}>
                       下一个
                     </button>
-                    <button className="ghost-button toolbar-action-button" onClick={() => setShowQueryAdvanced((current) => !current)}>
-                      <ToolIcon kind="more" /><span>{showQueryAdvanced ? "收起条件" : "更多条件"}</span>
+                    <button className="ghost-button toolbar-action-button" onClick={() => setShowQueryAdvanced((current) => !current)} disabled={!serverId}>
+                      <ToolIcon theme={uiTheme} kind="more" /><span>{showQueryAdvanced ? "收起条件" : "更多条件"}</span>
                     </button>
                   </>
                 ) : (
                   <>
                     {canOpenTerminal ? (
                       <button className="ghost-button toolbar-action-button" onClick={() => terminalPanelOpen ? setTerminalPanelOpen(false) : openTerminalView()} disabled={!serverId}>
-                        <ToolIcon kind="terminal" /><span>{terminalPanelOpen ? "收起终端" : "终端"}</span>
+                        <ToolIcon theme={uiTheme} kind="terminal" /><span>{terminalPanelOpen ? "收起终端" : "终端"}</span>
                       </button>
                     ) : null}
-                    <button className="ghost-button toolbar-action-button" onClick={() => setShowQueryAdvanced((current) => !current)}>
-                      <ToolIcon kind="more" /><span>{showQueryAdvanced ? "收起条件" : "更多条件"}</span>
+                    <button className="ghost-button toolbar-action-button" onClick={() => setShowQueryAdvanced((current) => !current)} disabled={!serverId}>
+                      <ToolIcon theme={uiTheme} kind="more" /><span>{showQueryAdvanced ? "收起条件" : "更多条件"}</span>
                     </button>
                   </>
                 )}
@@ -2589,8 +2925,9 @@ export function App() {
                     }
                   }}
                   placeholder="输入关键字，或直接用 /关键字 后回车"
+                  disabled={!serverId}
                 />
-                <button className="ghost-button slim-button" onClick={() => setKeywordInput("")}>
+                <button className="ghost-button slim-button" onClick={() => setKeywordInput("")} disabled={!serverId}>
                   清空
                 </button>
               </div>
@@ -2608,7 +2945,7 @@ export function App() {
                 <div className="advanced-row advanced-row-main">
                   <label>
                     匹配
-                    <select value={keywordMode} onChange={(event) => setKeywordMode(event.target.value as "phrase" | "any" | "all")}>
+                    <select value={keywordMode} onChange={(event) => setKeywordMode(event.target.value as "phrase" | "any" | "all")} disabled={!serverId}>
                       <option value="phrase">精确包含</option>
                       <option value="any">任意一个</option>
                       <option value="all">同时包含</option>
@@ -2616,33 +2953,32 @@ export function App() {
                   </label>
                   <label>
                     上下文
-                    <input type="number" min={0} max={20} value={contextLines} onChange={(event) => setContextLines(Number(event.target.value))} />
+                    <input type="number" min={0} max={20} value={contextLines} onChange={(event) => setContextLines(Number(event.target.value))} disabled={!serverId} />
                   </label>
-                  <label className="checkbox-inline checkbox-inline-compact">
-                    <input
-                      type="checkbox"
-                      checked={useRegex}
-                      onChange={(event) => {
-                        setUseRegex(event.target.checked);
-                        setSelectedPreset(event.target.checked ? "正则" : "自定义");
-                      }}
-                    />
+                  <button
+                    type="button"
+                    className={`ghost-button regex-pill${useRegex ? " regex-pill-active" : ""}`}
+                    onClick={() => {
+                      setUseRegex(!useRegex);
+                      setSelectedPreset(!useRegex ? "正则" : "自定义");
+                    }}
+                  >
                     正则
-                  </label>
+                  </button>
                 </div>
                 <div className="advanced-row advanced-row-time">
                   <label>
                     起始
                     <div className="time-pair">
-                      <input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
-                      <input type="time" step="1" value={startTime} onChange={(event) => setStartTime(event.target.value)} />
+                      <input type="text" placeholder="年-月-日" value={startDate} onChange={(event) => setStartDate(event.target.value)} disabled={!serverId} />
+                      <input type="text" placeholder="时:分:秒" value={startTime} onChange={(event) => setStartTime(event.target.value)} disabled={!serverId} />
                     </div>
                   </label>
                   <label>
                     截止
                     <div className="time-pair">
-                      <input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
-                      <input type="time" step="1" value={endTime} onChange={(event) => setEndTime(event.target.value)} />
+                      <input type="text" placeholder="年-月-日" value={endDate} onChange={(event) => setEndDate(event.target.value)} disabled={!serverId} />
+                      <input type="text" placeholder="时:分:秒" value={endTime} onChange={(event) => setEndTime(event.target.value)} disabled={!serverId} />
                     </div>
                   </label>
                 </div>
@@ -2653,11 +2989,12 @@ export function App() {
                       className={preset.label === selectedPreset ? "ghost-button preset-active" : "ghost-button"}
                       onClick={preset.apply}
                       type="button"
+                      disabled={!serverId}
                     >
                       {preset.label}
                     </button>
                   ))}
-                  <button className="ghost-button" onClick={() => setKeywordInput("")}>清空</button>
+                  <button className="ghost-button" onClick={() => { setKeywordInput(""); setStartDate(""); setEndDate(""); setStartTime(""); setEndTime(""); setSelectedPreset("自定义"); }} disabled={!serverId}>清空</button>
                 </div>
               </div>
             ) : null}
@@ -2721,37 +3058,47 @@ export function App() {
               </div>
             ) : !isFileMode ? (
               <>
-                <div className="panel-head inline-panel-head workspace-head">
-                  <div>
-                    <p className="panel-kicker">结果</p>
-                    <h2>{activeResultTab ? `${activeResultTab.label} · ${activeResultTab.sourceLabel}` : logViews.find((view) => view.key === activeLogView)?.label}</h2>
-                  </div>
-                  <div className="toolbar-inline">
+                <div className="workspace-strip viewer-actions-strip">
+                  <span className="viewer-strip-label">{activeResultTab ? `${activeResultTab.label} · ${activeResultTab.sourceLabel}` : "搜索结果"}</span>
+                  <div className="toolbar-inline workspace-actions compact-actions">
                     {filePath && activeLogView === "search" && activeViewerTabId === "file" ? (
                       <button
-                        className={liveFollowEnabled ? "ghost-button tab-active" : "ghost-button"}
+                        className={liveFollowEnabled ? "ghost-button icon-button tab-active" : "ghost-button icon-button"}
                         onClick={() => liveFollowEnabled ? stopLiveFollow() : startLiveFollow(filePath, selectedFileName)}
                         disabled={isBusy || !filePath.trim()}
+                        title={liveFollowEnabled ? "停止实时跟随" : "开启实时跟随"}
                       >
-                        {liveFollowEnabled ? (liveFollowConnected ? "停止实时" : "实时连接中…") : "实时跟随"}
+                        <Radio size={14} strokeWidth={1.8} />
                       </button>
                     ) : null}
                     {filePath && activeLogView === "search" && activeViewerTabId === "file" ? (
-                      <button className={showFileTools ? "ghost-button tab-active" : "ghost-button"} onClick={() => setShowFileTools((current) => !current)}>
-                        {showFileTools ? "收起更多" : "更多工具"}
+                      <button className={showFileTools ? "ghost-button icon-button tab-active" : "ghost-button icon-button"} onClick={() => setShowFileTools((current) => !current)} title="更多工具">
+                        <Wrench size={14} strokeWidth={1.8} />
+                      </button>
+                    ) : null}
+                    {activeResultTab?.fullContent ? (
+                      <button
+                        className={resultContextMode ? "ghost-button tab-active" : "ghost-button"}
+                        onClick={() => setResultContextMode((current) => !current)}
+                        title={resultContextMode ? "仅显示命中行" : "显示命中行及上下文"}
+                      >
+                        {resultContextMode ? "仅命中" : "含上下文"}
                       </button>
                     ) : null}
                     {activeLogView === "search" ? (
-                      <button className="ghost-button" onClick={exportCurrentResults} disabled={!activeResultTab && !results}>下载结果</button>
+                      <button className="ghost-button icon-button" onClick={exportCurrentResults} disabled={!activeResultTab && !results} title="下载结果">
+                        <Download size={14} strokeWidth={1.8} />
+                      </button>
                     ) : null}
                     {activeViewerCommandPreview ? (
                       <button
-                        className="ghost-button"
+                        className="ghost-button icon-button"
                         onClick={() => {
                           void copyText(activeViewerCommandPreview).then(() => setActionStatus("搜索命令已复制到剪贴板。"));
                         }}
+                        title="复制命令"
                       >
-                        复制命令
+                        <Copy size={14} strokeWidth={1.8} />
                       </button>
                     ) : null}
                   </div>
@@ -2787,14 +3134,24 @@ export function App() {
                     <label>
                       切片大小
                       <select
-                        value={sliceLength}
+                        value={sliceLengthMode === "auto" ? "auto" : sliceLength}
                         onChange={(event) => {
-                          const next = Number(event.target.value);
-                          if (next > 0) {
-                            setSliceLength(next);
+                          const val = event.target.value;
+                          if (val === "auto") {
+                            setSliceLengthMode("auto");
+                            if (activeFileMeta) {
+                              setSliceLength(computeAutoSliceLength(activeFileMeta.size));
+                            }
+                          } else {
+                            const next = Number(val);
+                            if (next > 0) {
+                              setSliceLengthMode("manual");
+                              setSliceLength(next);
+                            }
                           }
                         }}
                       >
+                        <option value="auto">自动{activeFileMeta ? ` (${formatBytes(computeAutoSliceLength(activeFileMeta.size))})` : ""}</option>
                         <option value={32768}>32 KB</option>
                         <option value={65536}>64 KB</option>
                         <option value={131072}>128 KB</option>
@@ -2813,7 +3170,7 @@ export function App() {
                         ))}
                       </div>
                       <div className="file-tools-strip">
-                        <button className="ghost-button" onClick={() => void navigateSlice("prev")} disabled={sliceOffset === 0 || isBusy}>
+                        <button className="ghost-button" onClick={() => void navigateSlice("prev")} disabled={sliceOffset === 0 || sliceData?.isStart || isBusy}>
                           上一页
                         </button>
                         <button className="ghost-button" onClick={() => loadSlice()} disabled={isBusy}>
@@ -2839,22 +3196,6 @@ export function App() {
                         <span>{compactReaderHint}</span>
                       </div>
                     ) : null}
-                    {activeViewerTabId !== "file" && activeViewerMatches.length ? (
-                      <div className="search-match-list">
-                        {activeViewerMatches.map((match, index) => (
-                          <button
-                            key={`${match.source}:${match.lineNumber}:${index}`}
-                            type="button"
-                            className="search-match-item"
-                            onClick={() => void jumpToSearchMatch(match)}
-                            title={match.source === "临时结果" ? "临时结果页暂不支持回跳原文件" : `定位到 ${match.lineNumber} 行`}
-                          >
-                            <span className="search-match-line">{formatNumber(match.lineNumber)}</span>
-                            <span className="search-match-preview">{match.preview}</span>
-                          </button>
-                        ))}
-                      </div>
-                    ) : null}
                     <div className={`viewer-content-shell ${showReaderRail ? "viewer-content-shell-with-rail" : ""}`}>
                       <VirtualLogViewer
                         ref={virtualViewerRef}
@@ -2862,15 +3203,20 @@ export function App() {
                         keywordTerms={keywordTerms}
                         useRegex={useRegex}
                         activeHighlightIndex={activeHighlightIndex}
+                        focusLineIndex={lineContextState && activeViewerTabId === "file" ? lineContextState.lineNumber - lineContextState.startLine : undefined}
+                        onLineClick={activeViewerTabId !== "file" && activeViewerMatches.length ? (lineIndex: number) => {
+                          const match = activeViewerMatches[lineIndex];
+                          if (match) void jumpToSearchMatch(match);
+                        } : undefined}
                         onHighlightCountChange={setHighlightCount}
                         onWheel={handleViewerWheel}
-                        onNearBottomChange={liveFollowEnabled ? handleLiveNearBottomChange : undefined}
+                        onNearBottomChange={handleViewerNearBottomChange}
                         followOutput={liveFollowEnabled && !liveFollowPaused}
                         className="console-block viewer-console viewer-console-markup"
                       />
-                      {liveFollowEnabled && liveFollowPaused ? (
-                        <button className="live-back-to-bottom ghost-button" onClick={scrollLiveToBottom}>
-                          新内容到达，点击回到底部
+                      {viewerNotAtBottom && activeViewerTabId === "file" ? (
+                        <button className="live-back-to-bottom" onClick={scrollViewerToBottom}>
+                          {liveFollowPaused ? "新内容到达，点击回到底部" : "回到底部"}
                         </button>
                       ) : null}
                       {showReaderRail ? (
@@ -2956,28 +3302,66 @@ export function App() {
                         }
                       }}
                       placeholder="/home/app/logs"
+                      disabled={!serverId}
                     />
                   </div>
                   <div className="toolbar-inline workspace-actions compact-actions">
-                    {showDirectoryFilter ? (
-                      <input
-                        className="directory-filter-input"
-                        value={fileFilter}
-                        onChange={(event) => setFileFilter(event.target.value)}
-                        placeholder="过滤当前目录文件"
-                      />
-                    ) : null}
                     <button className="ghost-button icon-button" title="返回上一级" onClick={() => void browseParentDirectory()} disabled={isBusy || !serverId}>
-                      <ToolIcon kind="open" />
+                      <ToolIcon theme={uiTheme} kind="open" />
                     </button>
-                    <button className="ghost-button icon-button" title="过滤当前目录" onClick={() => setShowDirectoryFilter((current) => !current)} disabled={!serverId}>
-                      <ToolIcon kind="filter" />
+                    <button
+                      className={showPathHistory ? "ghost-button icon-button tab-active" : "ghost-button icon-button"}
+                      title="最近访问的目录"
+                      onClick={() => setShowPathHistory((c) => !c)}
+                      disabled={!serverId}
+                    >
+                      <ToolIcon theme={uiTheme} kind="history" />
+                    </button>
+                    <button className={showDirectoryFilter ? "ghost-button icon-button tab-active" : "ghost-button icon-button"} title="过滤当前目录" onClick={() => setShowDirectoryFilter((current) => !current)} disabled={!serverId}>
+                      <ToolIcon theme={uiTheme} kind="filter" />
+                    </button>
+                    <button className="ghost-button icon-button" title="上传文件到当前目录" onClick={() => void uploadFiles()} disabled={isBusy || !serverId}>
+                      <ToolIcon theme={uiTheme} kind="upload" />
                     </button>
                     <button className="ghost-button icon-button" title="刷新目录" onClick={() => browseLogFiles(directoryPath || "/")} disabled={isBusy || !serverId}>
-                      <ToolIcon kind="refresh" />
+                      <ToolIcon theme={uiTheme} kind="refresh" />
                     </button>
                   </div>
                 </div>
+                {showDirectoryFilter ? (
+                  <div className="directory-filter-bar">
+                    <input
+                      className="directory-filter-input"
+                      value={fileFilter}
+                      onChange={(event) => setFileFilter(event.target.value)}
+                      placeholder="输入关键词过滤当前目录..."
+                      autoFocus
+                      disabled={!serverId}
+                    />
+                  </div>
+                ) : null}
+                {showPathHistory ? (() => {
+                  const history = serverId ? readDirectoryHistory(serverId).filter((p) => p !== directoryPath) : [];
+                  return history.length ? (
+                    <div className="path-history-dropdown">
+                      {history.map((historyPath) => (
+                        <div
+                          key={historyPath}
+                          role="button"
+                          className="path-history-item"
+                          onClick={() => void browseLogFiles(historyPath, { manual: true })}
+                          title={historyPath}
+                        >
+                          {historyPath}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="path-history-dropdown">
+                      <span className="path-history-empty">暂无历史记录</span>
+                    </div>
+                  );
+                })() : null}
 
                 {isConnectingWorkspace ? (
                   <div className="workspace-placeholder">
@@ -3046,11 +3430,21 @@ export function App() {
 
                     <div className="browser-resizer" onPointerDown={handleTreeResizeStart} title="拖拽调整目录宽度" />
 
-                    <section className="browser-column browser-file-column">
+                    <section
+                      className={`browser-column browser-file-column${isDragOver ? " drop-zone-active" : ""}`}
+                      onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
+                      onDragLeave={(e) => { if (e.currentTarget.contains(e.relatedTarget as Node)) return; setIsDragOver(false); }}
+                      onDrop={handleFileDrop}
+                    >
                       <div className="browser-column-head">
                         <strong>目录内容</strong>
                         <span>{formatNumber(tableEntries.length)} 项</span>
                       </div>
+                      {isDragOver && (
+                        <div className="drop-zone-overlay">
+                          <div className="drop-zone-label">松开上传文件到当前目录</div>
+                        </div>
+                      )}
                       <div className="file-table">
                         <div className="file-table-head">
                           <button type="button" className="table-head-button" onClick={() => toggleFileSort("name")}>
@@ -3072,10 +3466,26 @@ export function App() {
                               key={entry.path}
                               className={`file-row ${entry.path === filePath ? "file-row-active" : ""} ${entry.kind === "directory" ? "file-row-dir" : ""}`}
                               onClick={() => openEntry(entry)}
+                              onContextMenu={(e) => { e.preventDefault(); setContextMenu({ x: e.clientX, y: e.clientY, entry }); }}
                             >
                               <span className="file-name-cell">
                                 <span className={`entry-icon ${entry.kind === "directory" ? "entry-icon-dir" : "entry-icon-file"}`} aria-hidden="true" />
                                 <strong>{entry.name}</strong>
+                                <span className="file-row-actions">
+                                  {entry.kind === "file" ? (
+                                    <span role="button" className="file-action-icon" title="下载" onClick={(e) => { e.stopPropagation(); void downloadFile(entry.path); }}>
+                                      <ToolIcon theme={uiTheme} kind="download" />
+                                    </span>
+                                  ) : null}
+                                  <span role="button" className="file-action-icon" title="重命名" onClick={(e) => { e.stopPropagation(); openRenameDialog(entry); }}>
+                                    <ToolIcon theme={uiTheme} kind="rename" />
+                                  </span>
+                                  {entry.kind === "file" ? (
+                                    <span role="button" className="file-action-icon file-action-danger" title="删除" onClick={(e) => { e.stopPropagation(); deleteRemoteFile(entry.path); }}>
+                                      <ToolIcon theme={uiTheme} kind="delete" />
+                                    </span>
+                                  ) : null}
+                                </span>
                               </span>
                               <span>{entry.kind === "file" && typeof entry.size === "number" ? formatBytes(entry.size) : "--"}</span>
                               <span>{formatDateTime(entry.modifiedTime)}</span>
@@ -3119,11 +3529,21 @@ export function App() {
 
                     <div className="browser-resizer" onPointerDown={handleTreeResizeStart} title="拖拽调整目录宽度" />
 
-                    <section className="browser-column browser-file-column">
+                    <section
+                      className={`browser-column browser-file-column${isDragOver ? " drop-zone-active" : ""}`}
+                      onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
+                      onDragLeave={(e) => { if (e.currentTarget.contains(e.relatedTarget as Node)) return; setIsDragOver(false); }}
+                      onDrop={handleFileDrop}
+                    >
                       <div className="browser-column-head">
                         <strong>目录内容</strong>
                         <span>0 项</span>
                       </div>
+                      {isDragOver && (
+                        <div className="drop-zone-overlay">
+                          <div className="drop-zone-label">松开上传文件到当前目录</div>
+                        </div>
+                      )}
                       <div className="file-table">
                         <div className="file-table-head">
                           <span>名称</span>
@@ -3145,15 +3565,238 @@ export function App() {
               connected={terminalSession.connected}
               isBusy={isBusy}
               serverId={serverId}
+              detached={terminalDetached}
               containerRef={terminalSession.containerRef}
               onReconnect={() => openTerminalView()}
-              onClose={() => setTerminalPanelOpen(false)}
+              onClose={() => { setTerminalPanelOpen(false); setTerminalDetached(false); }}
               onFocus={() => terminalSession.focusTerminal()}
+              onDetach={() => setTerminalDetached(true)}
+              onAttach={() => setTerminalDetached(false)}
+              onFit={() => terminalSession.fitTerminal()}
             />
           ) : null}
 
         </section>
       </section>
+      {contextMenu ? (
+        <div className="context-menu-backdrop" onClick={() => setContextMenu(null)} onContextMenu={(e) => { e.preventDefault(); setContextMenu(null); }}>
+          <div className="context-menu" style={{ left: contextMenu.x, top: contextMenu.y }} onClick={(e) => e.stopPropagation()}>
+            {contextMenu.entry.kind === "file" ? (
+              <>
+                <div role="button" className="context-menu-item" onClick={() => { const e = contextMenu.entry; setContextMenu(null); void previewFile(e); }}>
+                  编辑
+                </div>
+                <div role="button" className="context-menu-item" onClick={() => { const p = contextMenu.entry.path; setContextMenu(null); void downloadFile(p); }}>
+                  下载
+                </div>
+              </>
+            ) : null}
+            <div role="button" className="context-menu-item" onClick={() => { const e = contextMenu.entry; setContextMenu(null); openRenameDialog(e); }}>
+              重命名
+            </div>
+            <div role="button" className="context-menu-item" onClick={() => { const e = contextMenu.entry; setContextMenu(null); openMoveDialog(e); }}>
+              移动到
+            </div>
+            {contextMenu.entry.kind === "file" ? (
+              <div role="button" className="context-menu-item context-menu-danger" onClick={() => { const p = contextMenu.entry.path; setContextMenu(null); void deleteRemoteFile(p); }}>
+                删除
+              </div>
+            ) : null}
+            <div role="button" className="context-menu-item" onClick={() => { void navigator.clipboard.writeText(contextMenu.entry.path); setContextMenu(null); setActionStatus("已复制路径"); }}>
+              复制路径
+            </div>
+            <div role="button" className="context-menu-item" onClick={() => { void navigator.clipboard.writeText(contextMenu.entry.name); setContextMenu(null); setActionStatus("已复制文件名"); }}>
+              复制文件名
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {uploadProgress ? (
+        <div className="upload-progress-bar">
+          <span className="upload-progress-text">{uploadProgress.fileName}</span>
+          <div className="upload-progress-track">
+            <div className="upload-progress-fill" style={{ width: `${uploadProgress.current}%` }} />
+          </div>
+          <span className="upload-progress-pct">{uploadProgress.current}%</span>
+        </div>
+      ) : null}
+
+      {renameDialog ? (
+        <div className="confirm-backdrop" onClick={() => setRenameDialog(null)}>
+          <div className="confirm-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="confirm-title">重命名{renameDialog.entry.kind === "directory" ? "文件夹" : "文件"}</div>
+            <div className="confirm-message">{renameDialog.entry.path}</div>
+            <input
+              className="rename-input"
+              value={renameDialog.newName}
+              onChange={(e) => setRenameDialog((prev) => prev ? { ...prev, newName: e.target.value } : null)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && renameDialog.newName.trim() && renameDialog.newName !== renameDialog.entry.name) {
+                  void renameRemoteFile(renameDialog.entry, renameDialog.newName);
+                  setRenameDialog(null);
+                }
+                if (e.key === "Escape") setRenameDialog(null);
+              }}
+              autoFocus
+            />
+            <div className="confirm-actions">
+              <div role="button" className="confirm-btn confirm-btn-cancel" onClick={() => setRenameDialog(null)}>取消</div>
+              <div
+                role="button"
+                className={`confirm-btn confirm-btn-primary ${!renameDialog.newName.trim() || renameDialog.newName === renameDialog.entry.name ? "confirm-btn-disabled" : ""}`}
+                onClick={() => {
+                  if (renameDialog.newName.trim() && renameDialog.newName !== renameDialog.entry.name) {
+                    void renameRemoteFile(renameDialog.entry, renameDialog.newName);
+                    setRenameDialog(null);
+                  }
+                }}
+              >
+                确定
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {moveDialog ? (
+        <div className="confirm-backdrop" onClick={() => setMoveDialog(null)}>
+          <div className="confirm-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="confirm-title">移动{moveDialog.entry.kind === "directory" ? "文件夹" : "文件"}</div>
+            <div className="confirm-message">当前：{moveDialog.entry.path}</div>
+            <label className="rename-label">目标目录</label>
+            <input
+              className="rename-input"
+              value={moveDialog.targetDir}
+              onChange={(e) => setMoveDialog((prev) => prev ? { ...prev, targetDir: e.target.value } : null)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && moveDialog.targetDir.trim()) {
+                  void moveRemoteFile(moveDialog.entry, moveDialog.targetDir);
+                  setMoveDialog(null);
+                }
+                if (e.key === "Escape") setMoveDialog(null);
+              }}
+              placeholder="/home/app/target-dir"
+              autoFocus
+            />
+            <div className="confirm-actions">
+              <div role="button" className="confirm-btn confirm-btn-cancel" onClick={() => setMoveDialog(null)}>取消</div>
+              <div
+                role="button"
+                className={`confirm-btn confirm-btn-primary ${!moveDialog.targetDir.trim() ? "confirm-btn-disabled" : ""}`}
+                onClick={() => {
+                  if (moveDialog.targetDir.trim()) {
+                    void moveRemoteFile(moveDialog.entry, moveDialog.targetDir);
+                    setMoveDialog(null);
+                  }
+                }}
+              >
+                移动
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {previewDialog ? (
+        <div className="confirm-backdrop preview-backdrop">
+          <div
+            className={`preview-dialog${previewDialog.maximized ? " preview-dialog-maximized" : ""}`}
+            onMouseDown={(e) => {
+              const target = e.target as HTMLElement;
+              if (!target.classList.contains("preview-resize-handle")) return;
+              e.preventDefault();
+              const dialog = target.parentElement!;
+              const startX = e.clientX;
+              const startY = e.clientY;
+              const startW = dialog.offsetWidth;
+              const startH = dialog.offsetHeight;
+              const onMove = (ev: MouseEvent) => {
+                dialog.style.width = Math.max(400, startW + ev.clientX - startX) + "px";
+                dialog.style.height = Math.max(300, startH + ev.clientY - startY) + "px";
+              };
+              const onUp = () => { document.removeEventListener("mousemove", onMove); document.removeEventListener("mouseup", onUp); };
+              document.addEventListener("mousemove", onMove);
+              document.addEventListener("mouseup", onUp);
+            }}
+          >
+            <div className="preview-header">
+              <div className="preview-title">
+                {previewDialog.fileName}
+                {previewDialog.readOnly
+                  ? <span className="preview-readonly-badge">只读 · 尾部预览 · {formatBytes(previewDialog.size)}</span>
+                  : previewDialog.content !== previewDialog.originalContent ? <span className="preview-dirty"> (已修改)</span> : null
+                }
+              </div>
+              <div className="preview-meta">
+                <span>{formatBytes(previewDialog.size)}</span>
+                {previewDialog.loading ? <span className="preview-loading-badge">加载中…</span> : null}
+              </div>
+              <div className="preview-actions">
+                {!previewDialog.readOnly && (
+                  <button
+                    type="button"
+                    className={`preview-save-btn ${previewDialog.content === previewDialog.originalContent || previewDialog.saving ? "preview-save-btn-disabled" : ""}`}
+                    onClick={() => void saveFileContent()}
+                    disabled={previewDialog.content === previewDialog.originalContent || previewDialog.saving}
+                  >
+                    {previewDialog.saving ? "保存中..." : "保存"}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="preview-maximize-btn"
+                  title={previewDialog.maximized ? "还原窗口" : "最大化"}
+                  onClick={() => setPreviewDialog((prev) => prev ? { ...prev, maximized: !prev.maximized } : null)}
+                >
+                  {previewDialog.maximized
+                    ? <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3"><rect x="3.5" y="5" width="7" height="6" rx="1"/><path d="M5 5V3.5a1 1 0 011-1h4.5a1 1 0 011 1V8a1 1 0 01-1 1H9"/></svg>
+                    : <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3"><rect x="2.5" y="2.5" width="9" height="9" rx="1.5"/></svg>
+                  }
+                </button>
+                <button type="button" className="preview-close" onClick={() => {
+                  if (!previewDialog.readOnly && previewDialog.content !== previewDialog.originalContent) {
+                    setConfirmDialog({ title: "未保存的更改", message: "文件已修改但未保存，确定关闭？", danger: true, onConfirm: () => setPreviewDialog(null) });
+                  } else {
+                    setPreviewDialog(null);
+                  }
+                }}>
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3.5 3.5l7 7M10.5 3.5l-7 7"/></svg>
+                </button>
+              </div>
+            </div>
+            {previewDialog.loading ? (
+              <div className="preview-loading">
+                <div className="preview-loading-spinner" />
+                <span>正在加载文件内容…</span>
+              </div>
+            ) : (
+              <CodeEditor
+                value={previewDialog.originalContent}
+                fileName={previewDialog.fileName}
+                theme={uiTheme}
+                readOnly={previewDialog.readOnly}
+                onChange={(v) => setPreviewDialog((prev) => prev ? { ...prev, content: v } : null)}
+                onSave={() => void saveFileContent()}
+              />
+            )}
+            <div className="preview-resize-handle" />
+          </div>
+        </div>
+      ) : null}
+
+      {confirmDialog ? (
+        <div className="confirm-backdrop" onClick={() => setConfirmDialog(null)}>
+          <div className="confirm-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="confirm-title">{confirmDialog.title}</div>
+            <div className="confirm-message">{confirmDialog.message}</div>
+            <div className="confirm-actions">
+              <div role="button" className="confirm-btn confirm-btn-cancel" onClick={() => setConfirmDialog(null)}>取消</div>
+              <div role="button" className={`confirm-btn ${confirmDialog.danger ? "confirm-btn-danger" : "confirm-btn-primary"}`} onClick={() => { confirmDialog.onConfirm(); setConfirmDialog(null); }}>确定</div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }

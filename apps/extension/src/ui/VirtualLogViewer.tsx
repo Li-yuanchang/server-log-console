@@ -21,6 +21,8 @@ interface Props {
   keywordTerms: string[];
   useRegex: boolean;
   activeHighlightIndex: number;
+  focusLineIndex?: number;
+  onLineClick?: (lineIndex: number) => void;
   onHighlightCountChange?: (count: number) => void;
   onWheel?: (event: React.WheelEvent<HTMLDivElement>) => void;
   onNearBottomChange?: (nearBottom: boolean) => void;
@@ -35,6 +37,8 @@ export const VirtualLogViewer = forwardRef<VirtualLogViewerHandle, Props>(
       keywordTerms,
       useRegex,
       activeHighlightIndex,
+      focusLineIndex,
+      onLineClick,
       onHighlightCountChange,
       onWheel,
       onNearBottomChange,
@@ -104,13 +108,23 @@ export const VirtualLogViewer = forwardRef<VirtualLogViewerHandle, Props>(
       virtuosoRef.current?.scrollToIndex({ index: targetLine, align: "center", behavior: "smooth" });
     }, [activeHighlightIndex, totalMatches, findLineForMatch]);
 
+    useEffect(() => {
+      if (focusLineIndex == null || focusLineIndex < 0 || focusLineIndex >= lines.length) return;
+      virtuosoRef.current?.scrollToIndex({ index: focusLineIndex, align: "center", behavior: "smooth" });
+    }, [focusLineIndex, lines.length]);
+
     const renderLine = useCallback(
       (index: number) => {
         const line = lines[index];
         const escaped = escapeHtml(line ?? "");
 
+        const isFocused = index === focusLineIndex;
+        const clickable = Boolean(onLineClick);
+        const baseClass = `log-line${isFocused ? " log-line-focus" : ""}${clickable ? " log-line-clickable" : ""}`;
+        const handleClick = clickable ? () => onLineClick!(index) : undefined;
+
         if (!highlightRegex || !escaped) {
-          return <div className="log-line" dangerouslySetInnerHTML={{ __html: escaped || "\u00A0" }} />;
+          return <div className={baseClass} onClick={handleClick} dangerouslySetInnerHTML={{ __html: escaped || "\u00A0" }} />;
         }
 
         const startMatchIdx = cumulativeOffsets[index] ?? 0;
@@ -122,9 +136,9 @@ export const VirtualLogViewer = forwardRef<VirtualLogViewerHandle, Props>(
           return `<mark class="${cls}">${capture}</mark>`;
         });
 
-        return <div className="log-line" dangerouslySetInnerHTML={{ __html: highlighted }} />;
+        return <div className={baseClass} onClick={handleClick} dangerouslySetInnerHTML={{ __html: highlighted }} />;
       },
-      [lines, highlightRegex, cumulativeOffsets, activeHighlightIndex],
+      [lines, highlightRegex, cumulativeOffsets, activeHighlightIndex, focusLineIndex, onLineClick],
     );
 
     useImperativeHandle(
@@ -173,6 +187,7 @@ export const VirtualLogViewer = forwardRef<VirtualLogViewerHandle, Props>(
           itemContent={renderLine}
           defaultItemHeight={17}
           followOutput={followOutput ? "smooth" : false}
+          atBottomThreshold={200}
           atBottomStateChange={(atBottom) => onNearBottomChange?.(atBottom)}
           overscan={300}
           style={{ height: "100%", width: "100%" }}

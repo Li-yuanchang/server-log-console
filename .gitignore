@@ -17,7 +17,11 @@ Thumbs.db
 .env.*
 
 # Windsurf
-.windsurf/
+.windsurf/*
+!.windsurf/workflows/
+
+# Electron build
+.electron-build/
 
 # Logs
 *.log

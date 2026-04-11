@@ -1,5 +1,4 @@
 import type { SearchSettingsState } from "./utils.js";
-import { getLocalDateString } from "./utils.js";
 
 const browserTreeWidthStorageKey = "server-log-console:browser-tree-width";
 const browserTreeWidthDefault = 224;
@@ -50,8 +49,8 @@ export function readSavedSearchSettings(): SearchSettingsState | null {
       contextLines: typeof parsed.contextLines === "number" ? Math.max(0, Math.min(20, parsed.contextLines)) : 3,
       useRegex: Boolean(parsed.useRegex),
       selectedPreset: typeof parsed.selectedPreset === "string" ? parsed.selectedPreset : "未选择",
-      startDate: typeof parsed.startDate === "string" ? parsed.startDate : getLocalDateString(),
-      endDate: typeof parsed.endDate === "string" ? parsed.endDate : getLocalDateString(),
+      startDate: typeof parsed.startDate === "string" ? parsed.startDate : "",
+      endDate: typeof parsed.endDate === "string" ? parsed.endDate : "",
       startTime: typeof parsed.startTime === "string" ? parsed.startTime : "",
       endTime: typeof parsed.endTime === "string" ? parsed.endTime : ""
     };
@@ -97,6 +96,35 @@ export function rememberDirectoryIfUseful(serverId: string, directoryPath: strin
   }
 
   writeLastDirectory(serverId, directoryPath);
+}
+
+const directoryHistoryStorageKey = "server-log-console:directory-history";
+const directoryHistoryMax = 20;
+
+export function readDirectoryHistory(serverId: string): string[] {
+  try {
+    const raw = globalThis.localStorage?.getItem(directoryHistoryStorageKey);
+    if (!raw) return [];
+    const map = JSON.parse(raw) as Record<string, string[]>;
+    return Array.isArray(map[serverId]) ? map[serverId] : [];
+  } catch {
+    return [];
+  }
+}
+
+export function pushDirectoryHistory(serverId: string, directoryPath: string) {
+  if (!serverId || !directoryPath.trim()) return;
+  try {
+    const raw = globalThis.localStorage?.getItem(directoryHistoryStorageKey);
+    const map = raw ? (JSON.parse(raw) as Record<string, string[]>) : {};
+    const list = Array.isArray(map[serverId]) ? map[serverId] : [];
+    const filtered = list.filter((p) => p !== directoryPath);
+    filtered.unshift(directoryPath);
+    map[serverId] = filtered.slice(0, directoryHistoryMax);
+    globalThis.localStorage?.setItem(directoryHistoryStorageKey, JSON.stringify(map));
+  } catch {
+    return;
+  }
 }
 
 export function readLastServerId() {

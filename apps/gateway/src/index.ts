@@ -16,7 +16,7 @@ import type {
 } from "@server-log-console/shared";
 import { LogsService } from "./modules/logs/logs.service.js";
 import { LogSearchTaskService } from "./modules/logs/log-search-task.service.js";
-import { FinalShellImportService } from "./modules/servers/finalshell-import.service.js";
+import { ImportStrategyResolver, FinalShellImportStrategy, XshellImportStrategy } from "./modules/servers/strategies/index.js";
 import { ServerRegistryService } from "./modules/servers/server-registry.service.js";
 import { CredentialResolverService } from "./modules/servers/credential-resolver.service.js";
 import { LocalConfigService } from "./modules/servers/local-config.service.js";
@@ -24,31 +24,57 @@ import { SshExecutorService } from "./modules/logs/ssh-executor.service.js";
 import { buildTailCommand } from "./modules/logs/command-builder.js";
 import { FileBrowserService } from "./modules/logs/file-browser.service.js";
 import { LogSliceService } from "./modules/logs/log-slice.service.js";
+import { FileTransferService } from "./modules/logs/file-transfer.service.js";
+import { StrategyResolver } from "./modules/logs/strategies/index.js";
+import multer from "multer";
 import { shellEscape } from "./modules/logs/remote-shell.js";
 import { registerTerminalWebsocket } from "./modules/terminals/terminal-websocket.js";
 
+const bootStart = performance.now();
+function logPhase(label: string, start: number) {
+  const ms = (performance.now() - start).toFixed(1);
+  console.log(`  ✓ ${label} (${ms}ms)`);
+}
+console.log("┌─ Gateway starting…");
+
+let t = performance.now();
 const app = express();
 const httpServer = createServer(app);
 const wsServer = new WebSocketServer({ noServer: true });
 const terminalWsServer = new WebSocketServer({ noServer: true });
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
-const extensionDistDir = path.resolve(currentDir, "../../extension/dist");
+const extensionDistDir = process.env.EXTENSION_DIST_DIR || path.resolve(currentDir, "../../extension/dist");
 const extensionIndexFile = path.join(extensionDistDir, "index.html");
+logPhase("HTTP + WebSocket servers", t);
+
+t = performance.now();
 const serverRegistryService = new ServerRegistryService();
 const localConfigService = new LocalConfigService();
 await localConfigService.initialize();
 serverRegistryService.setManualServers(localConfigService.listManualServers());
 serverRegistryService.setImportedServers(localConfigService.listImportedServers());
+logPhase("Local config & server registry", t);
+
+t = performance.now();
 const credentialResolverService = new CredentialResolverService(localConfigService);
 const sshExecutorService = new SshExecutorService(serverRegistryService, credentialResolverService, localConfigService);
+const strategyResolver = new StrategyResolver(serverRegistryService, sshExecutorService);
 const logsService = new LogsService(serverRegistryService, sshExecutorService);
-const fileBrowserService = new FileBrowserService(serverRegistryService, sshExecutorService);
-const logSliceService = new LogSliceService(serverRegistryService, sshExecutorService);
-const logSearchTaskService = new LogSearchTaskService(serverRegistryService, sshExecutorService, logSliceService);
-const finalShellImportService = new FinalShellImportService();
+const fileBrowserService = new FileBrowserService(strategyResolver, serverRegistryService);
+const logSliceService = new LogSliceService(strategyResolver);
+const logSearchTaskService = new LogSearchTaskService(serverRegistryService, strategyResolver, logSliceService);
+const fileTransferService = new FileTransferService(strategyResolver);
+logPhase("Service layer", t);
+
+t = performance.now();
+const importResolver = new ImportStrategyResolver();
+importResolver.register(new FinalShellImportStrategy());
+importResolver.register(new XshellImportStrategy());
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } });
+logPhase("Import strategies & middleware", t);
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "50mb" }));
 
 app.get("/health", (_req, res) => {
   res.json({ ok: true, service: "gateway", now: new Date().toISOString() });
@@ -77,15 +103,25 @@ app.get("/api/servers/:serverId/route", (req, res) => {
   }
 });
 
+app.get("/api/import/tools", (_req, res) => {
+  res.json(importResolver.listTools());
+});
+
 app.get("/api/import/finalshell", async (_req, res) => {
   try {
+    const strategy = importResolver.resolve("finalshell");
     const preferredPath = localConfigService.getFinalShellConfiguredPath() || undefined;
-    const result = await finalShellImportService.importServers(preferredPath);
+    const result = await strategy.importServers(preferredPath);
     await localConfigService.setImportedCredentials(result.credentials);
-    await localConfigService.setImportedServers(result.response.servers);
-    serverRegistryService.setImportedServers(result.response.servers);
-    await localConfigService.markFinalShellImported(result.response.importedAt, preferredPath);
-    res.json(result.response);
+    await localConfigService.setImportedServers(result.servers);
+    serverRegistryService.setImportedServers(result.servers);
+    await localConfigService.markFinalShellImported(result.importedAt, preferredPath);
+    res.json({
+      importedAt: result.importedAt,
+      resolvedPath: result.resolvedPath,
+      searchedPaths: result.searchedPaths,
+      servers: result.servers
+    });
   } catch (error) {
     res.status(500).json({ message: error instanceof Error ? error.message : "Unknown error" });
   }
@@ -93,8 +129,9 @@ app.get("/api/import/finalshell", async (_req, res) => {
 
 app.get("/api/import/finalshell/settings", async (_req, res) => {
   try {
+    const strategy = importResolver.resolve("finalshell");
     const configuredPath = localConfigService.getFinalShellConfiguredPath();
-    const inspection = await finalShellImportService.inspectRootDir(configuredPath || undefined);
+    const inspection = await strategy.inspect(configuredPath || undefined);
     const payload: FinalShellSettingsResponse = {
       configuredPath,
       resolvedPath: inspection.resolvedPath,
@@ -109,10 +146,11 @@ app.get("/api/import/finalshell/settings", async (_req, res) => {
 
 app.post("/api/import/finalshell/settings", async (req, res) => {
   try {
+    const strategy = importResolver.resolve("finalshell");
     const body = (req.body || {}) as FinalShellSettingsRequest;
     await localConfigService.saveFinalShellConfiguredPath(body.configuredPath || "");
     const configuredPath = localConfigService.getFinalShellConfiguredPath();
-    const inspection = await finalShellImportService.inspectRootDir(configuredPath || undefined);
+    const inspection = await strategy.inspect(configuredPath || undefined);
     const payload: FinalShellSettingsResponse = {
       configuredPath,
       resolvedPath: inspection.resolvedPath,
@@ -122,6 +160,24 @@ app.post("/api/import/finalshell/settings", async (req, res) => {
     res.json(payload);
   } catch (error) {
     res.status(400).json({ message: error instanceof Error ? error.message : "Unknown error" });
+  }
+});
+
+app.get("/api/import/xshell", async (_req, res) => {
+  try {
+    const strategy = importResolver.resolve("xshell");
+    const result = await strategy.importServers();
+    await localConfigService.setImportedCredentials(result.credentials);
+    await localConfigService.setImportedServers(result.servers);
+    serverRegistryService.setImportedServers(result.servers);
+    res.json({
+      importedAt: result.importedAt,
+      resolvedPath: result.resolvedPath,
+      searchedPaths: result.searchedPaths,
+      servers: result.servers
+    });
+  } catch (error) {
+    res.status(500).json({ message: error instanceof Error ? error.message : "Unknown error" });
   }
 });
 
@@ -335,6 +391,67 @@ app.post("/api/logs/export", async (req, res) => {
   }
 });
 
+app.post("/api/files/delete", async (req, res) => {
+  try {
+    const result = await fileTransferService.delete(req.body);
+    res.json(result);
+  } catch (error) {
+    res.status(400).json({ message: error instanceof Error ? error.message : "Unknown error" });
+  }
+});
+
+app.post("/api/files/rename", async (req, res) => {
+  try {
+    const result = await fileTransferService.rename(req.body);
+    res.json(result);
+  } catch (error) {
+    res.status(400).json({ message: error instanceof Error ? error.message : "Unknown error" });
+  }
+});
+
+app.post("/api/files/save", async (req, res) => {
+  try {
+    const result = await fileTransferService.save(req.body);
+    res.json(result);
+  } catch (error) {
+    res.status(400).json({ message: error instanceof Error ? error.message : "Unknown error" });
+  }
+});
+
+app.post("/api/files/preview", async (req, res) => {
+  try {
+    const result = await fileTransferService.preview(req.body);
+    res.json(result);
+  } catch (error) {
+    res.status(400).json({ message: error instanceof Error ? error.message : "Unknown error" });
+  }
+});
+
+app.post("/api/files/download", async (req, res) => {
+  try {
+    const { buffer, fileName } = await fileTransferService.download(req.body);
+    res.setHeader("Content-Type", "application/octet-stream");
+    res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(fileName)}"`);
+    res.setHeader("Content-Length", buffer.length);
+    res.send(buffer);
+  } catch (error) {
+    res.status(400).json({ message: error instanceof Error ? error.message : "Unknown error" });
+  }
+});
+
+app.post("/api/files/upload", upload.single("file"), async (req, res) => {
+  try {
+    const serverId = req.body?.serverId as string;
+    const filePath = req.body?.filePath as string;
+    if (!serverId || !filePath) throw new Error("serverId 和 filePath 必填");
+    if (!req.file) throw new Error("未收到上传文件");
+    const result = await fileTransferService.upload(serverId, filePath, req.file.buffer);
+    res.json(result);
+  } catch (error) {
+    res.status(400).json({ message: error instanceof Error ? error.message : "Unknown error" });
+  }
+});
+
 app.post("/api/logs/files", async (req, res) => {
   try {
     const result = await fileBrowserService.list(req.body);
@@ -371,6 +488,7 @@ app.post("/api/logs/line-context", async (req, res) => {
   }
 });
 
+t = performance.now();
 if (existsSync(extensionIndexFile)) {
   app.use(express.static(extensionDistDir));
 
@@ -382,18 +500,21 @@ if (existsSync(extensionIndexFile)) {
 
     res.sendFile(extensionIndexFile);
   });
+  logPhase(`Static files (${extensionDistDir})`, t);
+} else {
+  console.log(`  ⚠ Frontend not found: ${extensionDistDir}`);
 }
 
 wsServer.on("connection", (socket: WebSocket) => {
   let clientCleanup: (() => void) | null = null;
 
-  let alive = true;
+  let missedPongs = 0;
   const heartbeat = setInterval(() => {
-    if (!alive) { socket.terminate(); return; }
-    alive = false;
+    missedPongs++;
+    if (missedPongs >= 3) { socket.terminate(); return; }
     socket.ping();
   }, 25000);
-  socket.on("pong", () => { alive = true; });
+  socket.on("pong", () => { missedPongs = 0; });
 
   socket.on("message", async (raw: RawData) => {
     try {
@@ -526,7 +647,18 @@ httpServer.on("upgrade", (request, socket, head) => {
 const port = Number(process.env.PORT || 4040);
 const host = process.env.HOST || "127.0.0.1";
 httpServer.listen(port, host, () => {
-  console.log(`Gateway listening on http://${host}:${port}`);
+  const url = `http://${host === "0.0.0.0" ? "127.0.0.1" : host}:${port}`;
+  const totalMs = (performance.now() - bootStart).toFixed(0);
+  const serverCount = serverRegistryService.listServers().length;
+  console.log(`├─ Routes & WebSocket handlers registered`);
+  console.log(`└─ Gateway ready in ${totalMs}ms — ${url}`);
+  console.log(`   ${serverCount} server(s) loaded | PID ${process.pid} | ${process.env.ELECTRON ? "Electron" : "standalone"}`);
+  if (process.argv.includes("--open") && !process.env.ELECTRON) {
+    import("node:child_process").then(({ exec }) => {
+      const cmd = process.platform === "darwin" ? "open" : process.platform === "win32" ? "start" : "xdg-open";
+      exec(`${cmd} ${url}`);
+    });
+  }
 });
 
 function appendConnectionHint(

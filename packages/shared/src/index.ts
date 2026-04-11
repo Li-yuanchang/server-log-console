@@ -10,7 +10,7 @@ export interface ServerSummary {
   basePath: string;
   profile: LogProfile;
   tags: string[];
-  source?: "manual" | "finalshell";
+  source?: "manual" | "finalshell" | "xshell";
   groupPath?: string[];
   authType?: "password" | "privateKey" | "unknown";
   hasStoredSecret?: boolean;
@@ -47,6 +47,7 @@ export interface LogSearchResponse {
   truncated: boolean;
   matches: LogSearchMatch[];
   rawOutput: string;
+  contextOutput?: string;
   strategyLabel?: string;
   scopeLabel?: string;
 }
@@ -107,7 +108,7 @@ export interface ServerCredentialStatus {
   serverId: string;
   serverName: string;
   username: string;
-  source: "manual" | "finalshell" | "environment" | "none";
+  source: "manual" | "finalshell" | "xshell" | "environment" | "none";
   hasPassword: boolean;
   hasPrivateKey: boolean;
   hasUsableCredential: boolean;
