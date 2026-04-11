@@ -14,6 +14,15 @@ export interface StreamingExecHandle {
   cleanup(): void;
 }
 
+export interface UploadHandle {
+  /** 写入一块数据（按顺序调用，内部自动追踪 offset） */
+  write(data: Buffer): Promise<void>;
+  /** 完成上传，释放资源 */
+  finish(): Promise<void>;
+  /** 中止上传，释放资源 */
+  abort(): void;
+}
+
 /**
  * 连接策略接口 —— 统一直连 / 堡垒机 SFTP 两种通道的文件操作。
  *
@@ -38,6 +47,9 @@ export interface ConnectionStrategy {
 
   /** 上传 Buffer 到远程文件 */
   uploadFile(filePath: string, content: Buffer): Promise<void>;
+
+  /** 开始分片上传，返回可复用的写入句柄 */
+  startUpload(filePath: string): Promise<UploadHandle>;
 
   /** 删除远程文件 */
   deleteFile(filePath: string): Promise<void>;

@@ -318,6 +318,17 @@ button, input, select, textarea, a,
   height: 13px;
 }
 
+@media (max-width: 960px) {
+  .toolbar-action-button > span {
+    display: none;
+  }
+  .toolbar-action-button {
+    padding: 0 6px;
+    min-width: 26px;
+    justify-content: center;
+  }
+}
+
 .compact-actions,
 .toolbar-tabs,
 .toolbar-search-actions,
@@ -2434,13 +2445,20 @@ body.is-resizing-tree {
   right: 0;
   z-index: 8000;
   display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 14px;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 14px 8px;
   background: #edf2f7;
   border-top: 1px solid #c8d1da;
   font-size: 11px;
   color: #33485d;
+}
+
+.upload-progress-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
 }
 
 .upload-progress-text {
@@ -2451,26 +2469,26 @@ body.is-resizing-tree {
   white-space: nowrap;
 }
 
+.upload-progress-stats {
+  flex-shrink: 0;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.75;
+}
+
 .upload-progress-track {
-  flex: 1;
-  height: 6px;
+  width: 100%;
+  height: 4px;
   background: #d9e0e8;
-  border-radius: 3px;
+  border-radius: 2px;
   overflow: hidden;
 }
 
 .upload-progress-fill {
   height: 100%;
   background: #4e7ea8;
-  border-radius: 3px;
+  border-radius: 2px;
   transition: width 0.2s ease;
-}
-
-.upload-progress-pct {
-  flex-shrink: 0;
-  width: 36px;
-  text-align: right;
-  font-variant-numeric: tabular-nums;
 }
 
 .table-empty {

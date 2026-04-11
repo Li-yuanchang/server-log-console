@@ -17,9 +17,11 @@ export class StrategyResolver {
     const server = this.serverRegistry.getServer(serverId);
 
     if (this.sshExecutor.isJumpServerBastion(server)) {
+      console.log(`[strategy] ${server.name} (${server.host}:${server.port}) → bastion-sftp`);
       return new BastionSftpStrategy(serverId, this.sshExecutor);
     }
 
+    console.log(`[strategy] ${server.name} (${server.host}:${server.port}) → direct`);
     return new DirectStrategy(serverId, this.sshExecutor);
   }
 }

@@ -123,7 +123,7 @@ export function App() {
   const [xshellPath, setXshellPath] = useState("");
   const [xshellDetectedPaths, setXshellDetectedPaths] = useState<string[]>([]);
   const [xshellLastImportedAt, setXshellLastImportedAt] = useState("");
-  const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number; fileName: string } | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number; fileName: string; fileSize: number; bytesUploaded: number; speed: number } | null>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; entry: LogFileEntry } | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<{ title: string; message: string; danger?: boolean; onConfirm: () => void } | null>(null);
   const [renameDialog, setRenameDialog] = useState<{ entry: LogFileEntry; newName: string } | null>(null);
@@ -2015,52 +2015,109 @@ export function App() {
     });
   }
 
-  function uploadOneFile(file: File, targetPath: string): Promise<void> {
-    return new Promise((resolve, reject) => {
+  function formatSize(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+    return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
+  }
+
+  async function uploadOneFile(file: File, targetPath: string): Promise<void> {
+    const CHUNK_THRESHOLD = 10 * 1024 * 1024;
+
+    if (file.size < CHUNK_THRESHOLD) {
       const formData = new FormData();
       formData.append("file", file);
       formData.append("serverId", serverId!);
       formData.append("filePath", targetPath);
-      const xhr = new XMLHttpRequest();
-      xhr.open("POST", `${localServiceBase}/api/files/upload`);
-      xhr.upload.onprogress = (e) => {
-        if (e.lengthComputable) {
-          setUploadProgress((prev) => prev ? { ...prev, current: Math.round((e.loaded / e.total) * 100) } : null);
-        }
-      };
-      xhr.onload = () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          resolve();
-        } else {
-          try {
-            const body = JSON.parse(xhr.responseText) as { message?: string };
-            reject(new Error(body.message || `上传失败 (${xhr.status})`));
-          } catch {
-            reject(new Error(`上传失败 (${xhr.status})`));
-          }
-        }
-      };
-      xhr.onerror = () => reject(new Error("网络错误，上传失败"));
-      xhr.send(formData);
+      const res = await fetch(`${localServiceBase}/api/files/upload`, { method: "POST", body: formData });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({})) as { message?: string };
+        throw new Error(body.message || `上传失败 (${res.status})`);
+      }
+      setUploadProgress((prev) => prev ? { ...prev, current: 100, bytesUploaded: file.size, speed: 0 } : null);
+      return;
+    }
+
+    const chunkSize = Math.max(1 * 1024 * 1024, Math.min(8 * 1024 * 1024, Math.ceil(file.size / 50)));
+    const totalChunks = Math.ceil(file.size / chunkSize);
+
+    const startRes = await fetch(`${localServiceBase}/api/files/upload/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ serverId, filePath: targetPath })
     });
+    if (!startRes.ok) {
+      const body = await startRes.json().catch(() => ({})) as { message?: string };
+      throw new Error(body.message || `上传初始化失败 (${startRes.status})`);
+    }
+    const { uploadId } = await startRes.json() as { uploadId: string };
+
+    let offset = 0;
+    let speedSampleTime = Date.now();
+    let speedSampleOffset = 0;
+    let speed = 0;
+
+    for (let i = 0; i < totalChunks; i++) {
+      const end = Math.min(offset + chunkSize, file.size);
+      const blob = file.slice(offset, end);
+      const formData = new FormData();
+      formData.append("chunk", blob);
+      formData.append("uploadId", uploadId);
+
+      const chunkRes = await fetch(`${localServiceBase}/api/files/upload/chunk`, {
+        method: "POST",
+        body: formData
+      });
+      if (!chunkRes.ok) {
+        const body = await chunkRes.json().catch(() => ({})) as { message?: string };
+        throw new Error(body.message || `分片上传失败 (${chunkRes.status})`);
+      }
+
+      offset = end;
+      const now = Date.now();
+      const elapsed = (now - speedSampleTime) / 1000;
+      if (elapsed >= 0.5) {
+        speed = (offset - speedSampleOffset) / elapsed;
+        speedSampleTime = now;
+        speedSampleOffset = offset;
+      }
+      setUploadProgress((prev) => prev ? { ...prev, current: Math.round((offset / file.size) * 100), bytesUploaded: offset, speed } : null);
+    }
+
+    const finishRes = await fetch(`${localServiceBase}/api/files/upload/finish`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ uploadId })
+    });
+    if (!finishRes.ok) {
+      const body = await finishRes.json().catch(() => ({})) as { message?: string };
+      throw new Error(body.message || `上传完成失败 (${finishRes.status})`);
+    }
   }
 
   async function uploadFileList(fileList: File[]) {
     if (!serverId || !directoryPath || fileList.length === 0) return;
     const total = fileList.length;
-    await withBusy(`正在上传 ${total} 个文件...`, async () => {
+    const uploadDir = directoryPath;
+    setActionStatus(`正在上传 ${total} 个文件...`);
+    try {
       for (let i = 0; i < fileList.length; i++) {
         const file = fileList[i];
-        const targetPath = directoryPath.endsWith("/") ? `${directoryPath}${file.name}` : `${directoryPath}/${file.name}`;
-        setUploadProgress({ current: 0, total, fileName: `(${i + 1}/${total}) ${file.name}` });
+        const targetPath = uploadDir.endsWith("/") ? `${uploadDir}${file.name}` : `${uploadDir}/${file.name}`;
+        setUploadProgress({ current: 0, total, fileName: `(${i + 1}/${total}) ${file.name}`, fileSize: file.size, bytesUploaded: 0, speed: 0 });
         await uploadOneFile(file, targetPath);
         pushActivity(`已上传文件：${targetPath}`);
       }
+      setActionStatus(`已上传 ${total} 个文件到 ${uploadDir}`);
+      await browseLogFiles(uploadDir);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "未知错误";
+      setActionStatus(`上传失败：${detail}`);
+      pushActivity(`上传失败：${detail}`);
+    } finally {
       setUploadProgress(null);
-      setActionStatus(`已上传 ${total} 个文件到 ${directoryPath}`);
-      await browseLogFiles(directoryPath);
-    });
-    setUploadProgress(null);
+    }
   }
 
   async function uploadFiles() {
@@ -3614,11 +3671,17 @@ export function App() {
 
       {uploadProgress ? (
         <div className="upload-progress-bar">
-          <span className="upload-progress-text">{uploadProgress.fileName}</span>
+          <div className="upload-progress-info">
+            <span className="upload-progress-text">{uploadProgress.fileName}</span>
+            <span className="upload-progress-stats">
+              {formatSize(uploadProgress.bytesUploaded)} / {formatSize(uploadProgress.fileSize)}
+              {uploadProgress.speed > 0 ? ` · ${formatSize(uploadProgress.speed)}/s` : ""}
+              {" · "}{uploadProgress.current}%
+            </span>
+          </div>
           <div className="upload-progress-track">
             <div className="upload-progress-fill" style={{ width: `${uploadProgress.current}%` }} />
           </div>
-          <span className="upload-progress-pct">{uploadProgress.current}%</span>
         </div>
       ) : null}
 

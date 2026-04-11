@@ -1,5 +1,5 @@
 import type { LogFileEntry } from "@server-log-console/shared";
-import type { DirectConnectionStrategy, FileStat, StreamingExecHandle } from "./connection-strategy.js";
+import type { DirectConnectionStrategy, FileStat, StreamingExecHandle, UploadHandle } from "./connection-strategy.js";
 import type { SshExecutorService } from "../ssh-executor.service.js";
 import { shellEscape } from "../remote-shell.js";
 
@@ -137,6 +137,25 @@ export class DirectStrategy implements DirectConnectionStrategy {
     const command = `base64 -d > ${fileArg}`;
     const b64 = content.toString("base64");
     await this.sshExecutor.execWithStdin(this.serverId, command, b64 + "\n", 120000);
+  }
+
+  async startUpload(filePath: string): Promise<UploadHandle> {
+    const fileArg = shellEscape(filePath);
+    let first = true;
+    let aborted = false;
+
+    return {
+      write: async (data: Buffer) => {
+        if (aborted) throw new Error("上传已中止");
+        const op = first ? ">" : ">>";
+        first = false;
+        const command = `base64 -d ${op} ${fileArg}`;
+        const b64 = data.toString("base64");
+        await this.sshExecutor.execWithStdin(this.serverId, command, b64 + "\n", 120000);
+      },
+      finish: async () => {},
+      abort: () => { aborted = true; }
+    };
   }
 
   async deleteFile(filePath: string): Promise<void> {

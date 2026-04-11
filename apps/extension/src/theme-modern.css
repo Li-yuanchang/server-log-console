@@ -313,7 +313,7 @@
 
 .theme-modern .compact-activity-panel {
   margin: 0;
-  padding: 10px 16px;
+  padding: 0 10px 16px;
   border-top: 1px solid var(--sidebar-line);
   gap: 6px;
   background: transparent;
@@ -1357,13 +1357,11 @@
 
 /* --- 20. 终端面板 --- */
 .theme-modern .terminal-bottom-panel {
-  border: none;
+  border: 1px solid var(--line);
   border-radius: 0;
   flex-shrink: 0;
   max-height: 40vh;
-  margin: 0 12px 8px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
+  margin: 0 16px 8px;
   overflow: hidden;
 }
 
@@ -1807,12 +1805,12 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  padding: 8px 16px 12px;
+  padding: 0 16px 8px;
 }
 
 .theme-modern .viewer-content-shell {
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 0;
   grid-template-rows: minmax(0, 1fr);
 }
 
@@ -1900,12 +1898,16 @@
 
 .theme-modern .upload-progress-track {
   background: var(--line);
-  border-radius: 4px;
+  border-radius: 3px;
 }
 
 .theme-modern .upload-progress-fill {
   background: var(--accent);
-  border-radius: 4px;
+  border-radius: 3px;
+}
+
+.theme-modern .upload-progress-stats {
+  opacity: 0.6;
 }
 
 /* --- 35. Confirm Dialog --- */

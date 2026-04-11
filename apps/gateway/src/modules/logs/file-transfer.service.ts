@@ -1,5 +1,7 @@
+import { randomUUID } from "crypto";
 import { z } from "zod";
 import type { StrategyResolver } from "./strategies/index.js";
+import type { UploadHandle } from "./strategies/connection-strategy.js";
 
 const downloadSchema = z.object({
   serverId: z.string(),
@@ -10,6 +12,13 @@ const uploadSchema = z.object({
   serverId: z.string(),
   filePath: z.string()
 });
+
+interface UploadSession {
+  handle: UploadHandle;
+  filePath: string;
+  bytesWritten: number;
+  timeout: ReturnType<typeof setTimeout>;
+}
 
 const renameSchema = z.object({
   serverId: z.string(),
@@ -108,14 +117,63 @@ export class FileTransferService {
   async upload(serverId: string, filePath: string, content: Buffer): Promise<{ filePath: string; size: number }> {
     uploadSchema.parse({ serverId, filePath });
     const strategy = this.strategyResolver.resolve(serverId);
-
-    const maxUploadSize = 100 * 1024 * 1024;
-    if (content.length > maxUploadSize) {
-      throw new Error(`文件过大（${formatBytes(content.length)}），上传上限 ${formatBytes(maxUploadSize)}`);
-    }
-
     await strategy.uploadFile(filePath, content);
     return { filePath, size: content.length };
+  }
+
+  /* ── 分片上传 ── */
+
+  private uploadSessions = new Map<string, UploadSession>();
+  private static SESSION_TIMEOUT = 10 * 60 * 1000;
+
+  async startChunkedUpload(serverId: string, filePath: string): Promise<{ uploadId: string }> {
+    uploadSchema.parse({ serverId, filePath });
+    const strategy = this.strategyResolver.resolve(serverId);
+    const handle = await strategy.startUpload(filePath);
+    const uploadId = randomUUID();
+
+    const timeout = setTimeout(() => this.cleanupSession(uploadId), FileTransferService.SESSION_TIMEOUT);
+    this.uploadSessions.set(uploadId, { handle, filePath, bytesWritten: 0, timeout });
+
+    console.log(`[upload] session started: ${uploadId} → ${filePath}`);
+    return { uploadId };
+  }
+
+  async writeChunk(uploadId: string, chunk: Buffer): Promise<{ bytesWritten: number }> {
+    const session = this.uploadSessions.get(uploadId);
+    if (!session) throw new Error("上传会话不存在或已过期");
+
+    clearTimeout(session.timeout);
+    session.timeout = setTimeout(() => this.cleanupSession(uploadId), FileTransferService.SESSION_TIMEOUT);
+
+    await session.handle.write(chunk);
+    session.bytesWritten += chunk.length;
+    return { bytesWritten: session.bytesWritten };
+  }
+
+  async finishUpload(uploadId: string): Promise<{ filePath: string; size: number }> {
+    const session = this.uploadSessions.get(uploadId);
+    if (!session) throw new Error("上传会话不存在或已过期");
+
+    clearTimeout(session.timeout);
+    await session.handle.finish();
+    this.uploadSessions.delete(uploadId);
+
+    console.log(`[upload] session finished: ${uploadId} size=${formatBytes(session.bytesWritten)}`);
+    return { filePath: session.filePath, size: session.bytesWritten };
+  }
+
+  abortUpload(uploadId: string): void {
+    this.cleanupSession(uploadId);
+  }
+
+  private cleanupSession(uploadId: string) {
+    const session = this.uploadSessions.get(uploadId);
+    if (!session) return;
+    clearTimeout(session.timeout);
+    try { session.handle.abort(); } catch {}
+    this.uploadSessions.delete(uploadId);
+    console.log(`[upload] session cleaned up: ${uploadId}`);
   }
 }
 

@@ -4,10 +4,16 @@ import { CredentialResolverService } from "../servers/credential-resolver.servic
 import { LocalConfigService } from "../servers/local-config.service.js";
 import { ServerRegistryService } from "../servers/server-registry.service.js";
 
+export interface SftpWriteHandle {
+  writeChunk(data: Buffer, offset: number): Promise<void>;
+  close(): Promise<void>;
+}
+
 export interface SftpSession {
   stat(filePath: string): Promise<{ size: number; mtime: number; readable: boolean }>;
   read(filePath: string, offset: number, length: number): Promise<Buffer>;
   write(filePath: string, data: Buffer): Promise<void>;
+  openForWrite(filePath: string): Promise<SftpWriteHandle>;
   unlink(filePath: string): Promise<void>;
   rename(oldPath: string, newPath: string): Promise<void>;
   close(): void;
@@ -575,10 +581,52 @@ export class SshExecutorService {
         return new Promise<void>((resolve, reject) => {
           sftp.open(filePath, "w", (openErr, handle) => {
             if (openErr) return reject(new Error(`SFTP open(write) 失败 (${filePath})：${openErr.message}`));
-            sftp.write(handle, data, 0, data.length, 0, (writeErr) => {
-              sftp.close(handle, () => {});
-              if (writeErr) return reject(new Error(`SFTP write 失败 (${filePath})：${writeErr.message}`));
-              resolve();
+            const CHUNK = 32 * 1024;
+            let offset = 0;
+            function writeNext() {
+              if (offset >= data.length) {
+                sftp.close(handle, () => {});
+                return resolve();
+              }
+              const end = Math.min(offset + CHUNK, data.length);
+              const len = end - offset;
+              sftp.write(handle, data, offset, len, offset, (writeErr) => {
+                if (writeErr) {
+                  sftp.close(handle, () => {});
+                  return reject(new Error(`SFTP write 失败 (${filePath} offset=${offset})：${writeErr.message}`));
+                }
+                offset = end;
+                writeNext();
+              });
+            }
+            writeNext();
+          });
+        });
+      },
+      openForWrite(filePath: string): Promise<SftpWriteHandle> {
+        return new Promise((resolve, reject) => {
+          sftp.open(filePath, "w", (openErr, handle) => {
+            if (openErr) return reject(new Error(`SFTP open(write) 失败 (${filePath})：${openErr.message}`));
+            resolve({
+              writeChunk(data: Buffer, offset: number): Promise<void> {
+                return new Promise<void>((res, rej) => {
+                  const CHUNK = 32 * 1024;
+                  let pos = 0;
+                  function next() {
+                    if (pos >= data.length) return res();
+                    const end = Math.min(pos + CHUNK, data.length);
+                    sftp.write(handle, data, pos, end - pos, offset + pos, (err) => {
+                      if (err) return rej(new Error(`SFTP write 失败 (offset=${offset + pos})：${err.message}`));
+                      pos = end;
+                      next();
+                    });
+                  }
+                  next();
+                });
+              },
+              close(): Promise<void> {
+                return new Promise<void>((res) => sftp.close(handle, () => res()));
+              }
             });
           });
         });
@@ -1385,6 +1433,103 @@ export class SshExecutorService {
     throw new Error(
       `JumpServer 搜索结果无法自动唯一命中，请在“跳转入口”里补资产编号。候选：${preview || compactJumpServerOutput(output)}`
     );
+  }
+
+  async connectToJumpServerAsset(bastionServerId: string, assetKeyword: string, timeoutMs = 45000): Promise<ManagedSshConnection> {
+    const server = this.serverRegistry.getServer(bastionServerId);
+    const credentials = this.credentialResolver.resolve(server);
+
+    return new Promise<ManagedSshConnection>((resolve, reject) => {
+      const client = this.createSshClient(credentials.password);
+      let settled = false;
+
+      const timeout = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        client.end();
+        reject(new Error(`JumpServer 连接超时，超过 ${timeoutMs}ms`));
+      }, timeoutMs);
+
+      client
+        .on("ready", () => {
+          client.shell({ term: "xterm", cols: 160, rows: 48 }, async (error, stream) => {
+            if (error) {
+              if (!settled) { settled = true; clearTimeout(timeout); client.end(); reject(error); }
+              return;
+            }
+
+            try {
+              await waitForPatterns(stream, [{ key: "menu", pattern: /Opt>\s*$/m }], timeoutMs, "等待 JumpServer 菜单超时");
+
+              const searchOutput = await sendAndWaitForPatterns(
+                stream,
+                `/${assetKeyword}\r`,
+                [
+                  { key: "host-select", pattern: /\[Host\]>\s*$/m },
+                  { key: "target-shell", pattern: /(\[[^\]\n]+@[^\]\n]+[^\n]*[#$]\s*$)|([#$]\s*$)/m },
+                  { key: "no-match", pattern: /(没有匹配|No matched asset|没有找到)/i }
+                ],
+                timeoutMs,
+                "JumpServer 资产搜索超时"
+              );
+
+              if (searchOutput.key === "no-match") {
+                throw new Error(`JumpServer 未找到目标资产：${assetKeyword}`);
+              }
+
+              if (searchOutput.key === "host-select") {
+                const selectOutput = await sendAndWaitForPatterns(
+                  stream,
+                  "1\r",
+                  [
+                    { key: "target-shell", pattern: /(\[[^\]\n]+@[^\]\n]+[^\n]*[#$]\s*$)|([#$]\s*$)/m },
+                    { key: "auth-failed", pattern: /(permission denied|认证失败|连接失败)/i }
+                  ],
+                  timeoutMs,
+                  "JumpServer 进入目标主机超时"
+                );
+                if (selectOutput.key === "auth-failed") {
+                  throw new Error(`JumpServer 进入目标主机失败`);
+                }
+              }
+
+              if (settled) return;
+              settled = true;
+              clearTimeout(timeout);
+              resolve({
+                client,
+                shellStream: stream,
+                cleanup: () => { stream.end("exit\r"); client.end(); },
+                mode: "jumpserver-shell"
+              });
+            } catch (shellError) {
+              if (settled) return;
+              settled = true;
+              clearTimeout(timeout);
+              stream.end("q\n");
+              client.end();
+              reject(shellError);
+            }
+          });
+        })
+        .on("error", (error) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timeout);
+          reject(error);
+        })
+        .connect({
+          host: credentials.host,
+          port: credentials.port,
+          username: credentials.username,
+          password: credentials.password,
+          privateKey: credentials.privateKey,
+          tryKeyboard: true,
+          readyTimeout: Math.min(timeoutMs, 20000),
+          keepaliveInterval: 10000,
+          keepaliveCountMax: 30
+        });
+    });
   }
 
   isJumpServerBastion(server: ReturnType<ServerRegistryService["getServer"]>) {

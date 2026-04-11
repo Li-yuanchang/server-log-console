@@ -1,6 +1,6 @@
 import type { LogFileEntry } from "@server-log-console/shared";
-import type { BastionSftpConnectionStrategy, FileStat } from "./connection-strategy.js";
-import type { SftpSession, SshExecutorService } from "../ssh-executor.service.js";
+import type { BastionSftpConnectionStrategy, FileStat, UploadHandle } from "./connection-strategy.js";
+import type { SftpSession, SftpWriteHandle, SshExecutorService } from "../ssh-executor.service.js";
 
 /**
  * 堡垒机 SFTP 策略 —— 通过 JumpServer 的 SFTP 通道完成文件操作。
@@ -58,6 +58,30 @@ export class BastionSftpStrategy implements BastionSftpConnectionStrategy {
     } finally {
       session.close();
     }
+  }
+
+  async startUpload(filePath: string): Promise<UploadHandle> {
+    const session = await this.sshExecutor.sftpOpenSession(this.serverId);
+    const writeHandle = await session.openForWrite(filePath);
+    let offset = 0;
+    let aborted = false;
+
+    return {
+      write: async (data: Buffer) => {
+        if (aborted) throw new Error("上传已中止");
+        await writeHandle.writeChunk(data, offset);
+        offset += data.length;
+      },
+      finish: async () => {
+        await writeHandle.close();
+        session.close();
+      },
+      abort: () => {
+        aborted = true;
+        writeHandle.close().catch(() => {});
+        session.close();
+      }
+    };
   }
 
   async renameFile(oldPath: string, newPath: string): Promise<void> {

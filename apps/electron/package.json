@@ -1,6 +1,6 @@
 {
   "name": "@server-log-console/electron",
-  "version": "0.2.5",
+  "version": "0.3.4",
   "description": "Server Log Console desktop app",
   "author": "lyc",
   "private": true,
@@ -18,7 +18,7 @@
   "build": {
     "appId": "com.server-log-console.app",
     "electronVersion": "33.4.11",
-    "productName": "日志控制台",
+    "productName": "ServerLogConsole",
     "files": [
       "main.cjs",
       "preload.cjs"

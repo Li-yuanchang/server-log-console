@@ -70,7 +70,7 @@ t = performance.now();
 const importResolver = new ImportStrategyResolver();
 importResolver.register(new FinalShellImportStrategy());
 importResolver.register(new XshellImportStrategy());
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } });
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 1024 * 1024 * 1024 } });
 logPhase("Import strategies & middleware", t);
 
 app.use(cors());
@@ -439,15 +439,74 @@ app.post("/api/files/download", async (req, res) => {
   }
 });
 
-app.post("/api/files/upload", upload.single("file"), async (req, res) => {
+app.post("/api/files/upload", (req, res, next) => {
+  upload.single("file")(req, res, (err) => {
+    if (err) {
+      console.error("[upload] multer error:", err);
+      res.status(400).json({ message: err instanceof Error ? err.message : "文件上传失败" });
+      return;
+    }
+    next();
+  });
+}, async (req, res) => {
   try {
     const serverId = req.body?.serverId as string;
     const filePath = req.body?.filePath as string;
     if (!serverId || !filePath) throw new Error("serverId 和 filePath 必填");
     if (!req.file) throw new Error("未收到上传文件");
+    console.log(`[upload] serverId=${serverId} filePath=${filePath} size=${req.file.size}`);
     const result = await fileTransferService.upload(serverId, filePath, req.file.buffer);
     res.json(result);
   } catch (error) {
+    console.error("[upload] error:", error);
+    res.status(400).json({ message: error instanceof Error ? error.message : "Unknown error" });
+  }
+});
+
+app.post("/api/files/upload/start", async (req, res) => {
+  try {
+    const { serverId, filePath } = req.body || {};
+    if (!serverId || !filePath) throw new Error("serverId 和 filePath 必填");
+    const result = await fileTransferService.startChunkedUpload(serverId, filePath);
+    res.json(result);
+  } catch (error) {
+    console.error("[upload/start] error:", error);
+    res.status(400).json({ message: error instanceof Error ? error.message : "Unknown error" });
+  }
+});
+
+const chunkUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+
+app.post("/api/files/upload/chunk", (req, res, next) => {
+  chunkUpload.single("chunk")(req, res, (err) => {
+    if (err) {
+      console.error("[upload/chunk] multer error:", err);
+      res.status(400).json({ message: err instanceof Error ? err.message : "分片上传失败" });
+      return;
+    }
+    next();
+  });
+}, async (req, res) => {
+  try {
+    const uploadId = req.body?.uploadId as string;
+    if (!uploadId) throw new Error("uploadId 必填");
+    if (!req.file) throw new Error("未收到分片数据");
+    const result = await fileTransferService.writeChunk(uploadId, req.file.buffer);
+    res.json(result);
+  } catch (error) {
+    console.error("[upload/chunk] error:", error);
+    res.status(400).json({ message: error instanceof Error ? error.message : "Unknown error" });
+  }
+});
+
+app.post("/api/files/upload/finish", async (req, res) => {
+  try {
+    const { uploadId } = req.body || {};
+    if (!uploadId) throw new Error("uploadId 必填");
+    const result = await fileTransferService.finishUpload(uploadId);
+    res.json(result);
+  } catch (error) {
+    console.error("[upload/finish] error:", error);
     res.status(400).json({ message: error instanceof Error ? error.message : "Unknown error" });
   }
 });
@@ -531,8 +590,27 @@ wsServer.on("connection", (socket: WebSocket) => {
       }
 
       const sessionId = `live-${payload.serverId}-${Date.now()}`;
-      const command = buildTailCommand(payload.filePath, payload.keyword);
-      const connection = await sshExecutorService.connectForStreaming(payload.serverId, 45000);
+
+      const server = serverRegistryService.getServer(payload.serverId);
+      const isJumpServer = sshExecutorService.isJumpServerBastion(server);
+      let tailFilePath = payload.filePath;
+      let connection: Awaited<ReturnType<typeof sshExecutorService.connectForStreaming>>;
+
+      if (isJumpServer) {
+        const parsed = parseJumpServerSftpPath(payload.filePath);
+        if (!parsed) {
+          socket.send(JSON.stringify({ type: "error", message: "无法解析堡垒机文件路径，请确认路径格式。" }));
+          return;
+        }
+        tailFilePath = parsed.realPath;
+        const assetKeyword = parsed.assetKey.replace(/[_\s].*/g, "");
+        console.log(`[live] JumpServer asset="${assetKeyword}" realPath="${tailFilePath}"`);
+        connection = await sshExecutorService.connectToJumpServerAsset(payload.serverId, assetKeyword, 45000);
+      } else {
+        connection = await sshExecutorService.connectForStreaming(payload.serverId, 45000);
+      }
+
+      const command = buildTailCommand(tailFilePath, payload.keyword);
       const client = connection.client;
       const shellStream = connection.shellStream;
 
@@ -660,6 +738,21 @@ httpServer.listen(port, host, () => {
     });
   }
 });
+
+function parseJumpServerSftpPath(virtualPath: string): { assetKey: string; realPath: string } | null {
+  const parts = virtualPath.split("/").filter(Boolean);
+  const fsRoots = new Set(["home", "var", "opt", "tmp", "root", "etc", "usr", "srv", "data", "mnt", "media", "run", "log", "logs", "app", "apps", "www"]);
+  for (let i = 0; i < parts.length; i++) {
+    if (fsRoots.has(parts[i].toLowerCase())) {
+      if (i === 0) return null;
+      return {
+        assetKey: parts[i - 1],
+        realPath: "/" + parts.slice(i).join("/")
+      };
+    }
+  }
+  return null;
+}
 
 function appendConnectionHint(
   server: { connectionKind?: string; connectionHint?: string } | null,
