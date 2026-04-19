@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>日志控制台</title>
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <script>window.__SLC_PIP_MODE__=new URLSearchParams(location.search).get('pip')||'';</script>
     <script type="module" src="./src/main.tsx"></script>
   </head>
   <body style="margin:0;background:#e3e7eb;min-height:100vh;overflow:hidden">
@@ -17,22 +18,47 @@
         <div style="height:20px;border-radius:4px;background:#e3e7eb;width:60%;opacity:.5"></div>
       </div>
       <!-- Skeleton: main area -->
-      <div style="flex:1;display:flex;flex-direction:column">
+      <div id="sk-main" style="flex:1;display:flex;flex-direction:column">
         <!-- Toolbar -->
         <div id="sk-toolbar" style="height:auto;background:#f2f4f6;border-bottom:1px solid #d5dbe2;display:flex;align-items:center;padding:8px 16px;gap:8px">
-      <script>if(/Electron/.test(navigator.userAgent)){document.getElementById('sk-side').style.paddingTop='38px';document.getElementById('app-loading').style.paddingTop='0'}</script>
+      <script>
+        const __slcPipMode=window.__SLC_PIP_MODE__||'';
+        const __slcSetStyle=(id, styles)=>{
+          const el=document.getElementById(id);
+          if(!el)return;
+          Object.assign(el.style, styles);
+        };
+        const __slcApplySkeletonTheme=()=>{
+          if(/Electron/.test(navigator.userAgent)){
+            __slcSetStyle('sk-side',{paddingTop:'38px'});
+            __slcSetStyle('app-loading',{paddingTop:'0'});
+          }
+          if(__slcPipMode){
+            document.body.style.background='#0a0a0a';
+            __slcSetStyle('app-loading',{background:'#0a0a0a'});
+            __slcSetStyle('sk-side',{display:'none'});
+            __slcSetStyle('sk-main',{background:'#0a0a0a'});
+            __slcSetStyle('sk-toolbar',{display:'none'});
+            __slcSetStyle('sk-content',{background:'#0a0a0a',color:'rgba(195,208,224,.72)'});
+            __slcSetStyle('sk-status',{background:'#0a0a0a',borderTop:'1px solid rgba(126,200,227,.08)'});
+            __slcSetStyle('sk-status-chip',{background:'rgba(126,200,227,.14)'});
+          }
+        };
+        __slcApplySkeletonTheme();
+        window.addEventListener('DOMContentLoaded', __slcApplySkeletonTheme, { once: true });
+      </script>
           <div style="height:28px;width:120px;border-radius:6px;background:#e3e7eb"></div>
           <div style="height:28px;width:80px;border-radius:6px;background:#e8ebef"></div>
           <div style="flex:1"></div>
           <div style="height:28px;width:28px;border-radius:6px;background:#e3e7eb"></div>
         </div>
         <!-- Content -->
-        <div style="flex:1;display:flex;align-items:center;justify-content:center;color:#8b95a3;font-size:13px;letter-spacing:.3px">
+        <div id="sk-content" style="flex:1;display:flex;align-items:center;justify-content:center;color:#8b95a3;font-size:13px;letter-spacing:.3px">
           正在连接服务…
         </div>
         <!-- Status bar -->
-        <div style="height:28px;background:#f2f4f6;border-top:1px solid #d5dbe2;display:flex;align-items:center;padding:0 12px">
-          <div style="height:12px;width:100px;border-radius:3px;background:#e3e7eb"></div>
+        <div id="sk-status" style="height:28px;background:#f2f4f6;border-top:1px solid #d5dbe2;display:flex;align-items:center;padding:0 12px">
+          <div id="sk-status-chip" style="height:12px;width:100px;border-radius:3px;background:#e3e7eb"></div>
         </div>
       </div>
     </div>

@@ -336,6 +336,10 @@ npm --workspace @server-log-console/electron run dist:win   # Windows .exe
 npm --workspace @server-log-console/electron run dist:linux # Linux .AppImage
 ```
 
+上述命令必须走 `apps/electron/package.json` 中预设脚本，不要长期依赖临时手写 shell 命令。当前脚本会先清理 `ELECTRON_RUN_AS_NODE` 再执行 `electron` / `electron-builder`，避免 IDE 宿主环境污染导致打包 app 以 Node 模式启动。
+
+macOS 打包事故归档见：`docs/electron-macos-packaging-archive-2026-04-12.md`
+
 ### 6.3 浏览器直接访问
 
 ```bash
@@ -393,6 +397,8 @@ npm --workspace @server-log-console/extension run build
 
 **终端 vim 显示异常**：确认 gateway 已更新到最新版本（支持 resize 事件透传）。
 
+**macOS 打包后双击无界面或很快退出**：优先确认是否通过 `package.json` 预设命令打包/启动。不要从被 IDE 注入环境变量的临时命令直接启动 Electron。详见 `docs/electron-macos-packaging-archive-2026-04-12.md`。
+
 ---
 
 ## 8. 运维建议
@@ -426,5 +432,22 @@ server-log-console/
 ├── packages/
 │   └── shared/        # 共享类型定义
 └── docs/
-    └── README.md      # 本文档
+    ├── README.md      # 本文档
+    ├── electron-macos-packaging-archive-2026-04-12.md
+    └── version-repair-archive-2026-04-14.md
 ```
+
+---
+
+## 10. 归档与版本修复记录
+
+建议后续统一审查时按以下顺序查看：
+
+- `CHANGELOG.md`：快速看版本级变化摘要
+- `docs/version-repair-archive-2026-04-14.md`：查看 2026-04-14 这轮 UI、上传、下载、解压、并发隔离的详细修复记录
+- `docs/electron-macos-packaging-archive-2026-04-12.md`：查看 Electron macOS 打包启动问题的完整排障与结论归档
+
+后续如果再出现“历史问题重复出现”的情况，优先先查这两类归档：
+
+- 功能/交互/文件传输相关问题：先看版本修复归档
+- 安装/打包/启动相关问题：先看 Electron 打包归档

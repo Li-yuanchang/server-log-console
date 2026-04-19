@@ -11,4 +11,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
   onPinChanged: (callback) => {
     ipcRenderer.on("pin-changed", (_event, pinned) => callback(pinned));
   },
+  openPipWindow: (config) => ipcRenderer.invoke("open-pip-window", config),
+  closePipWindow: () => ipcRenderer.invoke("close-pip-window"),
+  onPipClosed: (callback) => {
+    ipcRenderer.on("pip-window-closed", (_event, payload) => callback(payload));
+  },
+  saveFile: (buffer, defaultName) => ipcRenderer.invoke("save-file", buffer, defaultName),
+  revealLocalPath: (targetPath) => ipcRenderer.invoke("reveal-local-path", targetPath),
 });

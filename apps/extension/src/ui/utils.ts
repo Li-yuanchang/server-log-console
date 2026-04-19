@@ -183,7 +183,14 @@ export function getParentDirectoryPath(value: string) {
   return trimmed.slice(0, index) || "/";
 }
 
-export function downloadTextFile(content: string, filename: string) {
+export async function downloadTextFile(content: string, filename: string) {
+  const api = (globalThis as any).electronAPI;
+  if (api?.saveFile) {
+    const buf = new TextEncoder().encode(content).buffer;
+    await api.saveFile(buf, filename.split("/").pop() ?? filename);
+    return;
+  }
+
   const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const chromeDownloads = globalThis.chrome?.downloads;
@@ -204,8 +211,14 @@ export function downloadTextFile(content: string, filename: string) {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+const ANSI_RE = /\x1b\[[0-9;]*[A-Za-z]|\x1b\].*?(?:\x07|\x1b\\)|\x1b[()][A-Z0-9]|\x1b[>=<]?/g;
+
+export function stripAnsi(value: string): string {
+  return value.replace(ANSI_RE, "");
+}
+
 export function escapeHtml(value: string) {
-  return value
+  return stripAnsi(value)
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
@@ -409,6 +422,7 @@ export function searchWithinContent(content: string, keywordMode: "phrase" | "an
   });
 
   const ordered = [...included].sort((a, b) => a - b);
+  const contextOutput = ordered.map((index) => `${index + 1} | ${lines[index]}`).join("\n");
   return {
     commandPreview: `结果页筛选：${keywordTerms.join(", ") || "--"}`,
     truncated: false,
@@ -417,7 +431,8 @@ export function searchWithinContent(content: string, keywordMode: "phrase" | "an
       lineNumber: index + 1,
       preview: lines[index]
     })),
-    rawOutput: ordered.map((index) => `${index + 1} | ${lines[index]}`).join("\n"),
+    rawOutput: contextOutput,
+    contextOutput,
     strategyLabel: "结果内筛选",
     scopeLabel: `临时页 · ${formatNumber(lines.length)} 行`
   } satisfies LogSearchResponse;
@@ -447,12 +462,15 @@ export function searchWithinMatches(baseMatches: LogSearchResponse["matches"], k
   });
 
   const ordered = [...included].sort((a, b) => a - b);
+  const matchedOnly = matchedIndexes.map((index) => baseMatches[index]);
   const selectedMatches = ordered.map((index) => baseMatches[index]);
+  const contextOutput = selectedMatches.map((match) => `${match.lineNumber} | ${match.preview}`).join("\n");
   return {
     commandPreview: `结果页筛选：${keywordTerms.join(", ") || "--"}`,
     truncated: false,
-    matches: selectedMatches,
-    rawOutput: selectedMatches.map((match) => `${match.lineNumber} | ${match.preview}`).join("\n"),
+    matches: matchedOnly,
+    rawOutput: contextOutput,
+    contextOutput,
     strategyLabel: "结果内筛选",
     scopeLabel: `继承上一次结果 · ${formatNumber(baseMatches.length)} 条`
   } satisfies LogSearchResponse;

@@ -72,6 +72,9 @@ export interface DirectConnectionStrategy extends ConnectionStrategy {
 
   /** 建立流式命令执行（用于 streaming search） */
   execStreaming(command: string, timeoutMs?: number): Promise<StreamingExecHandle>;
+
+  /** 创建 SSH exec stdout 可读流，用于流式下载大文件 */
+  createReadStream(filePath: string, limitBytes?: number): Promise<{ stream: import("stream").Readable; cleanup: () => void }>;
 }
 
 /**
@@ -82,6 +85,12 @@ export interface BastionSftpConnectionStrategy extends ConnectionStrategy {
 
   /** 打开可复用 SFTP 会话（用于批量读取如搜索） */
   openSession(): Promise<SftpSession>;
+
+  /** 单次连接内完成 stat + read（避免堡垒机 2 次 SSH 延迟） */
+  statAndRead(filePath: string, offset: number, length: number): Promise<{ stat: FileStat; data: Buffer }>;
+
+  /** 创建 SFTP 可读流，用于流式下载大文件 */
+  createReadStream(filePath: string): Promise<import("stream").Readable>;
 }
 
 /** 类型守卫 */

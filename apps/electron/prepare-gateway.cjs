@@ -11,6 +11,25 @@ const BUILD_DIR = path.join(__dirname, ".electron-build", "gateway");
 const SHARED_DIR = path.join(ROOT, "packages", "shared");
 const GATEWAY_DIR = path.join(ROOT, "apps", "gateway");
 const EXTENSION_DIST = path.join(ROOT, "apps", "extension", "dist");
+const EXTENSION_DIR = path.join(ROOT, "apps", "extension");
+
+console.log("Building latest shared dist...");
+execSync("npm run build", {
+  cwd: SHARED_DIR,
+  stdio: "inherit",
+});
+
+console.log("Building latest gateway dist...");
+execSync("npm run build", {
+  cwd: GATEWAY_DIR,
+  stdio: "inherit",
+});
+
+console.log("Building latest extension dist...");
+execSync("npm run build", {
+  cwd: EXTENSION_DIR,
+  stdio: "inherit",
+});
 
 // Clean
 if (fs.existsSync(path.join(__dirname, ".electron-build"))) {
@@ -40,7 +59,7 @@ execSync("npm install --omit=dev --ignore-scripts", {
 // Copy shared package manually
 const sharedTarget = path.join(BUILD_DIR, "node_modules", "@server-log-console", "shared");
 fs.mkdirSync(path.dirname(sharedTarget), { recursive: true });
-copyDirSync(SHARED_DIR, sharedTarget);
+copySharedPackage(SHARED_DIR, sharedTarget);
 
 // Copy extension dist for gateway to serve
 const extTarget = path.join(BUILD_DIR, "..", "extension", "dist");
@@ -48,6 +67,22 @@ fs.mkdirSync(path.dirname(extTarget), { recursive: true });
 copyDirSync(EXTENSION_DIST, extTarget);
 
 console.log("Gateway preparation complete.");
+
+function copySharedPackage(src, dest) {
+  fs.mkdirSync(dest, { recursive: true });
+  const sharedPkg = JSON.parse(fs.readFileSync(path.join(src, "package.json"), "utf8"));
+  const runtimePkg = {
+    name: sharedPkg.name,
+    version: sharedPkg.version,
+    private: sharedPkg.private,
+    type: sharedPkg.type,
+    main: "dist/index.js",
+    types: "dist/index.d.ts",
+  };
+
+  fs.writeFileSync(path.join(dest, "package.json"), JSON.stringify(runtimePkg, null, 2));
+  copyDirSync(path.join(src, "dist"), path.join(dest, "dist"));
+}
 
 function copyDirSync(src, dest) {
   fs.mkdirSync(dest, { recursive: true });

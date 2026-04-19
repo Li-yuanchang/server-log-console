@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import type { ManualServerUpsertRequest, ServerCredentialInput, ServerRouteConfig, ServerSummary } from "@server-log-console/shared";
+import type { ManualServerUpsertRequest, ServerConnectionKind, ServerCredentialInput, ServerRouteConfig, ServerSummary } from "@server-log-console/shared";
 import { decodeFinalShellPassword } from "./finalshell-password-decoder.js";
 
 interface PersistedServerRecord extends ServerSummary {
@@ -22,6 +22,30 @@ type ServerRouteRecord = Record<
     jumpAssetId?: string;
   }
 >;
+
+function describeManualConnection(kind: ServerConnectionKind | undefined): Pick<ServerSummary, "connectionKind" | "connectionHint" | "cautionLabel"> {
+  if (kind === "bastion") {
+    return {
+      connectionKind: "bastion",
+      connectionHint: "手动维护的堡垒机入口账号，可先进入它再跳转目标服务器。",
+      cautionLabel: "堡垒机"
+    };
+  }
+
+  if (kind === "bastion-target") {
+    return {
+      connectionKind: "bastion-target",
+      connectionHint: "手动维护的目标机，需要先在连接设置里指定入口账号。",
+      cautionLabel: "经堡垒机"
+    };
+  }
+
+  return {
+    connectionKind: "direct",
+    connectionHint: "手动维护服务器，按普通 SSH 直连处理。",
+    cautionLabel: "直连"
+  };
+}
 
 export class LocalConfigService {
   private manualServers: PersistedServerRecord[] = [];
@@ -162,6 +186,7 @@ export class LocalConfigService {
   }
 
   async saveManualServer(request: ManualServerUpsertRequest): Promise<ServerSummary> {
+    const connectionMeta = describeManualConnection(request.connectionKind);
     const server: PersistedServerRecord = {
       id: request.id || `manual:${Date.now()}`,
       name: request.name,
@@ -172,9 +197,9 @@ export class LocalConfigService {
       profile: request.profile || "custom",
       tags: request.tags?.length ? request.tags : ["manual"],
       source: "manual",
-      connectionKind: "direct",
-      connectionHint: "手动维护服务器，默认按普通 SSH 直连处理。",
-      cautionLabel: "直连"
+      connectionKind: connectionMeta.connectionKind,
+      connectionHint: connectionMeta.connectionHint,
+      cautionLabel: connectionMeta.cautionLabel
     };
 
     const nextServers = this.manualServers.filter((item) => item.id !== server.id);

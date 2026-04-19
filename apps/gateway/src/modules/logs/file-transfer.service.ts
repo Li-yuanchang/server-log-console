@@ -1,7 +1,10 @@
 import { randomUUID } from "crypto";
+import { Readable } from "stream";
 import { z } from "zod";
 import type { StrategyResolver } from "./strategies/index.js";
 import type { UploadHandle } from "./strategies/connection-strategy.js";
+import { isBastionSftpStrategy, isDirectStrategy } from "./strategies/connection-strategy.js";
+import { shellEscape } from "./remote-shell.js";
 
 const downloadSchema = z.object({
   serverId: z.string(),
@@ -42,15 +45,44 @@ export class FileTransferService {
     const strategy = this.strategyResolver.resolve(request.serverId);
     const stat = await strategy.fileStat(request.filePath);
 
-    const maxDownloadSize = 200 * 1024 * 1024;
-    if (stat.size > maxDownloadSize) {
-      throw new Error(`文件过大（${formatBytes(stat.size)}），下载上限 ${formatBytes(maxDownloadSize)}`);
+    const maxBufferSize = 500 * 1024 * 1024;
+    if (stat.size > maxBufferSize) {
+      throw new Error(`文件过大（${formatBytes(stat.size)}），Buffer 下载上限 ${formatBytes(maxBufferSize)}`);
     }
 
     const buffer = await strategy.downloadFile(request.filePath);
     const fileName = request.filePath.split("/").pop() || "download";
 
     return { buffer, fileName, filePath: request.filePath };
+  }
+
+  /**
+   * Streaming download — pipes the file directly to the response without loading into memory.
+   * Bastion SFTP: SFTP createReadStream (no size limit).
+   * Direct SSH: exec `cat file` and stream stdout (no size limit).
+   */
+  async prepareStreamDownload(rawRequest: unknown): Promise<{
+    stream: Readable; fileName: string; filePath: string; size: number;
+    cleanup?: () => void;
+  }> {
+    const request = downloadSchema.parse(rawRequest);
+    const strategy = this.strategyResolver.resolve(request.serverId);
+    const stat = await strategy.fileStat(request.filePath);
+    const fileName = request.filePath.split("/").pop() || "download";
+
+    if (isBastionSftpStrategy(strategy)) {
+      const stream = await strategy.createReadStream(request.filePath);
+      return { stream, fileName, filePath: request.filePath, size: stat.size };
+    }
+
+    if (isDirectStrategy(strategy)) {
+      const { stream, cleanup } = await strategy.createReadStream(request.filePath, stat.size);
+      return { stream, fileName, filePath: request.filePath, size: stat.size, cleanup };
+    }
+
+    // Fallback: buffer download
+    const buffer = await strategy.downloadFile(request.filePath);
+    return { stream: Readable.from(buffer), fileName, filePath: request.filePath, size: buffer.length };
   }
 
   async delete(rawRequest: unknown): Promise<{ filePath: string }> {
@@ -165,6 +197,101 @@ export class FileTransferService {
 
   abortUpload(uploadId: string): void {
     this.cleanupSession(uploadId);
+  }
+
+  async mkdir(rawRequest: unknown): Promise<{ directoryPath: string }> {
+    const schema = z.object({ serverId: z.string(), directoryPath: z.string() });
+    const request = schema.parse(rawRequest);
+    const strategy = this.strategyResolver.resolve(request.serverId);
+    if (isDirectStrategy(strategy)) {
+      const dirArg = shellEscape(request.directoryPath);
+      await strategy.exec(`mkdir -p ${dirArg}`, 30000);
+    } else if (isBastionSftpStrategy(strategy)) {
+      const session = await strategy.openSession();
+      try {
+        await session.ensureDir(request.directoryPath);
+      } finally {
+        session.close();
+      }
+    } else {
+      throw new Error("当前连接策略不支持创建目录");
+    }
+    return { directoryPath: request.directoryPath };
+  }
+
+  async compress(rawRequest: unknown): Promise<{ archivePath: string; output: string }> {
+    const schema = z.object({
+      serverId: z.string(),
+      sourcePath: z.string(),
+      archiveType: z.enum(["tar.gz", "zip"]).optional(),
+      targetDir: z.string().optional()
+    });
+    const request = schema.parse(rawRequest);
+    const strategy = this.strategyResolver.resolve(request.serverId);
+    if (!isDirectStrategy(strategy)) {
+      throw new Error("堡垒机连接暂不支持压缩操作，请使用直连服务器");
+    }
+    const archiveType = request.archiveType || "tar.gz";
+    const sourceArg = shellEscape(request.sourcePath);
+    const targetDir = request.targetDir || request.sourcePath.substring(0, request.sourcePath.lastIndexOf("/")) || "/";
+    const dirArg = shellEscape(targetDir);
+    const baseName = request.sourcePath.split("/").pop() || "archive";
+    let archivePath: string;
+    let compressCmd: string;
+    if (archiveType === "zip") {
+      archivePath = `${targetDir}/${baseName}.zip`;
+      const archiveArg = shellEscape(archivePath);
+      compressCmd = `cd ${dirArg} && zip -r ${archiveArg} ${sourceArg}`;
+    } else {
+      archivePath = `${targetDir}/${baseName}.tar.gz`;
+      const archiveArg = shellEscape(archivePath);
+      compressCmd = `tar -czf ${archiveArg} -C ${dirArg} ${sourceArg}`;
+    }
+    const output = await strategy.exec(
+      `${compressCmd} 2>&1 || echo '[compress-exit-code]'$?`,
+      300000
+    );
+    if (output.includes("[compress-exit-code]") && !output.includes("[compress-exit-code]0")) {
+      throw new Error(`压缩失败：${output.split("\n").slice(-3).join("\n")}`);
+    }
+    return { archivePath, output };
+  }
+
+  async extractZip(rawRequest: unknown): Promise<{ filePath: string; targetDir: string; output: string }> {
+    const schema = z.object({ serverId: z.string(), filePath: z.string(), targetDir: z.string().optional() });
+    const request = schema.parse(rawRequest);
+    const strategy = this.strategyResolver.resolve(request.serverId);
+    if (!isDirectStrategy(strategy)) {
+      throw new Error("堡垒机连接暂不支持解压操作，请使用直连服务器");
+    }
+    const targetDir = request.targetDir || request.filePath.substring(0, request.filePath.lastIndexOf("/")) || "/";
+    const fileArg = shellEscape(request.filePath);
+    const dirArg = shellEscape(targetDir);
+    const lowerPath = request.filePath.toLowerCase();
+    let extractCmd: string;
+    if (lowerPath.endsWith(".tar.gz") || lowerPath.endsWith(".tgz")) {
+      extractCmd = `tar -xzf ${fileArg} -C ${dirArg}`;
+    } else if (lowerPath.endsWith(".tar.bz2")) {
+      extractCmd = `tar -xjf ${fileArg} -C ${dirArg}`;
+    } else if (lowerPath.endsWith(".tar.xz")) {
+      extractCmd = `tar -xJf ${fileArg} -C ${dirArg}`;
+    } else if (lowerPath.endsWith(".gz")) {
+      const sourceName = request.filePath.split("/").pop() || "archive.gz";
+      const outputName = sourceName.replace(/\.gz$/i, "") || `${sourceName}.out`;
+      const outputPath = `${targetDir}/${outputName}`;
+      const outputArg = shellEscape(outputPath);
+      extractCmd = `gzip -dc ${fileArg} > ${outputArg}`;
+    } else {
+      extractCmd = `cd ${dirArg} && unzip -o ${fileArg}`;
+    }
+    const output = await strategy.exec(
+      `${extractCmd} 2>&1 || echo '[extract-exit-code]'$?`,
+      120000
+    );
+    if (output.includes("[extract-exit-code]") && !output.includes("[extract-exit-code]0")) {
+      throw new Error(`解压失败：${output.split("\n").slice(-3).join("\n")}`);
+    }
+    return { filePath: request.filePath, targetDir, output };
   }
 
   private cleanupSession(uploadId: string) {

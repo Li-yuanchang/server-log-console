@@ -65,6 +65,17 @@ export interface LogSearchTaskResponse {
   scopeLabel?: string;
   commandPreview?: string;
   errorMessage?: string;
+  progressPhase?: "queued" | "quick_tail" | "full_scan" | "completed";
+  progressPhaseLabel?: string;
+  progressPhaseIndex?: number;
+  progressPhaseCount?: number;
+  phaseProgressPercent?: number;
+  phaseScannedBytes?: number;
+  phaseTotalBytes?: number;
+  overallProgressBytes?: number;
+  overallProgressTotalBytes?: number;
+  /** Phase 1 quick results from tail search (available while status is still "running") */
+  quickResult?: LogSearchResponse;
   result?: LogSearchResponse;
 }
 
@@ -169,6 +180,7 @@ export interface ManualServerUpsertRequest {
   username?: string;
   basePath: string;
   profile?: LogProfile;
+  connectionKind?: ServerConnectionKind;
   tags?: string[];
   credential?: ServerCredentialInput;
 }
@@ -225,6 +237,10 @@ export interface LogSliceResponse {
   isStart: boolean;
   isEnd: boolean;
   nextOffset: number;
+  /** Total file size in bytes (always returned, saves a separate meta call) */
+  fileSize?: number;
+  /** File modification time ISO string */
+  modifiedTime?: string;
 }
 
 export interface LogLineContextRequest {

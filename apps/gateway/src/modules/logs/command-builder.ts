@@ -164,8 +164,7 @@ export function buildSearchCommand(server: ServerSummary, request: LogSearchRequ
   const termAssignments = payload.keywordTerms.map((_, index) => `  terms[${index + 1}] = term_${index + 1};`);
 
   const script = [
-    `AWK_BIN=$(command -v mawk 2>/dev/null || echo awk)`,
-    `LC_ALL=C $AWK_BIN ${awkVariables.join(" ")} '`,
+    `LC_ALL=C $(command -v mawk 2>/dev/null || echo awk) ${awkVariables.join(" ")} '`,
     "BEGIN {",
     ...termAssignments,
     "  termsCount = term_count + 0;",
@@ -243,7 +242,7 @@ export function buildSearchCommand(server: ServerSummary, request: LogSearchRequ
   return `bash -lc ${shellEscape(script)}`;
 }
 
-export function buildStreamingSearchCommand(server: ServerSummary, request: LogSearchRequest, totalBytes = 0): string {
+export function buildStreamingSearchCommand(server: ServerSummary, request: LogSearchRequest, totalBytes = 0, options?: { tailBytes?: number }): string {
   const context = Number.isFinite(request.contextLines) ? Math.max(0, request.contextLines ?? 0) : 0;
   const filePath = request.filePath || `${server.basePath}/catalina.out`;
   const { rangeStart, rangeEnd } = toIsoRange(request);
@@ -258,7 +257,7 @@ export function buildStreamingSearchCommand(server: ServerSummary, request: LogS
     `-v keyword_mode=${shellEscape(request.keywordMode || "phrase")}`,
     `-v use_regex=${shellEscape(request.useRegex ? "1" : "0")}`,
     `-v term_count=${shellEscape(String(normalizedTerms.length))}`,
-    `-v total_bytes=${shellEscape(String(totalBytes))}`
+    `-v total_bytes=${shellEscape(String(options?.tailBytes || totalBytes))}`
   ];
 
   if (hasDateRange) {
@@ -299,8 +298,7 @@ export function buildStreamingSearchCommand(server: ServerSummary, request: LogS
     : "keywordHit(line)";
 
   const script = [
-    `AWK_BIN=$(command -v mawk 2>/dev/null || echo awk)`,
-    `LC_ALL=C $AWK_BIN ${awkVariables.join(" ")} '`,
+    `LC_ALL=C $(command -v mawk 2>/dev/null || echo awk) ${awkVariables.join(" ")} '`,
     "BEGIN {",
     ...termAssignments,
     "  termsCount = term_count + 0;",
@@ -366,10 +364,14 @@ export function buildStreamingSearchCommand(server: ServerSummary, request: LogS
     "}",
     "END {",
     "  if (scannedBytes != lastReported) emitProgress();",
-    "}' " + shellEscape(filePath)
+    "}' " + (options?.tailBytes ? "-" : shellEscape(filePath))
   ].join("\n");
 
-  return `bash -lc ${shellEscape(script)}`;
+  const finalScript = options?.tailBytes
+    ? `tail -c ${options.tailBytes} ${shellEscape(filePath)} | ${script}`
+    : script;
+
+  return `bash -lc ${shellEscape(finalScript)}`;
 }
 
 export function buildTailCommand(filePath: string, keyword?: string): string {

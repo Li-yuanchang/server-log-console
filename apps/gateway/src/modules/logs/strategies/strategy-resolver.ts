@@ -15,8 +15,11 @@ export class StrategyResolver {
 
   resolve(serverId: string): ConnectionStrategy {
     const server = this.serverRegistry.getServer(serverId);
+    const isBastionEntry = server.connectionKind
+      ? server.connectionKind === "bastion"
+      : this.sshExecutor.isJumpServerBastion(server);
 
-    if (this.sshExecutor.isJumpServerBastion(server)) {
+    if (isBastionEntry) {
       console.log(`[strategy] ${server.name} (${server.host}:${server.port}) → bastion-sftp`);
       return new BastionSftpStrategy(serverId, this.sshExecutor);
     }
