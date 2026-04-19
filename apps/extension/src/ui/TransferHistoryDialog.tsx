@@ -1,4 +1,20 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
+import { 
+  AlertTriangle, 
+  Ban, 
+  CheckCircle2, 
+  ChevronDown, 
+  ChevronUp, 
+  Copy, 
+  Download, 
+  Files, 
+  FolderOpen, 
+  HardDrive, 
+  Search, 
+  Trash2, 
+  Upload, 
+  X 
+} from "lucide-react";
 import type { TransferHistoryEntry, TransferHistoryStatus } from "./storage.js";
 import { getParentDirectoryPath } from "./utils.js";
 
@@ -29,10 +45,19 @@ function statusLabel(status: TransferHistoryStatus) {
   return "取消";
 }
 
+function directionLabel(direction: TransferHistoryEntry["direction"]) {
+  return direction === "upload" ? "上传" : "下载";
+}
+
+function localPathLabel(direction: TransferHistoryEntry["direction"]) {
+  return direction === "upload" ? "本地来源" : "本地保存";
+}
+
 export function TransferHistoryDialog(props: Props) {
   const [keyword, setKeyword] = useState("");
   const [directionFilter, setDirectionFilter] = useState<DirectionFilter>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [expandedEntryIds, setExpandedEntryIds] = useState<string[]>([]);
 
   const summary = useMemo(() => {
     let uploads = 0;
@@ -49,6 +74,25 @@ export function TransferHistoryDialog(props: Props) {
     }
     return { uploads, downloads, success, error, canceled };
   }, [props.entries]);
+
+  const expandedEntryIdSet = useMemo(() => new Set(expandedEntryIds), [expandedEntryIds]);
+
+  useEffect(() => {
+    if (!props.open) {
+      setExpandedEntryIds([]);
+      return;
+    }
+    const validIds = new Set(props.entries.map((entry) => entry.id));
+    setExpandedEntryIds((current) => current.filter((entryId) => validIds.has(entryId)));
+  }, [props.entries, props.open]);
+
+  function toggleEntryExpanded(entryId: string) {
+    setExpandedEntryIds((current) => (
+      current.includes(entryId)
+        ? current.filter((value) => value !== entryId)
+        : [...current, entryId]
+    ));
+  }
 
   const filteredEntries = useMemo(() => {
     const normalizedKeyword = keyword.trim().toLowerCase();
@@ -73,51 +117,84 @@ export function TransferHistoryDialog(props: Props) {
     return null;
   }
 
+  const summaryCards = [
+    { key: "total", label: "总记录", value: props.entries.length, icon: <Files size={15} strokeWidth={1.85} /> },
+    { key: "upload", label: "上传", value: summary.uploads, icon: <Upload size={15} strokeWidth={1.85} /> },
+    { key: "download", label: "下载", value: summary.downloads, icon: <Download size={15} strokeWidth={1.85} /> },
+    { key: "success", label: "成功", value: summary.success, icon: <CheckCircle2 size={15} strokeWidth={1.85} /> },
+    { key: "error", label: "失败", value: summary.error, icon: <AlertTriangle size={15} strokeWidth={1.85} /> },
+    { key: "canceled", label: "取消", value: summary.canceled, icon: <Ban size={15} strokeWidth={1.85} /> },
+  ] as const;
+
   return (
     <div className="confirm-backdrop transfer-history-backdrop" onClick={props.onClose}>
       <div className="confirm-dialog transfer-history-dialog" onClick={(event) => event.stopPropagation()}>
         <div className="transfer-history-dialog-head">
-          <div>
+          <div className="transfer-history-dialog-title-block">
+            <div className="transfer-history-dialog-kicker">当前服务器 · 紧凑视图</div>
             <div className="confirm-title">传输记录</div>
-            <div className="transfer-history-dialog-subtitle">记录上传、下载、失败与取消，支持远程定位和本地追溯。</div>
+            <div className="transfer-history-dialog-subtitle">聚合展示上传、下载与异常结果。路径和快捷操作默认折叠，需要时再展开。</div>
           </div>
           <div className="transfer-history-dialog-head-actions">
-            <button type="button" className="transfer-history-clear" onClick={props.onClear} disabled={!props.entries.length}>
-              清空当前服务器记录
+            <button
+              type="button"
+              className="ghost-button icon-button transfer-history-head-icon-button transfer-history-clear"
+              title="清空当前服务器记录"
+              aria-label="清空当前服务器记录"
+              onClick={props.onClear}
+              disabled={!props.entries.length}
+            >
+              <Trash2 size={16} strokeWidth={1.8} />
             </button>
-            <button type="button" className="confirm-btn confirm-btn-cancel transfer-history-close" onClick={props.onClose}>
-              关闭
+            <button
+              type="button"
+              className="ghost-button icon-button transfer-history-head-icon-button transfer-history-close"
+              title="关闭传输记录"
+              aria-label="关闭传输记录"
+              onClick={props.onClose}
+            >
+              <X size={16} strokeWidth={1.8} />
             </button>
           </div>
         </div>
 
         <div className="transfer-history-summary-grid">
-          <div className="transfer-history-summary-card"><strong>{props.entries.length}</strong><span>总记录</span></div>
-          <div className="transfer-history-summary-card"><strong>{summary.uploads}</strong><span>上传</span></div>
-          <div className="transfer-history-summary-card"><strong>{summary.downloads}</strong><span>下载</span></div>
-          <div className="transfer-history-summary-card"><strong>{summary.success}</strong><span>成功</span></div>
-          <div className="transfer-history-summary-card"><strong>{summary.error}</strong><span>失败</span></div>
-          <div className="transfer-history-summary-card"><strong>{summary.canceled}</strong><span>取消</span></div>
+          {summaryCards.map((card) => (
+            <div key={card.key} className={`transfer-history-summary-card transfer-history-summary-card-${card.key}`}>
+              <span className="transfer-history-summary-icon">{card.icon}</span>
+              <span className="transfer-history-summary-label">{card.label}</span>
+              <strong>{card.value}</strong>
+            </div>
+          ))}
         </div>
 
         <div className="transfer-history-filter-row">
-          <input
-            className="rename-input transfer-history-search"
-            value={keyword}
-            onChange={(event) => setKeyword(event.target.value)}
-            placeholder="搜索文件名、远程路径、本地路径或错误信息"
-          />
-          <select className="transfer-history-select" value={directionFilter} onChange={(event) => setDirectionFilter(event.target.value as DirectionFilter)}>
-            <option value="all">全部方向</option>
-            <option value="upload">仅上传</option>
-            <option value="download">仅下载</option>
-          </select>
-          <select className="transfer-history-select" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}>
-            <option value="all">全部状态</option>
-            <option value="success">成功</option>
-            <option value="error">失败</option>
-            <option value="canceled">取消</option>
-          </select>
+          <label className="transfer-history-search-shell">
+            <Search size={15} strokeWidth={1.9} />
+            <input
+              className="rename-input transfer-history-search"
+              value={keyword}
+              onChange={(event) => setKeyword(event.target.value)}
+              placeholder="搜索文件名、远程路径、本地路径或错误信息"
+            />
+          </label>
+          <label className="transfer-history-filter-field">
+            <span>方向</span>
+            <select className="transfer-history-select" value={directionFilter} onChange={(event) => setDirectionFilter(event.target.value as DirectionFilter)}>
+              <option value="all">全部方向</option>
+              <option value="upload">仅上传</option>
+              <option value="download">仅下载</option>
+            </select>
+          </label>
+          <label className="transfer-history-filter-field">
+            <span>状态</span>
+            <select className="transfer-history-select" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}>
+              <option value="all">全部状态</option>
+              <option value="success">成功</option>
+              <option value="error">失败</option>
+              <option value="canceled">取消</option>
+            </select>
+          </label>
           <div className="transfer-history-filter-meta">显示 {filteredEntries.length} / {props.entries.length} 条</div>
         </div>
 
@@ -128,18 +205,73 @@ export function TransferHistoryDialog(props: Props) {
             </div>
           ) : filteredEntries.map((entry) => {
             const canRevealLocalPath = Boolean(entry.localPath && props.isElectron && isAbsoluteLocalPath(entry.localPath));
+            const isExpanded = expandedEntryIdSet.has(entry.id);
             return (
-              <article key={entry.id} className="transfer-history-card">
-                <div className="transfer-history-card-head">
+              <article key={entry.id} className={`transfer-history-card${isExpanded ? " transfer-history-card-expanded" : ""}`}>
+                <div className="transfer-history-card-topbar">
                   <div className="transfer-history-row">
                     <span className={`transfer-history-chip transfer-history-chip-${entry.direction}`}>
-                      {entry.direction === "upload" ? "上传" : "下载"}
+                      {directionLabel(entry.direction)}
                     </span>
                     <span className={`transfer-history-chip transfer-history-chip-${entry.status}`}>
                       {statusLabel(entry.status)}
                     </span>
-                    <strong className="transfer-history-name">{entry.fileName}</strong>
                   </div>
+                  <div className="transfer-history-card-toolbar">
+                    <button
+                      type="button"
+                      className="ghost-button icon-button transfer-history-card-icon-button"
+                      title="打开远程目录"
+                      aria-label="打开远程目录"
+                      onClick={() => props.onBrowsePath(getParentDirectoryPath(entry.filePath))}
+                    >
+                      <FolderOpen size={15} strokeWidth={1.85} />
+                    </button>
+                    <button
+                      type="button"
+                      className="ghost-button icon-button transfer-history-card-icon-button"
+                      title="复制远程路径"
+                      aria-label="复制远程路径"
+                      onClick={() => props.onCopyRemotePath(entry.filePath)}
+                    >
+                      <Copy size={15} strokeWidth={1.85} />
+                    </button>
+                    {entry.localPath ? (
+                      <button
+                        type="button"
+                        className="ghost-button icon-button transfer-history-card-icon-button"
+                        title={`复制${localPathLabel(entry.direction)}`}
+                        aria-label={`复制${localPathLabel(entry.direction)}`}
+                        onClick={() => props.onCopyLocalPath(entry.localPath!)}
+                      >
+                        <HardDrive size={15} strokeWidth={1.85} />
+                      </button>
+                    ) : null}
+                    {canRevealLocalPath ? (
+                      <button
+                        type="button"
+                        className="ghost-button icon-button transfer-history-card-icon-button"
+                        title="在 Finder 中显示"
+                        aria-label="在 Finder 中显示"
+                        onClick={() => props.onRevealLocalPath(entry.localPath!)}
+                      >
+                        <FolderOpen size={15} strokeWidth={1.85} />
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      className="ghost-button icon-button transfer-history-card-icon-button transfer-history-expand-button"
+                      title={isExpanded ? "收起详情" : "展开详情"}
+                      aria-label={isExpanded ? "收起详情" : "展开详情"}
+                      onClick={() => toggleEntryExpanded(entry.id)}
+                    >
+                      {isExpanded ? <ChevronUp size={15} strokeWidth={1.85} /> : <ChevronDown size={15} strokeWidth={1.85} />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="transfer-history-card-head">
+                  <strong className="transfer-history-name" title={entry.fileName}>{entry.fileName}</strong>
                   <div className="transfer-history-meta">
                     <span>{props.formatDateTime(entry.createdAt)}</span>
                     <span>{props.formatBytes(entry.size)}</span>
@@ -147,36 +279,22 @@ export function TransferHistoryDialog(props: Props) {
                   </div>
                 </div>
 
-                <div className="transfer-history-path-line">
-                  <label>远程</label>
-                  <code>{entry.filePath}</code>
-                </div>
-                {entry.localPath ? (
-                  <div className="transfer-history-path-line">
-                    <label>{entry.direction === "upload" ? "本地来源" : "本地保存"}</label>
-                    <code>{entry.localPath}</code>
-                  </div>
-                ) : null}
                 {entry.message ? <div className={`transfer-history-note transfer-history-note-${entry.status}`}>{entry.message}</div> : null}
 
-                <div className="transfer-history-action-row">
-                  <button type="button" className="ghost-button" onClick={() => props.onBrowsePath(getParentDirectoryPath(entry.filePath))}>
-                    打开远程目录
-                  </button>
-                  <button type="button" className="ghost-button" onClick={() => props.onCopyRemotePath(entry.filePath)}>
-                    复制远程路径
-                  </button>
-                  {entry.localPath ? (
-                    <button type="button" className="ghost-button" onClick={() => props.onCopyLocalPath(entry.localPath!)}>
-                      复制本地路径
-                    </button>
-                  ) : null}
-                  {canRevealLocalPath ? (
-                    <button type="button" className="ghost-button" onClick={() => props.onRevealLocalPath(entry.localPath!)}>
-                      在 Finder 中显示
-                    </button>
-                  ) : null}
-                </div>
+                {isExpanded ? (
+                  <div className="transfer-history-card-details">
+                    <div className="transfer-history-path-line">
+                      <label>远程</label>
+                      <code>{entry.filePath}</code>
+                    </div>
+                    {entry.localPath ? (
+                      <div className="transfer-history-path-line">
+                        <label>{localPathLabel(entry.direction)}</label>
+                        <code>{entry.localPath}</code>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
               </article>
             );
           })}

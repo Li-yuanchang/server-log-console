@@ -32,7 +32,7 @@ import type {
   ServerCredentialStatus,
   ServerSummary
 } from "@server-log-console/shared";
-import { Radio, Wrench, Download, Copy, PictureInPicture2, Bug, Plus, X } from "lucide-react";
+import { Radio, Wrench, Download, Copy, PictureInPicture2, Bug, X } from "lucide-react";
 import { TerminalPanel } from "./TerminalWorkspace.js";
 import { ToolIcon } from "./ToolIcon.js";
 import { looksLikeJumpServer } from "./terminal-utils.js";
@@ -135,6 +135,7 @@ const LOCAL_SERVICE_RETRY_INTERVAL_MS = 2500;
 const MAX_PREVIEW_CACHE_ENTRIES = 60;
 const MAX_SLICE_CACHE_ENTRIES = 24;
 const MAX_RESULT_TABS = 8;
+const VIEWER_PIP_SNAPSHOT_KEY = "slc:viewer-pip-snapshot";
 
 type WorkspaceSession = {
   id: string;
@@ -182,12 +183,43 @@ type WorkspaceSessionState = {
   resultTabCounter: number;
   activeHighlightIndex: number;
   showQueryAdvanced: boolean;
+  showFileTools: boolean;
+  errorHighlightEnabled: boolean;
   showPathHistory: boolean;
   showTransferHistory: boolean;
   terminalPanelOpen: boolean;
   terminalDetached: boolean;
   terminalOverlay: "none" | "shortcuts" | "ai";
   terminalSessionId: string;
+  recordingSession: LogRecordingSessionResponse | null;
+  liveFollowEnabled: boolean;
+  liveFollowPaused: boolean;
+  liveFollowContent: string;
+};
+
+type ViewerPipSnapshot = {
+  serverId: string;
+  filePath: string;
+  directoryPath: string;
+  keywordInput: string;
+  keywordMode: "phrase" | "any" | "all";
+  useRegex: boolean;
+  preferredBastionId: string;
+  activeLogView: "search" | "files";
+  activeViewerTabId: string;
+  results: LogSearchResponse | null;
+  resultTabs: ViewerResultTab[];
+  searchStartedAt: number | null;
+  fileMeta: LogFileMetaResponse | null;
+  sliceOffset: number;
+  sliceLength: number;
+  sliceLengthMode: "auto" | "manual";
+  sliceData: LogSliceResponse | null;
+  lineContextState: LineContextState | null;
+  resultContextMode: boolean;
+  activeHighlightIndex: number;
+  showFileTools: boolean;
+  errorHighlightEnabled: boolean;
   liveFollowEnabled: boolean;
   liveFollowPaused: boolean;
   liveFollowContent: string;
@@ -238,13 +270,29 @@ function setLimitedMapEntry<K, V>(map: Map<K, V>, key: K, value: V, maxEntries: 
   }
 }
 
+function readViewerPipSnapshot(): ViewerPipSnapshot | null {
+  try {
+    const raw = window.localStorage.getItem(VIEWER_PIP_SNAPSHOT_KEY);
+    return raw ? JSON.parse(raw) as ViewerPipSnapshot : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeViewerPipSnapshot(snapshot: ViewerPipSnapshot) {
+  try {
+    window.localStorage.setItem(VIEWER_PIP_SNAPSHOT_KEY, JSON.stringify(snapshot));
+  } catch {
+    return;
+  }
+}
+
 // Detect PiP mode from URL params (Electron BrowserWindow PiP)
 const pipUrlParams = new URLSearchParams(globalThis.location?.search ?? "");
 const pipMode = pipUrlParams.get("pip") ?? "";
 const isStandaloneViewerWindow = pipMode === "viewer";
 const isStandaloneTerminalWindow = pipMode === "terminal";
 const isStandalonePipWindow = isStandaloneViewerWindow || isStandaloneTerminalWindow;
-const ERROR_HIGHLIGHT_SYNC_KEY = "slc:error-highlight-enabled";
 
 export function App() {
   const [servers, setServers] = useState<ServerSummary[]>([]);
@@ -343,6 +391,7 @@ export function App() {
   const [showFileTools, setShowFileTools] = useState(false);
   const [showViewerDebugPanel, setShowViewerDebugPanel] = useState(false);
   const [errorHighlightEnabled, setErrorHighlightEnabled] = useState(() => pipUrlParams.get("errorHighlight") === "1");
+  const [resultContextMode, setResultContextMode] = useState(false);
   const [showKeywordBar, setShowKeywordBar] = useState(true);
   const [showDirectoryFilter, setShowDirectoryFilter] = useState(false);
   const [showPathHistory, setShowPathHistory] = useState(false);
@@ -397,13 +446,15 @@ export function App() {
   const prevServerIdForResetRef = useRef(serverId);
   const serverIdRef = useRef(serverId);
   const terminalDetachedRef = useRef(terminalDetached);
+  const terminalSessionIdRef = useRef(terminalSessionId);
   const workspaceSessionStatesRef = useRef<Record<string, WorkspaceSessionState>>({});
   const pendingWorkspaceActivationRef = useRef<{ session: WorkspaceSession; state: WorkspaceSessionState; fromCache: boolean } | null>(null);
   const restoringWorkspaceStateRef = useRef<WorkspaceSessionState | null>(null);
   const restoringWorkspaceFromCacheRef = useRef(false);
   const skipServerSelectionResetRef = useRef(false);
   const skipServerAutoConnectRef = useRef(false);
-  const errorHighlightChannelRef = useRef<BroadcastChannel | null>(null);
+  const standaloneViewerSnapshotRef = useRef<ViewerPipSnapshot | null>(isStandaloneViewerWindow ? readViewerPipSnapshot() : null);
+  const standaloneViewerSnapshotAppliedRef = useRef(false);
 
   const liveReconnectRef = useRef<((target: { filePath: string; fileName: string }) => void) | null>(null);
   const liveFollow = useLiveFollow({
@@ -421,6 +472,34 @@ export function App() {
     startLiveFollow, stopLiveFollow,
     handleViewerNearBottomChange, scrollViewerToBottom, clearLiveContent,
   } = liveFollow;
+
+  const captureViewerPipSnapshot = useCallback((): ViewerPipSnapshot => ({
+    serverId,
+    filePath,
+    directoryPath,
+    keywordInput,
+    keywordMode,
+    useRegex,
+    preferredBastionId,
+    activeLogView,
+    activeViewerTabId,
+    results,
+    resultTabs: [...resultTabs],
+    searchStartedAt,
+    fileMeta,
+    sliceOffset,
+    sliceLength,
+    sliceLengthMode,
+    sliceData,
+    lineContextState,
+    resultContextMode,
+    activeHighlightIndex,
+    showFileTools,
+    errorHighlightEnabled,
+    liveFollowEnabled,
+    liveFollowPaused,
+    liveFollowContent,
+  }), [serverId, filePath, directoryPath, keywordInput, keywordMode, useRegex, preferredBastionId, activeLogView, activeViewerTabId, results, resultTabs, searchStartedAt, fileMeta, sliceOffset, sliceLength, sliceLengthMode, sliceData, lineContextState, resultContextMode, activeHighlightIndex, showFileTools, errorHighlightEnabled, liveFollowEnabled, liveFollowPaused, liveFollowContent]);
 
   const pipViewerRef = useRef<HTMLDivElement>(null);
   const pipLiveFollowRef = useRef(false);
@@ -442,15 +521,18 @@ export function App() {
         setActionStatus("已从小窗恢复实时跟随。");
       }
     },
-    electronPipParams: () => ({
-      serverId,
-      filePath,
-      directoryPath,
-      bastionId: preferredBastionId,
-      activeLogView,
-      errorHighlight: errorHighlightEnabled,
-      liveFollow: liveFollowEnabled,
-    }),
+    electronPipParams: () => {
+      writeViewerPipSnapshot(captureViewerPipSnapshot());
+      return {
+        serverId,
+        filePath,
+        directoryPath,
+        bastionId: preferredBastionId,
+        activeLogView,
+        errorHighlight: errorHighlightEnabled,
+        liveFollow: liveFollowEnabled,
+      };
+    },
   });
 
   useEffect(() => {
@@ -462,77 +544,76 @@ export function App() {
   }, [terminalDetached]);
 
   useEffect(() => {
+    terminalSessionIdRef.current = terminalSessionId;
+  }, [terminalSessionId]);
+
+  useEffect(() => {
     if (!isElectron) {
       return;
     }
 
     const api = (window as any).electronAPI;
-    api.onPipClosed((payload?: { mode?: "viewer" | "terminal" }) => {
-      if (payload?.mode !== "terminal" || !terminalDetachedRef.current) {
+    api.onPipClosed((payload?: { mode?: "viewer" | "terminal"; terminalSessionId?: string }) => {
+      const closedTerminalSessionId = String(payload?.terminalSessionId || "").trim();
+      if (payload?.mode !== "terminal" || !closedTerminalSessionId) {
         return;
       }
+
+      Object.keys(workspaceSessionStatesRef.current).forEach((workspaceSessionId) => {
+        const sessionState = workspaceSessionStatesRef.current[workspaceSessionId];
+        if (!sessionState || sessionState.terminalSessionId.trim() !== closedTerminalSessionId) {
+          return;
+        }
+        workspaceSessionStatesRef.current[workspaceSessionId] = {
+          ...sessionState,
+          terminalDetached: false,
+          terminalPanelOpen: Boolean(sessionState.serverId),
+        };
+      });
+
+      if (terminalSessionIdRef.current !== closedTerminalSessionId) {
+        return;
+      }
+
       setTerminalDetached(false);
       setTerminalPanelOpen(Boolean(serverIdRef.current));
     });
   }, [isElectron]);
 
   useEffect(() => {
-    if (!isElectron) {
+    if (!isStandaloneViewerWindow || standaloneViewerSnapshotAppliedRef.current) {
       return;
     }
-
-    if (typeof BroadcastChannel === "undefined") {
+    const snapshot = standaloneViewerSnapshotRef.current;
+    if (!snapshot || snapshot.serverId !== serverId) {
       return;
     }
-
-    const channel = new BroadcastChannel(ERROR_HIGHLIGHT_SYNC_KEY);
-    errorHighlightChannelRef.current = channel;
-    channel.onmessage = (event: MessageEvent<{ enabled?: boolean }>) => {
-      const nextEnabled = Boolean(event.data?.enabled);
-      setErrorHighlightEnabled((current) => (current === nextEnabled ? current : nextEnabled));
-    };
-
-    return () => {
-      channel.close();
-      if (errorHighlightChannelRef.current === channel) {
-        errorHighlightChannelRef.current = null;
-      }
-    };
-  }, [isElectron]);
-
-  useEffect(() => {
-    if (!isElectron) {
-      return;
-    }
-
-    const handleStorage = (event: StorageEvent) => {
-      if (event.key !== ERROR_HIGHLIGHT_SYNC_KEY || !event.newValue) {
-        return;
-      }
-      try {
-        const payload = JSON.parse(event.newValue) as { enabled?: boolean };
-        const nextEnabled = Boolean(payload.enabled);
-        setErrorHighlightEnabled((current) => (current === nextEnabled ? current : nextEnabled));
-      } catch {
-        return;
-      }
-    };
-
-    window.addEventListener("storage", handleStorage);
-    return () => window.removeEventListener("storage", handleStorage);
-  }, [isElectron]);
-
-  useEffect(() => {
-    if (!isElectron) {
-      return;
-    }
-    errorHighlightChannelRef.current?.postMessage({ enabled: errorHighlightEnabled });
-    try {
-      window.localStorage.setItem(ERROR_HIGHLIGHT_SYNC_KEY, JSON.stringify({ enabled: errorHighlightEnabled, updatedAt: Date.now() }));
-    } catch {
-      return;
-    }
-  }, [errorHighlightEnabled, isElectron]);
+    standaloneViewerSnapshotAppliedRef.current = true;
+    setKeywordInput(snapshot.keywordInput);
+    setKeywordMode(snapshot.keywordMode);
+    setUseRegex(snapshot.useRegex);
+    setPreferredBastionId(snapshot.preferredBastionId);
+    setResults(snapshot.results);
+    setResultTabs(snapshot.resultTabs);
+    setSearchStartedAt(snapshot.searchStartedAt);
+    setActiveLogView(snapshot.activeLogView);
+    setActiveViewerTabId(snapshot.activeViewerTabId);
+    setDirectoryPath(snapshot.directoryPath);
+    setDirectoryInput(snapshot.directoryPath || "/");
+    setFilePath(snapshot.filePath);
+    setFileMeta(snapshot.fileMeta);
+    setSliceOffset(snapshot.sliceOffset);
+    setSliceLength(snapshot.sliceLength);
+    setSliceLengthMode(snapshot.sliceLengthMode);
+    setSliceData(snapshot.sliceData);
+    setLineContextState(snapshot.lineContextState);
+    setResultContextMode(snapshot.resultContextMode);
+    setActiveHighlightIndex(snapshot.activeHighlightIndex);
+    setShowFileTools(snapshot.showFileTools);
+    setErrorHighlightEnabled(snapshot.errorHighlightEnabled);
+    setLiveFollowContent(snapshot.liveFollowContent);
+    setLiveFollowPaused(snapshot.liveFollowPaused);
+  }, [serverId]);
 
   useEffect(() => {
     if (!isStandaloneTerminalWindow || !serverId) {
@@ -611,12 +692,15 @@ export function App() {
       resultTabCounter: 1,
       activeHighlightIndex: 0,
       showQueryAdvanced: false,
+      showFileTools: false,
+      errorHighlightEnabled: false,
       showPathHistory: false,
       showTransferHistory: false,
       terminalPanelOpen: isStandaloneTerminalWindow,
       terminalDetached: false,
       terminalOverlay: "none",
       terminalSessionId: "",
+      recordingSession: null,
       liveFollowEnabled: false,
       liveFollowPaused: false,
       liveFollowContent: ""
@@ -663,12 +747,15 @@ export function App() {
       resultTabCounter,
       activeHighlightIndex,
       showQueryAdvanced,
+      showFileTools,
+      errorHighlightEnabled,
       showPathHistory,
       showTransferHistory,
       terminalPanelOpen,
       terminalDetached,
       terminalOverlay,
       terminalSessionId,
+      recordingSession,
       liveFollowEnabled,
       liveFollowPaused,
       liveFollowContent
@@ -744,6 +831,8 @@ export function App() {
     setResultTabCounter(nextState.resultTabCounter);
     setActiveHighlightIndex(nextState.activeHighlightIndex);
     setShowQueryAdvanced(nextState.showQueryAdvanced);
+    setShowFileTools(nextState.showFileTools);
+    setErrorHighlightEnabled(nextState.errorHighlightEnabled);
     setPathbarMode("browse");
     setBatchMoveDialog(null);
     setShowPathHistory(nextState.showPathHistory);
@@ -753,6 +842,7 @@ export function App() {
     setTerminalDetached(nextState.terminalDetached);
     setTerminalPanelOpen(nextState.terminalPanelOpen);
     setTerminalOverlay(nextState.terminalOverlay);
+    setRecordingSession(nextState.recordingSession);
     setLiveFollowContent(nextState.liveFollowContent);
     setLiveFollowPaused(nextState.liveFollowPaused);
     setReaderPositionDragging(false);
@@ -990,7 +1080,23 @@ export function App() {
   const pipAutoLoadedRef = useRef(false);
   useEffect(() => {
     if (!isStandaloneViewerWindow || pipAutoLoadedRef.current) return;
-    const pipFilePath = pipUrlParams.get("filePath");
+    const snapshot = standaloneViewerSnapshotRef.current;
+    const pipFilePath = snapshot?.filePath?.trim() || pipUrlParams.get("filePath") || "";
+    if (snapshot && snapshot.serverId === serverId) {
+      if (!snapshot.liveFollowEnabled) {
+        pipAutoLoadedRef.current = true;
+        return;
+      }
+      if (!pipFilePath || !connectionTestStatus?.connected) return;
+      pipAutoLoadedRef.current = true;
+
+      const pipFileName = pipFilePath.split("/").pop() || pipFilePath;
+      startLiveFollow(pipFilePath, pipFileName);
+      if (snapshot.liveFollowPaused) {
+        window.setTimeout(() => setLiveFollowPaused(true), 0);
+      }
+      return;
+    }
     if (!pipFilePath || !connectionTestStatus?.connected) return;
     pipAutoLoadedRef.current = true;
 
@@ -1018,7 +1124,7 @@ export function App() {
         setActionStatus(`PiP 自动打开文件失败：${err instanceof Error ? err.message : "未知错误"}`);
       }
     })();
-  }, [connectionTestStatus?.connected, serverId, isStandaloneViewerWindow]);
+  }, [connectionTestStatus?.connected, serverId, startLiveFollow, setLiveFollowPaused]);
 
   useEffect(() => () => {
     stopLiveFollow();
@@ -1915,6 +2021,25 @@ export function App() {
     setShowConnectionSettings(true);
   }
 
+  function closeSettingsWorkspace() {
+    setShowConnectionSettings(false);
+  }
+
+  useEffect(() => {
+    if (!showConnectionSettings || isStandalonePipWindow) {
+      return;
+    }
+
+    function handleSettingsWorkspaceKeydown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        closeSettingsWorkspace();
+      }
+    }
+
+    window.addEventListener("keydown", handleSettingsWorkspaceKeydown);
+    return () => window.removeEventListener("keydown", handleSettingsWorkspaceKeydown);
+  }, [showConnectionSettings, isStandalonePipWindow]);
+
   function pushActivity(message: string) {
     const timestamp = new Date().toLocaleTimeString("zh-CN", { hour12: false });
     setActivityLines((current) => [...current.slice(-79), `[${timestamp}] ${message}`]);
@@ -2149,9 +2274,41 @@ export function App() {
     setTerminalOverlay((current) => current === nextOverlay ? "none" : nextOverlay);
   }
 
-  async function restoreEmbeddedTerminalWindow() {
-    await closeDetachedTerminalWindow();
-    setTerminalPanelOpen(true);
+  async function restoreEmbeddedTerminalWindow(targetSessionId: string = terminalSessionId) {
+    await closeDetachedTerminalWindow(targetSessionId);
+    setTerminalDetached(false);
+    setTerminalPanelOpen(Boolean(serverId));
+  }
+
+  async function reconcileDetachedTerminalOwnership(nextSessionId: string) {
+    const normalizedNextSessionId = nextSessionId.trim();
+    if (!isElectron || !normalizedNextSessionId) {
+      return;
+    }
+
+    const detachedSessionIdsToClose = new Set<string>();
+    for (const session of workspaceSessions) {
+      if (session.id === activeWorkspaceSessionId) {
+        continue;
+      }
+
+      const sessionState = readWorkspaceSessionState(session);
+      const detachedSessionId = sessionState.terminalSessionId.trim();
+      if (!sessionState.terminalDetached || !detachedSessionId || detachedSessionId === normalizedNextSessionId) {
+        continue;
+      }
+
+      storeWorkspaceSessionState(session.id, {
+        ...sessionState,
+        terminalDetached: false,
+        terminalPanelOpen: Boolean(sessionState.serverId),
+      });
+      detachedSessionIdsToClose.add(detachedSessionId);
+    }
+
+    for (const detachedSessionId of detachedSessionIdsToClose) {
+      await closeDetachedTerminalWindow(detachedSessionId);
+    }
   }
 
   function toggleTerminalPanel() {
@@ -2176,6 +2333,7 @@ export function App() {
     }
 
     const nextSessionId = ensureTerminalSessionId();
+    await reconcileDetachedTerminalOwnership(nextSessionId);
 
     if (pip.isPip) {
       await pip.togglePip();
@@ -2205,12 +2363,20 @@ export function App() {
     setTerminalDetached(true);
   }
 
-  async function closeDetachedTerminalWindow() {
+  async function closeDetachedTerminalWindow(targetSessionId: string = terminalSessionId) {
     if (!isElectron) {
       return;
     }
 
-    await (window as any).electronAPI.closePipWindow();
+    const nextSessionId = targetSessionId.trim();
+    if (!nextSessionId) {
+      return;
+    }
+
+    await (window as any).electronAPI.closePipWindow({
+      mode: "terminal",
+      terminalSessionId: nextSessionId,
+    });
   }
 
   useEffect(() => {
@@ -2823,7 +2989,6 @@ export function App() {
   const currentFileContent = liveFollowEnabled
     ? liveFollowContent || activeSliceData?.content || ""
     : lineContextState?.content || liveFollowContent || activeSliceData?.content || "";
-  const [resultContextMode, setResultContextMode] = useState(false);
   const currentLogContent = activeResultTab
     ? (resultContextMode && activeResultTab.fullContent ? activeResultTab.fullContent : activeResultTab.content)
     : (resultContextMode && results?.contextOutput ? results.contextOutput : currentFileContent);
@@ -4487,10 +4652,10 @@ export function App() {
                 </button>
                 <button
                   className="ghost-button icon-button"
-                  title={showConnectionSettings ? "收起设置" : "打开设置"}
+                  title={showConnectionSettings ? "关闭设置" : "打开设置"}
                   onClick={() => {
                     if (showConnectionSettings) {
-                      setShowConnectionSettings(false);
+                      closeSettingsWorkspace();
                       return;
                     }
                     openSettingsWorkspace();
@@ -4631,11 +4796,6 @@ export function App() {
                     );
                   })}
                 </div>
-              </div>
-              <div className="workspace-session-actions">
-                <button className="ghost-button icon-button workspace-session-add-button" type="button" onClick={startCreateManualServer} title="新增服务器">
-                  <Plus size={14} strokeWidth={1.5} />
-                </button>
               </div>
             </div>
           ) : null}
@@ -5468,6 +5628,90 @@ export function App() {
           ) : null}
 
         </section>
+
+        {showConnectionSettings && !isStandalonePipWindow ? (
+          <div className="settings-modal-backdrop" role="presentation" onClick={closeSettingsWorkspace}>
+            <div
+              className="settings-modal-shell"
+              role="dialog"
+              aria-modal="true"
+              aria-label="连接设置"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <button
+                className="ghost-button icon-button settings-modal-close"
+                type="button"
+                aria-label="关闭设置"
+                onClick={closeSettingsWorkspace}
+              >
+                <X size={16} strokeWidth={1.75} />
+              </button>
+            <ConnectionSettingsWorkspace
+              activeView={settingsWorkspaceView}
+              onViewChange={setSettingsWorkspaceView}
+              isBusy={isBusy}
+              localServiceState={localServiceState}
+              localServiceStatusText={localServiceStatusText}
+              importSection={{
+                selectedTool: selectedImportTool,
+                importStatus,
+                importPath,
+                finalShellPath,
+                finalShellDetectedPaths,
+                finalShellLastImportedAt,
+                xshellDetectedPaths,
+                xshellLastImportedAt,
+                onSelectTool: setSelectedImportTool,
+                onChangeFinalShellPath: setFinalShellPath,
+                onCheckService: () => { void checkLocalServiceHealth(); },
+                onSaveFinalShellPath: () => { void saveFinalShellPath(); },
+                onImport: (tool) => { void importFromTool(tool || selectedImportTool); },
+              }}
+              inventorySection={{
+                managedServers: servers,
+                manualServers,
+                importedServers,
+                selectedServerId: serverId,
+                draft: manualServerDraft,
+                canSaveDraft: canSaveManualServer,
+                onSelectServer: selectServerById,
+                onStartCreate: startCreateManualServer,
+                onStartEdit: startEditManualServer,
+                onChangeDraft: (patch) => setManualServerDraft((current) => ({ ...current, ...patch })),
+                onResetDraft: () => setManualServerDraft(createManualServerDraft()),
+                onSaveDraft: () => { void saveManualServer(); },
+                onDeleteServer: requestDeleteServer,
+              }}
+              currentServerSection={{
+                selectedServer,
+                connectionDirectory: currentConnectionDirectory,
+                credentialStatus,
+                credentialUsername,
+                credentialPassword,
+                credentialPrivateKey,
+                onCredentialUsernameChange: setCredentialUsername,
+                onCredentialPasswordChange: setCredentialPassword,
+                onCredentialPrivateKeyChange: setCredentialPrivateKey,
+                onSaveCredential: () => { void saveCredentialForServer(); },
+                onTestConnection: () => { void testServerConnection(currentConnectionDirectory); },
+                onOpenTerminal: () => openTerminalView(),
+                availableBastions,
+                preferredBastionId,
+                jumpMode,
+                jumpSearchKeyword,
+                jumpAssetId,
+                jumpAssetOptions,
+                onPreferredBastionChange: handlePreferredBastionChange,
+                onJumpModeChange: setJumpMode,
+                onJumpSearchKeywordChange: setJumpSearchKeyword,
+                onJumpAssetIdChange: setJumpAssetId,
+                onSearchJumpAssets: () => { void searchJumpServerAssets(); },
+                onSaveRoute: () => { void saveServerRouteForServer(); },
+              }}
+            />
+            </div>
+          </div>
+        ) : null}
       </section>
       <FileContextMenu
         menu={contextMenu}
