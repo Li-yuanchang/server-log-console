@@ -23,8 +23,8 @@ import {
 type IconKind = "search" | "tail" | "files" | "more" | "open" | "refresh" | "filter" | "highlight" | "context" | "settings" | "terminal" | "sparkle" | "undo" | "history" | "transfer" | "download" | "upload" | "delete" | "rename" | "folder" | "folder-plus";
 
 export function ToolIcon({ kind, theme }: { kind: IconKind; theme?: "classic" | "modern" }) {
-  if (theme === "modern") return <ModernIcon kind={kind} />;
-  return <ClassicIcon kind={kind} />;
+  if (theme === "classic") return <ClassicIcon kind={kind} />;
+  return <ModernIcon kind={kind} />;
 }
 
 function ClassicIcon({ kind }: { kind: IconKind }) {

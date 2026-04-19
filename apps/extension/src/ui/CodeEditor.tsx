@@ -96,7 +96,7 @@ interface CodeEditorProps {
   onSave?: () => void;
 }
 
-export function CodeEditor({ value, fileName, theme = "classic", readOnly, onChange, onSave }: CodeEditorProps) {
+export function CodeEditor({ value, fileName, theme = "modern", readOnly, onChange, onSave }: CodeEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const initTokenRef = useRef(0);
