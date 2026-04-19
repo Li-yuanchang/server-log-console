@@ -16,12 +16,33 @@ let gatewayProcess = null;
 let tray = null;
 let isAlwaysOnTop = false;
 let gatewayStartPromise = null;
+let viewerPipWindow = null;
+const terminalPipWindows = new Map();
+
+function listPipWindows() {
+  const windows = [];
+  if (viewerPipWindow && !viewerPipWindow.isDestroyed()) {
+    windows.push(viewerPipWindow);
+  }
+  for (const win of terminalPipWindows.values()) {
+    if (win && !win.isDestroyed()) {
+      windows.push(win);
+    }
+  }
+  return windows;
+}
+
+function findFocusedPipWindow() {
+  return listPipWindows().find((win) => win.isFocused()) || null;
+}
 
 function resolveInspectableWindow(targetWindow = null) {
   if (targetWindow && !targetWindow.isDestroyed()) return targetWindow;
   const focusedWindow = BrowserWindow.getFocusedWindow();
-  if (focusedWindow === pipWindow || focusedWindow === mainWindow) return focusedWindow;
-  if (pipWindow && !pipWindow.isDestroyed() && pipWindow.isFocused()) return pipWindow;
+  if (focusedWindow === mainWindow) return focusedWindow;
+  if (focusedWindow && listPipWindows().includes(focusedWindow)) return focusedWindow;
+  const focusedPipWindow = findFocusedPipWindow();
+  if (focusedPipWindow) return focusedPipWindow;
   if (mainWindow && !mainWindow.isDestroyed()) return mainWindow;
   return null;
 }
@@ -302,15 +323,22 @@ ipcMain.handle("reveal-local-path", async (_event, targetPath) => {
 });
 
 // --- PiP Window ---
-let pipWindow = null;
+ipcMain.handle("open-pip-window", (_event, config = {}) => {
+  const pipMode = config.mode || "viewer";
+  const isTerminalMode = pipMode === "terminal";
+  const terminalSessionId = String(config.terminalSessionId || "").trim();
+  if (isTerminalMode && !terminalSessionId) {
+    return { ok: false, message: "缺少终端会话标识" };
+  }
 
-ipcMain.handle("open-pip-window", (_event, config) => {
-  if (pipWindow) {
-    pipWindow.focus();
+  const existingWindow = isTerminalMode
+    ? terminalPipWindows.get(terminalSessionId)
+    : viewerPipWindow;
+  if (existingWindow && !existingWindow.isDestroyed()) {
+    existingWindow.focus();
     return { ok: true };
   }
 
-  const pipMode = config.mode || "viewer";
   const query = new URLSearchParams();
   query.set("pip", pipMode);
   if (config.serverId) query.set("serverId", config.serverId);
@@ -323,7 +351,7 @@ ipcMain.handle("open-pip-window", (_event, config) => {
   if (config.liveFollow) query.set("liveFollow", "1");
   const indexFile = path.join(getExtensionDistDir(), "index.html");
 
-  pipWindow = new BrowserWindow({
+  const nextPipWindow = new BrowserWindow({
     width: config.width || 980,
     height: config.height || 680,
     minWidth: 720,
@@ -341,34 +369,63 @@ ipcMain.handle("open-pip-window", (_event, config) => {
     },
   });
 
-  bindDevToolsShortcut(pipWindow);
-  pipWindow.webContents.setWindowOpenHandler(({ url }) => {
+  if (isTerminalMode) {
+    terminalPipWindows.set(terminalSessionId, nextPipWindow);
+  } else {
+    viewerPipWindow = nextPipWindow;
+  }
+
+  bindDevToolsShortcut(nextPipWindow);
+  nextPipWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (url === "about:blank" || url.startsWith("about:")) {
       return { action: "allow" };
     }
     shell.openExternal(url);
     return { action: "deny" };
   });
-  pipWindow.webContents.on("will-navigate", (event, url) => {
+  nextPipWindow.webContents.on("will-navigate", (event, url) => {
     if (url.startsWith("file://") || url.startsWith("about:")) return;
     event.preventDefault();
     shell.openExternal(url);
   });
-  pipWindow.loadFile(indexFile, { query: Object.fromEntries(query.entries()) });
+  nextPipWindow.loadFile(indexFile, { query: Object.fromEntries(query.entries()) });
 
-  pipWindow.on("closed", () => {
-    pipWindow = null;
+  nextPipWindow.on("closed", () => {
+    if (isTerminalMode) {
+      if (terminalPipWindows.get(terminalSessionId) === nextPipWindow) {
+        terminalPipWindows.delete(terminalSessionId);
+      }
+    } else if (viewerPipWindow === nextPipWindow) {
+      viewerPipWindow = null;
+    }
     if (mainWindow) {
-      mainWindow.webContents.send("pip-window-closed", { mode: pipMode });
+      mainWindow.webContents.send("pip-window-closed", {
+        mode: pipMode,
+        terminalSessionId: isTerminalMode ? terminalSessionId : undefined,
+        serverId: config.serverId || undefined,
+      });
     }
   });
 
   return { ok: true };
 });
 
-ipcMain.handle("close-pip-window", () => {
-  if (pipWindow) {
-    pipWindow.close();
+ipcMain.handle("close-pip-window", (_event, config = {}) => {
+  const pipMode = config.mode || (config.terminalSessionId ? "terminal" : "viewer");
+  if (pipMode === "terminal") {
+    const terminalSessionId = String(config.terminalSessionId || "").trim();
+    if (!terminalSessionId) {
+      return { ok: false, message: "缺少终端会话标识" };
+    }
+    const terminalWindow = terminalPipWindows.get(terminalSessionId);
+    if (terminalWindow && !terminalWindow.isDestroyed()) {
+      terminalWindow.close();
+    }
+    return { ok: true };
+  }
+
+  if (viewerPipWindow && !viewerPipWindow.isDestroyed()) {
+    viewerPipWindow.close();
   }
   return { ok: true };
 });

@@ -12,7 +12,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on("pin-changed", (_event, pinned) => callback(pinned));
   },
   openPipWindow: (config) => ipcRenderer.invoke("open-pip-window", config),
-  closePipWindow: () => ipcRenderer.invoke("close-pip-window"),
+  closePipWindow: (config) => ipcRenderer.invoke("close-pip-window", config),
   onPipClosed: (callback) => {
     ipcRenderer.on("pip-window-closed", (_event, payload) => callback(payload));
   },
