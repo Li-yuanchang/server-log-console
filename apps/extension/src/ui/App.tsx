@@ -362,14 +362,10 @@ export function App() {
   const { toasts, showToast, updateToast, dismissToast } = useToasts();
   const [fileLoadingName, setFileLoadingName] = useState("");
   const [isDragOver, setIsDragOver] = useState(false);
-  const [uiTheme, setUiTheme] = useState<"classic" | "modern">(() => {
-    try { return (localStorage.getItem("ui-theme") as "classic" | "modern") || "classic"; } catch { return "classic"; }
-  });
-  const toggleUiTheme = () => setUiTheme((prev) => {
-    const next = prev === "classic" ? "modern" : "classic";
-    try { localStorage.setItem("ui-theme", next); } catch { /* ignore */ }
-    return next;
-  });
+  const [uiTheme] = useState<"classic" | "modern">("modern");
+  useEffect(() => {
+    try { localStorage.setItem("ui-theme", "modern"); } catch { /* ignore */ }
+  }, []);
   const [showConnectionSettings, setShowConnectionSettings] = useState(false);
   const [settingsWorkspaceView, setSettingsWorkspaceView] = useState<SettingsWorkspaceView>("overview");
   const [manualServerDraft, setManualServerDraft] = useState<ManualServerDraft>(() => createManualServerDraft());
@@ -4643,13 +4639,6 @@ export function App() {
                 <h1 className="topbar-title">日志控制台</h1>
               </div>
               <div className="sidebar-head-buttons">
-                <button
-                  className="ghost-button icon-button"
-                  title={uiTheme === "classic" ? "切换到现代风格" : "切换到经典风格"}
-                  onClick={toggleUiTheme}
-                >
-                  <ToolIcon theme={uiTheme} kind={uiTheme === "classic" ? "sparkle" : "undo"} />
-                </button>
                 <button
                   className="ghost-button icon-button"
                   title={showConnectionSettings ? "关闭设置" : "打开设置"}
