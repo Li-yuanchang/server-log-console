@@ -297,7 +297,11 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
       options.onSessionIdChange?.(activeSessionId);
     }
     const sessionKey = [options.serverId, bastionId || "", activeSessionId].join("|");
-    if (connected && sessionKeyRef.current === sessionKey) {
+    const currentSocket = socketRef.current;
+    if (
+      sessionKeyRef.current === sessionKey
+      && (connected || currentSocket?.readyState === WebSocket.OPEN || currentSocket?.readyState === WebSocket.CONNECTING)
+    ) {
       return;
     }
 
@@ -330,8 +334,12 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
     const wsUrl = options.localServiceBase.replace(/^http/, "ws") + "/ws/terminal";
     const socket = new WebSocket(wsUrl);
     socketRef.current = socket;
+    expectedCloseRef.current = false;
 
     socket.addEventListener("open", () => {
+      if (socketRef.current !== socket) {
+        return;
+      }
       expectedCloseRef.current = false;
       socket.send(
         JSON.stringify({
@@ -347,6 +355,10 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
     });
 
     socket.addEventListener("message", (event) => {
+      if (socketRef.current !== socket) {
+        return;
+      }
+
       try {
         const payload = JSON.parse(String(event.data)) as {
           type?: "ready" | "output" | "stderr" | "closed" | "error" | "detached";
@@ -417,6 +429,10 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
     });
 
     socket.addEventListener("close", () => {
+      if (socketRef.current !== socket) {
+        return;
+      }
+
       if (socketRef.current === socket) {
         socketRef.current = null;
       }
