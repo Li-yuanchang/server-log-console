@@ -13,6 +13,10 @@ import { ServerRegistryService } from "../servers/server-registry.service.js";
 import { LogSliceService } from "./log-slice.service.js";
 import { type StrategyResolver, isDirectStrategy, isBastionSftpStrategy } from "./strategies/index.js";
 
+const QUICK_TAIL_BYTES = 5 * 1024 * 1024;
+
+type SearchProgressPhase = "queued" | "quick_tail" | "full_scan" | "completed";
+
 const searchSchema = z.object({
   serverId: z.string(),
   filePath: z.string(),
@@ -42,6 +46,13 @@ interface SearchTaskState {
   scannedLines: number;
   matchCount: number;
   chunkLabel: string;
+  progressPhase: SearchProgressPhase;
+  progressPhaseLabel: string;
+  progressPhaseIndex: number;
+  progressPhaseCount: number;
+  phaseScannedBytes: number;
+  phaseTotalBytes: number;
+  quickPhaseBytes: number;
   commandPreview: string;
   strategyLabel: string;
   scopeLabel: string;
@@ -49,6 +60,10 @@ interface SearchTaskState {
   allLines: Array<{ lineNumber: number; preview: string; isMatch: boolean }>;
   client?: Client;
   errorMessage?: string;
+  /** Phase 1 quick search (tail portion) */
+  quickMatches: LogSearchMatch[];
+  quickAllLines: Array<{ lineNumber: number; preview: string; isMatch: boolean }>;
+  quickDone: boolean;
 }
 
 export class LogSearchTaskService {
@@ -68,6 +83,7 @@ export class LogSearchTaskService {
     const filePath = request.filePath || `${server.basePath}/catalina.out`;
     const meta = await this.logSliceService.getMeta({ serverId: request.serverId, filePath });
     const taskId = randomUUID();
+    const quickPhaseBytes = meta.size > QUICK_TAIL_BYTES ? QUICK_TAIL_BYTES : 0;
     const commandPreview = strategy.kind === "bastion-sftp"
       ? `[SFTP 网关搜索] ${filePath}`
       : buildStreamingSearchCommand(server, { ...request, filePath }, meta.size);
@@ -84,12 +100,22 @@ export class LogSearchTaskService {
       scannedBytes: 0,
       scannedLines: 0,
       matchCount: 0,
-      chunkLabel: meta.size ? `0 B ~ ${formatBytes(Math.min(meta.size, 4 * 1024 * 1024))}` : "--",
+      chunkLabel: quickPhaseBytes > 0 ? `准备尾部快搜 · 0 B / ${formatBytes(quickPhaseBytes)}` : `准备全文扫描 · 0 B / ${formatBytes(meta.size)}`,
+      progressPhase: "queued",
+      progressPhaseLabel: quickPhaseBytes > 0 ? "准备尾部快搜" : "准备全文扫描",
+      progressPhaseIndex: 1,
+      progressPhaseCount: quickPhaseBytes > 0 ? 2 : 1,
+      phaseScannedBytes: 0,
+      phaseTotalBytes: quickPhaseBytes > 0 ? quickPhaseBytes : meta.size,
+      quickPhaseBytes,
       commandPreview,
       strategyLabel,
       scopeLabel,
       matches: [],
-      allLines: []
+      allLines: [],
+      quickMatches: [],
+      quickAllLines: [],
+      quickDone: false
     };
 
     this.tasks.set(taskId, task);
@@ -112,85 +138,147 @@ export class LogSearchTaskService {
     return this.toResponse(task);
   }
 
+  private setProgressPhase(task: SearchTaskState, phase: SearchProgressPhase) {
+    task.progressPhase = phase;
+    if (phase === "queued") {
+      task.progressPhaseLabel = task.quickPhaseBytes > 0 ? "准备尾部快搜" : "准备全文扫描";
+      task.progressPhaseIndex = 1;
+      task.phaseTotalBytes = task.quickPhaseBytes > 0 ? task.quickPhaseBytes : task.totalBytes;
+      task.phaseScannedBytes = 0;
+    } else if (phase === "quick_tail") {
+      task.progressPhaseLabel = "尾部快搜";
+      task.progressPhaseIndex = 1;
+      task.phaseTotalBytes = task.quickPhaseBytes;
+      task.phaseScannedBytes = 0;
+    } else if (phase === "full_scan") {
+      task.progressPhaseLabel = "全文扫描";
+      task.progressPhaseIndex = task.quickPhaseBytes > 0 ? 2 : 1;
+      task.phaseTotalBytes = task.totalBytes;
+      task.phaseScannedBytes = 0;
+    } else {
+      task.progressPhaseLabel = "全文扫描已完成";
+      task.progressPhaseIndex = task.progressPhaseCount;
+      task.phaseTotalBytes = task.totalBytes;
+      task.phaseScannedBytes = task.totalBytes;
+    }
+    this.syncProgressState(task);
+  }
+
+  private updatePhaseProgress(task: SearchTaskState, scannedBytes: number, scannedLines?: number) {
+    task.phaseScannedBytes = Math.max(0, Math.min(task.phaseTotalBytes, scannedBytes));
+    if (scannedLines !== undefined && Number.isFinite(scannedLines)) {
+      task.scannedLines = scannedLines;
+    }
+    this.syncProgressState(task);
+  }
+
+  private syncProgressState(task: SearchTaskState) {
+    const overallProgressTotalBytes = this.getOverallProgressTotalBytes(task);
+    const overallProgressBytes = this.getOverallProgressBytes(task);
+    task.scannedBytes = overallProgressTotalBytes > 0 && task.totalBytes > 0
+      ? Math.min(task.totalBytes, Math.round((overallProgressBytes / overallProgressTotalBytes) * task.totalBytes))
+      : (task.status === "completed" ? task.totalBytes : 0);
+    task.chunkLabel = `${task.progressPhaseLabel} · ${formatBytes(task.phaseScannedBytes)} / ${formatBytes(task.phaseTotalBytes)}`;
+  }
+
+  private getOverallProgressBytes(task: SearchTaskState) {
+    const completedBeforePhase = task.progressPhase === "full_scan" || task.progressPhase === "completed"
+      ? task.quickPhaseBytes
+      : 0;
+    return Math.min(this.getOverallProgressTotalBytes(task), completedBeforePhase + Math.min(task.phaseScannedBytes, task.phaseTotalBytes));
+  }
+
+  private getOverallProgressTotalBytes(task: SearchTaskState) {
+    return task.totalBytes + task.quickPhaseBytes;
+  }
+
   private async runTaskDirect(task: SearchTaskState, strategy: import("./strategies/index.js").DirectConnectionStrategy) {
     task.status = "running";
     task.startedAt = Date.now();
 
-    let pendingStdout = "";
-    let pendingStderr = "";
+    const needsQuickPhase = task.quickPhaseBytes > 0;
 
-    const consumeLine = (line: string) => {
-      if (!line) return;
-      if (line.startsWith("__PROGRESS__\t")) {
-        const [, scannedBytesToken = "0", scannedLinesToken = "0", chunkStartToken = "0", chunkEndToken = "0"] = line.split("\t");
-        task.scannedBytes = Number(scannedBytesToken) || task.scannedBytes;
-        task.scannedLines = Number(scannedLinesToken) || task.scannedLines;
-        task.chunkLabel = `${formatBytes(Number(chunkStartToken) || 0)} ~ ${formatBytes(Number(chunkEndToken) || 0)}`;
-        return;
-      }
+    const runStreamingPhase = (
+      command: string,
+      matchesArr: LogSearchMatch[],
+      allLinesArr: Array<{ lineNumber: number; preview: string; isMatch: boolean }>
+    ): Promise<void> => {
+      return new Promise<void>(async (resolve, reject) => {
+        let pendingStdout = "";
+        let pendingStderr = "";
 
-      if (line.startsWith("__CTX__\t")) {
-        const parts = line.split("\t");
-        const lineNumber = Number(parts[1] || "0");
-        const preview = parts.slice(2).join("\t");
-        task.allLines.push({ lineNumber, preview, isMatch: false });
-        return;
-      }
+        const consumeLine = (line: string) => {
+          if (!line) return;
+          if (line.startsWith("__PROGRESS__\t")) {
+            const [, scannedBytesToken = "0", scannedLinesToken = "0"] = line.split("\t");
+            const scannedBytes = Number(scannedBytesToken);
+            const scannedLines = Number(scannedLinesToken);
+            this.updatePhaseProgress(task, Number.isFinite(scannedBytes) ? scannedBytes : 0, Number.isFinite(scannedLines) ? scannedLines : undefined);
+            return;
+          }
+          if (line.startsWith("__CTX__\t")) {
+            const parts = line.split("\t");
+            const lineNumber = Number(parts[1] || "0");
+            const preview = parts.slice(2).join("\t");
+            allLinesArr.push({ lineNumber, preview, isMatch: false });
+            return;
+          }
+          if (line.startsWith("__MATCH__\t")) {
+            const parts = line.split("\t");
+            const lineNumber = Number(parts[1] || "0");
+            const preview = parts.slice(2).join("\t");
+            matchesArr.push({ source: task.request.filePath, lineNumber, preview });
+            allLinesArr.push({ lineNumber, preview, isMatch: true });
+            task.matchCount = task.matches.length + task.quickMatches.length;
+          }
+        };
 
-      if (line.startsWith("__MATCH__\t")) {
-        const parts = line.split("\t");
-        const lineNumber = Number(parts[1] || "0");
-        const preview = parts.slice(2).join("\t");
-        task.matches.push({
-          source: task.request.filePath,
-          lineNumber,
-          preview
-        });
-        task.allLines.push({ lineNumber, preview, isMatch: true });
-        task.matchCount = task.matches.length;
-      }
-    };
+        const flushBuffer = (buffer: string, kind: "stdout" | "stderr") => {
+          const lines = buffer.split(/\r?\n/);
+          const remain = lines.pop() ?? "";
+          for (const line of lines) {
+            if (kind === "stdout") consumeLine(line);
+            else if (line.trim()) task.errorMessage = line.trim();
+          }
+          return remain;
+        };
 
-    const flushBuffer = (buffer: string, kind: "stdout" | "stderr") => {
-      const lines = buffer.split(/\r?\n/);
-      const remain = lines.pop() ?? "";
-      for (const line of lines) {
-        if (kind === "stdout") {
-          consumeLine(line);
-        } else if (line.trim()) {
-          task.errorMessage = line.trim();
+        try {
+          const handle = await strategy.execStreaming(command, 120000);
+          handle.onStdout((chunk) => { pendingStdout += chunk; pendingStdout = flushBuffer(pendingStdout, "stdout"); });
+          handle.onStderr((chunk) => { pendingStderr += chunk; pendingStderr = flushBuffer(pendingStderr, "stderr"); });
+          handle.onClose((code) => {
+            flushBuffer(`${pendingStdout}\n`, "stdout");
+            flushBuffer(`${pendingStderr}\n`, "stderr");
+            if (code && code !== 0 && !matchesArr.length) {
+              reject(new Error(task.errorMessage || `SSH 搜索失败，退出码 ${code}`));
+            } else {
+              resolve();
+            }
+          });
+        } catch (error) {
+          reject(error);
         }
-      }
-      return remain;
+      });
     };
 
     try {
-      const handle = await strategy.execStreaming(task.commandPreview, 45000);
+      if (needsQuickPhase) {
+        this.setProgressPhase(task, "quick_tail");
+        const quickCommand = buildStreamingSearchCommand(task.server, task.request, task.totalBytes, { tailBytes: QUICK_TAIL_BYTES });
+        await runStreamingPhase(quickCommand, task.quickMatches, task.quickAllLines);
+        task.quickDone = true;
+        console.log(`[search] Phase 1 done: ${task.quickMatches.length} quick matches in tail ${formatBytes(QUICK_TAIL_BYTES)}`);
+      }
 
-      handle.onStdout((chunk) => {
-        pendingStdout += chunk;
-        pendingStdout = flushBuffer(pendingStdout, "stdout");
-      });
+      this.setProgressPhase(task, "full_scan");
+      const fullCommand = buildStreamingSearchCommand(task.server, task.request, task.totalBytes);
+      await runStreamingPhase(fullCommand, task.matches, task.allLines);
 
-      handle.onStderr((chunk) => {
-        pendingStderr += chunk;
-        pendingStderr = flushBuffer(pendingStderr, "stderr");
-      });
-
-      handle.onClose((code) => {
-        pendingStdout = flushBuffer(`${pendingStdout}\n`, "stdout");
-        pendingStderr = flushBuffer(`${pendingStderr}\n`, "stderr");
-        task.scannedBytes = task.totalBytes;
-        task.chunkLabel = `${formatBytes(task.totalBytes)} / ${formatBytes(task.totalBytes)}`;
-        task.finishedAt = Date.now();
-
-        if (code && code !== 0 && !task.matches.length) {
-          task.status = "failed";
-          task.errorMessage = task.errorMessage || `SSH 搜索失败，退出码 ${code}`;
-        } else {
-          task.status = "completed";
-        }
-      });
+      task.matchCount = task.matches.length;
+      task.status = "completed";
+      this.setProgressPhase(task, "completed");
+      task.finishedAt = Date.now();
     } catch (error) {
       task.status = "failed";
       task.errorMessage = error instanceof Error ? error.message : String(error);
@@ -242,21 +330,24 @@ export class LogSearchTaskService {
       return normalizedTerms.some((term, i) => useRegex ? regexTerms[i].test(line) : line.includes(term));
     };
 
-    let session: import("./ssh-executor.service.js").SftpSession | null = null;
-
-    try {
-      session = await strategy.openSession();
-      const fileSize = task.totalBytes;
+    const scanChunks = async (
+      session: import("./ssh-executor.service.js").SftpSession,
+      startOffset: number,
+      endOffset: number,
+      matchesArr: LogSearchMatch[],
+      allLinesArr: Array<{ lineNumber: number; preview: string; isMatch: boolean }>,
+      initialLineNumber = 0
+    ) => {
       const chunkSize = 8 * 1024 * 1024;
-      let offset = 0;
+      let offset = startOffset;
       let leftover = "";
-      let lineNumber = 0;
+      let lineNumber = initialLineNumber;
       let pendingAfter = 0;
       let lastPrinted = 0;
       const contextBuffer: Map<number, string> = new Map();
 
-      while (offset < fileSize) {
-        const readLen = Math.min(chunkSize, fileSize - offset);
+      while (offset < endOffset) {
+        const readLen = Math.min(chunkSize, endOffset - offset);
         const buf = await session.read(task.request.filePath, offset, readLen);
         offset += buf.length;
 
@@ -275,18 +366,18 @@ export class LogSearchTaskService {
               for (let i = start; i < lineNumber; i++) {
                 const buffered = contextBuffer.get(i);
                 if (buffered !== undefined && lastPrinted !== i) {
-                  task.allLines.push({ lineNumber: i, preview: buffered, isMatch: false });
+                  allLinesArr.push({ lineNumber: i, preview: buffered, isMatch: false });
                   lastPrinted = i;
                 }
               }
             }
-            task.matches.push({ source: task.request.filePath, lineNumber, preview: line });
-            task.allLines.push({ lineNumber, preview: line, isMatch: true });
-            task.matchCount = task.matches.length;
+            matchesArr.push({ source: task.request.filePath, lineNumber, preview: line });
+            allLinesArr.push({ lineNumber, preview: line, isMatch: true });
+            task.matchCount = task.matches.length + task.quickMatches.length;
             lastPrinted = lineNumber;
             pendingAfter = context;
           } else if (pendingAfter > 0 && lastPrinted !== lineNumber) {
-            task.allLines.push({ lineNumber, preview: line, isMatch: false });
+            allLinesArr.push({ lineNumber, preview: line, isMatch: false });
             lastPrinted = lineNumber;
             pendingAfter--;
           }
@@ -297,9 +388,7 @@ export class LogSearchTaskService {
           }
         }
 
-        task.scannedBytes = offset;
-        task.scannedLines = lineNumber;
-        task.chunkLabel = `${formatBytes(offset)} / ${formatBytes(fileSize)}`;
+        this.updatePhaseProgress(task, offset - startOffset, lineNumber);
 
         if (buf.length === 0) break;
       }
@@ -314,21 +403,42 @@ export class LogSearchTaskService {
             for (let i = start; i < lineNumber; i++) {
               const buffered = contextBuffer.get(i);
               if (buffered !== undefined && lastPrinted !== i) {
-                task.allLines.push({ lineNumber: i, preview: buffered, isMatch: false });
+                allLinesArr.push({ lineNumber: i, preview: buffered, isMatch: false });
                 lastPrinted = i;
               }
             }
           }
-          task.matches.push({ source: task.request.filePath, lineNumber, preview: line });
-          task.allLines.push({ lineNumber, preview: line, isMatch: true });
-          task.matchCount = task.matches.length;
+          matchesArr.push({ source: task.request.filePath, lineNumber, preview: line });
+          allLinesArr.push({ lineNumber, preview: line, isMatch: true });
+          task.matchCount = task.matches.length + task.quickMatches.length;
         }
       }
 
-      task.scannedBytes = fileSize;
-      task.scannedLines = lineNumber;
-      task.chunkLabel = `${formatBytes(fileSize)} / ${formatBytes(fileSize)}`;
+      return lineNumber;
+    };
+
+    let session: import("./ssh-executor.service.js").SftpSession | null = null;
+
+    try {
+      session = await strategy.openSession();
+      const fileSize = task.totalBytes;
+      const needsQuickPhase = task.quickPhaseBytes > 0;
+
+      if (needsQuickPhase) {
+        this.setProgressPhase(task, "quick_tail");
+        const tailOffset = fileSize - task.quickPhaseBytes;
+        await scanChunks(session, tailOffset, fileSize, task.quickMatches, task.quickAllLines);
+        task.quickDone = true;
+        console.log(`[search-sftp] Phase 1 done: ${task.quickMatches.length} quick matches in tail ${formatBytes(QUICK_TAIL_BYTES)}`);
+      }
+
+      this.setProgressPhase(task, "full_scan");
+      await scanChunks(session, 0, fileSize, task.matches, task.allLines);
+
+      task.scannedLines = task.matches.length;
+      task.matchCount = task.matches.length;
       task.status = "completed";
+      this.setProgressPhase(task, "completed");
       task.finishedAt = Date.now();
     } catch (error) {
       task.status = "failed";
@@ -341,7 +451,14 @@ export class LogSearchTaskService {
 
   private toResponse(task: SearchTaskState): LogSearchTaskResponse {
     const now = task.finishedAt || Date.now();
-    const progressPercent = task.totalBytes > 0 ? Math.min(100, (task.scannedBytes / task.totalBytes) * 100) : 0;
+    const overallProgressBytes = this.getOverallProgressBytes(task);
+    const overallProgressTotalBytes = this.getOverallProgressTotalBytes(task);
+    const progressPercent = overallProgressTotalBytes > 0
+      ? Math.min(100, (overallProgressBytes / overallProgressTotalBytes) * 100)
+      : (task.status === "completed" ? 100 : 0);
+    const phaseProgressPercent = task.phaseTotalBytes > 0
+      ? Math.min(100, (task.phaseScannedBytes / task.phaseTotalBytes) * 100)
+      : (task.status === "completed" ? 100 : 0);
     const response: LogSearchTaskResponse = {
       taskId: task.id,
       status: task.status,
@@ -354,8 +471,45 @@ export class LogSearchTaskService {
       strategyLabel: task.strategyLabel,
       scopeLabel: task.scopeLabel,
       commandPreview: task.commandPreview,
-      errorMessage: task.errorMessage
+      errorMessage: task.errorMessage,
+      progressPhase: task.progressPhase,
+      progressPhaseLabel: task.progressPhaseLabel,
+      progressPhaseIndex: task.progressPhaseIndex,
+      progressPhaseCount: task.progressPhaseCount,
+      phaseProgressPercent,
+      phaseScannedBytes: task.phaseScannedBytes,
+      phaseTotalBytes: task.phaseTotalBytes,
+      overallProgressBytes,
+      overallProgressTotalBytes
     };
+
+    // Phase 1 quick results (available while Phase 2 is still running)
+    if (task.quickDone && !response.result) {
+      const qMatches = task.quickMatches;
+      let qContextOutput: string | undefined;
+      if (task.quickAllLines.length > qMatches.length) {
+        const sorted = [...task.quickAllLines].sort((a, b) => a.lineNumber - b.lineNumber);
+        const parts: string[] = [];
+        let prevLineNumber = -1;
+        for (const entry of sorted) {
+          if (prevLineNumber >= 0 && entry.lineNumber > prevLineNumber + 1) {
+            parts.push("--");
+          }
+          parts.push(`${entry.lineNumber} | ${entry.preview}`);
+          prevLineNumber = entry.lineNumber;
+        }
+        qContextOutput = parts.join("\n");
+      }
+      response.quickResult = {
+        commandPreview: task.commandPreview,
+        truncated: false,
+        matches: qMatches,
+        rawOutput: qMatches.map((m) => `${m.source}:${m.lineNumber}:${m.preview}`).join("\n"),
+        contextOutput: qContextOutput,
+        strategyLabel: task.strategyLabel,
+        scopeLabel: task.scopeLabel
+      };
+    }
 
     if (task.status === "completed") {
       let contextOutput: string | undefined;

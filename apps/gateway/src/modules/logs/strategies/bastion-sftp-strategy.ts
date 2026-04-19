@@ -15,15 +15,20 @@ export class BastionSftpStrategy implements BastionSftpConnectionStrategy {
   ) {}
 
   async fileStat(filePath: string): Promise<FileStat> {
-    return this.sshExecutor.sftpStat(this.serverId, filePath);
+    // JumpServer SFTP 不支持 sftp.stat()，改用 readdir 父目录获取文件属性
+    return this.sshExecutor.sftpStatViaReaddir(this.serverId, filePath);
   }
 
   async fileRead(filePath: string, offset: number, length: number): Promise<Buffer> {
     return this.sshExecutor.sftpReadRange(this.serverId, filePath, offset, length);
   }
 
+  async statAndRead(filePath: string, offset: number, length: number): Promise<{ stat: FileStat; data: Buffer }> {
+    return this.sshExecutor.sftpStatAndRead(this.serverId, filePath, offset, length);
+  }
+
   async listDirectory(directoryPath: string): Promise<LogFileEntry[]> {
-    const sftpEntries = await this.sshExecutor.sftpListDirectory(this.serverId, directoryPath, 30000);
+    const sftpEntries = await this.sshExecutor.sftpListDirectory(this.serverId, directoryPath);
     return sftpEntries.map((entry) => ({
       path: entry.path,
       name: entry.name,
@@ -38,23 +43,49 @@ export class BastionSftpStrategy implements BastionSftpConnectionStrategy {
   }
 
   async downloadFile(filePath: string): Promise<Buffer> {
-    const stat = await this.sshExecutor.sftpStat(this.serverId, filePath);
+    const stat = await this.sshExecutor.sftpStatViaReaddir(this.serverId, filePath);
     return this.sshExecutor.sftpReadRange(this.serverId, filePath, 0, stat.size);
+  }
+
+  async createReadStream(filePath: string): Promise<import("stream").Readable> {
+    return this.sshExecutor.sftpCreateReadStream(this.serverId, filePath);
   }
 
   async uploadFile(filePath: string, content: Buffer): Promise<void> {
     const session = await this.sshExecutor.sftpOpenSession(this.serverId);
     try {
+      const parentDir = filePath.substring(0, filePath.lastIndexOf("/")) || "/";
+      await session.ensureDir(parentDir);
       await session.write(filePath, content);
     } finally {
       session.close();
     }
   }
 
+  private async deleteDirectoryRecursive(session: SftpSession, directoryPath: string): Promise<void> {
+    const entries = await session.listDirectory(directoryPath);
+    for (const entry of entries) {
+      if (entry.kind === "directory") {
+        await this.deleteDirectoryRecursive(session, entry.path);
+      } else {
+        await session.unlink(entry.path);
+      }
+    }
+    await session.rmdir(directoryPath);
+  }
+
   async deleteFile(filePath: string): Promise<void> {
+    if (filePath === "/") {
+      throw new Error("禁止删除根目录。");
+    }
+    const stat = await this.sshExecutor.sftpStatViaReaddir(this.serverId, filePath);
     const session = await this.sshExecutor.sftpOpenSession(this.serverId);
     try {
-      await session.unlink(filePath);
+      if (stat.kind === "directory") {
+        await this.deleteDirectoryRecursive(session, filePath);
+      } else {
+        await session.unlink(filePath);
+      }
     } finally {
       session.close();
     }
@@ -62,6 +93,8 @@ export class BastionSftpStrategy implements BastionSftpConnectionStrategy {
 
   async startUpload(filePath: string): Promise<UploadHandle> {
     const session = await this.sshExecutor.sftpOpenSession(this.serverId);
+    const parentDir = filePath.substring(0, filePath.lastIndexOf("/")) || "/";
+    await session.ensureDir(parentDir);
     const writeHandle = await session.openForWrite(filePath);
     let offset = 0;
     let aborted = false;

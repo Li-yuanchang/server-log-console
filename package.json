@@ -1,22 +1,8 @@
 {
-  "name": "server-log-console",
+  "name": "@server-log-console/electron",
+  "version": "0.3.4",
+  "description": "Server Log Console desktop app",
+  "author": "lyc",
   "private": true,
-  "version": "0.1.0",
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ],
-  "scripts": {
-    "dev:gateway": "npm --workspace @server-log-console/gateway run dev",
-    "dev:extension": "npm --workspace @server-log-console/extension run dev",
-    "start": "npm run build:all && npm --workspace @server-log-console/gateway run start -- --open",
-    "start:gateway": "npm --workspace @server-log-console/gateway run start",
-    "build:shared": "npm --workspace @server-log-console/shared run build",
-    "build:gateway": "npm --workspace @server-log-console/gateway run build",
-    "build:extension": "npm --workspace @server-log-console/extension run build",
-    "build:all": "npm run build:shared && npm run build:gateway && npm run build:extension",
-    "pack": "npm run build:all && npm --workspace @server-log-console/electron run dist:mac",
-    "pack:install": "npm run pack && rm -rf /Applications/日志控制台.app && cp -RL apps/electron/dist/mac-arm64/日志控制台.app /Applications/",
-    "typecheck": "npm run typecheck --workspaces"
-  }
+  "main": "main.cjs"
 }

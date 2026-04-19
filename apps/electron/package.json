@@ -1,23 +1,27 @@
 {
   "name": "@server-log-console/electron",
-  "version": "0.3.4",
+  "version": "0.3.123",
   "description": "Server Log Console desktop app",
   "author": "lyc",
   "private": true,
   "main": "main.cjs",
   "scripts": {
-    "start": "electron .",
+    "start": "node run-clean-electron-env.cjs electron .",
+    "bump-version": "node bump-version.cjs",
     "prepare-gateway": "node prepare-gateway.cjs",
-    "predist": "node prepare-gateway.cjs",
-    "predist:mac": "node prepare-gateway.cjs",
-    "dist": "electron-builder",
-    "dist:mac": "electron-builder --mac",
-    "dist:win": "electron-builder --win",
-    "dist:linux": "electron-builder --linux"
+    "install:mac-app": "node install-mac-app.cjs",
+    "predist": "node bump-version.cjs && node prepare-gateway.cjs",
+    "predist:mac": "node bump-version.cjs && node prepare-gateway.cjs",
+    "predist:win": "node bump-version.cjs && node prepare-gateway.cjs",
+    "predist:linux": "node bump-version.cjs && node prepare-gateway.cjs",
+    "dist": "node run-clean-electron-env.cjs electron-builder",
+    "dist:mac": "node run-clean-electron-env.cjs electron-builder --mac",
+    "dist:win": "node run-clean-electron-env.cjs electron-builder --win",
+    "dist:linux": "node run-clean-electron-env.cjs electron-builder --linux",
+    "release:mac": "npm run dist:mac && npm run install:mac-app"
   },
   "build": {
-    "appId": "com.server-log-console.app",
-    "electronVersion": "33.4.11",
+    "appId": "com.slc.desktop",
     "productName": "ServerLogConsole",
     "files": [
       "main.cjs",
@@ -46,13 +50,18 @@
         ]
       }
     ],
+    "afterPack": "./afterPack.cjs",
     "mac": {
       "category": "public.app-category.developer-tools",
       "icon": "resources/icon.icns",
       "target": [
         "dmg",
         "zip"
-      ]
+      ],
+      "extendInfo": {
+        "CFBundleName": "ServerLogConsole",
+        "CFBundleDisplayName": "日志控制台"
+      }
     },
     "win": {
       "icon": "resources/icon.ico",
@@ -71,7 +80,7 @@
   },
   "devDependencies": {
     "app-builder-bin": "^4.0.0",
-    "electron": "^33.2.1",
+    "electron": "32.2.7",
     "electron-builder": "^25.1.8"
   }
 }

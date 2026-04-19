@@ -15,7 +15,10 @@ export interface SftpSession {
   write(filePath: string, data: Buffer): Promise<void>;
   openForWrite(filePath: string): Promise<SftpWriteHandle>;
   unlink(filePath: string): Promise<void>;
+  listDirectory(directoryPath: string): Promise<Array<{ name: string; path: string; kind: "file" | "directory" }>>;
+  rmdir(directoryPath: string): Promise<void>;
   rename(oldPath: string, newPath: string): Promise<void>;
+  ensureDir(dirPath: string): Promise<void>;
   close(): void;
 }
 
@@ -75,100 +78,237 @@ function humanizeSshError(error: unknown, context: { username?: string; host?: s
 }
 
 export class SshExecutorService {
+  private static readonly IDLE_TTL = 120_000;
+  private static readonly MAX_LIFETIME = 600_000;
+
+  private sftpCache = new Map<string, { client: Client; sftp: SFTPWrapper; idleTimer: ReturnType<typeof setTimeout>; maxTimer: ReturnType<typeof setTimeout> }>();
+  private execCache = new Map<string, { connection: ManagedSshConnection; idleTimer: ReturnType<typeof setTimeout>; maxTimer: ReturnType<typeof setTimeout>; busy: number; evictPending?: boolean }>();
+
   constructor(
     private readonly serverRegistry: ServerRegistryService,
     private readonly credentialResolver: CredentialResolverService,
     private readonly localConfigService: LocalConfigService
   ) {}
 
-  async exec(serverId: string, command: string, timeoutMs = 45000): Promise<string> {
+  /**
+   * Get or create a cached SFTP connection for the given server.
+   * SSH handshake is the bottleneck (~1.3s for JumpServer), so reusing connections
+   * across operations (browse → open → slice) saves significant latency.
+   */
+  private async acquireSftp(serverId: string, timeoutMs = 30000): Promise<SFTPWrapper> {
+    const cached = this.sftpCache.get(serverId);
+    if (cached) {
+      clearTimeout(cached.idleTimer);
+      cached.idleTimer = setTimeout(() => this.evictSftp(serverId), SshExecutorService.IDLE_TTL);
+      return cached.sftp;
+    }
+
     const server = this.serverRegistry.getServer(serverId);
     const credentials = this.credentialResolver.resolve(server);
 
-    try {
-      const connection = await this.connectManaged(server.id, timeoutMs);
-      return await this.execWithConnection(connection, command, timeoutMs);
-    } catch (error) {
-      if (!this.shouldTryBastion(server)) {
-        throw new Error(humanizeSshError(error, credentials));
-      }
+    const { client, sftp } = await new Promise<{ client: Client; sftp: SFTPWrapper }>((resolve, reject) => {
+      const c = this.createSshClient(credentials.password);
+      let settled = false;
 
-      const bastions = this.findCandidateBastions(server.id);
-      if (bastions.length === 0) {
-        throw new Error(humanizeSshError(error, credentials));
-      }
+      const timeout = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        c.end();
+        reject(new Error(`SFTP 连接超时 (${credentials.host}:${credentials.port})：超过 ${timeoutMs}ms`));
+      }, timeoutMs);
 
-      const bastionErrors: string[] = [];
+      c
+        .on("ready", () => {
+          c.sftp((error, s) => {
+            if (error) {
+              if (!settled) { settled = true; clearTimeout(timeout); c.end(); reject(error); }
+              return;
+            }
+            settled = true;
+            clearTimeout(timeout);
+            resolve({ client: c, sftp: s });
+          });
+        })
+        .on("error", (error) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timeout);
+          reject(error);
+        })
+        .connect({
+          host: credentials.host,
+          port: credentials.port,
+          username: credentials.username,
+          password: credentials.password,
+          privateKey: credentials.privateKey,
+          tryKeyboard: true,
+          readyTimeout: Math.min(timeoutMs, 20000),
+          keepaliveInterval: 10000,
+          keepaliveCountMax: 60
+        });
+    }).catch((error) => {
+      throw new Error(humanizeSshError(error, credentials));
+    });
 
+    // Auto-evict on disconnect / error
+    client.on("close", () => this.evictSftp(serverId));
+    client.on("error", () => this.evictSftp(serverId));
+
+    const idleTimer = setTimeout(() => this.evictSftp(serverId), SshExecutorService.IDLE_TTL);
+    const maxTimer = setTimeout(() => this.evictSftp(serverId), SshExecutorService.MAX_LIFETIME);
+    this.sftpCache.set(serverId, { client, sftp, idleTimer, maxTimer });
+    return sftp;
+  }
+
+  private evictSftp(serverId: string): void {
+    const entry = this.sftpCache.get(serverId);
+    if (entry) {
+      clearTimeout(entry.idleTimer);
+      clearTimeout(entry.maxTimer);
+      try { entry.client.end(); } catch {}
+      this.sftpCache.delete(serverId);
+    }
+  }
+
+  /* ── SSH exec pool (direct / bastion-forwarded connections) ── */
+
+  private async acquireExecConnection(serverId: string, timeoutMs = 30000): Promise<Client> {
+    const cached = this.execCache.get(serverId);
+    if (cached) {
+      clearTimeout(cached.idleTimer);
+      cached.idleTimer = setTimeout(() => this.evictExec(serverId), SshExecutorService.IDLE_TTL);
+      cached.busy++;
+      return cached.connection.client;
+    }
+
+    // Create new connection using the existing connect chain (direct → bastion fallback)
+    const server = this.serverRegistry.getServer(serverId);
+    const credentials = this.credentialResolver.resolve(server);
+    let connection: ManagedSshConnection;
+
+    const bastions = this.shouldTryBastion(server) ? this.findCandidateBastions(serverId) : [];
+    const preferBastionFirst = server.connectionKind === "bastion-target" || (!server.connectionKind && Boolean(server.preferredBastionId));
+    const hasBastionRoute = preferBastionFirst && Boolean(server.preferredBastionId) && bastions.length > 0;
+
+    if (hasBastionRoute) {
+      let lastError: unknown;
+      let found = false;
       for (const bastion of bastions) {
         try {
-          const connection = await this.connectManagedViaBastion(server.id, bastion.id, timeoutMs);
-          return await this.execWithConnection(connection, command, timeoutMs);
-        } catch (bastionError) {
-          bastionErrors.push(`${bastion.name}：${formatErrorMessage(bastionError)}`);
+          connection = await this.connectManagedViaBastion(serverId, bastion.id, timeoutMs);
+          found = true;
+          break;
+        } catch (bastionError) { lastError = bastionError; }
+      }
+      if (!found) {
+        // Bastion failed — try direct as last resort
+        try {
+          connection = await this.connectManaged(serverId, timeoutMs);
+        } catch (directError) {
+          throw new Error(humanizeSshError(lastError ?? directError, credentials));
         }
       }
+    } else {
+      try {
+        connection = await this.connectManaged(serverId, timeoutMs);
+      } catch (error) {
+        if (bastions.length === 0) {
+          throw new Error(humanizeSshError(error, credentials));
+        }
 
-      throw new Error(humanizeSshError(error, credentials));
+        let lastError = error;
+        let found = false;
+        for (const bastion of bastions) {
+          try {
+            connection = await this.connectManagedViaBastion(serverId, bastion.id, timeoutMs);
+            found = true;
+            break;
+          } catch (bastionError) { lastError = bastionError; }
+        }
+        if (!found) throw new Error(humanizeSshError(lastError, credentials));
+      }
+    }
+
+    // Auto-evict on disconnect / error
+    connection!.client.on("close", () => this.evictExec(serverId));
+    connection!.client.on("error", () => this.evictExec(serverId));
+
+    const idleTimer = setTimeout(() => this.evictExec(serverId), SshExecutorService.IDLE_TTL);
+    const maxTimer = setTimeout(() => this.evictExec(serverId), SshExecutorService.MAX_LIFETIME);
+    this.execCache.set(serverId, { connection: connection!, idleTimer, maxTimer, busy: 1 });
+    return connection!.client;
+  }
+
+  private releaseExecConnection(serverId: string): void {
+    const entry = this.execCache.get(serverId);
+    if (!entry) return;
+    entry.busy = Math.max(0, entry.busy - 1);
+    if (entry.evictPending && entry.busy <= 0) {
+      this.evictExec(serverId, true);
+      return;
+    }
+    clearTimeout(entry.idleTimer);
+    entry.idleTimer = setTimeout(() => this.evictExec(serverId), SshExecutorService.IDLE_TTL);
+  }
+
+  private evictExec(serverId: string, force = false): void {
+    const entry = this.execCache.get(serverId);
+    if (!entry) return;
+    if (!force && entry.busy > 0) {
+      // Other operations still in-flight — defer eviction until they release
+      entry.evictPending = true;
+      return;
+    }
+    clearTimeout(entry.idleTimer);
+    clearTimeout(entry.maxTimer);
+    try { entry.connection.cleanup(); } catch {}
+    this.execCache.delete(serverId);
+  }
+
+  /** Dispose all cached connections — call on app shutdown. */
+  disposeAllCaches(): void {
+    for (const [id] of this.sftpCache) this.evictSftp(id);
+    for (const [id] of this.execCache) this.evictExec(id, true);
+  }
+
+  async exec(serverId: string, command: string, timeoutMs = 45000): Promise<string> {
+    await this.acquireExecConnection(serverId, timeoutMs);
+    const cached = this.execCache.get(serverId);
+    try {
+      if (cached?.connection.mode === "jumpserver-shell" && cached.connection.shellStream) {
+        return await this.execWithShellConnection(cached.connection, command, timeoutMs, { preserveConnection: true });
+      }
+      return await this.execOnClient(cached!.connection.client, command, timeoutMs);
+    } catch (error) {
+      this.evictExec(serverId);
+      throw error;
+    } finally {
+      this.releaseExecConnection(serverId);
     }
   }
 
   async execWithStdin(serverId: string, command: string, stdinData: string | Buffer, timeoutMs = 120000): Promise<string> {
-    const server = this.serverRegistry.getServer(serverId);
-    const credentials = this.credentialResolver.resolve(server);
-
+    const client = await this.acquireExecConnection(serverId, timeoutMs);
     try {
-      const connection = await this.connectManaged(server.id, timeoutMs);
-      return await this.execWithConnectionStdin(connection, command, stdinData, timeoutMs);
+      return await this.execOnClientStdin(client, command, stdinData, timeoutMs);
     } catch (error) {
-      if (!this.shouldTryBastion(server)) {
-        throw new Error(humanizeSshError(error, credentials));
-      }
-
-      const bastions = this.findCandidateBastions(server.id);
-      if (bastions.length === 0) {
-        throw new Error(humanizeSshError(error, credentials));
-      }
-
-      for (const bastion of bastions) {
-        try {
-          const connection = await this.connectManagedViaBastion(server.id, bastion.id, timeoutMs);
-          return await this.execWithConnectionStdin(connection, command, stdinData, timeoutMs);
-        } catch (_) { /* try next bastion */ }
-      }
-
-      throw new Error(humanizeSshError(error, credentials));
+      this.evictExec(serverId);
+      throw error;
+    } finally {
+      this.releaseExecConnection(serverId);
     }
   }
 
   async connectForStreaming(serverId: string, timeoutMs = 45000): Promise<ManagedSshConnection> {
-    const server = this.serverRegistry.getServer(serverId);
-    const credentials = this.credentialResolver.resolve(server);
-
-    try {
-      return await this.connectManaged(serverId, timeoutMs);
-    } catch (error) {
-      if (!this.shouldTryBastion(server)) {
-        throw new Error(humanizeSshError(error, credentials));
-      }
-
-      const bastions = this.findCandidateBastions(serverId);
-      if (bastions.length === 0) {
-        throw new Error(humanizeSshError(error, credentials));
-      }
-
-      const bastionErrors: string[] = [];
-
-      for (const bastion of bastions) {
-        try {
-          return await this.connectManagedViaBastion(serverId, bastion.id, timeoutMs);
-        } catch (bastionError) {
-          bastionErrors.push(`${bastion.name}：${formatErrorMessage(bastionError)}`);
-        }
-      }
-
-      throw new Error(humanizeSshError(error, credentials));
-    }
+    await this.acquireExecConnection(serverId, timeoutMs);
+    const cached = this.execCache.get(serverId)!;
+    // Return a lightweight handle — cleanup does NOT close the pooled client
+    return {
+      client: cached.connection.client,
+      shellStream: cached.connection.shellStream,
+      cleanup: () => this.releaseExecConnection(serverId),
+      mode: cached.connection.mode ?? "direct"
+    };
   }
 
   async execViaBastionHost(bastionId: string, targetHost: string, command: string, timeoutMs = 45000): Promise<string> {
@@ -295,271 +435,229 @@ export class SshExecutorService {
     }
   }
 
-  async sftpListDirectory(serverId: string, directoryPath: string, timeoutMs = 30000): Promise<Array<{ name: string; path: string; kind: "file" | "directory"; size?: number; modifiedTime?: string }>> {
-    const server = this.serverRegistry.getServer(serverId);
-    const credentials = this.credentialResolver.resolve(server);
+  async sftpListDirectory(serverId: string, directoryPath: string): Promise<Array<{ name: string; path: string; kind: "file" | "directory"; size?: number; modifiedTime?: string }>> {
+    const sftp = await this.acquireSftp(serverId);
 
-    const sftp = new Promise<Array<{ name: string; path: string; kind: "file" | "directory"; size?: number; modifiedTime?: string }>>((resolve, reject) => {
-      const client = this.createSshClient(credentials.password);
-      let settled = false;
+    return new Promise((resolve, reject) => {
+      sftp.readdir(directoryPath, (readError, list) => {
+        if (readError) {
+          this.evictSftp(serverId);
+          reject(new Error(`SFTP 读取目录失败：${readError.message}`));
+          return;
+        }
 
-      const timeout = setTimeout(() => {
-        if (settled) return;
-        settled = true;
-        client.end();
-        reject(new Error(`SFTP 连接超时 (${credentials.username}@${credentials.host}:${credentials.port})：超过 ${timeoutMs}ms`));
-      }, timeoutMs);
-
-      client
-        .on("ready", () => {
-          client.sftp((error, sftp) => {
-            if (error) {
-              if (!settled) { settled = true; clearTimeout(timeout); client.end(); reject(error); }
-              return;
-            }
-
-            sftp.readdir(directoryPath, (readError, list) => {
-              settled = true;
-              clearTimeout(timeout);
-              client.end();
-
-              if (readError) {
-                reject(new Error(`SFTP 读取目录失败：${readError.message}`));
-                return;
-              }
-
-              const entries = (list || [])
-                .filter((item) => !item.filename.startsWith("."))
-                .map((item) => {
-                  const isDir = (item.attrs.mode & 0o40000) !== 0;
-                  const fullPath = directoryPath === "/" ? `/${item.filename}` : `${directoryPath}/${item.filename}`;
-                  return {
-                    name: item.filename,
-                    path: fullPath,
-                    kind: (isDir ? "directory" : "file") as "file" | "directory",
-                    size: isDir ? undefined : item.attrs.size,
-                    modifiedTime: item.attrs.mtime ? new Date(item.attrs.mtime * 1000).toISOString() : undefined
-                  };
-                })
-                .sort((a, b) => {
-                  if (a.kind !== b.kind) return a.kind === "directory" ? -1 : 1;
-                  return a.name.localeCompare(b.name);
-                });
-
-              resolve(entries);
-            });
+        const entries = (list || [])
+          .filter((item) => !item.filename.startsWith("."))
+          .map((item) => {
+            const isDir = (item.attrs.mode & 0o40000) !== 0;
+            const fullPath = directoryPath === "/" ? `/${item.filename}` : `${directoryPath}/${item.filename}`;
+            return {
+              name: item.filename,
+              path: fullPath,
+              kind: (isDir ? "directory" : "file") as "file" | "directory",
+              size: isDir ? undefined : item.attrs.size,
+              modifiedTime: item.attrs.mtime ? new Date(item.attrs.mtime * 1000).toISOString() : undefined
+            };
+          })
+          .sort((a, b) => {
+            if (a.kind !== b.kind) return a.kind === "directory" ? -1 : 1;
+            return a.name.localeCompare(b.name);
           });
-        })
-        .on("error", (error) => {
-          if (settled) return;
-          settled = true;
-          clearTimeout(timeout);
-          reject(error);
-        })
-        .connect({
-          host: credentials.host,
-          port: credentials.port,
-          username: credentials.username,
-          password: credentials.password,
-          privateKey: credentials.privateKey,
-          tryKeyboard: true,
-          readyTimeout: Math.min(timeoutMs, 20000),
-          keepaliveInterval: 10000,
-          keepaliveCountMax: 30
-        });
-    });
 
-    return sftp.catch((error) => {
-      throw new Error(humanizeSshError(error, credentials));
+        resolve(entries);
+      });
     });
   }
 
-  async sftpStat(serverId: string, filePath: string, timeoutMs = 30000): Promise<{ size: number; mtime: number; readable: boolean }> {
-    const server = this.serverRegistry.getServer(serverId);
-    const credentials = this.credentialResolver.resolve(server);
-
-    const result = new Promise<{ size: number; mtime: number; readable: boolean }>((resolve, reject) => {
-      const client = this.createSshClient(credentials.password);
-      let settled = false;
-
-      const timeout = setTimeout(() => {
-        if (settled) return;
-        settled = true;
-        client.end();
-        reject(new Error(`SFTP stat 超时 (${credentials.host}:${credentials.port})：超过 ${timeoutMs}ms`));
-      }, timeoutMs);
-
-      client
-        .on("ready", () => {
-          client.sftp((error, sftp) => {
-            if (error) {
-              if (!settled) { settled = true; clearTimeout(timeout); client.end(); reject(error); }
-              return;
-            }
-
-            sftp.stat(filePath, (statError, stats) => {
-              settled = true;
-              clearTimeout(timeout);
-              client.end();
-
-              if (statError) {
-                reject(new Error(`SFTP stat 失败 (${filePath})：${statError.message}`));
-                return;
-              }
-
-              resolve({
-                size: stats.size,
-                mtime: stats.mtime,
-                readable: (stats.mode & 0o444) !== 0
-              });
-            });
-          });
-        })
-        .on("error", (error) => {
-          if (settled) return;
-          settled = true;
-          clearTimeout(timeout);
-          reject(error);
-        })
-        .connect({
-          host: credentials.host,
-          port: credentials.port,
-          username: credentials.username,
-          password: credentials.password,
-          privateKey: credentials.privateKey,
-          tryKeyboard: true,
-          readyTimeout: Math.min(timeoutMs, 20000),
-          keepaliveInterval: 10000,
-          keepaliveCountMax: 30
-        });
-    });
-
-    return result.catch((error) => {
-      throw new Error(humanizeSshError(error, credentials));
+  async sftpStat(serverId: string, filePath: string): Promise<{ size: number; mtime: number; readable: boolean }> {
+    const sftp = await this.acquireSftp(serverId);
+    return new Promise((resolve, reject) => {
+      sftp.stat(filePath, (statError, stats) => {
+        if (statError) {
+          this.evictSftp(serverId);
+          reject(new Error(`SFTP stat 失败 (${filePath})：${statError.message}`));
+          return;
+        }
+        resolve({ size: stats.size, mtime: stats.mtime, readable: (stats.mode & 0o444) !== 0 });
+      });
     });
   }
 
-  async sftpReadRange(serverId: string, filePath: string, offset: number, length: number, timeoutMs = 60000): Promise<Buffer> {
-    const server = this.serverRegistry.getServer(serverId);
-    const credentials = this.credentialResolver.resolve(server);
+  /**
+   * JumpServer SFTP 不支持 sftp.stat()，改用 readdir 父目录获取文件属性。
+   * Uses cached SFTP connection to avoid repeated SSH handshakes.
+   */
+  async sftpStatViaReaddir(serverId: string, filePath: string): Promise<{ size: number; mtime: number; readable: boolean; kind: "file" | "directory" }> {
+    const lastSlash = filePath.lastIndexOf("/");
+    const parentDir = lastSlash > 0 ? filePath.substring(0, lastSlash) : "/";
+    const fileName = filePath.substring(lastSlash + 1);
 
-    const result = new Promise<Buffer>((resolve, reject) => {
-      const client = this.createSshClient(credentials.password);
-      let settled = false;
+    const sftp = await this.acquireSftp(serverId);
 
-      const timeout = setTimeout(() => {
-        if (settled) return;
-        settled = true;
-        client.end();
-        reject(new Error(`SFTP read 超时 (${credentials.host}:${credentials.port})：超过 ${timeoutMs}ms`));
-      }, timeoutMs);
-
-      client
-        .on("ready", () => {
-          client.sftp((error, sftp) => {
-            if (error) {
-              if (!settled) { settled = true; clearTimeout(timeout); client.end(); reject(error); }
-              return;
-            }
-
-            sftp.open(filePath, "r", (openError, handle) => {
-              if (openError) {
-                if (!settled) { settled = true; clearTimeout(timeout); client.end(); reject(new Error(`SFTP open 失败 (${filePath})：${openError.message}`)); }
-                return;
-              }
-
-              const buf = Buffer.alloc(length);
-              sftp.read(handle, buf, 0, length, offset, (readError, bytesRead) => {
-                sftp.close(handle, () => {});
-                settled = true;
-                clearTimeout(timeout);
-                client.end();
-
-                if (readError) {
-                  reject(new Error(`SFTP read 失败 (${filePath})：${readError.message}`));
-                  return;
-                }
-
-                resolve(buf.subarray(0, bytesRead));
-              });
-            });
-          });
-        })
-        .on("error", (error) => {
-          if (settled) return;
-          settled = true;
-          clearTimeout(timeout);
-          reject(error);
-        })
-        .connect({
-          host: credentials.host,
-          port: credentials.port,
-          username: credentials.username,
-          password: credentials.password,
-          privateKey: credentials.privateKey,
-          tryKeyboard: true,
-          readyTimeout: Math.min(timeoutMs, 20000),
-          keepaliveInterval: 10000,
-          keepaliveCountMax: 30
+    return new Promise((resolve, reject) => {
+      sftp.readdir(parentDir, (readError, list) => {
+        if (readError) {
+          this.evictSftp(serverId);
+          reject(new Error(`SFTP readdir 失败 (${parentDir})：${readError.message}`));
+          return;
+        }
+        const entry = (list || []).find((item) => item.filename === fileName);
+        if (!entry) {
+          reject(new Error(`文件不存在：${filePath}`));
+          return;
+        }
+        resolve({
+          size: entry.attrs.size,
+          mtime: entry.attrs.mtime,
+          readable: (entry.attrs.mode & 0o444) !== 0,
+          kind: (entry.attrs.mode & 0o40000) !== 0 ? "directory" : "file"
         });
-    });
-
-    return result.catch((error) => {
-      throw new Error(humanizeSshError(error, credentials));
+      });
     });
   }
 
-  async sftpOpenSession(serverId: string, timeoutMs = 300000): Promise<SftpSession> {
-    const server = this.serverRegistry.getServer(serverId);
-    const credentials = this.credentialResolver.resolve(server);
+  async sftpReadRange(serverId: string, filePath: string, offset: number, length: number): Promise<Buffer> {
+    const sftp = await this.acquireSftp(serverId);
 
-    const { client, sftp } = await new Promise<{ client: Client; sftp: SFTPWrapper }>((resolve, reject) => {
-      const c = this.createSshClient(credentials.password);
-      let settled = false;
-
-      const timeout = setTimeout(() => {
-        if (settled) return;
-        settled = true;
-        c.end();
-        reject(new Error(`SFTP session 超时 (${credentials.host}:${credentials.port})`));
-      }, 30000);
-
-      c
-        .on("ready", () => {
-          c.sftp((error, s) => {
-            clearTimeout(timeout);
-            if (error) {
-              if (!settled) { settled = true; c.end(); reject(error); }
-              return;
-            }
-            settled = true;
-            resolve({ client: c, sftp: s });
-          });
-        })
-        .on("error", (error) => {
-          if (settled) return;
-          settled = true;
-          clearTimeout(timeout);
-          reject(error);
-        })
-        .connect({
-          host: credentials.host,
-          port: credentials.port,
-          username: credentials.username,
-          password: credentials.password,
-          privateKey: credentials.privateKey,
-          tryKeyboard: true,
-          readyTimeout: 20000,
-          keepaliveInterval: 10000,
-          keepaliveCountMax: 60
+    return new Promise<Buffer>((resolve, reject) => {
+      sftp.open(filePath, "r", (openError, handle) => {
+        if (openError) {
+          this.evictSftp(serverId);
+          reject(new Error(`SFTP open 失败 (${filePath})：${openError.message}`));
+          return;
+        }
+        const buf = Buffer.alloc(length);
+        sftp.read(handle, buf, 0, length, offset, (readError, bytesRead) => {
+          sftp.close(handle, () => {});
+          if (readError) {
+            this.evictSftp(serverId);
+            reject(new Error(`SFTP read 失败 (${filePath})：${readError.message}`));
+            return;
+          }
+          resolve(buf.subarray(0, bytesRead));
         });
+      });
     });
+  }
+
+  /**
+   * readdir(stat) + open+read using cached SFTP connection.
+   * Supports offset=-1 (tail mode) — computes offset from file size internally.
+   */
+  async sftpStatAndRead(
+    serverId: string,
+    filePath: string,
+    offset: number,
+    length: number
+  ): Promise<{ stat: { size: number; mtime: number; readable: boolean }; data: Buffer }> {
+    const lastSlash = filePath.lastIndexOf("/");
+    const parentDir = lastSlash > 0 ? filePath.substring(0, lastSlash) : "/";
+    const fileName = filePath.substring(lastSlash + 1);
+
+    const sftp = await this.acquireSftp(serverId);
+
+    // Step 1: readdir parent to get file stat
+    const fileStat = await new Promise<{ size: number; mtime: number; readable: boolean }>((resolve, reject) => {
+      sftp.readdir(parentDir, (readError, list) => {
+        if (readError) {
+          this.evictSftp(serverId);
+          reject(new Error(`SFTP readdir 失败 (${parentDir})：${readError.message}`));
+          return;
+        }
+        const entry = (list || []).find((item) => item.filename === fileName);
+        if (!entry) { reject(new Error(`文件不存在：${filePath}`)); return; }
+        resolve({ size: entry.attrs.size, mtime: entry.attrs.mtime, readable: (entry.attrs.mode & 0o444) !== 0 });
+      });
+    });
+
+    // Compute effective read range
+    const effectiveOffset = offset === -1 ? Math.max(0, fileStat.size - length) : offset;
+    const remaining = Math.max(0, fileStat.size - effectiveOffset);
+    const effectiveLength = Math.min(length, remaining);
+
+    if (effectiveLength <= 0) {
+      return { stat: fileStat, data: Buffer.alloc(0) };
+    }
+
+    // Step 2: open + read on the same cached connection
+    const data = await new Promise<Buffer>((resolve, reject) => {
+      sftp.open(filePath, "r", (openError, handle) => {
+        if (openError) {
+          this.evictSftp(serverId);
+          reject(new Error(`SFTP open 失败 (${filePath})：${openError.message}`));
+          return;
+        }
+        const buf = Buffer.alloc(effectiveLength);
+        sftp.read(handle, buf, 0, effectiveLength, effectiveOffset, (readErr, bytesRead) => {
+          sftp.close(handle, () => {});
+          if (readErr) {
+            this.evictSftp(serverId);
+            reject(new Error(`SFTP read 失败 (${filePath})：${readErr.message}`));
+            return;
+          }
+          resolve(buf.subarray(0, bytesRead));
+        });
+      });
+    });
+
+    return { stat: fileStat, data };
+  }
+
+  /**
+   * Execute a command and return stdout as a raw Readable stream (for streaming download).
+   * The returned object includes the stream and a cleanup function to call on completion/error.
+   */
+  async execRawStream(serverId: string, command: string, timeoutMs = 600000): Promise<{
+    stream: import("stream").Readable;
+    cleanup: () => void;
+  }> {
+    const connection = await this.connectForStreaming(serverId, timeoutMs);
+
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        connection.cleanup();
+        reject(new Error(`SSH stream command timed out after ${timeoutMs}ms`));
+      }, timeoutMs);
+
+      connection.client.exec(command, (error, channel) => {
+        if (error) {
+          clearTimeout(timeout);
+          connection.cleanup();
+          reject(error);
+          return;
+        }
+
+        const cleanup = () => {
+          clearTimeout(timeout);
+          connection.cleanup();
+        };
+
+        channel.on("close", () => cleanup());
+        channel.on("error", () => cleanup());
+
+        // Resolve immediately with the stdout stream
+        resolve({ stream: channel, cleanup });
+      });
+    });
+  }
+
+  /**
+   * Create a readable stream for a remote file using the cached SFTP connection.
+   */
+  async sftpCreateReadStream(serverId: string, filePath: string): Promise<import("ssh2").ReadStream> {
+    const sftp = await this.acquireSftp(serverId);
+    return sftp.createReadStream(filePath);
+  }
+
+  async sftpOpenSession(serverId: string): Promise<SftpSession> {
+    const sftp = await this.acquireSftp(serverId);
+    const self = this;
 
     return {
       stat(filePath: string) {
         return new Promise((resolve, reject) => {
           sftp.stat(filePath, (err, stats) => {
-            if (err) return reject(new Error(`SFTP stat 失败 (${filePath})：${err.message}`));
+            if (err) { self.evictSftp(serverId); return reject(new Error(`SFTP stat 失败 (${filePath})：${err.message}`)); }
             resolve({ size: stats.size, mtime: stats.mtime, readable: (stats.mode & 0o444) !== 0 });
           });
         });
@@ -567,11 +665,11 @@ export class SshExecutorService {
       read(filePath: string, offset: number, length: number) {
         return new Promise((resolve, reject) => {
           sftp.open(filePath, "r", (openErr, handle) => {
-            if (openErr) return reject(new Error(`SFTP open 失败 (${filePath})：${openErr.message}`));
+            if (openErr) { self.evictSftp(serverId); return reject(new Error(`SFTP open 失败 (${filePath})：${openErr.message}`)); }
             const buf = Buffer.alloc(length);
             sftp.read(handle, buf, 0, length, offset, (readErr, bytesRead) => {
               sftp.close(handle, () => {});
-              if (readErr) return reject(new Error(`SFTP read 失败 (${filePath})：${readErr.message}`));
+              if (readErr) { self.evictSftp(serverId); return reject(new Error(`SFTP read 失败 (${filePath})：${readErr.message}`)); }
               resolve(buf.subarray(0, bytesRead));
             });
           });
@@ -580,21 +678,14 @@ export class SshExecutorService {
       write(filePath: string, data: Buffer) {
         return new Promise<void>((resolve, reject) => {
           sftp.open(filePath, "w", (openErr, handle) => {
-            if (openErr) return reject(new Error(`SFTP open(write) 失败 (${filePath})：${openErr.message}`));
+            if (openErr) { self.evictSftp(serverId); return reject(new Error(`SFTP open(write) 失败 (${filePath})：${openErr.message}`)); }
             const CHUNK = 32 * 1024;
             let offset = 0;
             function writeNext() {
-              if (offset >= data.length) {
-                sftp.close(handle, () => {});
-                return resolve();
-              }
+              if (offset >= data.length) { sftp.close(handle, () => {}); return resolve(); }
               const end = Math.min(offset + CHUNK, data.length);
-              const len = end - offset;
-              sftp.write(handle, data, offset, len, offset, (writeErr) => {
-                if (writeErr) {
-                  sftp.close(handle, () => {});
-                  return reject(new Error(`SFTP write 失败 (${filePath} offset=${offset})：${writeErr.message}`));
-                }
+              sftp.write(handle, data, offset, end - offset, offset, (writeErr) => {
+                if (writeErr) { sftp.close(handle, () => {}); self.evictSftp(serverId); return reject(new Error(`SFTP write 失败 (${filePath} offset=${offset})：${writeErr.message}`)); }
                 offset = end;
                 writeNext();
               });
@@ -606,7 +697,7 @@ export class SshExecutorService {
       openForWrite(filePath: string): Promise<SftpWriteHandle> {
         return new Promise((resolve, reject) => {
           sftp.open(filePath, "w", (openErr, handle) => {
-            if (openErr) return reject(new Error(`SFTP open(write) 失败 (${filePath})：${openErr.message}`));
+            if (openErr) { self.evictSftp(serverId); return reject(new Error(`SFTP open(write) 失败 (${filePath})：${openErr.message}`)); }
             resolve({
               writeChunk(data: Buffer, offset: number): Promise<void> {
                 return new Promise<void>((res, rej) => {
@@ -616,7 +707,7 @@ export class SshExecutorService {
                     if (pos >= data.length) return res();
                     const end = Math.min(pos + CHUNK, data.length);
                     sftp.write(handle, data, pos, end - pos, offset + pos, (err) => {
-                      if (err) return rej(new Error(`SFTP write 失败 (offset=${offset + pos})：${err.message}`));
+                      if (err) { self.evictSftp(serverId); return rej(new Error(`SFTP write 失败 (offset=${offset + pos})：${err.message}`)); }
                       pos = end;
                       next();
                     });
@@ -634,7 +725,34 @@ export class SshExecutorService {
       unlink(filePath: string) {
         return new Promise<void>((resolve, reject) => {
           sftp.unlink(filePath, (err) => {
-            if (err) return reject(new Error(`SFTP unlink 失败 (${filePath})：${err.message}`));
+            if (err) { self.evictSftp(serverId); return reject(new Error(`SFTP unlink 失败 (${filePath})：${err.message}`)); }
+            resolve();
+          });
+        });
+      },
+      listDirectory(directoryPath: string) {
+        return new Promise<Array<{ name: string; path: string; kind: "file" | "directory" }>>((resolve, reject) => {
+          sftp.readdir(directoryPath, (err, list) => {
+            if (err) { self.evictSftp(serverId); return reject(new Error(`SFTP 读取目录失败 (${directoryPath})：${err.message}`)); }
+            const entries = (list || [])
+              .filter((item) => item.filename !== "." && item.filename !== "..")
+              .map((item) => {
+                const isDir = (item.attrs.mode & 0o40000) !== 0;
+                const fullPath = directoryPath === "/" ? `/${item.filename}` : `${directoryPath}/${item.filename}`;
+                return {
+                  name: item.filename,
+                  path: fullPath,
+                  kind: (isDir ? "directory" : "file") as "file" | "directory"
+                };
+              });
+            resolve(entries);
+          });
+        });
+      },
+      rmdir(directoryPath: string) {
+        return new Promise<void>((resolve, reject) => {
+          sftp.rmdir(directoryPath, (err) => {
+            if (err) { self.evictSftp(serverId); return reject(new Error(`SFTP rmdir 失败 (${directoryPath})：${err.message}`)); }
             resolve();
           });
         });
@@ -642,13 +760,26 @@ export class SshExecutorService {
       rename(oldPath: string, newPath: string) {
         return new Promise<void>((resolve, reject) => {
           sftp.rename(oldPath, newPath, (err) => {
-            if (err) return reject(new Error(`SFTP rename 失败 (${oldPath} → ${newPath})：${err.message}`));
+            if (err) { self.evictSftp(serverId); return reject(new Error(`SFTP rename 失败 (${oldPath} → ${newPath})：${err.message}`)); }
             resolve();
           });
         });
       },
+      async ensureDir(dirPath: string) {
+        const parts = dirPath.split("/").filter(Boolean);
+        let current = "";
+        for (const part of parts) {
+          current += "/" + part;
+          await new Promise<void>((resolve) => {
+            sftp.mkdir(current, (err) => {
+              // Ignore errors (directory may already exist)
+              resolve();
+            });
+          });
+        }
+      },
       close() {
-        try { client.end(); } catch {}
+        // No-op: pool manages connection lifecycle
       }
     };
   }
@@ -715,15 +846,16 @@ export class SshExecutorService {
     return this.openJumpServerShellManaged(bastion.id, timeoutMs);
   }
 
-  async connectTerminal(serverId: string, bastionId: string | undefined, timeoutMs = 30000): Promise<ManagedSshConnection> {
+  async connectTerminal(serverId: string, bastionId: string | undefined, timeoutMs = 30000, cwd?: string): Promise<ManagedSshConnection> {
     const currentServer = this.serverRegistry.getServer(serverId);
     if (this.isJumpServerBastion(currentServer)) {
       return this.connectJumpServerTerminal(serverId, bastionId, timeoutMs);
     }
 
     let connection: ManagedSshConnection;
+    const shouldUseBastion = currentServer.connectionKind === "bastion-target" || (!currentServer.connectionKind && Boolean(bastionId));
 
-    if (bastionId) {
+    if (shouldUseBastion && bastionId) {
       const bastion = this.serverRegistry.getServer(bastionId);
       connection = this.isJumpServerBastion(bastion)
         ? await this.connectManagedViaJumpServerShell(serverId, bastion.id, timeoutMs)
@@ -737,7 +869,9 @@ export class SshExecutorService {
     }
 
     return new Promise<ManagedSshConnection>((resolve, reject) => {
-      connection.client.shell({ term: "xterm", cols: 160, rows: 48 }, (error, stream) => {
+      const shellOpts: Record<string, unknown> = { term: "xterm", cols: 160, rows: 48 };
+      if (cwd) { shellOpts.cwd = cwd; }
+      connection.client.shell(shellOpts, (error, stream) => {
         if (error) {
           connection.cleanup();
           reject(error);
@@ -753,6 +887,85 @@ export class SshExecutorService {
             connection.cleanup();
           }
         });
+      });
+    });
+  }
+
+  /** Run command on a pooled Client (no cleanup — pool manages lifecycle). */
+  private execOnClient(client: Client, command: string, timeoutMs: number): Promise<string> {
+    return new Promise<string>((resolve, reject) => {
+      let stdout = "";
+      let stderr = "";
+      let settled = false;
+
+      const timeout = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        reject(new Error(`SSH command timed out after ${timeoutMs}ms`));
+      }, timeoutMs);
+
+      client.exec(command, (error, stream) => {
+        if (error) {
+          clearTimeout(timeout);
+          settled = true;
+          reject(error);
+          return;
+        }
+
+        stream.on("data", (chunk: Buffer | string) => { stdout += chunk.toString(); });
+        stream.stderr.on("data", (chunk: Buffer | string) => { stderr += chunk.toString(); });
+
+        stream.on("close", (code: number | undefined) => {
+          if (settled) return;
+          clearTimeout(timeout);
+          settled = true;
+          if (code && code !== 0 && stdout.length === 0) {
+            reject(new Error(stderr || `SSH command failed with exit code ${code}`));
+            return;
+          }
+          resolve(stdout || stderr);
+        });
+      });
+    });
+  }
+
+  /** Run command with stdin on a pooled Client. */
+  private execOnClientStdin(client: Client, command: string, stdinData: string | Buffer, timeoutMs: number): Promise<string> {
+    return new Promise<string>((resolve, reject) => {
+      let stdout = "";
+      let stderr = "";
+      let settled = false;
+
+      const timeout = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        reject(new Error(`SSH command timed out after ${timeoutMs}ms`));
+      }, timeoutMs);
+
+      client.exec(command, (error, stream) => {
+        if (error) {
+          clearTimeout(timeout);
+          settled = true;
+          reject(error);
+          return;
+        }
+
+        stream.on("data", (chunk: Buffer | string) => { stdout += chunk.toString(); });
+        stream.stderr.on("data", (chunk: Buffer | string) => { stderr += chunk.toString(); });
+
+        stream.on("close", (code: number | undefined) => {
+          if (settled) return;
+          clearTimeout(timeout);
+          settled = true;
+          if (code && code !== 0 && stdout.length === 0) {
+            reject(new Error(stderr || `SSH command failed with exit code ${code}`));
+            return;
+          }
+          resolve(stdout || stderr);
+        });
+
+        stream.write(stdinData);
+        stream.end();
       });
     });
   }

@@ -46,11 +46,11 @@ Web 模式下不涉及 Electron，直接在浏览器调试。
 ### 2.2 Electron 本地调试
 
 ```bash
-# 在 electron 目录启动
-cd apps/electron && npm start
+# 从项目根目录
+npm --workspace @server-log-console/electron run start
 ```
 
-这会直接用 Electron 加载本地文件，方便快速验证主进程逻辑。
+这会通过 `apps/electron/package.json` 中的预设脚本启动 Electron。当前脚本会先清理 `ELECTRON_RUN_AS_NODE`，再执行真正的 `electron` 命令，避免 IDE 宿主环境把打包 app 或本地调试进程错误地带成 Node 模式。
 
 ---
 
@@ -60,7 +60,7 @@ cd apps/electron && npm start
 
 ```bash
 # 从项目根目录
-npm run pack
+npm --workspace @server-log-console/electron run dist:mac
 ```
 
 执行流程：
@@ -68,7 +68,12 @@ npm run pack
 2. `build:gateway` → 编译后端
 3. `build:extension` → Vite 构建前端
 4. `predist:mac` → `prepare-gateway.cjs` 收集资源到 `.electron-build/`
-5. `electron-builder --mac` → 打包为 `.app` + `.dmg`
+5. `run-clean-electron-env.cjs` → 清理 `ELECTRON_RUN_AS_NODE`
+6. `electron-builder --mac` → 打包为 `.app` + `.dmg`
+
+规则：打包和启动优先走 `package.json` 中已定义的脚本入口，不长期依赖临时手写 shell 命令。临时命令只用于排障，验证有效后必须回写到脚本中。
+
+本次事故归档见：`docs/electron-macos-packaging-archive-2026-04-12.md`
 
 ### 3.2 安装到 /Applications
 

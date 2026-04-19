@@ -1,5 +1,6 @@
 import cors from "cors";
 import express from "express";
+import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
 import { existsSync } from "node:fs";
 import path from "node:path";
@@ -38,6 +39,37 @@ function logPhase(label: string, start: number) {
 console.log("┌─ Gateway starting…");
 
 let t = performance.now();
+
+type LogRecordingSession = {
+  sessionId: string;
+  serverId: string;
+  sourcePath: string;
+  outputPath: string;
+  /** Shell-safe real paths (stripped JumpServer SFTP prefix when applicable) */
+  realSourcePath: string;
+  realOutputPath: string;
+  realPidFilePath: string;
+  startedAt: string;
+};
+
+const activeLogRecordings = new Map<string, LogRecordingSession>();
+const recordingConnections = new Map<string, { cleanup: () => void }>();
+
+function buildRecordingTimestamp(date = new Date()): string {
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const dd = String(date.getDate()).padStart(2, "0");
+  const hh = String(date.getHours()).padStart(2, "0");
+  const mi = String(date.getMinutes()).padStart(2, "0");
+  const ss = String(date.getSeconds()).padStart(2, "0");
+  return `${yyyy}${mm}${dd}-${hh}${mi}${ss}`;
+}
+
+function buildRecordingOutputPath(filePath: string, preferredDir?: string): string {
+  const sourceDir = preferredDir?.trim() || path.posix.dirname(filePath) || ".";
+  const sourceBase = (path.posix.basename(filePath).replace(/\.[^.]+$/, "") || "log").replace(/[^a-zA-Z0-9._-]+/g, "-");
+  return path.posix.join(sourceDir, `${sourceBase}-${buildRecordingTimestamp()}.record.log`);
+}
 const app = express();
 const httpServer = createServer(app);
 const wsServer = new WebSocketServer({ noServer: true });
@@ -70,7 +102,8 @@ t = performance.now();
 const importResolver = new ImportStrategyResolver();
 importResolver.register(new FinalShellImportStrategy());
 importResolver.register(new XshellImportStrategy());
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 1024 * 1024 * 1024 } });
+const uploadMemoryLimit = 10 * 1024 * 1024;
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: uploadMemoryLimit } });
 logPhase("Import strategies & middleware", t);
 
 app.use(cors());
@@ -364,6 +397,7 @@ app.post("/api/logs/search/tasks", async (req, res) => {
 
 app.get("/api/logs/search/tasks/:taskId", (req, res) => {
   try {
+    res.set("Cache-Control", "no-store");
     const result = logSearchTaskService.get(req.params.taskId);
     res.json(result);
   } catch (error) {
@@ -409,6 +443,33 @@ app.post("/api/files/rename", async (req, res) => {
   }
 });
 
+app.post("/api/files/mkdir", async (req, res) => {
+  try {
+    const result = await fileTransferService.mkdir(req.body);
+    res.json(result);
+  } catch (error) {
+    res.status(400).json({ message: error instanceof Error ? error.message : "Unknown error" });
+  }
+});
+
+app.post("/api/files/compress", async (req, res) => {
+  try {
+    const result = await fileTransferService.compress(req.body);
+    res.json(result);
+  } catch (error) {
+    res.status(400).json({ message: error instanceof Error ? error.message : "Unknown error" });
+  }
+});
+
+app.post("/api/files/extract", async (req, res) => {
+  try {
+    const result = await fileTransferService.extractZip(req.body);
+    res.json(result);
+  } catch (error) {
+    res.status(400).json({ message: error instanceof Error ? error.message : "Unknown error" });
+  }
+});
+
 app.post("/api/files/save", async (req, res) => {
   try {
     const result = await fileTransferService.save(req.body);
@@ -427,13 +488,130 @@ app.post("/api/files/preview", async (req, res) => {
   }
 });
 
+app.post("/api/logs/recordings/start", async (req, res) => {
+  try {
+    const serverId = String(req.body?.serverId || "").trim();
+    const filePath = String(req.body?.filePath || "").trim();
+    const directoryPath = String(req.body?.directoryPath || "").trim();
+    if (!serverId || !filePath) {
+      throw new Error("serverId 和 filePath 必填");
+    }
+
+    // Translate JumpServer SFTP virtual paths to real filesystem paths
+    const parsed = parseJumpServerSftpPath(filePath);
+    const realFilePath = parsed ? parsed.realPath : filePath;
+    const realDirPath = parsed && directoryPath ? (parseJumpServerSftpPath(directoryPath)?.realPath || directoryPath) : directoryPath;
+
+    const outputPath = buildRecordingOutputPath(filePath, directoryPath);
+    const realOutputPath = buildRecordingOutputPath(realFilePath, realDirPath);
+    const realPidFilePath = `${realOutputPath}.pid`;
+    const sessionId = randomUUID();
+    const startedAt = new Date().toISOString();
+
+    // Use REAL paths for all shell commands
+    const edir = shellEscape(path.posix.dirname(realOutputPath) || ".");
+    const eout = shellEscape(realOutputPath);
+    const epid = shellEscape(realPidFilePath);
+    const esrc = shellEscape(realFilePath);
+
+    // Determine connection strategy (mirror live follow approach)
+    const server = serverRegistryService.getServer(serverId);
+    const isJumpServer = sshExecutorService.isJumpServerBastion(server);
+
+    if (isJumpServer && parsed) {
+      // JumpServer bastion: connect to target asset via JumpServer menu navigation
+      const assetKeyword = parsed.assetKey.replace(/[_\s].*/g, "");
+      console.log(`[recording] JumpServer asset="${assetKeyword}" realPath="${realFilePath}" realOut="${realOutputPath}"`);
+      const connection = await sshExecutorService.connectToJumpServerAsset(serverId, assetKeyword, 30000);
+      // Run setup + foreground tail through the persistent shell to the target
+      connection.shellStream!.write(`mkdir -p ${edir}; rm -f ${eout} ${epid}; touch ${eout}; tail -n 0 -F ${esrc} >> ${eout} 2>/dev/null\r`);
+      recordingConnections.set(sessionId, { cleanup: connection.cleanup });
+    } else {
+      // Direct: setup + background tail with nohup (single exec)
+      const bgScript = `mkdir -p ${edir}; rm -f ${eout} ${epid}; touch ${eout}; nohup tail -n 0 -F ${esrc} >> ${eout} 2>/dev/null </dev/null & echo $! > ${epid}; sleep 0.3; if [ -s ${epid} ] && kill -0 $(cat ${epid}) 2>/dev/null; then echo RECORD_OK; else echo RECORD_FAIL; fi`;
+      const bgOutput = (await sshExecutorService.exec(serverId, `sh -lc ${shellEscape(bgScript)}`, 15000)).trim();
+      if (bgOutput.includes("RECORD_FAIL")) {
+        throw new Error(`录制启动失败：远程 tail 进程未能存活`);
+      }
+    }
+
+    const session: LogRecordingSession = {
+      sessionId,
+      serverId,
+      sourcePath: filePath,
+      outputPath,
+      realSourcePath: realFilePath,
+      realOutputPath,
+      realPidFilePath,
+      startedAt,
+    };
+    activeLogRecordings.set(sessionId, session);
+    res.json(session);
+  } catch (error) {
+    res.status(400).json({ message: error instanceof Error ? error.message : "Unknown error" });
+  }
+});
+
+app.post("/api/logs/recordings/stop", async (req, res) => {
+  try {
+    const sessionId = String(req.body?.sessionId || "").trim();
+    const session = activeLogRecordings.get(sessionId);
+    if (!session) {
+      throw new Error("录制会话不存在或已失效");
+    }
+
+    // Close persistent connection first (JumpServer foreground tail)
+    const persistentConn = recordingConnections.get(sessionId);
+    if (persistentConn) {
+      try { persistentConn.cleanup(); } catch { /* ignore */ }
+      recordingConnections.delete(sessionId);
+      await new Promise((r) => setTimeout(r, 500));
+    }
+
+    const eout = shellEscape(session.realOutputPath);
+    const epid = shellEscape(session.realPidFilePath);
+    const stopScript = [
+      `if [ -f ${epid} ]; then kill $(cat ${epid}) 2>/dev/null; rm -f ${epid}; fi`,
+      `sleep 0.3`,
+      `if [ -f ${eout} ]; then wc -c < ${eout} | tr -d ' '; else printf '0'; fi`,
+    ].join("; ");
+    const command = `sh -lc ${shellEscape(stopScript)}`;
+
+    const output = await sshExecutorService.exec(session.serverId, command, 15000);
+    activeLogRecordings.delete(sessionId);
+    res.json({
+      sessionId,
+      serverId: session.serverId,
+      sourcePath: session.sourcePath,
+      outputPath: session.outputPath,
+      startedAt: session.startedAt,
+      stoppedAt: new Date().toISOString(),
+      sizeBytes: Number.parseInt(String(output).trim(), 10) || 0,
+    });
+  } catch (error) {
+    res.status(400).json({ message: error instanceof Error ? error.message : "Unknown error" });
+  }
+});
+
 app.post("/api/files/download", async (req, res) => {
   try {
-    const { buffer, fileName } = await fileTransferService.download(req.body);
+    const { stream, fileName, size, cleanup } = await fileTransferService.prepareStreamDownload(req.body);
     res.setHeader("Content-Type", "application/octet-stream");
     res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(fileName)}"`);
-    res.setHeader("Content-Length", buffer.length);
-    res.send(buffer);
+    if (size > 0) {
+      res.setHeader("Content-Length", size);
+    }
+    stream.on("error", (err) => {
+      console.error("[download] stream error:", err.message);
+      cleanup?.();
+      if (!res.headersSent) {
+        res.status(500).json({ message: err.message });
+      } else {
+        res.destroy();
+      }
+    });
+    res.on("close", () => cleanup?.());
+    stream.pipe(res);
   } catch (error) {
     res.status(400).json({ message: error instanceof Error ? error.message : "Unknown error" });
   }
@@ -566,6 +744,28 @@ if (existsSync(extensionIndexFile)) {
 
 wsServer.on("connection", (socket: WebSocket) => {
   let clientCleanup: (() => void) | null = null;
+  let activeSessionId = "";
+  let liveExecStream: { destroy: (error?: Error) => void } | null = null;
+
+  function send(payload: Record<string, unknown>) {
+    if (socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify(payload));
+    }
+  }
+
+  function cleanupLiveConnection() {
+    const stream = liveExecStream;
+    const cleanup = clientCleanup;
+    liveExecStream = null;
+    clientCleanup = null;
+    activeSessionId = "";
+    try {
+      stream?.destroy();
+    } catch {
+      // noop
+    }
+    cleanup?.();
+  }
 
   let missedPongs = 0;
   const heartbeat = setInterval(() => {
@@ -585,11 +785,13 @@ wsServer.on("connection", (socket: WebSocket) => {
       };
 
       if (payload.action !== "start") {
-        socket.send(JSON.stringify({ type: "error", message: "Unsupported live action." }));
+        send({ type: "error", message: "Unsupported live action." });
         return;
       }
 
+      cleanupLiveConnection();
       const sessionId = `live-${payload.serverId}-${Date.now()}`;
+      activeSessionId = sessionId;
 
       const server = serverRegistryService.getServer(payload.serverId);
       const isJumpServer = sshExecutorService.isJumpServerBastion(server);
@@ -599,7 +801,7 @@ wsServer.on("connection", (socket: WebSocket) => {
       if (isJumpServer) {
         const parsed = parseJumpServerSftpPath(payload.filePath);
         if (!parsed) {
-          socket.send(JSON.stringify({ type: "error", message: "无法解析堡垒机文件路径，请确认路径格式。" }));
+          send({ type: "error", message: "无法解析堡垒机文件路径，请确认路径格式。" });
           return;
         }
         tailFilePath = parsed.realPath;
@@ -610,93 +812,147 @@ wsServer.on("connection", (socket: WebSocket) => {
         connection = await sshExecutorService.connectForStreaming(payload.serverId, 45000);
       }
 
+      if (activeSessionId !== sessionId) {
+        connection.cleanup();
+        return;
+      }
+
+      let connectionReleased = false;
+      const releaseConnection = () => {
+        if (connectionReleased) {
+          return;
+        }
+        connectionReleased = true;
+        connection.cleanup();
+      };
+
+      clientCleanup = releaseConnection;
+
       const command = buildTailCommand(tailFilePath, payload.keyword);
       const client = connection.client;
       const shellStream = connection.shellStream;
 
-      client
-        .on("error", (error) => {
-          socket.send(JSON.stringify({ type: "error", message: error.message }));
-        });
+      client.on("error", (error) => {
+        if (activeSessionId !== sessionId) {
+          return;
+        }
+        send({ type: "error", message: error.message });
+      });
 
       if (connection.mode === "jumpserver-shell" && shellStream) {
+        // JumpServer shell echoes the command back; suppress the first line (echo)
+        let echoSuppressed = false;
+        let echoBuffer = "";
+
         shellStream.on("data", (chunk: Buffer | string) => {
-          socket.send(
-            JSON.stringify({
-              sessionId,
-              chunk: chunk.toString(),
-              timestamp: new Date().toISOString()
-            })
-          );
+          if (activeSessionId !== sessionId) {
+            return;
+          }
+          let text = chunk.toString();
+
+          if (!echoSuppressed) {
+            echoBuffer += text;
+            const nlIdx = echoBuffer.indexOf("\n");
+            if (nlIdx === -1) return; // still accumulating echo line
+            text = echoBuffer.substring(nlIdx + 1);
+            echoSuppressed = true;
+            if (!text) return; // nothing left after stripping echo
+          }
+
+          send({
+            sessionId,
+            chunk: text,
+            timestamp: new Date().toISOString()
+          });
         });
 
         shellStream.stderr.on("data", (chunk: Buffer | string) => {
-          socket.send(
-            JSON.stringify({
-              type: "stderr",
-              sessionId,
-              chunk: chunk.toString(),
-              timestamp: new Date().toISOString()
-            })
-          );
+          if (activeSessionId !== sessionId) {
+            return;
+          }
+          send({
+            type: "stderr",
+            sessionId,
+            chunk: chunk.toString(),
+            timestamp: new Date().toISOString()
+          });
         });
 
         shellStream.on("close", () => {
-          socket.send(JSON.stringify({ type: "closed", sessionId }));
-          connection.cleanup();
+          if (activeSessionId !== sessionId) {
+            return;
+          }
+          cleanupLiveConnection();
+          send({ type: "closed", sessionId });
         });
 
         shellStream.write(`${command}\r`);
       } else {
         client.exec(command, (error, stream) => {
           if (error) {
-            socket.send(JSON.stringify({ type: "error", message: error.message }));
-            connection.cleanup();
+            if (activeSessionId === sessionId) {
+              send({ type: "error", message: error.message });
+              cleanupLiveConnection();
+            } else {
+              releaseConnection();
+            }
             return;
           }
 
+          if (activeSessionId !== sessionId) {
+            stream.destroy();
+            releaseConnection();
+            return;
+          }
+
+          liveExecStream = stream;
+
           stream.on("data", (chunk: Buffer | string) => {
-            socket.send(
-              JSON.stringify({
-                sessionId,
-                chunk: chunk.toString(),
-                timestamp: new Date().toISOString()
-              })
-            );
+            if (activeSessionId !== sessionId) {
+              return;
+            }
+            send({
+              sessionId,
+              chunk: chunk.toString(),
+              timestamp: new Date().toISOString()
+            });
           });
 
           stream.stderr.on("data", (chunk: Buffer | string) => {
-            socket.send(
-              JSON.stringify({
-                type: "stderr",
-                sessionId,
-                chunk: chunk.toString(),
-                timestamp: new Date().toISOString()
-              })
-            );
+            if (activeSessionId !== sessionId) {
+              return;
+            }
+            send({
+              type: "stderr",
+              sessionId,
+              chunk: chunk.toString(),
+              timestamp: new Date().toISOString()
+            });
           });
 
           stream.on("close", () => {
-            socket.send(JSON.stringify({ type: "closed", sessionId }));
-            connection.cleanup();
+            if (liveExecStream === stream) {
+              liveExecStream = null;
+            }
+            if (activeSessionId !== sessionId) {
+              return;
+            }
+            cleanupLiveConnection();
+            send({ type: "closed", sessionId });
           });
         });
       }
-
-      clientCleanup = () => connection.cleanup();
     } catch (error) {
-      socket.send(
-        JSON.stringify({
-          type: "error",
-          message: error instanceof Error ? error.message : "Invalid live payload."
-        })
-      );
+      send({
+        type: "error",
+        message: error instanceof Error ? error.message : "Invalid live payload."
+      });
     }
   });
 
   socket.on("close", () => {
     clearInterval(heartbeat);
-    clientCleanup?.();
+    cleanupLiveConnection();
   });
 });
 
@@ -738,6 +994,14 @@ httpServer.listen(port, host, () => {
     });
   }
 });
+
+// Cleanup cached SSH connections on shutdown
+const gracefulShutdown = () => {
+  sshExecutorService.disposeAllCaches();
+  process.exit(0);
+};
+process.on("SIGTERM", gracefulShutdown);
+process.on("SIGINT", gracefulShutdown);
 
 function parseJumpServerSftpPath(virtualPath: string): { assetKey: string; realPath: string } | null {
   const parts = virtualPath.split("/").filter(Boolean);
