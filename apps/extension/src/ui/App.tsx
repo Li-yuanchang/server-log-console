@@ -42,41 +42,54 @@ import { VirtualLogViewer, type VirtualLogViewerHandle, type VirtualLogViewerScr
 import { useLiveFollow } from "./useLiveFollow.js";
 import { usePictureInPicture } from "./usePictureInPicture.js";
 import type { LogRecordingSessionResponse } from "./api.js";
+import type { WorkspaceSession, WorkspaceSessionState, ViewerPipSnapshot } from "./types.js";
+import {
+  defaultDirectoryPath,
+  MAX_PREVIEW_CACHE_ENTRIES,
+  MAX_RESULT_TABS,
+  VIEWER_PIP_SNAPSHOT_KEY,
+} from "./types.js";
+import {
+  computeAutoSliceLength,
+  setLimitedMapEntry,
+  createManualServerDraft,
+  readViewerPipSnapshot,
+  writeViewerPipSnapshot,
+  buildWorkspaceSession,
+  createDefaultWorkspaceSessionState,
+} from "./app-utils.js";
+import { useAsyncStatus } from "./useAsyncStatus.js";
+import { useLocalService } from "./useLocalService.js";
+import { useSearchTimer } from "./useSearchTimer.js";
+import { usePanelResize } from "./usePanelResize.js";
+import { useElectronEnv } from "./useElectronEnv.js";
+import { useUiTheme } from "./useUiTheme.js";
+import { useWorkspaceTabDrag } from "./useWorkspaceTabDrag.js";
+import { useTransferHistory } from "./useTransferHistory.js";
+import { useFileBrowserComputed } from "./useFileBrowserComputed.js";
+import { useServerConnection } from "./useServerConnection.js";
+import { useSliceCache } from "./useSliceCache.js";
+import { useImportSettings } from "./useImportSettings.js";
+import { useFileTransfer } from "./useFileTransfer.js";
+import { useFileOperations } from "./useFileOperations.js";
+import { useServerManagement } from "./useServerManagement.js";
+import { useLogRecording } from "./useLogRecording.js";
+import { SidebarPanel } from "./SidebarPanel.js";
+import { WorkspaceTabContextMenu, type WorkspaceTabMenuState } from "./WorkspaceTabContextMenu.js";
+import { WorkspaceSessionTabs } from "./WorkspaceSessionTabs.js";
+import { SettingsModalOverlay } from "./SettingsModalOverlay.js";
+import { WorkspaceStartupCards } from "./WorkspaceStartupCards.js";
+import { DialogOverlays } from "./DialogOverlays.js";
+import { useTerminalWindowManager } from "./useTerminalWindowManager.js";
+import { useKeyboardShortcuts } from "./useKeyboardShortcuts.js";
 import {
   localServiceBase,
-  apiDeleteServer,
-  apiGetServers,
   apiGetDirectoryListing,
   apiGetLogMeta,
   apiGetLogSlice,
   apiGetLineContext,
   apiCreateSearchTask,
   apiPollSearchTask,
-  apiGetFinalShellSettings,
-  apiSaveFinalShellPath,
-  apiGetCredentialStatus,
-  apiSaveCredential,
-  apiGetServerRoute,
-  apiSaveServerRoute,
-  apiSearchJumpServerAssets,
-  apiTestConnection,
-  apiImportFromTool,
-  apiUpsertManualServer,
-  apiStartLogRecording,
-  apiStopLogRecording,
-  apiDownloadFile,
-  apiDeleteFile,
-  apiRenameFile,
-  apiPreviewFile,
-  apiSaveFile,
-  apiUploadSmall,
-  apiUploadStart,
-  apiUploadChunk,
-  apiUploadFinish,
-  apiHealthCheck,
-  apiExtractZip,
-  apiMkdir,
-  apiCompress,
 } from "./api.js";
 import {
   buildConnectionSummary,
@@ -97,7 +110,6 @@ import {
   getLocalDateString,
   getParentDirectoryPath,
   getPreviewCacheKey,
-  getSliceCacheKey,
   lineMatchesSearch,
   looksLikeShellPrompt,
   normalizeSearchInput,
@@ -110,8 +122,6 @@ import {
 } from "./utils.js";
 import type { LineContextState, ViewerResultTab } from "./utils.js";
 import {
-  clampBrowserTreeWidth,
-  clampActivityPanelHeight,
   clearTransferHistory,
   type TransferHistoryEntry,
   pushDirectoryHistory,
@@ -129,163 +139,6 @@ import {
   writeLastServerId,
 } from "./storage.js";
 
-const defaultDirectoryPath = "";
-const SEARCH_TIMER_INTERVAL_MS = 1000;
-const LOCAL_SERVICE_RETRY_INTERVAL_MS = 2500;
-const MAX_PREVIEW_CACHE_ENTRIES = 60;
-const MAX_SLICE_CACHE_ENTRIES = 24;
-const MAX_RESULT_TABS = 8;
-const VIEWER_PIP_SNAPSHOT_KEY = "slc:viewer-pip-snapshot";
-
-type WorkspaceSession = {
-  id: string;
-  serverId: string;
-  serverName: string;
-  serverHost: string;
-};
-
-type WorkspaceSessionState = {
-  serverId: string;
-  filePath: string;
-  directoryPath: string;
-  keywordInput: string;
-  keywordMode: "phrase" | "any" | "all";
-  contextLines: number;
-  useRegex: boolean;
-  selectedPreset: string;
-  startDate: string;
-  endDate: string;
-  startTime: string;
-  endTime: string;
-  credentialStatus: ServerCredentialStatus | null;
-  credentialUsername: string;
-  serverRouteConfig: ServerRouteConfig | null;
-  connectionTestStatus: ServerConnectionTestResponse | null;
-  preferredBastionId: string;
-  jumpMode: "auto" | "jumpserver-search";
-  jumpSearchKeyword: string;
-  jumpAssetId: string;
-  jumpAssetOptions: JumpServerAssetOption[];
-  results: LogSearchResponse | null;
-  resultTabs: ViewerResultTab[];
-  searchStartedAt: number | null;
-  activeLogView: "search" | "files";
-  activeViewerTabId: string;
-  fileEntries: LogFileEntry[];
-  fileMeta: LogFileMetaResponse | null;
-  sliceOffset: number;
-  sliceLength: number;
-  sliceLengthMode: "auto" | "manual";
-  sliceData: LogSliceResponse | null;
-  lineContextState: LineContextState | null;
-  resultContextMode: boolean;
-  selectedFilePaths: string[];
-  resultTabCounter: number;
-  activeHighlightIndex: number;
-  showQueryAdvanced: boolean;
-  showFileTools: boolean;
-  errorHighlightEnabled: boolean;
-  showPathHistory: boolean;
-  showTransferHistory: boolean;
-  terminalPanelOpen: boolean;
-  terminalDetached: boolean;
-  terminalOverlay: "none" | "shortcuts" | "ai";
-  terminalSessionId: string;
-  recordingSession: LogRecordingSessionResponse | null;
-  liveFollowEnabled: boolean;
-  liveFollowPaused: boolean;
-  liveFollowContent: string;
-};
-
-type ViewerPipSnapshot = {
-  serverId: string;
-  filePath: string;
-  directoryPath: string;
-  keywordInput: string;
-  keywordMode: "phrase" | "any" | "all";
-  useRegex: boolean;
-  preferredBastionId: string;
-  activeLogView: "search" | "files";
-  activeViewerTabId: string;
-  results: LogSearchResponse | null;
-  resultTabs: ViewerResultTab[];
-  searchStartedAt: number | null;
-  fileMeta: LogFileMetaResponse | null;
-  sliceOffset: number;
-  sliceLength: number;
-  sliceLengthMode: "auto" | "manual";
-  sliceData: LogSliceResponse | null;
-  lineContextState: LineContextState | null;
-  resultContextMode: boolean;
-  activeHighlightIndex: number;
-  showFileTools: boolean;
-  errorHighlightEnabled: boolean;
-  liveFollowEnabled: boolean;
-  liveFollowPaused: boolean;
-  liveFollowContent: string;
-};
-
-function createManualServerDraft(server?: ServerSummary | null): ManualServerDraft {
-  return {
-    id: server?.source === "manual" ? server.id : "",
-    name: server?.name || "",
-    host: server?.host || "",
-    port: String(server?.port || 22),
-    username: server?.username || "root",
-    basePath: server?.basePath || "/var/log",
-    profile: server?.profile || "custom",
-    tagsText: server?.tags?.join(", ") || "",
-    connectionKind: server?.connectionKind === "bastion" || server?.connectionKind === "bastion-target" ? server.connectionKind : "direct",
-    password: "",
-    privateKey: ""
-  };
-}
-
-function parseManualServerTags(tagsText: string): string[] {
-  return tagsText
-    .split(/[\n,]/)
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
-
-function computeAutoSliceLength(fileSize: number): number {
-  if (fileSize <= 0) return 65536;
-  if (fileSize <= 65536) return 65536;         // ≤ 64 KB → whole file
-  if (fileSize <= 131072) return 131072;       // ≤ 128 KB → whole file
-  if (fileSize <= 262144) return 262144;       // ≤ 256 KB → whole file
-  return 262144;                                // > 256 KB → fixed 256 KB slices
-}
-
-function setLimitedMapEntry<K, V>(map: Map<K, V>, key: K, value: V, maxEntries: number) {
-  if (map.has(key)) {
-    map.delete(key);
-  }
-  map.set(key, value);
-  while (map.size > maxEntries) {
-    const oldestKey = map.keys().next().value as K | undefined;
-    if (oldestKey === undefined) {
-      break;
-    }
-    map.delete(oldestKey);
-  }
-}
-
-function readViewerPipSnapshot(): ViewerPipSnapshot | null {
-  try {
-    const raw = window.localStorage.getItem(VIEWER_PIP_SNAPSHOT_KEY);
-    return raw ? JSON.parse(raw) as ViewerPipSnapshot : null;
-  } catch {
-    return null;
-  }
-}
-
-function writeViewerPipSnapshot(snapshot: ViewerPipSnapshot) {
-  try {
-    window.localStorage.setItem(VIEWER_PIP_SNAPSHOT_KEY, JSON.stringify(snapshot));
-  } catch {
-    return;
-  }
-}
 
 // Detect PiP mode from URL params (Electron BrowserWindow PiP)
 const pipUrlParams = new URLSearchParams(globalThis.location?.search ?? "");
@@ -328,8 +181,7 @@ export function App() {
   const [sliceLengthMode, setSliceLengthMode] = useState<"auto" | "manual">("auto");
   const [sliceData, setSliceData] = useState<LogSliceResponse | null>(null);
   const [searchStartedAt, setSearchStartedAt] = useState<number | null>(null);
-  const [searchNow, setSearchNow] = useState(() => Date.now());
-  const [activityLines, setActivityLines] = useState<string[]>(["系统已启动，等待选择服务器与日志文件。"]);
+  const { searchNow } = useSearchTimer(searchStartedAt);
   const [selectedImportTool, setSelectedImportTool] = useState<"finalshell" | "xshell">("finalshell");
   const [importStatus, setImportStatus] = useState("尚未导入连接。");
   const [importPath, setImportPath] = useState("尚未解析配置目录。");
@@ -342,16 +194,7 @@ export function App() {
   const [uploadProgress, setUploadProgress] = useState<UploadProgressState | null>(null);
   const [downloadProgress, setDownloadProgress] = useState<DownloadProgressState | null>(null);
   const [contextMenu, setContextMenu] = useState<FileContextMenuState | null>(null);
-  const [workspaceTabMenu, setWorkspaceTabMenu] = useState<{ x: number; y: number; session: WorkspaceSession } | null>(null);
-  const [workspaceTabDragState, setWorkspaceTabDragState] = useState<{
-    draggedSessionId: string | null;
-    targetSessionId: string | null;
-    position: "before" | "after" | null;
-  }>({
-    draggedSessionId: null,
-    targetSessionId: null,
-    position: null
-  });
+  const [workspaceTabMenu, setWorkspaceTabMenu] = useState<WorkspaceTabMenuState | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
   const [renameDialog, setRenameDialog] = useState<{ entry: LogFileEntry; newName: string } | null>(null);
   const [moveDialog, setMoveDialog] = useState<{ entry: LogFileEntry; targetDir: string } | null>(null);
@@ -361,20 +204,16 @@ export function App() {
   const [compressDialog, setCompressDialog] = useState<{ sourcePath: string; sourceName: string; archiveType: "tar.gz" | "zip"; targetDir: string } | null>(null);
   const [recordingSession, setRecordingSession] = useState<LogRecordingSessionResponse | null>(null);
   const [previewDialog, setPreviewDialog] = useState<PreviewDialogState | null>(null);
-  const [actionStatus, setActionStatus] = useState("就绪，可开始检索日志。");
-  const [localServiceState, setLocalServiceState] = useState<"checking" | "online" | "offline">("checking");
-  const [localServiceStatusText, setLocalServiceStatusText] = useState("正在检查本地连接服务...");
-  const [isBusy, setIsBusy] = useState(false);
+  const { isElectron, isMacOS } = useElectronEnv();
+  const { toasts, showToast, updateToast, dismissToast } = useToasts();
+  const { isBusy, actionStatus, activityLines, setIsBusy, setActionStatus, pushActivity, withBusy } = useAsyncStatus({ showToast, updateToast, dismissToast });
+  const { localServiceState, localServiceStatusText, checkLocalServiceHealth } = useLocalService({ isElectron, setActionStatus, pushActivity, onServiceRestored: async () => { await fetchServers(); await fetchFinalShellSettings(); } });
   const [preserveTerminalOnInactive, setPreserveTerminalOnInactive] = useState(false);
   const [pendingLiveFollowRestore, setPendingLiveFollowRestore] = useState<WorkspaceSessionState | null>(null);
   const isWorkspaceSwitchLocked = isBusy || searchTask?.status === "queued" || searchTask?.status === "running";
-  const { toasts, showToast, updateToast, dismissToast } = useToasts();
   const [fileLoadingName, setFileLoadingName] = useState("");
   const [isDragOver, setIsDragOver] = useState(false);
-  const [uiTheme] = useState<"classic" | "modern">("modern");
-  useEffect(() => {
-    try { localStorage.setItem("ui-theme", "modern"); } catch { /* ignore */ }
-  }, []);
+  const { uiTheme } = useUiTheme();
   const [showConnectionSettings, setShowConnectionSettings] = useState(false);
   const [settingsWorkspaceView, setSettingsWorkspaceView] = useState<SettingsWorkspaceView>("overview");
   const [manualServerDraft, setManualServerDraft] = useState<ManualServerDraft>(() => createManualServerDraft());
@@ -390,8 +229,6 @@ export function App() {
   const [jumpSearchKeyword, setJumpSearchKeyword] = useState("");
   const [jumpAssetId, setJumpAssetId] = useState("");
   const [jumpAssetOptions, setJumpAssetOptions] = useState<JumpServerAssetOption[]>([]);
-  const [isElectron] = useState(() => !!(window as any).electronAPI || /Electron/.test(navigator.userAgent));
-  const [isMacOS] = useState(() => navigator.userAgent.includes("Mac") || navigator.platform.toUpperCase().includes("MAC"));
   const [isPinned, setIsPinned] = useState(false);
   const [showFileTools, setShowFileTools] = useState(false);
   const [showViewerDebugPanel, setShowViewerDebugPanel] = useState(false);
@@ -428,7 +265,7 @@ export function App() {
   const browserGridRef = useRef<HTMLDivElement | null>(null);
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
   const workspaceTabMenuRef = useRef<HTMLDivElement | null>(null);
-  const workspaceTabDragJustMovedRef = useRef(false);  
+  
   const viewerDebugRef = useRef<HTMLDivElement | null>(null);
   const readerRailRef = useRef<HTMLDivElement | null>(null);
   const viewerOverviewRailRef = useRef<HTMLDivElement | null>(null);
@@ -436,23 +273,17 @@ export function App() {
   const autoConnectServerRef = useRef("");
   const sliceScrollAnchorRef = useRef<"top" | "bottom" | null>(null);
   const wheelSliceLockRef = useRef(false);
-  const treeResizeRef = useRef<{ startX: number; startWidth: number } | null>(null);
-  const activityPanelResizeRef = useRef<{ startY: number; startHeight: number } | null>(null);
+  const { treeResizeRef, activityPanelResizeRef } = usePanelResize(setBrowserTreeWidth, setActivityPanelHeight);
   const readerPreviewRequestRef = useRef(0);
   const openFileRequestRef = useRef(0);
   const sliceRequestRef = useRef(0);
   const jumpAssetAutoSearchKeyRef = useRef("");
   const readerDraftFrameRef = useRef<number | null>(null);
   const readerPendingDraftRef = useRef<number | null>(null);
-  const previewCacheRef = useRef(new Map<string, { offset: number; content: string }>());
   const previewWarmRef = useRef(new Set<string>());
-  const sliceCacheRef = useRef(new Map<string, LogSliceResponse>());
-  const sliceWarmRef = useRef(new Set<string>());
-  const backgroundHealthCheckInFlightRef = useRef(false);
+  const { sliceCacheRef, sliceWarmRef, previewCacheRef, cacheSlicePayload, getCachedSlice, warmSlice: warmSliceFromCache, warmNeighborSlices: warmNeighborSlicesFromCache } = useSliceCache();
   const prevServerIdForResetRef = useRef(serverId);
   const serverIdRef = useRef(serverId);
-  const terminalDetachedRef = useRef(terminalDetached);
-  const terminalSessionIdRef = useRef(terminalSessionId);
   const workspaceSessionStatesRef = useRef<Record<string, WorkspaceSessionState>>({});
   const pendingWorkspaceActivationRef = useRef<{ session: WorkspaceSession; state: WorkspaceSessionState; fromCache: boolean } | null>(null);
   const restoringWorkspaceStateRef = useRef<WorkspaceSessionState | null>(null);
@@ -545,46 +376,6 @@ export function App() {
     serverIdRef.current = serverId;
   }, [serverId]);
 
-  useEffect(() => {
-    terminalDetachedRef.current = terminalDetached;
-  }, [terminalDetached]);
-
-  useEffect(() => {
-    terminalSessionIdRef.current = terminalSessionId;
-  }, [terminalSessionId]);
-
-  useEffect(() => {
-    if (!isElectron) {
-      return;
-    }
-
-    const api = (window as any).electronAPI;
-    api.onPipClosed((payload?: { mode?: "viewer" | "terminal"; terminalSessionId?: string }) => {
-      const closedTerminalSessionId = String(payload?.terminalSessionId || "").trim();
-      if (payload?.mode !== "terminal" || !closedTerminalSessionId) {
-        return;
-      }
-
-      Object.keys(workspaceSessionStatesRef.current).forEach((workspaceSessionId) => {
-        const sessionState = workspaceSessionStatesRef.current[workspaceSessionId];
-        if (!sessionState || sessionState.terminalSessionId.trim() !== closedTerminalSessionId) {
-          return;
-        }
-        workspaceSessionStatesRef.current[workspaceSessionId] = {
-          ...sessionState,
-          terminalDetached: false,
-          terminalPanelOpen: Boolean(sessionState.serverId),
-        };
-      });
-
-      if (terminalSessionIdRef.current !== closedTerminalSessionId) {
-        return;
-      }
-
-      setTerminalDetached(false);
-      setTerminalPanelOpen(Boolean(serverIdRef.current));
-    });
-  }, [isElectron]);
 
   useEffect(() => {
     if (!isStandaloneViewerWindow || standaloneViewerSnapshotAppliedRef.current) {
@@ -621,14 +412,6 @@ export function App() {
     setLiveFollowPaused(snapshot.liveFollowPaused);
   }, [serverId]);
 
-  useEffect(() => {
-    if (!isStandaloneTerminalWindow || !serverId) {
-      return;
-    }
-
-    setTerminalPanelOpen(true);
-  }, [serverId, isStandaloneTerminalWindow]);
-
   function resetFileReaderState() {
     sliceRequestRef.current += 1;
     readerPreviewRequestRef.current += 1;
@@ -648,69 +431,9 @@ export function App() {
     sliceWarmRef.current.clear();
   }
 
-  function buildWorkspaceSession(targetServer: ServerSummary): WorkspaceSession {
-    return {
-      id: `workspace:${targetServer.id}`,
-      serverId: targetServer.id,
-      serverName: targetServer.name || targetServer.host || targetServer.id,
-      serverHost: targetServer.host
-    };
-  }
-
-  function createDefaultWorkspaceSessionState(nextServerId: string): WorkspaceSessionState {
+  function getDefaultWorkspaceSessionState(nextServerId: string): WorkspaceSessionState {
     const savedDirectory = readLastDirectoryMap()[nextServerId]?.trim() || defaultDirectoryPath;
-    return {
-      serverId: nextServerId,
-      filePath: "",
-      directoryPath: savedDirectory,
-      keywordInput: "",
-      keywordMode: "phrase",
-      contextLines: 3,
-      useRegex: false,
-      selectedPreset: "未选择",
-      startDate: "",
-      endDate: "",
-      startTime: "",
-      endTime: "",
-      credentialStatus: null,
-      credentialUsername: "",
-      serverRouteConfig: null,
-      connectionTestStatus: null,
-      preferredBastionId: "",
-      jumpMode: "auto",
-      jumpSearchKeyword: "",
-      jumpAssetId: "",
-      jumpAssetOptions: [],
-      results: null,
-      resultTabs: [],
-      searchStartedAt: null,
-      activeLogView: isStandaloneViewerWindow ? "search" : "files",
-      activeViewerTabId: "file",
-      fileEntries: [],
-      fileMeta: null,
-      sliceOffset: 0,
-      sliceLength: 64 * 1024,
-      sliceLengthMode: "auto",
-      sliceData: null,
-      lineContextState: null,
-      resultContextMode: false,
-      selectedFilePaths: [],
-      resultTabCounter: 1,
-      activeHighlightIndex: 0,
-      showQueryAdvanced: false,
-      showFileTools: false,
-      errorHighlightEnabled: false,
-      showPathHistory: false,
-      showTransferHistory: false,
-      terminalPanelOpen: isStandaloneTerminalWindow,
-      terminalDetached: false,
-      terminalOverlay: "none",
-      terminalSessionId: "",
-      recordingSession: null,
-      liveFollowEnabled: false,
-      liveFollowPaused: false,
-      liveFollowContent: ""
-    };
+    return createDefaultWorkspaceSessionState(nextServerId, savedDirectory, isStandaloneViewerWindow, isStandaloneTerminalWindow);
   }
 
   function captureCurrentWorkspaceSessionState(nextServerId: string = serverId): WorkspaceSessionState {
@@ -774,7 +497,7 @@ export function App() {
 
   function readWorkspaceSessionState(session: WorkspaceSession): WorkspaceSessionState {
     return {
-      ...createDefaultWorkspaceSessionState(session.serverId),
+      ...getDefaultWorkspaceSessionState(session.serverId),
       ...workspaceSessionStatesRef.current[session.id]
     };
   }
@@ -885,11 +608,6 @@ export function App() {
     applyWorkspaceSessionState(session, nextState, { fromCache: hasCachedState });
   }
 
-  useEffect(() => {
-    if (isElectron) {
-      document.body.classList.add("is-electron");
-    }
-  }, [isElectron]);
 
   useEffect(() => {
     if (!pendingWorkspaceActivationRef.current || terminalPanelOpen || terminalDetached) {
@@ -1238,49 +956,6 @@ export function App() {
   }, [showViewerDebugPanel]);
 
 
-  useEffect(() => {
-    if (!searchStartedAt) {
-      return;
-    }
-
-    const timer = window.setInterval(() => {
-      setSearchNow(Date.now());
-    }, SEARCH_TIMER_INTERVAL_MS);
-
-    return () => window.clearInterval(timer);
-  }, [searchStartedAt]);
-
-  useEffect(() => {
-    if (localServiceState !== "offline") {
-      backgroundHealthCheckInFlightRef.current = false;
-      return;
-    }
-
-    const timer = window.setInterval(() => {
-      if (backgroundHealthCheckInFlightRef.current) {
-        return;
-      }
-
-      backgroundHealthCheckInFlightRef.current = true;
-      void (async () => {
-        try {
-          const ok = await checkLocalServiceHealth({ silentFailure: true, background: true });
-          if (ok) {
-            await fetchServers();
-            await fetchFinalShellSettings();
-          }
-        } finally {
-          backgroundHealthCheckInFlightRef.current = false;
-        }
-      })();
-    }, LOCAL_SERVICE_RETRY_INTERVAL_MS);
-
-    return () => {
-      backgroundHealthCheckInFlightRef.current = false;
-      window.clearInterval(timer);
-    };
-  }, [localServiceState]);
-
   async function initializeWorkbench() {
     const serviceReady = await checkLocalServiceHealth();
     if (!serviceReady) {
@@ -1289,29 +964,6 @@ export function App() {
 
     await fetchServers();
     await fetchFinalShellSettings();
-  }
-
-  async function checkLocalServiceHealth(options?: { silentFailure?: boolean; background?: boolean }) {
-    if (!options?.background) {
-      setLocalServiceState("checking");
-      setLocalServiceStatusText("正在检查本地连接服务...");
-    }
-
-    try {
-      await apiHealthCheck();
-      setLocalServiceState("online");
-      setLocalServiceStatusText("本地连接服务已启动");
-      return true;
-    } catch (error) {
-      const detail = error instanceof Error ? error.message : "未知错误";
-      setLocalServiceState("offline");
-      setLocalServiceStatusText(isElectron ? "正在等待内置连接服务启动..." : "本地连接服务未启动");
-      if (!options?.silentFailure) {
-        setActionStatus(isElectron ? "正在等待内置连接服务启动..." : "本地连接服务未启动，请先启动本地服务。");
-        pushActivity(`本地连接服务不可用：${detail}`);
-      }
-      return false;
-    }
   }
 
   useEffect(() => {
@@ -1323,150 +975,25 @@ export function App() {
     };
   }, []);
 
-  useEffect(() => {
-    function onPointerMove(event: PointerEvent) {
-      const resizeState = treeResizeRef.current;
-      if (!resizeState) {
-        return;
-      }
 
-      const delta = event.clientX - resizeState.startX;
-      setBrowserTreeWidth(clampBrowserTreeWidth(resizeState.startWidth + delta));
-    }
-
-    function stopResize() {
-      treeResizeRef.current = null;
-      document.body.classList.remove("is-resizing-tree");
-    }
-
-    window.addEventListener("pointermove", onPointerMove);
-    window.addEventListener("pointerup", stopResize);
-    window.addEventListener("pointercancel", stopResize);
-
-    return () => {
-      window.removeEventListener("pointermove", onPointerMove);
-      window.removeEventListener("pointerup", stopResize);
-      window.removeEventListener("pointercancel", stopResize);
-    };
-  }, []);
-
-  useEffect(() => {
-    function onPointerMove(event: PointerEvent) {
-      const resizeState = activityPanelResizeRef.current;
-      if (!resizeState) {
-        return;
-      }
-
-      const delta = resizeState.startY - event.clientY;
-      setActivityPanelHeight(clampActivityPanelHeight(resizeState.startHeight + delta));
-    }
-
-    function stopResize() {
-      activityPanelResizeRef.current = null;
-      document.body.classList.remove("is-resizing-activity-panel");
-    }
-
-    window.addEventListener("pointermove", onPointerMove);
-    window.addEventListener("pointerup", stopResize);
-    window.addEventListener("pointercancel", stopResize);
-
-    return () => {
-      window.removeEventListener("pointermove", onPointerMove);
-      window.removeEventListener("pointerup", stopResize);
-      window.removeEventListener("pointercancel", stopResize);
-    };
-  }, []);
-
-  useEffect(() => {
-    function onKeyDown(event: KeyboardEvent) {
-      const lowered = event.key.toLowerCase();
-      const target = event.target as HTMLElement | null;
-      const isTypingTarget =
-        target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target?.isContentEditable;
-
-      if ((event.metaKey || event.ctrlKey) && lowered === "f") {
-        event.preventDefault();
-        setShowKeywordBar(true);
-        window.setTimeout(() => keywordInputRef.current?.focus(), 0);
-        return;
-      }
-
-      if ((event.metaKey || event.ctrlKey) && lowered === "l") {
-        event.preventDefault();
-        enterPathbarEditMode({ selectAll: true });
-        return;
-      }
-
-      if (event.key === "Escape") {
-        setShowQueryAdvanced(false);
-        setShowKeywordBar(true);
-        return;
-      }
-
-      if (!isTypingTarget && event.key === "/" && activeLogView === "search") {
-        event.preventDefault();
-        setShowKeywordBar(true);
-        window.setTimeout(() => {
-          if (keywordInput.trim()) {
-            keywordInputRef.current?.focus();
-            keywordInputRef.current?.select();
-            return;
-          }
-
-          setKeywordInput("/");
-          keywordInputRef.current?.focus();
-          window.setTimeout(() => {
-            keywordInputRef.current?.setSelectionRange(1, 1);
-          }, 0);
-        }, 0);
-        return;
-      }
-
-      if (isTypingTarget || !filePath.trim()) {
-        return;
-      }
-
-      if ((event.metaKey || event.ctrlKey) && event.key === "Home") {
-        event.preventDefault();
-        void loadHeadSlice();
-        return;
-      }
-
-      if ((event.metaKey || event.ctrlKey) && event.key === "End") {
-        event.preventDefault();
-        void loadTailSlice();
-        return;
-      }
-
-      if (event.key === "PageUp") {
-        event.preventDefault();
-        if (activeViewerTabId !== "file") {
-          setActiveLogView("search");
-          setActiveViewerTabId("file");
-        }
-        void navigateSlice("prev", "keyboard");
-        return;
-      }
-
-      if (event.key === "PageDown") {
-        event.preventDefault();
-        if (activeViewerTabId !== "file") {
-          setActiveLogView("search");
-          setActiveViewerTabId("file");
-        }
-        void navigateSlice("next", "keyboard");
-        return;
-      }
-
-      if (activeLogView === "search" && lowered === "n" && normalizeSearchInput(keywordInput)) {
-        event.preventDefault();
-        focusHighlight(event.shiftKey ? "prev" : "next");
-      }
-    }
-
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [activeLogView, activeViewerTabId, directoryInput, directoryPath, filePath, keywordInput, sliceData?.nextOffset, sliceLength, sliceOffset, serverId]);
+  useKeyboardShortcuts({
+    activeLogView,
+    activeViewerTabId,
+    filePath,
+    keywordInput,
+    keywordInputRef,
+    setShowKeywordBar,
+    setShowQueryAdvanced,
+    setKeywordInput,
+    setActiveLogView,
+    setActiveViewerTabId,
+    enterPathbarEditMode,
+    loadHeadSlice,
+    loadTailSlice,
+    navigateSlice,
+    focusHighlight,
+    normalizeSearchInput,
+  });
 
   useEffect(() => {
     if (!sliceData) return;
@@ -1500,250 +1027,54 @@ export function App() {
 
   // VirtualLogViewer handles scrollToHighlight internally via activeHighlightIndex prop
 
-  async function fetchServers(): Promise<ServerSummary[]> {
-    try {
-      const data = await apiGetServers();
-      setLocalServiceState("online");
-      setLocalServiceStatusText("本地连接服务已启动");
-      setServers(data);
-      setActionStatus(data.length ? `已载入 ${data.length} 台服务器，请在左侧选择一台。` : "当前还没有服务器，请导入 FinalShell 或手动新增。");
-      pushActivity(data.length ? `已读取本地服务器清单，共 ${data.length} 台。` : "当前没有服务器，请先导入 FinalShell 或手动维护服务器。");
-      return data;
-    } catch (error) {
-      const detail = error instanceof Error ? error.message : "未知错误";
-      setLocalServiceState("offline");
-      setLocalServiceStatusText("本地连接服务未启动");
-      setActionStatus(`本地连接服务不可用：${detail}`);
-      pushActivity(`读取本地服务器清单失败：${detail}`);
-      return [];
-    }
-  }
+  const {
+    fetchServers,
+    selectServerById,
+    activateWorkspaceSession,
+    closeWorkspaceSession,
+    startCreateManualServer,
+    startEditManualServer,
+    saveManualServer,
+    deleteServerRecord,
+    requestDeleteServer,
+  } = useServerManagement({
+    serverId,
+    servers,
+    workspaceSessions,
+    activeWorkspaceSessionId,
+    isWorkspaceSwitchLocked,
+    manualServerDraft,
+    workspaceSessionStatesRef,
+    setServers,
+    setServerId,
+    setActionStatus,
+    pushActivity,
+    showToast,
+    setConfirmDialog,
+    setWorkspaceSessions,
+    setActiveWorkspaceSessionId,
+    setManualServerDraft,
+    setSettingsWorkspaceView,
+    setPendingLiveFollowRestore,
+    setPreserveTerminalOnInactive,
+    withBusy,
+    checkLocalServiceHealth,
+    startWorkspaceActivation,
+    openSettingsWorkspace,
+  });
 
-  function selectServerById(nextServerId: string) {
-    if (nextServerId && nextServerId !== serverId && isWorkspaceSwitchLocked) {
-      setActionStatus("当前检索或连接操作尚未完成，请稍后再切换工作区。");
-      return false;
-    }
+  const {
+    workspaceTabDragState,
+    workspaceTabDragJustMovedRef,
+    clearWorkspaceTabDragState,
+    reorderWorkspaceSessions,
+    getWorkspaceTabDropPosition,
+    handleWorkspaceTabDragStart,
+    handleWorkspaceTabDragOver,
+    handleWorkspaceTabDrop,
+    handleWorkspaceTabDragEnd
+  } = useWorkspaceTabDrag(isWorkspaceSwitchLocked, setWorkspaceSessions);
 
-    if (!nextServerId) {
-      setActiveWorkspaceSessionId(null);
-      writeLastServerId("");
-      setServerId("");
-      return true;
-    }
-
-    const existingSession = workspaceSessions.find((session) => session.serverId === nextServerId);
-    const targetServer = servers.find((server) => server.id === nextServerId);
-    const nextSession = existingSession ?? (targetServer ? buildWorkspaceSession(targetServer) : null);
-
-    if (!nextSession) {
-      writeLastServerId(nextServerId);
-      setServerId(nextServerId);
-      return true;
-    }
-
-    if (!existingSession) {
-      setWorkspaceSessions((current) => current.some((session) => session.id === nextSession.id) ? current : [...current, nextSession]);
-    }
-
-    startWorkspaceActivation(nextSession);
-    return true;
-  }
-
-  function activateWorkspaceSession(session: WorkspaceSession) {
-    startWorkspaceActivation(session);
-  }
-
-  function clearWorkspaceTabDragState() {
-    setWorkspaceTabDragState({
-      draggedSessionId: null,
-      targetSessionId: null,
-      position: null
-    });
-  }
-
-  function reorderWorkspaceSessions(draggedSessionId: string, targetSessionId: string, position: "before" | "after") {
-    if (draggedSessionId === targetSessionId) { return; }
-    setWorkspaceSessions((current) => {
-      const draggedIndex = current.findIndex((s) => s.id === draggedSessionId);
-      const targetIndex = current.findIndex((s) => s.id === targetSessionId);
-      if (draggedIndex === -1 || targetIndex === -1) { return current; }
-      const next = [...current];
-      const [draggedSession] = next.splice(draggedIndex, 1);
-      const normalizedTargetIndex = draggedIndex < targetIndex ? targetIndex - 1 : targetIndex;
-      const insertIndex = position === "after" ? normalizedTargetIndex + 1 : normalizedTargetIndex;
-      next.splice(insertIndex, 0, draggedSession);
-      return next;
-    });
-  }
-
-  function getWorkspaceTabDropPosition(event: ReactDragEvent<HTMLDivElement>): "before" | "after" {
-    const bounds = event.currentTarget.getBoundingClientRect();
-    return event.clientX - bounds.left < bounds.width / 2 ? "before" : "after";
-  }
-
-  function handleWorkspaceTabDragStart(event: ReactDragEvent<HTMLDivElement>, sessionId: string) {
-    if (isWorkspaceSwitchLocked) { event.preventDefault(); return; }
-    const target = event.target;
-    if (target instanceof HTMLElement && target.closest(".workspace-session-tab-close")) { event.preventDefault(); return; }
-    workspaceTabDragJustMovedRef.current = false;
-    setWorkspaceTabDragState({ draggedSessionId: sessionId, targetSessionId: null, position: null });
-    event.dataTransfer.effectAllowed = "move";
-    event.dataTransfer.setData("text/plain", sessionId);
-  }
-
-  function handleWorkspaceTabDragOver(event: ReactDragEvent<HTMLDivElement>, sessionId: string) {
-    const draggedSessionId = workspaceTabDragState.draggedSessionId;
-    if (!draggedSessionId || isWorkspaceSwitchLocked) { return; }
-    event.preventDefault();
-    event.dataTransfer.dropEffect = "move";
-    if (draggedSessionId === sessionId) {
-      if (workspaceTabDragState.targetSessionId || workspaceTabDragState.position) {
-        setWorkspaceTabDragState((c) => ({ ...c, targetSessionId: null, position: null }));
-      }
-      return;
-    }
-    const position = getWorkspaceTabDropPosition(event);
-    if (workspaceTabDragState.targetSessionId === sessionId && workspaceTabDragState.position === position) { return; }
-    setWorkspaceTabDragState((c) => ({ ...c, targetSessionId: sessionId, position }));
-  }
-
-  function handleWorkspaceTabDrop(event: ReactDragEvent<HTMLDivElement>, sessionId: string) {
-    const draggedSessionId = workspaceTabDragState.draggedSessionId || event.dataTransfer.getData("text/plain");
-    if (!draggedSessionId || isWorkspaceSwitchLocked) { clearWorkspaceTabDragState(); return; }
-    event.preventDefault();
-    if (draggedSessionId === sessionId) { clearWorkspaceTabDragState(); return; }
-    const position = getWorkspaceTabDropPosition(event);
-    reorderWorkspaceSessions(draggedSessionId, sessionId, position);
-    workspaceTabDragJustMovedRef.current = true;
-    clearWorkspaceTabDragState();
-  }
-
-  function handleWorkspaceTabDragEnd() {
-    clearWorkspaceTabDragState();
-    window.setTimeout(() => { workspaceTabDragJustMovedRef.current = false; }, 120);
-  }
-
-  function closeWorkspaceSession(sessionId: string) {
-    if (isWorkspaceSwitchLocked) {
-      setActionStatus("当前检索或连接操作尚未完成，请稍后再关闭工作区。");
-      return;
-    }
-
-    const currentIndex = workspaceSessions.findIndex((session) => session.id === sessionId);
-    if (currentIndex === -1) {
-      return;
-    }
-
-    const nextSessions = workspaceSessions.filter((session) => session.id !== sessionId);
-    setWorkspaceSessions(nextSessions);
-    delete workspaceSessionStatesRef.current[sessionId];
-
-    if (activeWorkspaceSessionId !== sessionId) {
-      return;
-    }
-
-    const fallbackSession = nextSessions[Math.min(currentIndex, nextSessions.length - 1)] ?? null;
-    if (!fallbackSession) {
-      pendingWorkspaceActivationRef.current = null;
-      restoringWorkspaceStateRef.current = null;
-      restoringWorkspaceFromCacheRef.current = false;
-      setPendingLiveFollowRestore(null);
-      setPreserveTerminalOnInactive(false);
-      setActiveWorkspaceSessionId(null);
-      writeLastServerId("");
-      setServerId("");
-      return;
-    }
-
-    startWorkspaceActivation(fallbackSession, { skipSaveCurrent: true });
-  }
-
-  function startCreateManualServer() {
-    setManualServerDraft(createManualServerDraft());
-    openSettingsWorkspace("inventory");
-  }
-
-  function startEditManualServer(server: ServerSummary) {
-    setManualServerDraft(createManualServerDraft(server));
-    selectServerById(server.id);
-    openSettingsWorkspace("inventory");
-  }
-
-  async function saveManualServer() {
-    const name = manualServerDraft.name.trim();
-    const host = manualServerDraft.host.trim();
-    const portValue = manualServerDraft.port.trim();
-    const port = Number(portValue || "22");
-
-    if (!name || !host) {
-      setActionStatus("请先填写服务器名称和主机地址。");
-      openSettingsWorkspace("inventory");
-      return;
-    }
-
-    if (!Number.isInteger(port) || port <= 0 || port > 65535) {
-      setActionStatus("端口必须是 1-65535 之间的整数。");
-      openSettingsWorkspace("inventory");
-      return;
-    }
-
-    await withBusy("正在保存手动服务器...", async () => {
-      const payload = await apiUpsertManualServer({
-        id: manualServerDraft.id || undefined,
-        name,
-        host,
-        port,
-        username: manualServerDraft.username.trim() || undefined,
-        basePath: manualServerDraft.basePath.trim() || "/",
-        profile: manualServerDraft.profile,
-        connectionKind: manualServerDraft.connectionKind,
-        tags: parseManualServerTags(manualServerDraft.tagsText),
-        credential: manualServerDraft.password || manualServerDraft.privateKey
-          ? {
-              username: manualServerDraft.username.trim() || undefined,
-              password: manualServerDraft.password || undefined,
-              privateKey: manualServerDraft.privateKey || undefined
-            }
-          : undefined
-      });
-      const refreshedServers = await fetchServers();
-      const savedServer = refreshedServers.find((server) => server.id === payload.server.id) || payload.server;
-      selectServerById(savedServer.id);
-      setManualServerDraft(createManualServerDraft(savedServer));
-      setSettingsWorkspaceView(savedServer.connectionKind === "bastion-target" ? "server" : "inventory");
-      setActionStatus(`已保存服务器：${savedServer.name}`);
-      pushActivity(`已保存手动服务器：${savedServer.name}（${savedServer.host}:${savedServer.port}）`);
-      showToast("success", `已保存 ${savedServer.name}`);
-    });
-  }
-
-  async function deleteServerRecord(targetServer: ServerSummary) {
-    await withBusy(`正在删除服务器 ${targetServer.name}...`, async () => {
-      await apiDeleteServer(targetServer.id);
-      const refreshedServers = await fetchServers();
-      if (serverId === targetServer.id) {
-        const fallbackServerId = refreshedServers[0]?.id || "";
-        selectServerById(fallbackServerId);
-      }
-      setManualServerDraft((current) => current.id === targetServer.id ? createManualServerDraft() : current);
-      setSettingsWorkspaceView(refreshedServers.length ? "inventory" : "overview");
-      setActionStatus(`已删除服务器：${targetServer.name}`);
-      pushActivity(`已删除服务器：${targetServer.name}（${targetServer.host}:${targetServer.port}）`);
-      showToast("success", `已删除 ${targetServer.name}`);
-    });
-  }
-
-  function requestDeleteServer(targetServer: ServerSummary) {
-    setConfirmDialog({
-      title: "删除服务器",
-      message: `确定删除服务器“${targetServer.name}”？\n${targetServer.username}@${targetServer.host}:${targetServer.port}`,
-      danger: true,
-      onConfirm: () => {
-        void deleteServerRecord(targetServer);
-      }
-    });
-  }
 
   async function fetchDirectoryListing(targetDirectoryPath: string) {
     const isBastionSftp = selectedServer?.connectionKind === "bastion" && looksLikeJumpServer(selectedServer);
@@ -1766,315 +1097,37 @@ export function App() {
     return apiGetLineContext(serverId, targetFilePath, lineNumber, context);
   }
 
-  function cacheSlicePayload(payload: LogSliceResponse, requestedOffset: number, targetLength: number) {
-    const requestedKey = getSliceCacheKey(payload.filePath, requestedOffset, targetLength);
-    const actualKey = getSliceCacheKey(payload.filePath, payload.actualOffset, targetLength);
-    setLimitedMapEntry(sliceCacheRef.current, requestedKey, payload, MAX_SLICE_CACHE_ENTRIES);
-    setLimitedMapEntry(sliceCacheRef.current, actualKey, payload, MAX_SLICE_CACHE_ENTRIES);
-
-    const previewContent = formatPreviewSnippet(payload.content) || "这一段没有完整日志行。";
-    const requestedPreviewKey = getPreviewCacheKey(payload.filePath, requestedOffset);
-    const actualPreviewKey = getPreviewCacheKey(payload.filePath, payload.actualOffset);
-    setLimitedMapEntry(previewCacheRef.current, requestedPreviewKey, {
-      offset: payload.actualOffset,
-      content: previewContent
-    }, MAX_PREVIEW_CACHE_ENTRIES);
-    setLimitedMapEntry(previewCacheRef.current, actualPreviewKey, {
-      offset: payload.actualOffset,
-      content: previewContent
-    }, MAX_PREVIEW_CACHE_ENTRIES);
-  }
-
-  function getCachedSlice(targetFilePath: string, targetOffset: number, targetLength: number) {
-    return sliceCacheRef.current.get(getSliceCacheKey(targetFilePath, targetOffset, targetLength)) ?? null;
-  }
-
   async function warmSlice(targetFilePath: string, targetOffset: number, targetLength: number) {
-    const cacheKey = getSliceCacheKey(targetFilePath, targetOffset, targetLength);
-    if (sliceCacheRef.current.has(cacheKey) || sliceWarmRef.current.has(cacheKey)) {
-      return sliceCacheRef.current.get(cacheKey) ?? null;
-    }
-
-    sliceWarmRef.current.add(cacheKey);
-    try {
-      const payload = await fetchLogSlice(targetFilePath, targetOffset, targetLength);
-      cacheSlicePayload(payload, targetOffset, targetLength);
-      return payload;
-    } finally {
-      sliceWarmRef.current.delete(cacheKey);
-    }
+    return warmSliceFromCache(targetFilePath, targetOffset, targetLength, fetchLogSlice);
   }
 
   function warmNeighborSlices(targetFilePath: string, payload: LogSliceResponse, targetLength: number) {
-    const nextOffsets: number[] = [];
-
-    if (!payload.isStart) {
-      nextOffsets.push(Math.max(0, payload.actualOffset - targetLength));
-    }
-    if (!payload.isEnd) {
-      nextOffsets.push(payload.nextOffset);
-    }
-
-    nextOffsets.forEach((offset) => {
-      void warmSlice(targetFilePath, offset, targetLength);
-    });
+    warmNeighborSlicesFromCache(targetFilePath, payload, targetLength, fetchLogSlice);
   }
 
-  async function fetchFinalShellSettings() {
-    try {
-      const payload = await apiGetFinalShellSettings();
-      setFinalShellPath(payload.configuredPath || "");
-      setFinalShellDetectedPaths(payload.searchedPaths || []);
-      setFinalShellLastImportedAt(payload.lastImportedAt || "");
-      setImportPath(
-        payload.resolvedPath
-          ? `当前识别目录：${payload.resolvedPath}`
-          : `尚未识别到 FinalShell 目录，已检测：${payload.searchedPaths.join(" | ")}`
-      );
-    } catch (error) {
-      const detail = error instanceof Error ? error.message : "未知错误";
-      setLocalServiceState("offline");
-      setLocalServiceStatusText("本地连接服务未启动");
-      pushActivity(`读取 FinalShell 配置失败：${detail}`);
-    }
-  }
+  const {
+    fetchFinalShellSettings,
+    saveFinalShellPath,
+    importFromTool,
+    importFromFinalShell,
+  } = useImportSettings({
+    selectedImportTool,
+    finalShellPath,
+    setFinalShellPath,
+    setFinalShellDetectedPaths,
+    setFinalShellLastImportedAt,
+    setXshellLastImportedAt,
+    setImportPath,
+    setImportStatus,
+    setServers,
+    setFilePath,
+    setActionStatus,
+    pushActivity,
+    selectServerById,
+    withBusy,
+    checkLocalServiceHealth,
+  });
 
-  async function saveFinalShellPath() {
-    await withBusy("正在保存 FinalShell 目录...", async () => {
-      const payload = await apiSaveFinalShellPath(finalShellPath.trim());
-      setFinalShellPath(payload.configuredPath || "");
-      setFinalShellDetectedPaths(payload.searchedPaths || []);
-      setFinalShellLastImportedAt(payload.lastImportedAt || "");
-      setImportPath(
-        payload.resolvedPath
-          ? `当前识别目录：${payload.resolvedPath}`
-          : `尚未识别到 FinalShell 目录，已检测：${payload.searchedPaths.join(" | ")}`
-      );
-      setActionStatus("FinalShell 目录已保存。");
-      pushActivity(`FinalShell 目录已保存：${payload.configuredPath || "已清空，将回退自动检测"}`);
-    });
-  }
-
-  async function fetchCredentialStatus(targetServerId: string) {
-    try {
-      const payload = await apiGetCredentialStatus(targetServerId);
-      if (serverIdRef.current !== targetServerId) {
-        return;
-      }
-      setCredentialStatus(payload);
-      setCredentialUsername(payload.username || "");
-      setCredentialPassword("");
-      setCredentialPrivateKey("");
-    } catch (error) {
-      if (serverIdRef.current !== targetServerId) {
-        return;
-      }
-      const detail = error instanceof Error ? error.message : "未知错误";
-      setCredentialStatus(null);
-      pushActivity(`读取连接凭证状态失败：${detail}`);
-    }
-  }
-
-  async function fetchServerRoute(targetServerId: string) {
-    try {
-      const payload = await apiGetServerRoute(targetServerId);
-      if (serverIdRef.current !== targetServerId) {
-        return;
-      }
-      setServerRouteConfig(payload);
-      setPreferredBastionId(payload.preferredBastionId || "");
-      setJumpMode(payload.jumpMode || "auto");
-      setJumpSearchKeyword(payload.jumpSearchKeyword || "");
-      setJumpAssetId(payload.jumpAssetId || "");
-      setJumpAssetOptions([]);
-      jumpAssetAutoSearchKeyRef.current = "";
-    } catch (error) {
-      if (serverIdRef.current !== targetServerId) {
-        return;
-      }
-      setServerRouteConfig(null);
-      setPreferredBastionId("");
-      setJumpMode("auto");
-      setJumpSearchKeyword("");
-      setJumpAssetId("");
-      setJumpAssetOptions([]);
-      jumpAssetAutoSearchKeyRef.current = "";
-      pushActivity(`读取二跳配置失败：${error instanceof Error ? error.message : "未知错误"}`);
-    }
-  }
-
-  async function saveCredentialForServer() {
-    if (!serverId) {
-      return;
-    }
-
-    await withBusy("正在保存连接凭证...", async () => {
-      const payload = await apiSaveCredential(serverId, {
-        username: credentialUsername.trim() || undefined,
-        password: credentialPassword || undefined,
-        privateKey: credentialPrivateKey || undefined
-      });
-      setCredentialStatus(payload);
-      setCredentialPassword("");
-      setCredentialPrivateKey("");
-      setActionStatus(`连接凭证已保存：${payload.serverName}`);
-      pushActivity(`已保存连接凭证：${payload.serverName}，后续刷新页面仍会保留。`);
-      await fetchServers();
-    });
-  }
-
-  async function saveServerRouteForServer() {
-    if (!serverId) {
-      return;
-    }
-
-    await withBusy("正在保存二跳设置...", async () => {
-      const payload = await apiSaveServerRoute(serverId, {
-        preferredBastionId: preferredBastionId || undefined,
-        jumpMode,
-        jumpSearchKeyword: jumpSearchKeyword.trim() || undefined,
-        jumpAssetId: jumpAssetId.trim() || undefined
-      });
-      setServerRouteConfig(payload);
-      setPreferredBastionId(payload.preferredBastionId || "");
-      setJumpMode(payload.jumpMode || "auto");
-      setJumpSearchKeyword(payload.jumpSearchKeyword || "");
-      setJumpAssetId(payload.jumpAssetId || "");
-      setJumpAssetOptions([]);
-      jumpAssetAutoSearchKeyRef.current = "";
-      await fetchServers();
-      setActionStatus("二跳设置已保存。");
-      pushActivity(`已保存二跳设置：${selectedServer?.name || serverId}`);
-      await testServerConnection(directoryPath.trim() || selectedServer?.basePath?.trim() || "/");
-    });
-  }
-
-  async function searchJumpServerAssets() {
-    if (!serverId) {
-      return;
-    }
-
-    const keyword =
-      jumpSearchKeyword.trim() ||
-      (selectedServer?.connectionKind === "bastion" ? "" : selectedServer?.host || "");
-
-    if (!keyword) {
-      setActionStatus("先输入 JumpServer 搜索关键字，再读取资产列表。");
-      return;
-    }
-
-    await withBusy("正在读取 JumpServer 资产列表...", async () => {
-      const payload = await apiSearchJumpServerAssets(
-        serverId,
-        preferredBastionId || (selectedServer?.connectionKind === "bastion" ? selectedServer.id : undefined),
-        keyword
-      );
-      setJumpAssetOptions(payload.assets || []);
-      if (payload.assets.length === 1) {
-        setJumpAssetId(payload.assets[0].id);
-        setActionStatus(`已唯一命中 JumpServer 资产：${payload.assets[0].name}`);
-        pushActivity(`JumpServer 资产唯一命中：${payload.assets[0].id} / ${payload.assets[0].name}`);
-        return;
-      }
-      setActionStatus(payload.assets.length ? `已读取 ${payload.assets.length} 条 JumpServer 资产。` : "没有检索到可用资产。");
-      pushActivity(
-        payload.assets.length
-          ? `JumpServer 资产已读取：${payload.assets.length} 条，关键字 ${payload.keyword}`
-          : `JumpServer 资产为空：${payload.keyword}`
-      );
-    });
-  }
-
-  async function testServerConnection(targetDirectoryPath?: string, options?: { auto?: boolean }) {
-    if (!serverId) {
-      return;
-    }
-
-    const requestServerId = serverId;
-    const autoMode = Boolean(options?.auto);
-    setIsBusy(true);
-    setActionStatus(autoMode ? "正在自动连接服务器..." : "正在测试服务器连接...");
-
-    try {
-      const payload = await apiTestConnection(requestServerId, targetDirectoryPath || directoryPath.trim() || "/");
-      if (serverIdRef.current !== requestServerId) {
-        return;
-      }
-      setConnectionTestStatus(payload);
-      const connectionMessage =
-        !payload.connected && ((availableBastions.length && selectedServer?.connectionKind !== "bastion") || looksLikeJumpServer(selectedServer))
-          ? `${payload.message} 可在连接设置里切换跳转入口后重试。`
-          : payload.message;
-      setActionStatus(connectionMessage);
-
-      if (!autoMode || payload.connected) {
-        pushActivity(
-          payload.connected
-            ? `${payload.message}${payload.sampleEntries.length ? `，示例：${payload.sampleEntries.join(", ")}` : ""}`
-            : `连接测试失败：${connectionMessage}`
-        );
-      }
-
-      if (!payload.connected && ((availableBastions.length && selectedServer?.connectionKind !== "bastion") || looksLikeJumpServer(selectedServer))) {
-        openSettingsWorkspace("server");
-      }
-
-      if (payload.connected && selectedServer?.connectionKind === "bastion" && looksLikeJumpServer(selectedServer)) {
-        try {
-          pushActivity("已连接 JumpServer 入口，可在终端中继续检索资产并进入目标机。");
-          const directoryPayload = await fetchDirectoryListing("/");
-          if (serverIdRef.current !== requestServerId) {
-            return;
-          }
-          setDirectoryPath(directoryPayload.directoryPath);
-          setDirectoryInput(directoryPayload.directoryPath);
-          setFileEntries(directoryPayload.entries);
-          pushActivity(`已通过 SFTP 读取堡垒机目录，共 ${directoryPayload.entries.length} 项。`);
-        } catch (sftpError) {
-          const sftpDetail = sftpError instanceof Error ? sftpError.message : "未知错误";
-          setActionStatus(`堡垒机 SFTP 目录读取失败：${sftpDetail}`);
-          pushActivity(`堡垒机 SFTP 目录读取失败：${sftpDetail}`);
-        }
-      } else if (payload.connected && payload.directoryReadable) {
-        const directoryPayload = await fetchDirectoryListing(payload.directoryPath);
-        if (serverIdRef.current !== requestServerId) {
-          return;
-        }
-        setDirectoryPath(directoryPayload.directoryPath);
-        setFileEntries(directoryPayload.entries);
-        rememberDirectoryIfUseful(requestServerId, directoryPayload.directoryPath, directoryPayload.entries.length);
-        pushActivity(`连接测试后已读取目录：${directoryPayload.directoryPath}，共 ${directoryPayload.entries.length} 项。`);
-      }
-    } catch (error) {
-      if (serverIdRef.current !== requestServerId) {
-        return;
-      }
-      const detail = error instanceof Error ? error.message : "未知错误";
-
-      setConnectionTestStatus({
-        serverId: requestServerId,
-        serverName: selectedServer?.name || requestServerId,
-        host: selectedServer?.host || "",
-        username: selectedServer?.username || "",
-        connected: false,
-        directoryPath: targetDirectoryPath || directoryPath.trim() || "/",
-        directoryReadable: false,
-        sampleEntries: [],
-        message: detail
-      });
-      setActionStatus(autoMode ? `自动连接未完成：${detail}` : `连接失败：${detail}`);
-
-      if (!autoMode) {
-        pushActivity(`连接失败：${detail}`);
-      }
-
-      if ((availableBastions.length && selectedServer?.connectionKind !== "bastion") || looksLikeJumpServer(selectedServer)) {
-        openSettingsWorkspace("server");
-      }
-    } finally {
-      setIsBusy(false);
-    }
-  }
 
   function toggleFileSort(nextKey: "name" | "size" | "kind" | "modifiedTime") {
     if (fileSortKey === nextKey) {
@@ -2116,10 +1169,6 @@ export function App() {
     return () => window.removeEventListener("keydown", handleSettingsWorkspaceKeydown);
   }, [showConnectionSettings, isStandalonePipWindow]);
 
-  function pushActivity(message: string) {
-    const timestamp = new Date().toLocaleTimeString("zh-CN", { hour12: false });
-    setActivityLines((current) => [...current.slice(-79), `[${timestamp}] ${message}`]);
-  }
 
   const selectedServer = useMemo(
     () => servers.find((server) => server.id === serverId) ?? null,
@@ -2167,85 +1216,27 @@ export function App() {
     setActiveWorkspaceSessionId(nextSessionId);
   }, [selectedServer?.host, selectedServer?.id, selectedServer?.name, serverId]);
 
-  function appendTransferHistory(
-    entry: Omit<TransferHistoryEntry, "id" | "serverId" | "serverLabel" | "createdAt">
-  ) {
-    if (!serverId) {
-      return;
-    }
-
-    const nextEntry: TransferHistoryEntry = {
-      ...entry,
-      id: globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      serverId,
-      serverLabel: selectedServer?.name || selectedServer?.host || serverId,
-      createdAt: new Date().toISOString(),
-    };
-    pushTransferHistory(nextEntry);
-    setTransferHistory(readTransferHistory());
-  }
-
-  function handleClearTransferHistory() {
-    const count = serverId ? transferHistory.filter((entry) => entry.serverId === serverId).length : 0;
-    clearTransferHistory(serverId || undefined);
-    setTransferHistory(readTransferHistory());
-    if (count > 0) {
-      const serverLabel = selectedServer?.name || selectedServer?.host || serverId || "当前服务器";
-      setActionStatus(`已清空 ${serverLabel} 的传输记录`);
-      pushActivity(`已清空传输记录：${serverLabel}（${count} 条）`);
-      showToast("success", `已清空 ${count} 条传输记录`);
-    }
-  }
-
-  function requestClearTransferHistory() {
-    if (!currentServerTransferHistory.length) {
-      return;
-    }
-    setConfirmDialog({
-      title: "清空传输记录",
-      message: `确定清空当前服务器的 ${currentServerTransferHistory.length} 条传输记录？`,
-      danger: true,
-      onConfirm: () => handleClearTransferHistory(),
-    });
-  }
-
-  function handleBrowseTransferHistoryPath(path: string) {
-    setShowTransferHistory(false);
-    void browseLogFiles(path, { manual: true });
-  }
-
-  async function handleCopyTransferHistoryValue(value: string, label: string) {
-    try {
-      await copyText(value);
-      setActionStatus(`已复制${label}`);
-      showToast("success", `已复制${label}`);
-    } catch (error) {
-      const detail = error instanceof Error ? error.message : "未知错误";
-      setActionStatus(`复制${label}失败：${detail}`);
-      showToast("error", `复制${label}失败：${detail}`);
-    }
-  }
-
-  async function handleRevealTransferHistoryLocalPath(targetPath: string) {
-    try {
-      const api = (window as any).electronAPI;
-      if (!api?.revealLocalPath) {
-        throw new Error("当前环境不支持定位本地文件");
-      }
-      const result = await api.revealLocalPath(targetPath);
-      if (!result?.ok) {
-        throw new Error(result?.message || "无法定位本地文件");
-      }
-      const fileName = targetPath.split(/[/\\]/).pop() || targetPath;
-      setActionStatus(`已在 Finder 中显示 ${fileName}`);
-      pushActivity(`已定位本地文件：${targetPath}`);
-      showToast("success", `已在 Finder 中显示 ${fileName}`);
-    } catch (error) {
-      const detail = error instanceof Error ? error.message : "未知错误";
-      setActionStatus(`定位本地文件失败：${detail}`);
-      showToast("error", `定位本地文件失败：${detail}`);
-    }
-  }
+  const {
+    appendTransferHistory,
+    handleClearTransferHistory,
+    requestClearTransferHistory,
+    handleBrowseTransferHistoryPath,
+    handleCopyTransferHistoryValue,
+    handleRevealTransferHistoryLocalPath,
+  } = useTransferHistory({
+    serverId,
+    selectedServer,
+    transferHistory,
+    currentServerTransferHistory,
+    setTransferHistory,
+    setActionStatus,
+    pushActivity,
+    showToast,
+    setConfirmDialog,
+    setShowTransferHistory,
+    browseLogFiles,
+    isElectron,
+  });
 
   function handlePreferredBastionChange(nextBastionId: string) {
     setPreferredBastionId(nextBastionId);
@@ -2288,6 +1279,53 @@ export function App() {
     [jumpServerBastions.length, preferredBastionId, selectedBastion, selectedServer]
   );
 
+  const {
+    fetchCredentialStatus,
+    fetchServerRoute,
+    saveCredentialForServer,
+    saveServerRouteForServer,
+    searchJumpServerAssets,
+    testServerConnection,
+  } = useServerConnection({
+    serverId,
+    serverIdRef,
+    credentialUsername,
+    credentialPassword,
+    credentialPrivateKey,
+    preferredBastionId,
+    jumpMode,
+    jumpSearchKeyword,
+    jumpAssetId,
+    directoryPath,
+    selectedServer,
+    availableBastions,
+    isBusy,
+    setIsBusy,
+    setActionStatus,
+    pushActivity,
+    showToast,
+    setCredentialStatus,
+    setCredentialPassword,
+    setCredentialPrivateKey,
+    setCredentialUsername,
+    setServerRouteConfig,
+    setPreferredBastionId,
+    setJumpMode,
+    setJumpSearchKeyword,
+    setJumpAssetId,
+    setJumpAssetOptions,
+    setConnectionTestStatus,
+    setDirectoryPath,
+    setDirectoryInput,
+    setFileEntries,
+    jumpAssetAutoSearchKeyRef,
+    withBusy,
+    fetchServers,
+    fetchDirectoryListing,
+    rememberDirectoryIfUseful,
+    openSettingsWorkspace,
+  });
+
   const resolvedFileDirectoryPath = useMemo(
     () => (filePath ? getParentDirectoryPath(filePath) : ""),
     [filePath]
@@ -2320,140 +1358,44 @@ export function App() {
     onSelectionMenu: setTermSelMenu,
   });
 
-  function createTerminalSessionId(targetServerId: string) {
-    return `terminal-${targetServerId}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-  }
-
-  function ensureTerminalSessionId() {
-    const existing = terminalSessionId.trim();
-    if (existing) {
-      return existing;
-    }
-
-    const next = createTerminalSessionId(serverId || "server");
-    setTerminalSessionId(next);
-    return next;
-  }
-
-  function openTerminalView(options?: { auto?: boolean }) {
-    const nextSessionId = ensureTerminalSessionId();
-    setTerminalDetached(false);
-    setTerminalPanelOpen(true);
-    terminalSession.startTerminal({ ...options, sessionId: nextSessionId });
-  }
-
-  function closeTerminalOverlay() {
-    setTerminalOverlay("none");
-  }
-
-  function toggleTerminalOverlay(nextOverlay: "shortcuts" | "ai") {
-    setTerminalOverlay((current) => current === nextOverlay ? "none" : nextOverlay);
-  }
-
-  async function restoreEmbeddedTerminalWindow(targetSessionId: string = terminalSessionId) {
-    await closeDetachedTerminalWindow(targetSessionId);
-    setTerminalDetached(false);
-    setTerminalPanelOpen(Boolean(serverId));
-  }
-
-  async function reconcileDetachedTerminalOwnership(nextSessionId: string) {
-    const normalizedNextSessionId = nextSessionId.trim();
-    if (!isElectron || !normalizedNextSessionId) {
-      return;
-    }
-
-    const detachedSessionIdsToClose = new Set<string>();
-    for (const session of workspaceSessions) {
-      if (session.id === activeWorkspaceSessionId) {
-        continue;
-      }
-
-      const sessionState = readWorkspaceSessionState(session);
-      const detachedSessionId = sessionState.terminalSessionId.trim();
-      if (!sessionState.terminalDetached || !detachedSessionId || detachedSessionId === normalizedNextSessionId) {
-        continue;
-      }
-
-      storeWorkspaceSessionState(session.id, {
-        ...sessionState,
-        terminalDetached: false,
-        terminalPanelOpen: Boolean(sessionState.serverId),
-      });
-      detachedSessionIdsToClose.add(detachedSessionId);
-    }
-
-    for (const detachedSessionId of detachedSessionIdsToClose) {
-      await closeDetachedTerminalWindow(detachedSessionId);
-    }
-  }
-
-  function toggleTerminalPanel() {
-    if (terminalDetached) {
-      void restoreEmbeddedTerminalWindow();
-      return;
-    }
-
-    if (terminalPanelOpen) {
-      closeTerminalOverlay();
-      setTerminalPanelOpen(false);
-      terminalSession.stopTerminal();
-      return;
-    }
-
-    openTerminalView();
-  }
-
-  async function openDetachedTerminalWindow() {
-    if (!isElectron || !serverId) {
-      return;
-    }
-
-    const nextSessionId = ensureTerminalSessionId();
-    await reconcileDetachedTerminalOwnership(nextSessionId);
-
-    if (pip.isPip) {
-      await pip.togglePip();
-    }
-
-    const terminalBastionId = selectedServer?.connectionKind === "bastion"
-      ? selectedServer.id
-      : selectedServer?.connectionKind === "bastion-target"
-        ? (preferredBastionId || undefined)
-        : !selectedServer?.connectionKind
-          ? (preferredBastionId || undefined)
-          : undefined;
-
-    await (window as any).electronAPI.openPipWindow({
-      mode: "terminal",
-      width: 980,
-      height: 680,
-      title: selectedServer?.name || selectedServer?.host || "终端",
-      serverId,
-      terminalSessionId: nextSessionId,
-      directoryPath: terminalWorkingDirectory || selectedServer?.basePath?.trim() || "/",
-      bastionId: terminalBastionId,
-    });
-
-    closeTerminalOverlay();
-    setTerminalPanelOpen(false);
-    setTerminalDetached(true);
-  }
-
-  async function closeDetachedTerminalWindow(targetSessionId: string = terminalSessionId) {
-    if (!isElectron) {
-      return;
-    }
-
-    const nextSessionId = targetSessionId.trim();
-    if (!nextSessionId) {
-      return;
-    }
-
-    await (window as any).electronAPI.closePipWindow({
-      mode: "terminal",
-      terminalSessionId: nextSessionId,
-    });
-  }
+  const {
+    ensureTerminalSessionId,
+    openTerminalView,
+    closeTerminalOverlay,
+    toggleTerminalOverlay,
+    restoreEmbeddedTerminalWindow,
+    reconcileDetachedTerminalOwnership,
+    toggleTerminalPanel,
+    openDetachedTerminalWindow,
+    closeDetachedTerminalWindow,
+    terminalDetachedRef,
+    terminalSessionIdRef,
+  } = useTerminalWindowManager({
+    terminalSessionId,
+    setTerminalSessionId,
+    terminalDetached,
+    setTerminalDetached,
+    terminalPanelOpen,
+    setTerminalPanelOpen,
+    terminalOverlay,
+    setTerminalOverlay,
+    preserveTerminalOnInactive,
+    setPreserveTerminalOnInactive,
+    serverId,
+    serverIdRef,
+    isElectron,
+    isStandaloneTerminalWindow,
+    selectedServer,
+    preferredBastionId,
+    terminalWorkingDirectory,
+    workspaceSessions,
+    activeWorkspaceSessionId,
+    workspaceSessionStatesRef,
+    readWorkspaceSessionState,
+    storeWorkspaceSessionState,
+    terminalSession,
+    pip,
+  });
 
   useEffect(() => {
     jumpAssetAutoSearchKeyRef.current = "";
@@ -2463,151 +1405,34 @@ export function App() {
     serverId
   ]);
 
-  const filteredEntries = useMemo(() => {
-    if (!fileFilter.trim()) {
-      return fileEntries;
-    }
-
-    const normalizedKeyword = fileFilter.trim().toLowerCase();
-    return fileEntries.filter((entry) => entry.name.toLowerCase().includes(normalizedKeyword));
-  }, [fileEntries, fileFilter]);
-
-  const selectableFileEntries = useMemo(
-    () => fileEntries.filter((entry) => entry.kind === "file"),
-    [fileEntries]
-  );
-  const fileEntriesByPath = useMemo(
-    () => new Map(fileEntries.map((entry) => [entry.path, entry] as const)),
-    [fileEntries]
-  );
-  const selectedFilePathSet = useMemo(
-    () => new Set(selectedFilePaths),
-    [selectedFilePaths]
-  );
-  const selectedFileEntries = useMemo(
-    () => selectedFilePaths.flatMap((path) => {
-      const entry = fileEntriesByPath.get(path);
-      return entry ? [entry] : [];
-    }),
-    [fileEntriesByPath, selectedFilePaths]
-  );
-  const directoryEntries = useMemo(
-    () => filteredEntries.filter((entry) => entry.kind === "directory"),
-    [filteredEntries]
-  );
-  const fileOnlyEntries = useMemo(
-    () => filteredEntries.filter((entry) => entry.kind === "file"),
-    [filteredEntries]
-  );
-  const tableEntries = useMemo(() => {
-    const collator = new Intl.Collator("zh-CN", { numeric: true, sensitivity: "base" });
-    const direction = fileSortDirection === "asc" ? 1 : -1;
-    return [...filteredEntries].sort((left, right) => {
-      if (left.kind !== right.kind) {
-        return left.kind === "directory" ? -1 : 1;
-      }
-
-      let result = 0;
-      switch (fileSortKey) {
-        case "size":
-          result = (left.size ?? -1) - (right.size ?? -1);
-          break;
-        case "kind":
-          result = collator.compare(left.kind, right.kind);
-          break;
-        case "modifiedTime":
-          result = new Date(left.modifiedTime || 0).getTime() - new Date(right.modifiedTime || 0).getTime();
-          break;
-        case "name":
-        default:
-          result = collator.compare(left.name, right.name);
-          break;
-      }
-
-      if (result === 0) {
-        result = collator.compare(left.name, right.name);
-      }
-
-      return result * direction;
-    });
-  }, [fileSortDirection, fileSortKey, filteredEntries]);
-  const visibleSelectedFileCount = useMemo(
-    () => tableEntries.reduce((count, entry) => count + (selectedFilePathSet.has(entry.path) ? 1 : 0), 0),
-    [selectedFilePathSet, tableEntries]
-  );
-  const allVisibleFilesSelected = tableEntries.length > 0 && visibleSelectedFileCount === tableEntries.length;
-  const groupedServers = useMemo(() => {
-    const groups = new Map<string, ServerSummary[]>();
-
-    for (const server of servers) {
-      const key = server.groupPath?.join(" / ") || "未分组";
-      const list = groups.get(key) ?? [];
-      list.push(server);
-      groups.set(key, list);
-    }
-
-    return [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0], "zh-CN"));
-  }, [servers]);
-  const filteredGroupedServers = useMemo(() => {
-    const normalized = serverFilter.trim().toLowerCase();
-    return groupedServers
-      .map(([groupName, groupServers]) => [
-        groupName,
-        normalized
-          ? groupServers.filter(
-              (server) =>
-                server.name.toLowerCase().includes(normalized) ||
-                server.host.toLowerCase().includes(normalized) ||
-                groupName.toLowerCase().includes(normalized)
-            )
-          : groupServers
-      ] as const)
-      .filter(([, groupServers]) => groupServers.length > 0);
-  }, [groupedServers, serverFilter]);
-  const pathSegments = useMemo(() => {
-    const segments = directoryPath.split("/").filter(Boolean);
-    const items = [{ label: "/", path: "/" }];
-    let currentPath = "";
-
-    for (const segment of segments) {
-      currentPath += `/${segment}`;
-      items.push({ label: segment, path: currentPath });
-    }
-
-    return items;
-  }, [directoryPath]);
-  const treeEntries = useMemo(() => {
-    const items: Array<{
-      key: string;
-      label: string;
-      path: string;
-      depth: number;
-      kind: "path" | "directory";
-      isCurrent: boolean;
-    }> = pathSegments.map((item, index) => ({
-      key: `path:${item.path}`,
-      label: item.label,
-      path: item.path,
-      depth: index,
-      kind: "path" as const,
-      isCurrent: item.path === (directoryPath || "/")
-    }));
-
-    directoryEntries.forEach((entry) => {
-      items.push({
-        key: `dir:${entry.path}`,
-        label: entry.name,
-        path: entry.path,
-        depth: pathSegments.length,
-        kind: "directory" as const,
-        isCurrent: false
-      });
-    });
-
-    return items;
-  }, [directoryEntries, directoryPath, pathSegments]);
-  const sidebarActivityLines = useMemo(() => activityLines.slice(-80), [activityLines]);
-  const recentActivityLines = useMemo(() => activityLines.slice(-4), [activityLines]);
+  const {
+    filteredEntries,
+    selectableFileEntries,
+    fileEntriesByPath,
+    selectedFilePathSet,
+    selectedFileEntries,
+    directoryEntries,
+    fileOnlyEntries,
+    tableEntries,
+    visibleSelectedFileCount,
+    allVisibleFilesSelected,
+    groupedServers,
+    filteredGroupedServers,
+    pathSegments,
+    treeEntries,
+    sidebarActivityLines,
+    recentActivityLines,
+  } = useFileBrowserComputed({
+    fileEntries,
+    fileFilter,
+    selectedFilePaths,
+    fileSortKey,
+    fileSortDirection,
+    servers,
+    serverFilter,
+    directoryPath,
+    activityLines,
+  });
   const connectionStateText = buildConnectionSummary(selectedServer, connectionTestStatus);
   const terminalPanelStatusText = !selectedServer
     ? (localServiceState === "online" ? "未选择服务器" : (isElectron ? "正在等待内置连接服务启动..." : "本地连接服务未启动"))
@@ -3444,93 +2269,22 @@ export function App() {
     setContextMenu({ x: nextX, y: nextY, entry });
   }
 
-  async function withBusy<T>(message: string, task: () => Promise<T>, successMessage?: string) {
-    setIsBusy(true);
-    setActionStatus(message);
-    const tid = showToast("loading", message);
 
-    try {
-      const result = await task();
-      if (successMessage) updateToast(tid, "success", successMessage);
-      else dismissToast(tid);
-      return result;
-    } catch (error) {
-      const detail = error instanceof Error ? error.message : "未知错误";
-      setActionStatus(`操作失败：${detail}`);
-      pushActivity(`操作失败：${detail}`);
-      updateToast(tid, "error", `操作失败：${detail}`);
-      return null;
-    } finally {
-      setIsBusy(false);
-    }
-  }
-
-  async function startLogRecording() {
-    if (!serverId || !filePath.trim()) {
-      return;
-    }
-
-    setActionStatus("正在开始录制日志...");
-    const tid = showToast("loading", "正在开始录制日志...");
-    try {
-      const payload = await apiStartLogRecording(serverId, filePath, directoryPath || undefined);
-      setRecordingSession(payload);
-      setActionStatus(`已开始录制：${payload.outputPath.split("/").pop() || payload.outputPath}`);
-      pushActivity(`开始录制日志：${payload.sourcePath} → ${payload.outputPath}`);
-      updateToast(tid, "success", "录制已开始");
-    } catch (error) {
-      const detail = error instanceof Error ? error.message : "未知错误";
-      setActionStatus(`录制启动失败：${detail}`);
-      pushActivity(`录制启动失败：${detail}`);
-      updateToast(tid, "error", `录制启动失败：${detail}`);
-    }
-  }
-
-  async function stopLogRecording() {
-    if (!recordingSession || !serverId) {
-      return;
-    }
-
-    setActionStatus("正在结束录制日志...");
-    const tid = showToast("loading", "正在结束录制日志...");
-    try {
-      const payload = await apiStopLogRecording(recordingSession.sessionId);
-      setRecordingSession(null);
-      const recordFileName = payload.outputPath.split("/").pop() || "record.log";
-      setPreviewDialog({
-        filePath: payload.outputPath,
-        fileName: recordFileName,
-        content: "",
-        originalContent: "",
-        size: payload.sizeBytes,
-        loading: true,
-        readOnly: true,
-      });
-      try {
-        const preview = await apiPreviewFile(serverId, payload.outputPath);
-        setPreviewDialog({
-          filePath: preview.filePath,
-          fileName: recordFileName,
-          content: preview.content,
-          originalContent: preview.content,
-          size: preview.size,
-          readOnly: true,
-        });
-      } catch (previewError) {
-        const detail = previewError instanceof Error ? previewError.message : "加载失败";
-        setPreviewDialog((prev) => prev ? { ...prev, loading: false, content: `/* 加载预览失败：${detail} */\n/* 可尝试下载文件查看完整内容 */`, originalContent: "" } : null);
-      }
-      setActionStatus(`录制完成，已打开 ${recordFileName}`);
-      pushActivity(`结束录制日志：${payload.outputPath}（${formatBytes(payload.sizeBytes)}）`);
-      updateToast(tid, "success", `录制完成：${recordFileName}`);
-    } catch (error) {
-      const detail = error instanceof Error ? error.message : "未知错误";
-      setRecordingSession(null);
-      setActionStatus(`结束录制失败：${detail}`);
-      pushActivity(`结束录制失败：${detail}`);
-      updateToast(tid, "error", `结束录制失败：${detail}`);
-    }
-  }
+  const {
+    startLogRecording,
+    stopLogRecording,
+  } = useLogRecording({
+    serverId,
+    filePath,
+    directoryPath,
+    recordingSession,
+    setRecordingSession,
+    setPreviewDialog,
+    setActionStatus,
+    pushActivity,
+    showToast,
+    updateToast,
+  });
 
   async function runSearch() {
     const normalizedInput = normalizeSearchInput(keywordInput);
@@ -3553,7 +2307,6 @@ export function App() {
     }
 
     const startedAt = Date.now();
-    setSearchNow(startedAt);
     setSearchStartedAt(startedAt);
     setIsBusy(true);
     setActionStatus("正在检索远程日志...");
@@ -3621,29 +2374,6 @@ export function App() {
     }
   }
 
-  async function importFromTool(toolId: string = selectedImportTool) {
-    const toolLabel = toolId === "finalshell" ? "FinalShell" : toolId === "xshell" ? "Xshell" : toolId;
-    await withBusy(`正在导入 ${toolLabel} 连接...`, async () => {
-      const payload = await apiImportFromTool(toolId);
-      setServers(payload.servers);
-      selectServerById(payload.servers[0]?.id ?? "");
-      setFilePath("");
-      setImportStatus(`已导入 ${payload.servers.length} 台服务器，时间 ${payload.importedAt}`);
-      if (toolId === "finalshell") setFinalShellLastImportedAt(payload.importedAt);
-      if (toolId === "xshell") setXshellLastImportedAt(payload.importedAt);
-      setImportPath(
-        payload.resolvedPath
-          ? `配置目录：${payload.resolvedPath}`
-          : `未发现 ${toolLabel} 配置目录，已检查：${payload.searchedPaths.join(" | ")}`
-      );
-      setActionStatus(`${toolLabel} 连接导入完成。`);
-      pushActivity(`${toolLabel} 配置已导入，共 ${payload.servers.length} 台，选择服务器后会自动连接。`);
-    }, `已导入 ${toolLabel} ${toolId === "finalshell" || toolId === "xshell" ? "连接" : ""}`);
-  }
-
-  async function importFromFinalShell() {
-    return importFromTool("finalshell");
-  }
 
   async function browseLogFiles(nextDirectoryPath?: string, options?: { manual?: boolean }) {
     if (!serverId) return;
@@ -3682,594 +2412,68 @@ export function App() {
     await commitDirectoryPath(getParentDirectoryPath(directoryPath || directoryInput || "/"));
   }
 
-  async function downloadFile(targetFilePath: string) {
-    if (!serverId) return;
-    const fileName = targetFilePath.split("/").pop() || "download";
-    let downloadedBytes = 0;
-    setDownloadProgress({ fileName, fileSize: 0, bytesDownloaded: 0, speed: 0, percent: 0 });
-    const tid = showToast("loading", `正在下载 ${fileName}...`);
-    try {
-      const blob = await apiDownloadFile(serverId, targetFilePath, (downloaded, total, speed) => {
-        downloadedBytes = downloaded;
-        setDownloadProgress({ fileName, fileSize: total, bytesDownloaded: downloaded, speed, percent: total > 0 ? Math.round((downloaded / total) * 100) : 0 });
-      });
-      setDownloadProgress(null);
-      const api = (window as any).electronAPI;
-      if (api?.saveFile) {
-        const buf = await blob.arrayBuffer();
-        const result = await api.saveFile(buf, fileName);
-        if (!result?.ok) {
-          if (result?.canceled) {
-            const message = "用户取消了下载保存";
-            setActionStatus("下载已取消");
-            pushActivity(`${message}：${targetFilePath}`);
-            appendTransferHistory({
-              direction: "download",
-              status: "canceled",
-              fileName,
-              filePath: targetFilePath,
-              size: blob.size || downloadedBytes,
-              message,
-            });
-            dismissToast(tid);
-            return;
-          }
-          throw new Error(result?.message || "保存下载文件失败");
-        }
-        setActionStatus(`已保存到 ${result.filePath}`);
-        pushActivity(`已下载文件：${targetFilePath} → ${result.filePath}`);
-        appendTransferHistory({
-          direction: "download",
-          status: "success",
-          fileName,
-          filePath: targetFilePath,
-          size: blob.size || downloadedBytes,
-          localPath: result.filePath,
-        });
-        updateToast(tid, "success", `已保存到 ${result.filePath}`);
-      } else {
-        const url = URL.createObjectURL(blob);
-        try {
-          const chromeDownloads = (globalThis as any).chrome?.downloads;
-          const chromeRuntime = (globalThis as any).chrome?.runtime;
-          if (chromeDownloads?.download) {
-            await new Promise<void>((resolve, reject) => {
-              chromeDownloads.download({ url, filename: fileName, saveAs: true }, () => {
-                const lastError = chromeRuntime?.lastError;
-                if (lastError) {
-                  reject(new Error(lastError.message || "浏览器下载失败"));
-                  return;
-                }
-                resolve();
-              });
-            });
-            setActionStatus(`浏览器已弹出保存对话框：${fileName}`);
-            pushActivity(`已触发浏览器保存：${targetFilePath}`);
-            appendTransferHistory({
-              direction: "download",
-              status: "success",
-              fileName,
-              filePath: targetFilePath,
-              size: blob.size || downloadedBytes,
-              message: "浏览器已弹出保存对话框",
-            });
-            updateToast(tid, "success", `请选择保存位置：${fileName}`);
-          } else {
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = fileName;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            setActionStatus(`浏览器已开始下载 ${fileName}`);
-            pushActivity(`已触发浏览器下载：${targetFilePath}`);
-            appendTransferHistory({
-              direction: "download",
-              status: "success",
-              fileName,
-              filePath: targetFilePath,
-              size: blob.size || downloadedBytes,
-              message: "浏览器已开始下载",
-            });
-            updateToast(tid, "success", `已开始下载 ${fileName}`);
-          }
-        } finally {
-          window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-        }
-        return;
-      }
-      return;
-    } catch (error) {
-      const detail = error instanceof Error ? error.message : "未知错误";
-      setActionStatus(`下载失败：${detail}`);
-      pushActivity(`下载失败：${detail}`);
-      appendTransferHistory({
-        direction: "download",
-        status: "error",
-        fileName,
-        filePath: targetFilePath,
-        size: downloadedBytes,
-        message: detail,
-      });
-      updateToast(tid, "error", `下载失败：${detail}`);
-    } finally {
-      setDownloadProgress(null);
-    }
-  }
+  const {
+    downloadFile,
+    uploadFiles,
+    uploadDirectory,
+    handleFileDrop,
+  } = useFileTransfer({
+    serverId,
+    directoryPath,
+    isBusy,
+    setDownloadProgress,
+    setUploadProgress,
+    setActionStatus,
+    pushActivity,
+    showToast,
+    updateToast,
+    dismissToast,
+    appendTransferHistory,
+    browseLogFiles,
+    setIsDragOver,
+  });
 
-  async function uploadOneFile(file: File, targetPath: string): Promise<void> {
-    const CHUNK_THRESHOLD = 10 * 1024 * 1024;
-
-    if (file.size < CHUNK_THRESHOLD) {
-      await apiUploadSmall(serverId!, targetPath, file);
-      setUploadProgress((prev) => prev ? { ...prev, current: 100, bytesUploaded: file.size, speed: 0 } : null);
-      return;
-    }
-
-    const chunkSize = Math.max(1 * 1024 * 1024, Math.min(8 * 1024 * 1024, Math.ceil(file.size / 50)));
-    const totalChunks = Math.ceil(file.size / chunkSize);
-
-    const uploadId = await apiUploadStart(serverId, targetPath);
-
-    let offset = 0;
-    let speedSampleTime = Date.now();
-    let speedSampleOffset = 0;
-    let speed = 0;
-
-    for (let i = 0; i < totalChunks; i++) {
-      const end = Math.min(offset + chunkSize, file.size);
-      const blob = file.slice(offset, end);
-      await apiUploadChunk(uploadId, blob);
-
-      offset = end;
-      const now = Date.now();
-      const elapsed = (now - speedSampleTime) / 1000;
-      if (elapsed >= 0.5) {
-        speed = (offset - speedSampleOffset) / elapsed;
-        speedSampleTime = now;
-        speedSampleOffset = offset;
-      }
-      setUploadProgress((prev) => prev ? { ...prev, current: Math.round((offset / file.size) * 100), bytesUploaded: offset, speed } : null);
-    }
-
-    await apiUploadFinish(uploadId);
-  }
-
-  const UPLOAD_JUNK_FILES = new Set([
-    ".DS_Store", "._.DS_Store", "Thumbs.db", "thumbs.db", "desktop.ini", "Desktop.ini",
-    ".Spotlight-V100", ".Trashes", "__MACOSX", ".fseventsd", ".TemporaryItems",
-    "ehthumbs.db", "ehthumbs_vista.db", "$RECYCLE.BIN", "System Volume Information",
-  ].map((name) => name.toLowerCase()));
-  function isJunkFile(name: string): boolean {
-    const normalized = (name || "").trim().toLowerCase();
-    return UPLOAD_JUNK_FILES.has(normalized) || normalized.startsWith("._");
-  }
-
-  function getUploadRelativePath(file: File): string {
-    return String((file as { webkitRelativePath?: string }).webkitRelativePath || file.name || "").replace(/^\/+/, "");
-  }
-
-  function getUploadLocalPath(file: File): string {
-    const localPath = String((file as { path?: string }).path || "").trim();
-    if (localPath) {
-      return localPath;
-    }
-    return getUploadRelativePath(file);
-  }
-
-  function isJunkUploadPath(relativePath: string): boolean {
-    const segments = relativePath
-      .split("/")
-      .map((segment) => segment.trim())
-      .filter(Boolean);
-    return segments.some((segment) => isJunkFile(segment));
-  }
-
-  function splitUploadFiles(fileList: File[]) {
-    const accepted: File[] = [];
-    const skipped: File[] = [];
-
-    for (const file of fileList) {
-      const relativePath = getUploadRelativePath(file);
-      if (!relativePath || isJunkUploadPath(relativePath)) {
-        skipped.push(file);
-        continue;
-      }
-      accepted.push(file);
-    }
-
-    return { accepted, skipped };
-  }
-
-  async function collectFilesFromEntries(entries: FileSystemEntry[]): Promise<File[]> {
-    const files: File[] = [];
-    async function readAllEntries(reader: FileSystemDirectoryReader): Promise<FileSystemEntry[]> {
-      const all: FileSystemEntry[] = [];
-      let batch: FileSystemEntry[];
-      do {
-        batch = await new Promise<FileSystemEntry[]>((resolve, reject) => reader.readEntries(resolve, reject));
-        all.push(...batch);
-      } while (batch.length > 0);
-      return all;
-    }
-    async function traverse(entry: FileSystemEntry, pathPrefix: string) {
-      if (entry.isFile) {
-        const fileEntry = entry as FileSystemFileEntry;
-        const file = await new Promise<File>((resolve, reject) => fileEntry.file(resolve, reject));
-        const relativePath = pathPrefix ? `${pathPrefix}/${entry.name}` : entry.name;
-        Object.defineProperty(file, "webkitRelativePath", { value: relativePath, writable: false });
-        files.push(file);
-      } else if (entry.isDirectory) {
-        if (isJunkFile(entry.name)) return;
-        const dirEntry = entry as FileSystemDirectoryEntry;
-        const reader = dirEntry.createReader();
-        const subEntries = await readAllEntries(reader);
-        const nextPrefix = pathPrefix ? `${pathPrefix}/${entry.name}` : entry.name;
-        for (const sub of subEntries) await traverse(sub, nextPrefix);
-      }
-    }
-    for (const entry of entries) await traverse(entry, "");
-    return files;
-  }
-
-  async function uploadFileList(fileList: File[]) {
-    if (!serverId || !directoryPath || fileList.length === 0) return;
-    const { accepted, skipped } = splitUploadFiles(fileList);
-    if (accepted.length === 0) {
-      const message = skipped.length > 0 ? `已过滤 ${skipped.length} 个垃圾文件，无需上传` : "没有可上传的文件";
-      setActionStatus(message);
-      pushActivity(message);
-      showToast("success", message);
-      return;
-    }
-    const skippedCount = skipped.length;
-    const total = accepted.length;
-    const uploadDir = directoryPath.endsWith("/") ? directoryPath.slice(0, -1) : directoryPath;
-    let currentUpload: { fileName: string; relativePath: string; localPath: string; targetPath: string; size: number } | null = null;
-    setActionStatus(`正在上传 ${total} 个文件${skippedCount ? `（已过滤 ${skippedCount} 个垃圾文件）` : ""}...`);
-    const tid = showToast("loading", `正在上传 ${total} 个文件${skippedCount ? `（已过滤 ${skippedCount} 个垃圾文件）` : ""}...`);
-    try {
-      for (let i = 0; i < accepted.length; i++) {
-        const file = accepted[i];
-        const relativePath = getUploadRelativePath(file);
-        const localPath = getUploadLocalPath(file);
-        const targetPath = `${uploadDir}/${relativePath}`;
-        currentUpload = { fileName: file.name, relativePath, localPath, targetPath, size: file.size };
-        setUploadProgress({ current: 0, total, fileName: `(${i + 1}/${total}) ${relativePath}`, fileSize: file.size, bytesUploaded: 0, speed: 0 });
-        updateToast(tid, "loading", `正在上传 (${i + 1}/${total}) ${relativePath}...`);
-        await uploadOneFile(file, targetPath);
-        pushActivity(`已上传文件：${targetPath}`);
-        appendTransferHistory({
-          direction: "upload",
-          status: "success",
-          fileName: file.name,
-          filePath: targetPath,
-          size: file.size,
-          localPath,
-        });
-      }
-      setActionStatus(`已上传 ${total} 个文件到 ${uploadDir}${skippedCount ? `（跳过 ${skippedCount} 个垃圾文件）` : ""}`);
-      updateToast(tid, "success", skippedCount ? `已上传 ${total} 个文件，已过滤 ${skippedCount} 个垃圾文件` : `已上传 ${total} 个文件`);
-      await browseLogFiles(uploadDir);
-    } catch (error) {
-      const detail = error instanceof Error ? error.message : "未知错误";
-      setActionStatus(`上传失败：${detail}`);
-      pushActivity(`上传失败：${detail}`);
-      if (currentUpload) {
-        appendTransferHistory({
-          direction: "upload",
-          status: "error",
-          fileName: currentUpload.fileName,
-          filePath: currentUpload.targetPath,
-          size: currentUpload.size,
-          localPath: currentUpload.localPath,
-          message: detail,
-        });
-      }
-      updateToast(tid, "error", `上传失败：${detail}`);
-    } finally {
-      setUploadProgress(null);
-    }
-  }
-
-  async function uploadFiles() {
-    if (!serverId || !directoryPath) return;
-    const input = document.createElement("input");
-    input.type = "file";
-    input.multiple = true;
-    input.onchange = async () => {
-      const files = input.files;
-      if (!files || files.length === 0) return;
-      await uploadFileList(Array.from(files));
-    };
-    input.click();
-  }
-
-  async function uploadDirectory() {
-    if (!serverId || !directoryPath) return;
-    const input = document.createElement("input");
-    input.type = "file";
-    (input as any).webkitdirectory = true;
-    input.onchange = async () => {
-      const files = input.files;
-      if (!files || files.length === 0) return;
-      await uploadFileList(Array.from(files));
-    };
-    input.click();
-  }
-
-  function handleFileDrop(e: React.DragEvent) {
-    e.preventDefault();
-    setIsDragOver(false);
-    if (!serverId || !directoryPath || isBusy) return;
-
-    const items = e.dataTransfer.items;
-    if (items && items.length > 0) {
-      const entries: FileSystemEntry[] = [];
-      for (let i = 0; i < items.length; i++) {
-        const entry = items[i].webkitGetAsEntry?.();
-        if (entry) entries.push(entry);
-      }
-      if (entries.some((en) => en.isDirectory)) {
-        void (async () => {
-          const allFiles = await collectFilesFromEntries(entries);
-          if (allFiles.length > 0) void uploadFileList(allFiles);
-        })();
-        return;
-      }
-    }
-
-    const files = Array.from(e.dataTransfer.files);
-    if (files.length === 0) return;
-    void uploadFileList(files);
-  }
-
-  function deleteRemoteFile(targetFile: string | LogFileEntry) {
-    if (!serverId) return;
-    const entry = typeof targetFile === "string"
-      ? { path: targetFile, name: targetFile.split("/").pop() || targetFile, kind: "file" as const }
-      : targetFile;
-    const fileName = entry.name || entry.path.split("/").pop() || entry.path;
-    const targetLabel = entry.kind === "directory" ? "目录" : "文件";
-    const refreshPath = directoryPath && (directoryPath === entry.path || directoryPath.startsWith(`${entry.path}/`))
-      ? entry.path.substring(0, entry.path.lastIndexOf("/")) || "/"
-      : directoryPath;
-    setConfirmDialog({
-      title: `删除${targetLabel}`,
-      message: entry.kind === "directory" ? `确定删除远程目录及其内容？\n${entry.path}` : `确定删除远程文件？\n${entry.path}`,
-      danger: true,
-      onConfirm: () => {
-        void withBusy(`正在删除${targetLabel} ${fileName}...`, async () => {
-          await apiDeleteFile(serverId, entry.path);
-          setActionStatus(`已删除 ${fileName}`);
-          pushActivity(`已删除${targetLabel}：${entry.path}`);
-          if (refreshPath) await browseLogFiles(refreshPath);
-        }, `已删除 ${fileName}`);
-      }
-    });
-  }
-
-  function toggleFileSelection(entryPath: string, nextSelected?: boolean) {
-    setSelectedFilePaths((current) => {
-      const next = new Set(current);
-      const shouldSelect = nextSelected ?? !next.has(entryPath);
-      if (shouldSelect) {
-        next.add(entryPath);
-      } else {
-        next.delete(entryPath);
-      }
-      return [...next];
-    });
-  }
-
-  function clearSelectedFiles() {
-    setSelectedFilePaths([]);
-  }
-
-  function toggleAllVisibleFiles(nextSelected: boolean) {
-    setSelectedFilePaths((current) => {
-      const next = new Set(current);
-      for (const entry of tableEntries) {
-        if (nextSelected) {
-          next.add(entry.path);
-        } else {
-          next.delete(entry.path);
-        }
-      }
-      return [...next];
-    });
-  }
-
-  async function deleteRemoteEntries(entries: LogFileEntry[]) {
-    if (!serverId || entries.length === 0) return;
-    const targetCount = entries.length;
-    await withBusy(`正在删除 ${targetCount} 项...`, async () => {
-      for (let index = 0; index < entries.length; index += 1) {
-        const entry = entries[index];
-        try {
-          await apiDeleteFile(serverId, entry.path);
-        } catch (error) {
-          const detail = error instanceof Error ? error.message : "未知错误";
-          throw new Error(`${detail}（已完成 ${index}/${targetCount}）`);
-        }
-      }
-      clearSelectedFiles();
-      setActionStatus(`已删除 ${targetCount} 项`);
-      pushActivity(`批量删除 ${targetCount} 项：${entries.map((entry) => entry.path).join(" | ")}`);
-      if (directoryPath) await browseLogFiles(directoryPath);
-    }, `已删除 ${targetCount} 项`);
-  }
-
-  function confirmDeleteSelectedFiles(entries: LogFileEntry[] = selectedFileEntries) {
-    if (!serverId || entries.length === 0) return;
-    const targetCount = entries.length;
-    const directoryCount = entries.filter((entry) => entry.kind === "directory").length;
-    const fileCount = targetCount - directoryCount;
-    const summary = targetCount === 1
-      ? entries[0].path
-      : `${fileCount > 0 ? `${fileCount} 个文件` : ""}${fileCount > 0 && directoryCount > 0 ? "，" : ""}${directoryCount > 0 ? `${directoryCount} 个目录` : ""}`;
-    setConfirmDialog({
-      title: targetCount === 1 ? `删除${entries[0].kind === "directory" ? "目录" : "文件"}` : `批量删除 ${targetCount} 项`,
-      message: targetCount === 1 ? `确定删除？\n${entries[0].path}` : `确定批量删除以下内容？\n${summary}`,
-      danger: true,
-      onConfirm: () => {
-        void deleteRemoteEntries(entries);
-      }
-    });
-  }
-
-  function openRenameDialog(entry: LogFileEntry) {
-    setRenameDialog({ entry, newName: entry.name });
-  }
-
-  async function renameRemoteFile(entry: LogFileEntry, newName: string) {
-    if (!serverId || !newName.trim() || newName === entry.name) return;
-    const parentDir = entry.path.substring(0, entry.path.lastIndexOf("/")) || "/";
-    const newPath = parentDir + "/" + newName.trim();
-    await withBusy(`正在重命名 ${entry.name}...`, async () => {
-      await apiRenameFile(serverId, entry.path, newPath);
-      setActionStatus(`已重命名 ${entry.name} → ${newName.trim()}`);
-      pushActivity(`重命名：${entry.name} → ${newName.trim()}`);
-      if (directoryPath) await browseLogFiles(directoryPath);
-    }, `已重命名 ${entry.name} → ${newName.trim()}`);
-  }
-
-  function openMoveDialog(entry: LogFileEntry) {
-    setMoveDialog({ entry, targetDir: directoryPath || "/" });
-  }
-
-  function openBatchMoveDialog(entries: LogFileEntry[] = selectedFileEntries) {
-    if (!entries.length) return;
-    setBatchMoveDialog({ entries, targetDir: directoryPath || "/" });
-  }
-
-  function buildMovedPath(targetDir: string, entryName: string) {
-    const normalizedTargetDir = targetDir.trim().replace(/\/+$/, "") || "/";
-    return normalizedTargetDir === "/" ? `/${entryName}` : `${normalizedTargetDir}/${entryName}`;
-  }
-
-  async function moveRemoteFile(entry: LogFileEntry, targetDir: string) {
-    if (!serverId || !targetDir.trim()) return;
-    const newPath = buildMovedPath(targetDir, entry.name);
-    if (newPath === entry.path) return;
-    await withBusy(`正在移动 ${entry.name}...`, async () => {
-      await apiRenameFile(serverId, entry.path, newPath);
-      setActionStatus(`已移动 ${entry.name} → ${targetDir}`);
-      pushActivity(`移动：${entry.path} → ${newPath}`);
-      if (directoryPath) await browseLogFiles(directoryPath);
-    }, `已移动 ${entry.name}`);
-  }
-
-  async function moveRemoteEntries(entries: LogFileEntry[], targetDir: string) {
-    if (!serverId || !targetDir.trim() || entries.length === 0) return;
-    const moveTargets = entries
-      .map((entry) => ({ entry, newPath: buildMovedPath(targetDir, entry.name) }))
-      .filter(({ entry, newPath }) => newPath !== entry.path);
-    if (moveTargets.length === 0) return;
-    await withBusy(`正在移动 ${moveTargets.length} 项...`, async () => {
-      for (let index = 0; index < moveTargets.length; index += 1) {
-        const { entry, newPath } = moveTargets[index];
-        try {
-          await apiRenameFile(serverId, entry.path, newPath);
-        } catch (error) {
-          const detail = error instanceof Error ? error.message : "未知错误";
-          throw new Error(`${detail}（已完成 ${index}/${moveTargets.length}）`);
-        }
-      }
-      clearSelectedFiles();
-      setActionStatus(`已移动 ${moveTargets.length} 项 → ${targetDir}`);
-      pushActivity(`批量移动 ${moveTargets.length} 项到 ${targetDir}`);
-      if (directoryPath) await browseLogFiles(directoryPath);
-    }, `已移动 ${moveTargets.length} 项`);
-  }
-
-  async function extractZipFile(filePath: string, targetDir?: string) {
-    if (!serverId) return;
-    const fileName = filePath.split("/").pop() || filePath;
-    await withBusy(`正在解压 ${fileName}...`, async () => {
-      const result = await apiExtractZip(serverId, filePath, targetDir);
-      setActionStatus(`已解压 ${fileName} 到 ${result.targetDir}`);
-      pushActivity(`已解压：${filePath} → ${result.targetDir}`);
-      if (directoryPath) await browseLogFiles(directoryPath);
-    }, `已解压 ${fileName}`);
-  }
-
-  async function mkdirRemoteDir(parentDir: string, dirName: string) {
-    if (!serverId || !dirName.trim()) return;
-    const fullPath = parentDir === "/" ? `/${dirName.trim()}` : `${parentDir}/${dirName.trim()}`;
-    await withBusy(`正在创建目录 ${dirName.trim()}...`, async () => {
-      await apiMkdir(serverId, fullPath);
-      setActionStatus(`已创建目录 ${dirName.trim()}`);
-      pushActivity(`新建目录：${fullPath}`);
-      if (directoryPath) await browseLogFiles(directoryPath);
-    }, `已创建目录 ${dirName.trim()}`);
-  }
-
-  async function compressRemotePath(sourcePath: string, archiveType: "tar.gz" | "zip", targetDir?: string) {
-    if (!serverId) return;
-    const sourceName = sourcePath.split("/").pop() || sourcePath;
-    await withBusy(`正在压缩 ${sourceName}...`, async () => {
-      const result = await apiCompress(serverId, sourcePath, archiveType, targetDir);
-      setActionStatus(`已压缩 ${sourceName} → ${result.archivePath}`);
-      pushActivity(`压缩：${sourcePath} → ${result.archivePath}`);
-      if (directoryPath) await browseLogFiles(directoryPath);
-    }, `已压缩 ${sourceName}`);
-  }
-
-  async function previewFile(entry: LogFileEntry) {
-    if (isBusy || !serverId || entry.kind !== "file") return;
-    const sizeBytes = typeof entry.size === "number" ? entry.size : 0;
-    const editLimit = 10 * 1024 * 1024;
-    if (sizeBytes > editLimit) {
-      setConfirmDialog({
-        title: "大文件预览",
-        message: `文件较大（${formatBytes(sizeBytes)}），将以只读模式显示尾部内容。`,
-        onConfirm: () => void doLoadFile(entry),
-      });
-      return;
-    }
-    const warnLimit = 2 * 1024 * 1024;
-    if (sizeBytes > warnLimit) {
-      setConfirmDialog({
-        title: "大文件编辑",
-        message: `文件较大（${formatBytes(sizeBytes)}），加载可能需要较长时间，是否继续？`,
-        onConfirm: () => void doLoadFile(entry),
-      });
-      return;
-    }
-    void doLoadFile(entry);
-  }
-
-  async function doLoadFile(entry: LogFileEntry) {
-    setPreviewDialog({ filePath: entry.path, fileName: entry.name, content: "", originalContent: "", size: typeof entry.size === "number" ? entry.size : 0, loading: true });
-    try {
-      const data = await apiPreviewFile(serverId, entry.path);
-      setPreviewDialog({ filePath: data.filePath, fileName: entry.name, content: data.content, originalContent: data.content, size: data.size, readOnly: data.readOnly });
-      pushActivity(`${data.readOnly ? "预览" : "打开"}文件：${entry.name}（${formatBytes(data.size)}）`);
-    } catch (error) {
-      setPreviewDialog(null);
-      setActionStatus(`加载失败：${error instanceof Error ? error.message : "未知错误"}`);
-    }
-  }
-
-  async function saveFileContent() {
-    if (!previewDialog || !serverId) return;
-    if (previewDialog.content === previewDialog.originalContent) return;
-    setPreviewDialog((prev) => prev ? { ...prev, saving: true } : null);
-    const tid = showToast("loading", `正在保存 ${previewDialog.fileName}...`);
-    try {
-      await apiSaveFile(serverId, previewDialog.filePath, previewDialog.content);
-      setPreviewDialog((prev) => prev ? { ...prev, originalContent: prev.content, saving: false } : null);
-      setActionStatus(`已保存 ${previewDialog.fileName}`);
-      pushActivity(`保存文件：${previewDialog.filePath}`);
-      updateToast(tid, "success", `已保存 ${previewDialog.fileName}`);
-    } catch (error) {
-      setPreviewDialog((prev) => prev ? { ...prev, saving: false } : null);
-      const detail = error instanceof Error ? error.message : "未知错误";
-      setActionStatus(`保存失败：${detail}`);
-      updateToast(tid, "error", `保存失败：${detail}`);
-    }
-  }
+  const {
+    deleteRemoteFile,
+    deleteRemoteEntries,
+    confirmDeleteSelectedFiles,
+    toggleFileSelection,
+    clearSelectedFiles,
+    toggleAllVisibleFiles,
+    openRenameDialog,
+    renameRemoteFile,
+    openMoveDialog,
+    openBatchMoveDialog,
+    buildMovedPath,
+    moveRemoteFile,
+    moveRemoteEntries,
+    extractZipFile,
+    mkdirRemoteDir,
+    compressRemotePath,
+    previewFile,
+    doLoadFile,
+    saveFileContent,
+  } = useFileOperations({
+    serverId,
+    directoryPath,
+    isBusy,
+    selectedFileEntries,
+    tableEntries,
+    selectedFilePaths,
+    previewDialog,
+    setConfirmDialog,
+    setRenameDialog,
+    setMoveDialog,
+    setBatchMoveDialog,
+    setPreviewDialog,
+    setSelectedFilePaths,
+    setActionStatus,
+    pushActivity,
+    showToast,
+    updateToast,
+    withBusy,
+    browseLogFiles,
+  });
 
   async function openEntry(entry: LogFileEntry) {
     if (entry.kind === "directory") {
@@ -4711,177 +2915,48 @@ export function App() {
   return (
     <main className={`app-shell${uiTheme === "modern" ? " theme-modern" : ""}${isElectron ? " electron-immersive" : ""}${isElectron && isMacOS ? " electron-macos-immersive" : ""}${isStandalonePipWindow ? " pip-standalone" : ""}`}>
       <section className="shell-layout">
-        <aside className="sidebar-panel">
-          <div className="sidebar-head">
-            <div className="sidebar-head-row">
-              <div className="sidebar-head-title">
-                <p className="eyebrow">日志控制台</p>
-                <h1 className="topbar-title">日志控制台</h1>
-              </div>
-              <div className="sidebar-head-buttons">
-                <button
-                  className="ghost-button icon-button"
-                  title={showConnectionSettings ? "关闭设置" : "打开设置"}
-                  onClick={() => {
-                    if (showConnectionSettings) {
-                      closeSettingsWorkspace();
-                      return;
-                    }
-                    openSettingsWorkspace();
-                  }}
-                >
-                  <ToolIcon theme={uiTheme} kind="settings" />
-                </button>
-              </div>
-            </div>
-            <p className="status-inline">{actionStatus}</p>
-          </div>
-
-          <section className="pane-section">
-            <div className="pane-title-row"><strong className="pane-title">服务器</strong>{servers.length > 0 && <span>{servers.length} 台</span>}</div>
-            <input
-              value={serverFilter}
-              onChange={(event) => setServerFilter(event.target.value)}
-              placeholder="输入名称、分组或地址"
-            />
-          </section>
-
-          <div className="server-groups pane-section">
-            {showServiceOfflineState ? (
-              <div className="empty-box sidebar-empty-box">
-                <strong>{isElectron ? "正在等待内置连接服务启动" : "本地服务未启动"}</strong>
-                <span>{isElectron ? "应用会自动重试连接本地服务；如果长时间没有恢复，我会继续排查安装版启动链路。" : "请在终端执行 npm run dev:gateway 启动本地连接服务，然后点击下方\"检查服务\"。"}</span>
-              </div>
-            ) : filteredGroupedServers.length ? (
-              filteredGroupedServers.map(([groupName, groupServers]) => (
-                <section key={groupName} className="server-group">
-                  <div className="server-group-title">{groupName}</div>
-                  <div className="server-list">
-                    {groupServers
-                      .map((server) => (
-                        <button
-                          key={server.id}
-                          type="button"
-                          className={`server-item ${server.id === serverId ? "server-item-active" : ""}`}
-                          onClick={() => {
-                            selectServerById(server.id);
-                          }}
-                        >
-                          <span className={`server-status-dot ${server.id === serverId ? (connectionTestStatus?.connected ? "dot-connected" : "dot-pending") : "dot-idle"}`} />
-                          <span className="server-item-main">
-                            <strong>{server.name}</strong>
-                            <span>{server.host}</span>
-                          </span>
-                          <span className="server-item-meta">{server.port}</span>
-                        </button>
-                      ))}
-                  </div>
-                </section>
-              ))
-            ) : (
-              <div className="empty-box sidebar-empty-box">
-                <strong>还没有服务器</strong>
-                <span>检查 FinalShell 目录后导入，或手动补录连接信息。</span>
-              </div>
-            )}
-          </div>
-
-          <div className="status-card status-grid pane-section compact-connection-card">
-            <div className="pane-title">连接概览</div>
-            <div className="status-row"><span>本地服务</span><strong>{localServiceStatusText}</strong></div>
-            <div className="status-row"><span>服务器</span><strong>{connectionStateText}</strong></div>
-            <div className="status-row"><span>主机</span><strong>{selectedServer ? `${selectedServer.username}@${selectedServer.host}` : "--"}</strong></div>
-            <div className="status-row status-row-path"><span>路径</span><strong>{directoryPath || "/"}</strong></div>
-          </div>
-
-          <section className="activity-panel pane-section compact-activity-panel" style={{ height: activityPanelHeight }}>
-            <div
-              className="activity-panel-resizer"
-              onPointerDown={handleActivityPanelResizeStart}
-              role="separator"
-              aria-orientation="horizontal"
-              aria-label="调整操作记录高度"
-            />
-            <div className="browser-column-head pane-title-row">
-              <strong className="pane-title">操作记录</strong>
-              <span>{sidebarActivityLines.length} 条</span>
-            </div>
-            <div className="activity-log-list compact-activity-log-list">
-              {sidebarActivityLines.map((line, index) => {
-                const text = line.replace(/^\[[^\]]+\]\s*/, "");
-                return (
-                  <div key={index} className="activity-log-line">
-                    <span className="activity-log-msg">{text}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </section>
-        </aside>
+        <SidebarPanel
+          uiTheme={uiTheme}
+          isElectron={isElectron}
+          showConnectionSettings={showConnectionSettings}
+          actionStatus={actionStatus}
+          serverFilter={serverFilter}
+          onServerFilterChange={setServerFilter}
+          servers={servers}
+          serverId={serverId}
+          selectServerById={selectServerById}
+          connectionTestStatus={connectionTestStatus}
+          showServiceOfflineState={showServiceOfflineState}
+          filteredGroupedServers={filteredGroupedServers}
+          localServiceStatusText={localServiceStatusText}
+          connectionStateText={connectionStateText}
+          selectedServer={selectedServer}
+          directoryPath={directoryPath}
+          activityPanelHeight={activityPanelHeight}
+          sidebarActivityLines={sidebarActivityLines}
+          onOpenSettingsWorkspace={openSettingsWorkspace}
+          onCloseSettingsWorkspace={closeSettingsWorkspace}
+          onActivityPanelResizeStart={handleActivityPanelResizeStart}
+        />
 
       <section className={`main-panel ${isFileMode ? "main-panel-files" : ""}${(terminalPanelOpen || terminalDetached) ? " main-panel-with-terminal" : ""}`}>
           {!isStandalonePipWindow && workspaceSessions.length > 0 ? (
-            <div className="workspace-session-strip">
-              <div className="workspace-session-tabs-shell">
-                <div className="workspace-session-strip-head">
-                  <span className="workspace-session-strip-label">工作区</span>
-                  <span className="workspace-session-strip-count">共 {workspaceSessions.length} 个</span>
-                </div>
-                <div className="workspace-session-tabs">
-                  {workspaceSessions.map((session) => {
-                    const isActiveSession = session.id === activeWorkspaceSessionId;
-                    const isDraggingSession = workspaceTabDragState.draggedSessionId === session.id;
-                    const dropPosition = workspaceTabDragState.targetSessionId === session.id ? workspaceTabDragState.position : null;
-                    return (
-                      <div
-                        key={session.id}
-                        className={`workspace-session-tab ${isActiveSession ? "workspace-session-tab-active" : ""}${!isWorkspaceSwitchLocked ? " workspace-session-tab-draggable" : ""}${isDraggingSession ? " workspace-session-tab-dragging" : ""}${dropPosition ? ` workspace-session-tab-drop-${dropPosition}` : ""}`}
-                        draggable={!isWorkspaceSwitchLocked}
-                        onDragStart={(event) => handleWorkspaceTabDragStart(event, session.id)}
-                        onDragOver={(event) => handleWorkspaceTabDragOver(event, session.id)}
-                        onDrop={(event) => handleWorkspaceTabDrop(event, session.id)}
-                        onDragEnd={handleWorkspaceTabDragEnd}
-                        onContextMenu={(event) => {
-                          event.preventDefault();
-                          const menuWidth = 160;
-                          const menuHeight = 140;
-                          const nextX = Math.min(Math.max(8, event.clientX), Math.max(8, window.innerWidth - menuWidth - 8));
-                          const nextY = Math.min(Math.max(8, event.clientY), Math.max(8, window.innerHeight - menuHeight - 8));
-                          setWorkspaceTabMenu({ x: nextX, y: nextY, session });
-                        }}
-                      >
-                        <button
-                          className="workspace-session-tab-trigger"
-                          type="button"
-                          title={session.serverHost ? `${session.serverName} · ${session.serverHost}` : session.serverName}
-                          disabled={isWorkspaceSwitchLocked && !isActiveSession}
-                          draggable={false}
-                          onClick={() => {
-                            if (workspaceTabDragJustMovedRef.current) {
-                              workspaceTabDragJustMovedRef.current = false;
-                              return;
-                            }
-                            activateWorkspaceSession(session);
-                          }}
-                        >
-                          <span className="workspace-session-tab-label">{session.serverName}</span>
-                        </button>
-                        <button
-                          className="ghost-button icon-button workspace-session-tab-close"
-                          type="button"
-                          aria-label={`关闭 ${session.serverName}`}
-                          disabled={isWorkspaceSwitchLocked}
-                          draggable={false}
-                          onClick={() => closeWorkspaceSession(session.id)}
-                        >
-                          <X size={12} strokeWidth={1.5} />
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
+            <WorkspaceSessionTabs
+              workspaceSessions={workspaceSessions}
+              activeWorkspaceSessionId={activeWorkspaceSessionId}
+              isWorkspaceSwitchLocked={isWorkspaceSwitchLocked}
+              workspaceTabDragState={workspaceTabDragState}
+              workspaceTabDragJustMovedRef={workspaceTabDragJustMovedRef}
+              onActivateSession={activateWorkspaceSession}
+              onCloseSession={closeWorkspaceSession}
+              onContextMenu={setWorkspaceTabMenu}
+              dragAPI={{
+                handleWorkspaceTabDragStart,
+                handleWorkspaceTabDragOver,
+                handleWorkspaceTabDrop,
+                handleWorkspaceTabDragEnd,
+              }}
+            />
           ) : null}
           <section className="toolbar-panel">
             <div className="toolbar-commandbar">
@@ -4993,40 +3068,16 @@ export function App() {
           </section>
 
           <section className={`workspace-panel ${isFileMode ? "workspace-panel-files" : ""}`}>
-            {showServiceOfflineState ? (
-              <div className="workspace-startup-card">
-                <div className="workspace-startup-head">
-                  <strong>{isElectron ? "正在等待内置连接服务启动" : "本地连接服务未启动"}</strong>
-                  <span>{isElectron ? "安装版会自动拉起内置连接服务；恢复后页面会自动刷新服务器与目录状态。" : "步骤：1. 在项目根目录执行 npm run dev:gateway 2. 点击右侧\"检查服务\" 3. 服务就绪后导入 FinalShell 或手动添加服务器"}</span>
-                </div>
-                <div className="toolbar-inline">
-                  <button className="ghost-button" type="button" onClick={() => void checkLocalServiceHealth()}>
-                    检查服务
-                  </button>
-                  <button className="ghost-button" type="button" onClick={() => openSettingsWorkspace("overview")}>
-                    连接设置
-                  </button>
-                </div>
-              </div>
-            ) : showNoServerState ? (
-              <div className="workspace-startup-card">
-                <div className="workspace-startup-head">
-                  <strong>本地服务已启动，但还没有服务器</strong>
-                  <span>导入 FinalShell 连接后，左侧会自动出现服务器列表。</span>
-                </div>
-                <div className="toolbar-inline">
-                  <button className="ghost-button" type="button" onClick={() => openSettingsWorkspace("overview")}>
-                    连接设置
-                  </button>
-                  <button className="ghost-button" type="button" onClick={importFromFinalShell}>
-                    立即导入
-                  </button>
-                  <button className="ghost-button" type="button" onClick={() => void fetchServers()}>
-                    刷新列表
-                  </button>
-                </div>
-              </div>
-            ) : (
+            <WorkspaceStartupCards
+              showServiceOfflineState={showServiceOfflineState}
+              showNoServerState={showNoServerState}
+              isElectron={isElectron}
+              onCheckService={checkLocalServiceHealth}
+              onOpenSettings={openSettingsWorkspace}
+              onImportFinalShell={importFromFinalShell}
+              onRefreshServers={fetchServers}
+            />
+            {!showServiceOfflineState && !showNoServerState && (
               <>
                 {(!isFileMode || pip.isPip) ? (
                 <div style={isFileMode ? { display: "none" } : { display: "contents" }}>
@@ -5667,7 +3718,7 @@ export function App() {
                 )}
               </>
               ) : null}
-              </>
+            </>
             )}
           </section>
 
@@ -5713,23 +3764,7 @@ export function App() {
 
         </section>
 
-        {showConnectionSettings && !isStandalonePipWindow ? (
-          <div className="settings-modal-backdrop" role="presentation" onClick={closeSettingsWorkspace}>
-            <div
-              className="settings-modal-shell"
-              role="dialog"
-              aria-modal="true"
-              aria-label="连接设置"
-              onClick={(event) => event.stopPropagation()}
-            >
-              <button
-                className="ghost-button icon-button settings-modal-close"
-                type="button"
-                aria-label="关闭设置"
-                onClick={closeSettingsWorkspace}
-              >
-                <X size={16} strokeWidth={1.75} />
-              </button>
+        <SettingsModalOverlay open={showConnectionSettings && !isStandalonePipWindow} onClose={closeSettingsWorkspace}>
             <ConnectionSettingsWorkspace
               activeView={settingsWorkspaceView}
               onViewChange={setSettingsWorkspaceView}
@@ -5793,9 +3828,7 @@ export function App() {
                 onSaveRoute: () => { void saveServerRouteForServer(); },
               }}
             />
-            </div>
-          </div>
-        ) : null}
+        </SettingsModalOverlay>
       </section>
       <FileContextMenu
         menu={contextMenu}
@@ -5828,48 +3861,23 @@ export function App() {
         }}
       />
 
-      {workspaceTabMenu ? (
-        <div className="context-menu-backdrop">
-          <div
-            ref={workspaceTabMenuRef}
-            className="context-menu"
-            style={{ left: workspaceTabMenu.x, top: workspaceTabMenu.y }}
-            onClick={(event) => event.stopPropagation()}
-            onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); }}
-          >
-            <div role="button" className="context-menu-item" onClick={() => {
-              setWorkspaceTabMenu(null);
-              void navigator.clipboard.writeText(workspaceTabMenu.session.serverName);
-              setActionStatus("已复制服务器名称");
-              showToast("success", "已复制服务器名称");
-            }}>
-              复制服务器名称
-            </div>
-            {workspaceTabMenu.session.serverHost ? (
-              <div role="button" className="context-menu-item" onClick={() => {
-                setWorkspaceTabMenu(null);
-                void navigator.clipboard.writeText(workspaceTabMenu.session.serverHost);
-                setActionStatus("已复制主机地址");
-                showToast("success", "已复制主机地址");
-              }}>
-                复制主机地址
-              </div>
-            ) : null}
-            <div role="button" className="context-menu-item" onClick={() => {
-              setWorkspaceTabMenu(null);
-              startCreateManualServer();
-            }}>
-              新增服务器
-            </div>
-            <div role="button" className="context-menu-item context-menu-danger" onClick={() => {
-              setWorkspaceTabMenu(null);
-              closeWorkspaceSession(workspaceTabMenu.session.id);
-            }}>
-              关闭工作区
-            </div>
-          </div>
-        </div>
-      ) : null}
+      <WorkspaceTabContextMenu
+        menu={workspaceTabMenu}
+        menuRef={workspaceTabMenuRef}
+        onClose={() => setWorkspaceTabMenu(null)}
+        onCopyServerName={(session) => {
+          void navigator.clipboard.writeText(session.serverName);
+          setActionStatus("已复制服务器名称");
+          showToast("success", "已复制服务器名称");
+        }}
+        onCopyServerHost={(session) => {
+          void navigator.clipboard.writeText(session.serverHost);
+          setActionStatus("已复制主机地址");
+          showToast("success", "已复制主机地址");
+        }}
+        onCreateServer={startCreateManualServer}
+        onCloseSession={closeWorkspaceSession}
+      />
 
       <FeedbackOverlays
         downloadProgress={downloadProgress}
@@ -5878,147 +3886,86 @@ export function App() {
         onDismissToast={dismissToast}
       />
 
-      <TextInputDialog
-        open={Boolean(renameDialog)}
-        title={`重命名${renameDialog?.entry.kind === "directory" ? "文件夹" : "文件"}`}
-        message={renameDialog?.entry.path}
-        value={renameDialog?.newName ?? ""}
-        confirmText="确定"
-        canConfirm={Boolean(renameDialog && renameDialog.newName.trim() && renameDialog.newName !== renameDialog.entry.name)}
-        onChange={(value) => setRenameDialog((prev) => prev ? { ...prev, newName: value } : null)}
-        onConfirm={() => {
+      <DialogOverlays
+        uiTheme={uiTheme}
+        renameDialog={renameDialog}
+        moveDialog={moveDialog}
+        batchMoveDialog={batchMoveDialog}
+        extractDialog={extractDialog}
+        mkdirDialog={mkdirDialog}
+        compressDialog={compressDialog}
+        previewDialog={previewDialog}
+        confirmDialog={confirmDialog}
+        showTransferHistory={showTransferHistory}
+        transferHistoryEntries={currentServerTransferHistory}
+        isElectron={isElectron}
+        formatBytes={formatBytes}
+        formatDateTime={formatDateTime}
+        onRenameDialogChange={(value) => setRenameDialog((prev) => prev ? { ...prev, newName: value } : null)}
+        onRenameDialogConfirm={() => {
           if (renameDialog && renameDialog.newName.trim() && renameDialog.newName !== renameDialog.entry.name) {
             void renameRemoteFile(renameDialog.entry, renameDialog.newName);
           }
         }}
-        onClose={() => setRenameDialog(null)}
-      />
-
-      <TextInputDialog
-        open={Boolean(moveDialog)}
-        title={`移动${moveDialog?.entry.kind === "directory" ? "文件夹" : "文件"}`}
-        message={moveDialog ? `当前：${moveDialog.entry.path}` : ""}
-        label="目标目录"
-        value={moveDialog?.targetDir ?? ""}
-        confirmText="移动"
-        placeholder="/home/app/target-dir"
-        canConfirm={Boolean(moveDialog?.targetDir.trim())}
-        onChange={(value) => setMoveDialog((prev) => prev ? { ...prev, targetDir: value } : null)}
-        onConfirm={() => {
+        onRenameDialogClose={() => setRenameDialog(null)}
+        onMoveDialogChange={(value) => setMoveDialog((prev) => prev ? { ...prev, targetDir: value } : null)}
+        onMoveDialogConfirm={() => {
           if (moveDialog?.targetDir.trim()) {
             void moveRemoteFile(moveDialog.entry, moveDialog.targetDir);
           }
         }}
-        onClose={() => setMoveDialog(null)}
-      />
-
-      <TextInputDialog
-        open={Boolean(batchMoveDialog)}
-        title={`批量移动 ${batchMoveDialog?.entries.length ?? 0} 项`}
-        message="目标将保留原文件名或目录名。"
-        label="目标目录"
-        value={batchMoveDialog?.targetDir ?? ""}
-        confirmText="移动"
-        placeholder="/home/app/target-dir"
-        canConfirm={Boolean(batchMoveDialog?.targetDir.trim())}
-        onChange={(value) => setBatchMoveDialog((prev) => prev ? { ...prev, targetDir: value } : null)}
-        onConfirm={() => {
+        onMoveDialogClose={() => setMoveDialog(null)}
+        onBatchMoveDialogChange={(value) => setBatchMoveDialog((prev) => prev ? { ...prev, targetDir: value } : null)}
+        onBatchMoveDialogConfirm={() => {
           if (batchMoveDialog?.targetDir.trim()) {
             void moveRemoteEntries(batchMoveDialog.entries, batchMoveDialog.targetDir);
           }
         }}
-        onClose={() => setBatchMoveDialog(null)}
-      />
-
-      <TextInputDialog
-        open={Boolean(extractDialog)}
-        title="解压文件"
-        message={extractDialog?.fileName}
-        label="目标目录"
-        value={extractDialog?.targetDir ?? ""}
-        confirmText="解压"
-        placeholder="/home/app/target-dir"
-        canConfirm={Boolean(extractDialog?.targetDir.trim())}
-        onChange={(value) => setExtractDialog((prev) => prev ? { ...prev, targetDir: value } : null)}
-        onConfirm={() => {
+        onBatchMoveDialogClose={() => setBatchMoveDialog(null)}
+        onExtractDialogChange={(value) => setExtractDialog((prev) => prev ? { ...prev, targetDir: value } : null)}
+        onExtractDialogConfirm={() => {
           if (extractDialog?.targetDir.trim()) {
             void extractZipFile(extractDialog.filePath, extractDialog.targetDir);
           }
         }}
-        onClose={() => setExtractDialog(null)}
-      />
-
-      <TextInputDialog
-        open={Boolean(mkdirDialog)}
-        title="新建目录"
-        message={mkdirDialog ? `在 ${mkdirDialog.parentDir} 下创建` : ""}
-        label="目录名称"
-        value={mkdirDialog?.dirName ?? ""}
-        confirmText="创建"
-        placeholder="new-directory"
-        canConfirm={Boolean(mkdirDialog?.dirName.trim())}
-        onChange={(value) => setMkdirDialog((prev) => prev ? { ...prev, dirName: value } : null)}
-        onConfirm={() => {
+        onExtractDialogClose={() => setExtractDialog(null)}
+        onMkdirDialogChange={(value) => setMkdirDialog((prev) => prev ? { ...prev, dirName: value } : null)}
+        onMkdirDialogConfirm={() => {
           if (mkdirDialog?.dirName.trim()) {
             void mkdirRemoteDir(mkdirDialog.parentDir, mkdirDialog.dirName);
           }
         }}
-        onClose={() => setMkdirDialog(null)}
-      />
-
-      <TextInputDialog
-        open={Boolean(compressDialog)}
-        title="压缩"
-        message={compressDialog?.sourcePath}
-        label="目标目录（留空则与源同目录）"
-        value={compressDialog?.targetDir ?? ""}
-        confirmText="压缩"
-        placeholder="/home/app/target-dir"
-        canConfirm={true}
-        onChange={(value) => setCompressDialog((prev) => prev ? { ...prev, targetDir: value } : null)}
-        onConfirm={() => {
+        onMkdirDialogClose={() => setMkdirDialog(null)}
+        onCompressDialogChange={(value) => setCompressDialog((prev) => prev ? { ...prev, targetDir: value } : null)}
+        onCompressDialogConfirm={() => {
           if (compressDialog) {
             void compressRemotePath(compressDialog.sourcePath, compressDialog.archiveType, compressDialog.targetDir.trim() || undefined);
           }
         }}
-        onClose={() => setCompressDialog(null)}
-      />
-
-      <FilePreviewDialog
-        dialog={previewDialog}
-        theme={uiTheme}
-        onChange={(value) => setPreviewDialog((prev) => prev ? { ...prev, content: value } : null)}
-        onDownload={() => {
+        onCompressDialogClose={() => setCompressDialog(null)}
+        onPreviewDialogChange={(value) => setPreviewDialog((prev) => prev ? { ...prev, content: value } : null)}
+        onPreviewDialogDownload={() => {
           if (previewDialog) {
             void downloadFile(previewDialog.filePath);
           }
         }}
-        onSave={() => void saveFileContent()}
-        onToggleMaximize={() => setPreviewDialog((prev) => prev ? { ...prev, maximized: !prev.maximized } : null)}
-        onClose={() => {
+        onPreviewDialogSave={() => void saveFileContent()}
+        onPreviewDialogToggleMaximize={() => setPreviewDialog((prev) => prev ? { ...prev, maximized: !prev.maximized } : null)}
+        onPreviewDialogClose={() => {
           if (previewDialog && !previewDialog.readOnly && previewDialog.content !== previewDialog.originalContent) {
             setConfirmDialog({ title: "未保存的更改", message: "文件已修改但未保存，确定关闭？", danger: true, onConfirm: () => setPreviewDialog(null) });
           } else {
             setPreviewDialog(null);
           }
         }}
+        onConfirmDialogClose={() => setConfirmDialog(null)}
+        onTransferHistoryBrowsePath={handleBrowseTransferHistoryPath}
+        onTransferHistoryCopyRemotePath={(path) => { void handleCopyTransferHistoryValue(path, "远程路径"); }}
+        onTransferHistoryCopyLocalPath={(path) => { void handleCopyTransferHistoryValue(path, "本地路径"); }}
+        onTransferHistoryRevealLocalPath={(path) => { void handleRevealTransferHistoryLocalPath(path); }}
+        onTransferHistoryClear={requestClearTransferHistory}
+        onTransferHistoryClose={() => setShowTransferHistory(false)}
       />
-
-      <TransferHistoryDialog
-        open={showTransferHistory}
-        entries={currentServerTransferHistory}
-        isElectron={isElectron}
-        formatBytes={formatBytes}
-        formatDateTime={formatDateTime}
-        onBrowsePath={handleBrowseTransferHistoryPath}
-        onCopyRemotePath={(path) => { void handleCopyTransferHistoryValue(path, "远程路径"); }}
-        onCopyLocalPath={(path) => { void handleCopyTransferHistoryValue(path, "本地路径"); }}
-        onRevealLocalPath={(path) => { void handleRevealTransferHistoryLocalPath(path); }}
-        onClear={requestClearTransferHistory}
-        onClose={() => setShowTransferHistory(false)}
-      />
-
-      <ConfirmDialog dialog={confirmDialog} onClose={() => setConfirmDialog(null)} />
     </main>
   );
 }
