@@ -73,7 +73,7 @@ npm --workspace @server-log-console/electron run dist:mac
 
 规则：打包和启动优先走 `package.json` 中已定义的脚本入口，不长期依赖临时手写 shell 命令。临时命令只用于排障，验证有效后必须回写到脚本中。
 
-本次事故归档见：`docs/electron-macos-packaging-archive-2026-04-12.md`
+本次事故归档见：`docs/Electron-macOS-打包归档-2026-04-12.md`
 
 ### 3.2 安装到 /Applications
 
