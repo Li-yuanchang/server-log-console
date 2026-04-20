@@ -174,7 +174,9 @@ button, input, select, textarea, a,
 }
 
 .electron-immersive .sidebar-head,
-.electron-immersive .toolbar-panel {
+.electron-immersive .toolbar-panel,
+.electron-immersive .workspace-session-strip,
+.electron-immersive .workspace-session-tabs {
   -webkit-app-region: drag;
 }
 
@@ -188,7 +190,9 @@ button, input, select, textarea, a,
 .electron-immersive .toolbar-search-actions,
 .electron-immersive .toolbar-search-row,
 .electron-immersive .toolbar-tabs,
-.electron-immersive .advanced-strip {
+.electron-immersive .advanced-strip,
+.electron-immersive .workspace-session-tab,
+.electron-immersive .workspace-session-tab * {
   -webkit-app-region: no-drag;
 }
 
@@ -220,7 +224,7 @@ button, input, select, textarea, a,
 }
 
 .electron-macos-immersive .sidebar-head {
-  padding-top: 10px;
+  padding-top: 5px;
 }
 
 .electron-macos-immersive .sidebar-head-row {
@@ -1510,7 +1514,7 @@ body.is-resizing-activity-panel {
   gap: 8px;
   align-items: center;
   padding: 6px 8px;
-  margin: -6px -6px 6px;
+  margin: -6px -6px 0;
   background: linear-gradient(180deg, #fafbfc, #f0f3f7);
   border-left: none;
   border-right: none;
@@ -1525,15 +1529,15 @@ body.is-resizing-activity-panel {
   grid-template-columns: minmax(0, 1fr);
   gap: 2px;
   align-items: center;
-  padding: 6px 8px;
-  margin: -6px -6px 6px;
+  padding: 10px 12px 6px 16px;
+  margin: -6px -6px 0;
   background: linear-gradient(180deg, #fafbfc, #f0f3f7);
   border-left: none;
   border-right: none;
   border-top: none;
   border-bottom: 1px solid #d9e0e8;
   border-radius: 0;
-  min-height: 36px;
+  min-height: 42px;
 }
 
 .workspace-session-tabs-shell {
@@ -1542,6 +1546,7 @@ body.is-resizing-activity-panel {
   gap: 8px;
   min-width: 0;
   width: 100%;
+  min-height: 30px;
 }
 
 .workspace-session-strip-head {
@@ -1550,9 +1555,12 @@ body.is-resizing-activity-panel {
   gap: 6px;
   min-width: 0;
   flex-shrink: 0;
+  padding-left: 2px;
 }
 
 .workspace-session-strip-label {
+  display: inline-flex;
+  align-items: center;
   font-size: 11px;
   font-weight: 500;
   color: #64748b;
@@ -1560,6 +1568,8 @@ body.is-resizing-activity-panel {
 }
 
 .workspace-session-strip-count {
+  display: inline-flex;
+  align-items: center;  
   font-size: 10px;
   color: #94a3b8;
   background: #f1f5f9;
@@ -1571,11 +1581,13 @@ body.is-resizing-activity-panel {
 .workspace-session-tabs {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
   min-width: 0;
   flex: 1;
   overflow-x: auto;
   overflow-y: hidden;
+  padding: 2px 6px 1px 0;
+  scroll-padding-inline: 8px;
 }
 
 .workspace-session-tab {
@@ -1588,7 +1600,8 @@ body.is-resizing-activity-panel {
   border: 1px solid #e2e8f0;
   border-radius: 6px;
   background: #f8fafc;
-  transition: background 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+  position: relative;
+  transition: background 140ms ease, border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease, opacity 140ms ease;
 }
 
 .workspace-session-tab-active {
@@ -1600,6 +1613,7 @@ body.is-resizing-activity-panel {
 .workspace-session-tab-trigger {
   display: flex;
   align-items: center;
+  justify-content: flex-start;
   gap: 6px;
   min-width: 0;
   flex: 1;
@@ -1616,6 +1630,41 @@ body.is-resizing-activity-panel {
 
 .workspace-session-tab-active .workspace-session-tab-trigger {
   color: #1e40af;
+}
+.workspace-session-tab-draggable {
+  cursor: grab;
+}
+
+.workspace-session-tab-draggable .workspace-session-tab-trigger {
+  cursor: inherit;
+}
+
+.workspace-session-tab-dragging {
+  opacity: 0.58;
+  transform: scale(0.985);
+}
+
+.workspace-session-tab-dragging .workspace-session-tab-close {
+  opacity: 0;
+}
+
+.workspace-session-tab-drop-before::before,
+.workspace-session-tab-drop-after::after {
+  content: "";
+  position: absolute;
+  top: 5px;
+  bottom: 5px;
+  width: 2px;
+  border-radius: 999px;
+  background: var(--accent);
+}
+
+.workspace-session-tab-drop-before::before {
+  left: -4px;
+}
+
+.workspace-session-tab-drop-after::after {
+  right: -4px;
 }
 
 .workspace-session-tab-label {
@@ -3108,20 +3157,23 @@ body.is-resizing-activity-panel {
 
 .viewer-floating-status-row {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 8px;
   min-width: 0;
 }
 
 .viewer-floating-status-chip {
   flex: none;
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
   padding: 3px 8px;
   border-radius: 999px;
   border: 1px solid rgba(148, 163, 184, 0.18);
   background: rgba(148, 163, 184, 0.14);
   color: rgba(226, 232, 240, 0.84);
   font-size: 10px;
-  line-height: 1.4;
+  line-height: 1.2;
 }
 
 .viewer-floating-status-chip-live {
@@ -3132,12 +3184,15 @@ body.is-resizing-activity-panel {
 
 .viewer-floating-status-text {
   min-width: 0;
+  display: flex;
+  align-items: center;
+  min-height: 22px;
   color: rgba(226, 232, 240, 0.82);
   font-size: 11px;
   white-space: normal;
   overflow: visible;
   text-overflow: clip;
-  line-height: 1.5;
+  line-height: 1.45;
 }
 
 .viewer-floating-activity-list {

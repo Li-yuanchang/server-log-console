@@ -1,11 +1,17 @@
-const GATEWAY_URL = "http://127.0.0.1:4040";
+async function enableSidePanelOnActionClick() {
+  if (!chrome.sidePanel?.setPanelBehavior) {
+    return;
+  }
 
-chrome.action.onClicked.addListener(() => {
-  chrome.tabs.query({ url: GATEWAY_URL + "/*" }, (tabs) => {
-    if (tabs.length) {
-      chrome.tabs.update(tabs[0].id, { active: true });
-    } else {
-      chrome.tabs.create({ url: GATEWAY_URL });
-    }
-  });
+  await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
+}
+
+void enableSidePanelOnActionClick();
+
+chrome.runtime.onInstalled.addListener(() => {
+  void enableSidePanelOnActionClick();
+});
+
+chrome.runtime.onStartup.addListener(() => {
+  void enableSidePanelOnActionClick();
 });
