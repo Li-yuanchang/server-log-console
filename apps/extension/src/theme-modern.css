@@ -101,7 +101,7 @@
 }
 
 .theme-modern.electron-macos-immersive .sidebar-head {
-  padding-top: 10px;
+  padding-top: 5px;
 }
 
 .theme-modern .sidebar-head-row { gap: 8px; }
@@ -567,15 +567,21 @@
 }
 
 .theme-modern .toolbar-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 0;
   flex: 0 1 auto;
   max-width: clamp(180px, 38vw, 440px);
+  min-width: 0;
   min-height: 32px;
   padding: 0 12px;
   border-radius: 8px;
+  box-sizing: border-box;
   font-size: 12.5px;
   font-weight: 400;
   color: var(--ink-muted);
   letter-spacing: 0.01em;
+  overflow: hidden;
 }
 
 .theme-modern .toolbar-breadcrumb:hover {
@@ -585,6 +591,14 @@
 
 .theme-modern .toolbar-breadcrumb.breadcrumb-active {
   color: var(--ink);
+}
+
+.theme-modern .breadcrumb-segment {
+  display: inline-block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .theme-modern .breadcrumb-server {
@@ -1212,7 +1226,7 @@
 
 .theme-modern .workspace-strip {
   gap: 8px;
-  padding: 10px 16px;
+  padding: 14px 22px 8px;
   min-height: 40px;
   border-bottom: 1px solid var(--line);
   background: var(--panel);
@@ -2651,6 +2665,105 @@
   .theme-modern .sidebar-panel { flex: 0 0 200px; }
   .theme-modern .toolbar-commandbar { gap: 4px; }
   .theme-modern .toolbar-action-button { padding: 0 8px; min-height: 28px; }
+}
+
+body.extension-sidepanel .app-shell.theme-modern {
+  padding: 0;
+  height: 100vh;
+}
+
+body.extension-sidepanel .theme-modern .shell-layout {
+  flex-direction: row;
+  height: 100vh;
+}
+
+body.extension-sidepanel .theme-modern .sidebar-panel {
+  flex: 0 0 180px;
+  width: auto;
+  max-height: none;
+  min-height: 0;
+  border-right: 1px solid var(--sidebar-line);
+  border-bottom: none;
+}
+
+body.extension-sidepanel .theme-modern .sidebar-head,
+body.extension-sidepanel .theme-modern .pane-section {
+  padding-left: 12px;
+  padding-right: 12px;
+}
+
+body.extension-sidepanel .theme-modern .server-groups {
+  min-height: 120px;
+}
+
+body.extension-sidepanel .theme-modern .compact-activity-panel {
+  height: 132px !important;
+}
+
+body.extension-sidepanel .theme-modern .toolbar-panel {
+  padding: 12px;
+}
+
+body.extension-sidepanel .theme-modern .toolbar-commandbar {
+  flex-wrap: wrap;
+  align-items: stretch;
+  overflow-x: visible;
+}
+
+body.extension-sidepanel .theme-modern .toolbar-breadcrumb {
+  flex: 1 1 100%;
+  max-width: none;
+}
+
+body.extension-sidepanel .theme-modern .toolbar-search-actions {
+  flex: 1 1 100%;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+
+body.extension-sidepanel .theme-modern .toolbar-search-row {
+  flex-wrap: wrap;
+}
+
+body.extension-sidepanel .theme-modern .toolbar-search-row .command-input-keyword {
+  min-width: 0;
+  flex-basis: 100%;
+}
+
+body.extension-sidepanel .theme-modern .advanced-row-main,
+body.extension-sidepanel .theme-modern .advanced-row-time,
+body.extension-sidepanel .theme-modern .time-pair {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+body.extension-sidepanel .theme-modern .workspace-strip {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+body.extension-sidepanel .theme-modern .workspace-actions {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+
+body.extension-sidepanel .theme-modern .directory-filter-input {
+  max-width: none;
+}
+
+body.extension-sidepanel .theme-modern .browser-grid {
+  flex-direction: row;
+}
+
+body.extension-sidepanel .theme-modern .browser-grid > .browser-column:first-child {
+  flex: 0 0 148px;
+  min-width: 120px;
+  border-right: 1px solid var(--line);
+  border-bottom: none;
+}
+
+body.extension-sidepanel .theme-modern .browser-resizer {
+  display: block;
 }
 
 .theme-modern .workspace-session-strip {

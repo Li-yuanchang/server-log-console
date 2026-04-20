@@ -18,7 +18,7 @@ import { SearchQueryPanel } from "./SearchQueryPanel.js";
 import { SearchProgressPanel } from "./SearchProgressPanel.js";
 import { SearchToolbarActions } from "./SearchToolbarActions.js";
 import { TransferHistoryDialog } from "./TransferHistoryDialog.js";
-import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, WheelEvent as ReactWheelEvent } from "react";
+import type { DragEvent as ReactDragEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, WheelEvent as ReactWheelEvent } from "react";
 import type { ReactNode } from "react";
 import type {
   JumpServerAssetOption,
@@ -343,6 +343,15 @@ export function App() {
   const [downloadProgress, setDownloadProgress] = useState<DownloadProgressState | null>(null);
   const [contextMenu, setContextMenu] = useState<FileContextMenuState | null>(null);
   const [workspaceTabMenu, setWorkspaceTabMenu] = useState<{ x: number; y: number; session: WorkspaceSession } | null>(null);
+  const [workspaceTabDragState, setWorkspaceTabDragState] = useState<{
+    draggedSessionId: string | null;
+    targetSessionId: string | null;
+    position: "before" | "after" | null;
+  }>({
+    draggedSessionId: null,
+    targetSessionId: null,
+    position: null
+  });
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
   const [renameDialog, setRenameDialog] = useState<{ entry: LogFileEntry; newName: string } | null>(null);
   const [moveDialog, setMoveDialog] = useState<{ entry: LogFileEntry; targetDir: string } | null>(null);
@@ -419,6 +428,7 @@ export function App() {
   const browserGridRef = useRef<HTMLDivElement | null>(null);
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
   const workspaceTabMenuRef = useRef<HTMLDivElement | null>(null);
+  const workspaceTabDragJustMovedRef = useRef(false);  
   const viewerDebugRef = useRef<HTMLDivElement | null>(null);
   const readerRailRef = useRef<HTMLDivElement | null>(null);
   const viewerOverviewRailRef = useRef<HTMLDivElement | null>(null);
@@ -1542,6 +1552,76 @@ export function App() {
 
   function activateWorkspaceSession(session: WorkspaceSession) {
     startWorkspaceActivation(session);
+  }
+
+  function clearWorkspaceTabDragState() {
+    setWorkspaceTabDragState({
+      draggedSessionId: null,
+      targetSessionId: null,
+      position: null
+    });
+  }
+
+  function reorderWorkspaceSessions(draggedSessionId: string, targetSessionId: string, position: "before" | "after") {
+    if (draggedSessionId === targetSessionId) { return; }
+    setWorkspaceSessions((current) => {
+      const draggedIndex = current.findIndex((s) => s.id === draggedSessionId);
+      const targetIndex = current.findIndex((s) => s.id === targetSessionId);
+      if (draggedIndex === -1 || targetIndex === -1) { return current; }
+      const next = [...current];
+      const [draggedSession] = next.splice(draggedIndex, 1);
+      const normalizedTargetIndex = draggedIndex < targetIndex ? targetIndex - 1 : targetIndex;
+      const insertIndex = position === "after" ? normalizedTargetIndex + 1 : normalizedTargetIndex;
+      next.splice(insertIndex, 0, draggedSession);
+      return next;
+    });
+  }
+
+  function getWorkspaceTabDropPosition(event: ReactDragEvent<HTMLDivElement>): "before" | "after" {
+    const bounds = event.currentTarget.getBoundingClientRect();
+    return event.clientX - bounds.left < bounds.width / 2 ? "before" : "after";
+  }
+
+  function handleWorkspaceTabDragStart(event: ReactDragEvent<HTMLDivElement>, sessionId: string) {
+    if (isWorkspaceSwitchLocked) { event.preventDefault(); return; }
+    const target = event.target;
+    if (target instanceof HTMLElement && target.closest(".workspace-session-tab-close")) { event.preventDefault(); return; }
+    workspaceTabDragJustMovedRef.current = false;
+    setWorkspaceTabDragState({ draggedSessionId: sessionId, targetSessionId: null, position: null });
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", sessionId);
+  }
+
+  function handleWorkspaceTabDragOver(event: ReactDragEvent<HTMLDivElement>, sessionId: string) {
+    const draggedSessionId = workspaceTabDragState.draggedSessionId;
+    if (!draggedSessionId || isWorkspaceSwitchLocked) { return; }
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    if (draggedSessionId === sessionId) {
+      if (workspaceTabDragState.targetSessionId || workspaceTabDragState.position) {
+        setWorkspaceTabDragState((c) => ({ ...c, targetSessionId: null, position: null }));
+      }
+      return;
+    }
+    const position = getWorkspaceTabDropPosition(event);
+    if (workspaceTabDragState.targetSessionId === sessionId && workspaceTabDragState.position === position) { return; }
+    setWorkspaceTabDragState((c) => ({ ...c, targetSessionId: sessionId, position }));
+  }
+
+  function handleWorkspaceTabDrop(event: ReactDragEvent<HTMLDivElement>, sessionId: string) {
+    const draggedSessionId = workspaceTabDragState.draggedSessionId || event.dataTransfer.getData("text/plain");
+    if (!draggedSessionId || isWorkspaceSwitchLocked) { clearWorkspaceTabDragState(); return; }
+    event.preventDefault();
+    if (draggedSessionId === sessionId) { clearWorkspaceTabDragState(); return; }
+    const position = getWorkspaceTabDropPosition(event);
+    reorderWorkspaceSessions(draggedSessionId, sessionId, position);
+    workspaceTabDragJustMovedRef.current = true;
+    clearWorkspaceTabDragState();
+  }
+
+  function handleWorkspaceTabDragEnd() {
+    clearWorkspaceTabDragState();
+    window.setTimeout(() => { workspaceTabDragJustMovedRef.current = false; }, 120);
   }
 
   function closeWorkspaceSession(sessionId: string) {
@@ -4750,10 +4830,17 @@ export function App() {
                 <div className="workspace-session-tabs">
                   {workspaceSessions.map((session) => {
                     const isActiveSession = session.id === activeWorkspaceSessionId;
+                    const isDraggingSession = workspaceTabDragState.draggedSessionId === session.id;
+                    const dropPosition = workspaceTabDragState.targetSessionId === session.id ? workspaceTabDragState.position : null;
                     return (
                       <div
                         key={session.id}
-                        className={`workspace-session-tab ${isActiveSession ? "workspace-session-tab-active" : ""}`}
+                        className={`workspace-session-tab ${isActiveSession ? "workspace-session-tab-active" : ""}${!isWorkspaceSwitchLocked ? " workspace-session-tab-draggable" : ""}${isDraggingSession ? " workspace-session-tab-dragging" : ""}${dropPosition ? ` workspace-session-tab-drop-${dropPosition}` : ""}`}
+                        draggable={!isWorkspaceSwitchLocked}
+                        onDragStart={(event) => handleWorkspaceTabDragStart(event, session.id)}
+                        onDragOver={(event) => handleWorkspaceTabDragOver(event, session.id)}
+                        onDrop={(event) => handleWorkspaceTabDrop(event, session.id)}
+                        onDragEnd={handleWorkspaceTabDragEnd}
                         onContextMenu={(event) => {
                           event.preventDefault();
                           const menuWidth = 160;
@@ -4768,7 +4855,14 @@ export function App() {
                           type="button"
                           title={session.serverHost ? `${session.serverName} · ${session.serverHost}` : session.serverName}
                           disabled={isWorkspaceSwitchLocked && !isActiveSession}
-                          onClick={() => activateWorkspaceSession(session)}
+                          draggable={false}
+                          onClick={() => {
+                            if (workspaceTabDragJustMovedRef.current) {
+                              workspaceTabDragJustMovedRef.current = false;
+                              return;
+                            }
+                            activateWorkspaceSession(session);
+                          }}
                         >
                           <span className="workspace-session-tab-label">{session.serverName}</span>
                         </button>
@@ -4777,6 +4871,7 @@ export function App() {
                           type="button"
                           aria-label={`关闭 ${session.serverName}`}
                           disabled={isWorkspaceSwitchLocked}
+                          draggable={false}
                           onClick={() => closeWorkspaceSession(session.id)}
                         >
                           <X size={12} strokeWidth={1.5} />
