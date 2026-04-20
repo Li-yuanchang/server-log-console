@@ -1,0 +1,608 @@
+
+.confirm-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.28);
+  backdrop-filter: blur(4px);
+}
+
+.confirm-dialog {
+  width: min(480px, calc(100vw - 32px));
+  max-width: 480px;
+  display: grid;
+  gap: 14px;
+  padding: 18px 20px;
+  border: 1px solid #d7dde5;
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 16px 42px rgba(15, 23, 42, 0.18);
+}
+
+.confirm-title {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.3;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.confirm-message {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--ink-soft);
+  white-space: pre-wrap;
+}
+
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.confirm-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
+  padding: 0 12px;
+  border: 1px solid #d7dde5;
+  border-radius: 6px;
+  cursor: pointer;
+  background: linear-gradient(180deg, #ffffff, #f0f3f7);
+  color: var(--ink);
+  box-shadow: 0 1px 2px rgba(31, 42, 55, 0.06);
+}
+
+.confirm-btn-primary {
+  border-color: #315f8d;
+  background: linear-gradient(180deg, #467cac, #315f8d);
+  color: #ffffff;
+}
+
+.confirm-btn-danger {
+  border-color: #b94a48;
+  background: linear-gradient(180deg, #d06a67, #b94a48);
+  color: #ffffff;
+}
+
+.confirm-btn-disabled {
+  opacity: 0.52;
+  pointer-events: none;
+}
+
+.rename-label {
+  font-size: 11px;
+  color: var(--ink-muted);
+}
+
+.rename-input {
+  width: 100%;
+  min-width: 0;
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid #d7dde5;
+  border-radius: 6px;
+  background: #ffffff;
+  color: var(--ink);
+}
+
+.transfer-history-dropdown {
+  max-height: 260px;
+}
+
+.transfer-history-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px 6px;
+  border-bottom: 1px solid #e8edf2;
+}
+
+.transfer-history-head strong {
+  font-size: 12px;
+  color: #31465a;
+}
+
+.transfer-history-clear {
+  border: none;
+  background: transparent;
+  color: #6280a0;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.transfer-history-clear:hover {
+  color: #2a537b;
+}
+
+.transfer-history-item {
+  display: grid;
+  gap: 4px;
+  padding: 8px 10px;
+  cursor: pointer;
+  border-top: 1px solid #f1f4f7;
+}
+
+.transfer-history-item:first-of-type {
+  border-top: none;
+}
+
+.transfer-history-item:hover {
+  background: #eef4fa !important;
+}
+
+.transfer-history-row,
+.transfer-history-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.transfer-history-row {
+  flex-wrap: wrap;
+  row-gap: 6px;
+}
+
+.transfer-history-meta {
+  flex-wrap: wrap;
+  font-size: 10.5px;
+  color: var(--ink-muted);
+}
+
+.transfer-history-name,
+.transfer-history-path,
+.transfer-history-extra {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.transfer-history-name {
+  font-size: 12px;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.transfer-history-path,
+.transfer-history-extra {
+  font-size: 10.5px;
+  color: var(--ink-muted);
+}
+
+.transfer-history-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 10px;
+  line-height: 1;
+  font-weight: 600;
+  color: var(--ink-soft);
+  background: var(--panel-muted);
+}
+
+.transfer-history-chip-upload {
+  color: var(--accent-strong);
+  background: rgba(49, 95, 141, 0.12);
+  border-color: rgba(49, 95, 141, 0.18);
+}
+
+.transfer-history-chip-download {
+  color: #2f6c58;
+  background: rgba(45, 106, 79, 0.12);
+  border-color: rgba(45, 106, 79, 0.18);
+}
+
+.transfer-history-chip-success {
+  color: #2d6a4f;
+  background: rgba(45, 106, 79, 0.12);
+  border-color: rgba(45, 106, 79, 0.18);
+}
+
+.transfer-history-chip-error {
+  color: #9f3f3f;
+  background: rgba(194, 91, 91, 0.1);
+  border-color: rgba(194, 91, 91, 0.16);
+}
+
+.transfer-history-chip-canceled {
+  color: #7d6134;
+  background: rgba(154, 122, 70, 0.12);
+  border-color: rgba(154, 122, 70, 0.18);
+}
+
+.transfer-history-backdrop {
+  z-index: 10020;
+  align-items: flex-start;
+  justify-content: center;
+  overflow: auto;
+  padding: 32px 20px 20px;
+}
+
+.transfer-history-dialog {
+  width: min(1260px, calc(100vw - 24px));
+  max-width: 1260px;
+  max-height: min(88vh, 920px);
+  margin: 0 auto;
+  display: grid;
+  grid-template-rows: auto auto auto minmax(0, 1fr);
+  gap: 14px;
+  padding: 20px 22px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--panel);
+  box-shadow: 0 20px 48px rgba(15, 23, 42, 0.18);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.confirm-dialog.transfer-history-dialog {
+  width: min(1260px, calc(100vw - 24px));
+  max-width: 1260px;
+  padding: 20px 22px;
+}
+
+.transfer-history-dialog-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 16px;
+}
+
+.transfer-history-dialog-head > * {
+  min-width: 0;
+}
+
+.transfer-history-dialog-title-block {
+  display: grid;
+  gap: 6px;
+}
+
+.transfer-history-dialog-kicker {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(49, 95, 141, 0.14);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+
+.transfer-history-dialog-subtitle {
+  font-size: 12px;
+  color: var(--ink-muted);
+  line-height: 1.6;
+  max-width: 760px;
+}
+
+.transfer-history-dialog-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.transfer-history-head-icon-button {
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  min-height: 34px;
+  padding: 0;
+  border-radius: 999px;
+  border-color: var(--line);
+  background: linear-gradient(180deg, var(--panel-strong), var(--panel-muted));
+  color: var(--ink-soft);
+  box-shadow: none;
+}
+
+.transfer-history-head-icon-button:hover:not(:disabled) {
+  border-color: var(--line-strong);
+  background: linear-gradient(180deg, var(--panel-strong), rgba(49, 95, 141, 0.08));
+  color: var(--accent-strong);
+}
+
+.transfer-history-close {
+  border: 1px solid var(--line);
+}
+
+.transfer-history-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.transfer-history-summary-card {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-height: 96px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: linear-gradient(180deg, var(--panel-strong) 0%, var(--panel-muted) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+.transfer-history-summary-card strong {
+  font-size: 21px;
+  color: var(--ink);
+  line-height: 1;
+}
+
+.transfer-history-summary-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 11px;
+  border: 1px solid rgba(49, 95, 141, 0.12);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.transfer-history-summary-label {
+  font-size: 11px;
+  color: var(--ink-muted);
+}
+
+.transfer-history-summary-card-success .transfer-history-summary-icon {
+  color: #2d6a4f;
+  background: rgba(45, 106, 79, 0.12);
+  border-color: rgba(45, 106, 79, 0.16);
+}
+
+.transfer-history-summary-card-error .transfer-history-summary-icon {
+  color: #9f3f3f;
+  background: rgba(194, 91, 91, 0.1);
+  border-color: rgba(194, 91, 91, 0.14);
+}
+
+.transfer-history-summary-card-canceled .transfer-history-summary-icon {
+  color: #7d6134;
+  background: rgba(154, 122, 70, 0.12);
+  border-color: rgba(154, 122, 70, 0.16);
+}
+
+.transfer-history-filter-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(150px, 180px) minmax(150px, 180px) auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.transfer-history-filter-meta {
+  justify-self: end;
+  align-self: center;
+  padding-left: 6px;
+  font-size: 11px;
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+
+.transfer-history-search-shell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel-strong);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.68);
+}
+
+.transfer-history-search-shell svg {
+  flex: 0 0 auto;
+  color: var(--ink-muted);
+}
+
+.transfer-history-search {
+  margin: 0;
+  width: 100%;
+  min-width: 0;
+  height: 38px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--ink);
+  box-shadow: none;
+  outline: none;
+}
+
+.transfer-history-search::placeholder {
+  color: var(--ink-muted);
+}
+
+.transfer-history-filter-field {
+  display: grid;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--ink-muted);
+}
+
+.transfer-history-select {
+  width: 100%;
+  height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel-strong);
+  color: var(--ink);
+  font-size: 12px;
+  padding: 0 12px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.68);
+}
+
+.transfer-history-dialog-body {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 2px 4px 4px 1px;
+}
+
+.transfer-history-empty-panel {
+  padding: 36px 16px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 14px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--ink-muted);
+  background: linear-gradient(180deg, var(--panel-strong), var(--panel-muted));
+}
+
+.transfer-history-card {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: linear-gradient(180deg, var(--panel-strong) 0%, var(--panel) 100%);
+  box-shadow: 0 8px 24px rgba(31, 42, 55, 0.05);
+}
+
+.transfer-history-card:hover {
+  border-color: var(--line-strong);
+}
+
+.transfer-history-card-expanded {
+  border-color: rgba(49, 95, 141, 0.18);
+  box-shadow: 0 10px 26px rgba(31, 42, 55, 0.06);
+}
+
+.transfer-history-card-topbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.transfer-history-card-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.transfer-history-card-icon-button {
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  min-height: 30px;
+  padding: 0;
+  border-radius: 999px;
+  border-color: transparent;
+  background: var(--panel-muted);
+  color: var(--ink-soft);
+  box-shadow: none;
+}
+
+.transfer-history-card-icon-button:hover:not(:disabled) {
+  border-color: rgba(49, 95, 141, 0.16);
+  background: rgba(49, 95, 141, 0.1);
+  color: var(--accent-strong);
+}
+
+.transfer-history-card-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 14px;
+}
+
+.transfer-history-card-head > * {
+  min-width: 0;
+}
+
+.transfer-history-card .transfer-history-meta {
+  justify-content: flex-end;
+  row-gap: 4px;
+  text-align: right;
+}
+
+.transfer-history-card .transfer-history-name {
+  font-size: 13px;
+  line-height: 1.45;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+}
+
+.transfer-history-card-details {
+  display: grid;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(49, 95, 141, 0.12);
+}
+
+.transfer-history-path-line {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+
+.transfer-history-path-line label {
+  font-size: 11px;
+  color: var(--ink-muted);
+  padding-top: 2px;
+}
+
+.transfer-history-path-line code {
+  font-size: 11px;
+  color: var(--ink);
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.6;
+  background: var(--panel-muted);
+  border: 1px solid rgba(49, 95, 141, 0.1);
+  padding: 7px 9px;
+  border-radius: 10px;
+}
+
+.transfer-history-note {
+  font-size: 11.5px;
+  line-height: 1.6;
+  padding: 9px 10px;
+  border-radius: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.transfer-history-note-success {
+  color: #2d6a4f;
+  background: rgba(45, 106, 79, 0.1);
+  border: 1px solid rgba(45, 106, 79, 0.16);
+}
+
+.transfer-history-note-canceled {
+  color: #7d6134;
+  background: rgba(154, 122, 70, 0.1);
+  border: 1px solid rgba(154, 122, 70, 0.18);
+}
+
+.transfer-history-note-error {
+  color: #9f3f3f;
+  background: rgba(194, 91, 91, 0.1);
+  border: 1px solid rgba(194, 91, 91, 0.14);
+}
