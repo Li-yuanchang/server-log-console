@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { PictureInPicture2, X, Clipboard, ClipboardPaste, Zap, RefreshCw, Plug, Sparkles } from "lucide-react";
+import { PictureInPicture2, X, Clipboard, ClipboardPaste, Zap, RefreshCw, Plug, Sparkles, Columns } from "lucide-react";
 import type { RefObject } from "react";
 import type { ServerSummary } from "@server-log-console/shared";
 import { looksLikeJumpServer } from "./terminal-utils.js";
@@ -28,6 +28,7 @@ interface TerminalPanelProps {
   pasteToTerminal: (text: string) => void;
   onToggleTerminalOverlay: (overlay: "shortcuts" | "ai") => void;
   onDismissMenu: () => void;
+  onSplitMode?: () => void;
   popupMode?: "embedded" | "standalone";
 }
 
@@ -219,6 +220,11 @@ export function TerminalPanel(props: TerminalPanelProps) {
               title={(isElectronRuntime ? props.detached : isBrowserPip) ? "收回终端" : "弹出独立小窗"}
             >
               <PictureInPicture2 size={13} />
+            </button>
+          ) : null}
+          {!isStandalone ? (
+            <button type="button" onClick={props.onSplitMode} title="分屏模式">
+              <Columns size={13} />
             </button>
           ) : null}
           {!isStandalone ? (
