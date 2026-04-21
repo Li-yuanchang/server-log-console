@@ -28,6 +28,10 @@ type Props = {
   onEndTimeChange: (value: string) => void;
   searchPresets: SearchQueryPreset[];
   onResetAdvanced: () => void;
+  multiFileMode: boolean;
+  onToggleMultiFileMode: () => void;
+  filePattern: string;
+  onFilePatternChange: (value: string) => void;
 };
 
 export function SearchQueryPanel(props: Props) {
@@ -84,6 +88,27 @@ export function SearchQueryPanel(props: Props) {
             >
               正则
             </button>
+          </div>
+          <div className="advanced-row advanced-row-multi-file">
+            <button
+              type="button"
+              className={`ghost-button regex-pill${props.multiFileMode ? " regex-pill-active" : ""}`}
+              onClick={props.onToggleMultiFileMode}
+            >
+              多文件
+            </button>
+            {props.multiFileMode ? (
+              <label>
+                文件匹配
+                <input
+                  type="text"
+                  placeholder="*.log"
+                  value={props.filePattern}
+                  onChange={(event) => props.onFilePatternChange(event.target.value)}
+                  disabled={!props.hasServer}
+                />
+              </label>
+            ) : null}
           </div>
           <div className="advanced-row advanced-row-exclude">
             <label>

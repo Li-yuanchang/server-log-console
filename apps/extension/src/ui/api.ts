@@ -9,6 +9,7 @@ import type {
   LogSliceResponse,
   ManualServerUpsertRequest,
   ManualServerUpsertResponse,
+  MultiFileLogSearchResponse,
   ServerConnectionTestResponse,
   ServerCredentialStatus,
   ServerRouteConfig,
@@ -461,4 +462,13 @@ export async function apiExtractZip(
     throw new Error(err.message || "解压失败");
   }
   return response.json() as Promise<{ filePath: string; targetDir: string; output: string }>;
+}
+
+export async function apiMultiFileSearch(params: Record<string, unknown>): Promise<MultiFileLogSearchResponse> {
+  const response = await fetch(`${localServiceBase}/api/logs/search/multi`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params)
+  });
+  return readPayload<MultiFileLogSearchResponse>(response, "多文件搜索失败");
 }

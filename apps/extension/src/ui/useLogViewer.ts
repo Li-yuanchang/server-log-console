@@ -15,6 +15,7 @@ import {
   apiGetLineContext,
   apiCreateSearchTask,
   apiPollSearchTask,
+  apiMultiFileSearch,
 } from "./api.js";
 import {
   clampSliceStart,
@@ -78,6 +79,8 @@ export type LogViewerState = {
   viewerOverviewDragging: boolean;
   viewerOverviewDraft: number;
   viewerOverviewTotalLines: number | null;
+  multiFileMode: boolean;
+  filePattern: string;
 };
 
 export type LogViewerRefs = {
@@ -408,6 +411,49 @@ export function useLogViewer(params: LogViewerParams): LogViewerAPI {
       setters.setActiveLogView("search");
       callbacks.setActionStatus(`已在 ${activeResultTab.label} 内继续筛选，命中 ${localResult.matches.length} 行。`);
       callbacks.pushActivity(`结果页继续筛选完成：${activeResultTab.label} / 命中 ${localResult.matches.length} 行。`);
+      return;
+    }
+    // Multi-file search mode
+    if (state.multiFileMode) {
+      const startedAt = Date.now();
+      setters.setSearchStartedAt(startedAt);
+      setters.setIsBusy(true);
+      callbacks.setActionStatus("正在跨文件检索...");
+      setters.setSearchTask(null);
+      setters.setResults(null);
+      try {
+        const multiResult = await apiMultiFileSearch({
+          serverId: state.serverId,
+          directoryPath: state.directoryPath || state.filePath,
+          filePattern: state.filePattern || "*.log",
+          keyword: normalizedInput,
+          keywordTerms: normalizedTerms,
+          keywordMode: state.keywordMode,
+          excludeTerms: excludeTerms.length ? excludeTerms : undefined,
+          startDate: state.startDate,
+          endDate: state.endDate,
+          startTime: state.startTime,
+          endTime: state.endTime,
+          useRegex: state.useRegex
+        });
+        const searchResponse: LogSearchResponse = {
+          matches: multiResult.matches,
+          rawOutput: multiResult.matches.map((m) => `${m.source}:${m.lineNumber}:${m.preview}`).join("\n"),
+          truncated: false,
+          commandPreview: multiResult.commandPreview || "",
+          strategyLabel: "多文件搜索",
+          scopeLabel: multiResult.scopeLabel || ""
+        };
+        setters.setResults(searchResponse);
+        appendResultTab(searchResponse, `${state.directoryPath} (${multiResult.scannedFiles} 文件)`);
+        setters.setActiveLogView("search");
+        callbacks.setActionStatus(`跨文件检索完成，${multiResult.matchedFiles} 个文件命中 ${multiResult.matches.length} 行。`);
+        callbacks.pushActivity(`多文件搜索完成：${multiResult.matchedFiles} 文件 / ${multiResult.matches.length} 行`);
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : "未知错误";
+        callbacks.setActionStatus(`多文件搜索失败：${detail}`);
+        callbacks.pushActivity(`多文件搜索失败：${detail}`);
+      } finally { setters.setIsBusy(false); setters.setSearchStartedAt(null); }
       return;
     }
     const startedAt = Date.now();

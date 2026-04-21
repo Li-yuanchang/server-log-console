@@ -26,6 +26,7 @@ import { buildTailCommand } from "./modules/logs/command-builder.js";
 import { FileBrowserService } from "./modules/logs/file-browser.service.js";
 import { LogSliceService } from "./modules/logs/log-slice.service.js";
 import { FileTransferService } from "./modules/logs/file-transfer.service.js";
+import { MultiFileSearchService } from "./modules/logs/multi-file-search.service.js";
 import { StrategyResolver } from "./modules/logs/strategies/index.js";
 import multer from "multer";
 import { shellEscape } from "./modules/logs/remote-shell.js";
@@ -96,6 +97,7 @@ const fileBrowserService = new FileBrowserService(strategyResolver, serverRegist
 const logSliceService = new LogSliceService(strategyResolver);
 const logSearchTaskService = new LogSearchTaskService(serverRegistryService, strategyResolver, logSliceService);
 const fileTransferService = new FileTransferService(strategyResolver);
+const multiFileSearchService = new MultiFileSearchService(serverRegistryService, sshExecutorService);
 logPhase("Service layer", t);
 
 t = performance.now();
@@ -372,6 +374,15 @@ app.post("/api/servers/:bastionId/jumpserver/browse-assets", async (req, res) =>
     const keyword = body.keyword?.trim() || "";
     const assets = await sshExecutorService.listBastionAssets(req.params.bastionId, keyword, 30000);
     res.json({ bastionId: req.params.bastionId, keyword, assets });
+  } catch (error) {
+    res.status(400).json({ message: error instanceof Error ? error.message : "Unknown error" });
+  }
+});
+
+app.post("/api/logs/search/multi", async (req, res) => {
+  try {
+    const result = await multiFileSearchService.search(req.body);
+    res.json(result);
   } catch (error) {
     res.status(400).json({ message: error instanceof Error ? error.message : "Unknown error" });
   }

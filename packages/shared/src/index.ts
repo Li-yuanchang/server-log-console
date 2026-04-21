@@ -80,6 +80,30 @@ export interface LogSearchTaskResponse {
   result?: LogSearchResponse;
 }
 
+export interface MultiFileLogSearchRequest {
+  serverId: string;
+  directoryPath: string;
+  filePattern?: string;
+  keyword?: string;
+  keywordTerms?: string[];
+  keywordMode?: "phrase" | "any" | "all";
+  excludeTerms?: string[];
+  startDate?: string;
+  endDate?: string;
+  startTime?: string;
+  endTime?: string;
+  useRegex?: boolean;
+  maxFiles?: number;
+}
+
+export interface MultiFileLogSearchResponse {
+  matches: LogSearchMatch[];
+  scannedFiles: number;
+  matchedFiles: number;
+  commandPreview?: string;
+  scopeLabel?: string;
+}
+
 export interface LiveTailRequest {
   serverId: string;
   filePath: string;
