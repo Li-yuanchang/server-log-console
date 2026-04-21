@@ -104,6 +104,37 @@ export interface MultiFileLogSearchResponse {
   scopeLabel?: string;
 }
 
+export interface SshTunnelRequest {
+  serverId: string;
+  tunnelType: "local" | "remote";
+  localHost: string;
+  localPort: number;
+  remoteHost: string;
+  remotePort: number;
+}
+
+export interface SshTunnelInfo {
+  tunnelId: string;
+  serverId: string;
+  tunnelType: "local" | "remote";
+  localHost: string;
+  localPort: number;
+  remoteHost: string;
+  remotePort: number;
+  status: "active" | "closed" | "error";
+  createdAt: string;
+}
+
+export interface SshTunnelResponse {
+  ok: boolean;
+  tunnelId?: string;
+  message?: string;
+}
+
+export interface SshTunnelListResponse {
+  tunnels: SshTunnelInfo[];
+}
+
 export interface LiveTailRequest {
   serverId: string;
   filePath: string;

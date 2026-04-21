@@ -27,6 +27,7 @@ import { FileBrowserService } from "./modules/logs/file-browser.service.js";
 import { LogSliceService } from "./modules/logs/log-slice.service.js";
 import { FileTransferService } from "./modules/logs/file-transfer.service.js";
 import { MultiFileSearchService } from "./modules/logs/multi-file-search.service.js";
+import { SshTunnelService } from "./modules/logs/ssh-tunnel.service.js";
 import { StrategyResolver } from "./modules/logs/strategies/index.js";
 import multer from "multer";
 import { shellEscape } from "./modules/logs/remote-shell.js";
@@ -98,6 +99,7 @@ const logSliceService = new LogSliceService(strategyResolver);
 const logSearchTaskService = new LogSearchTaskService(serverRegistryService, strategyResolver, logSliceService);
 const fileTransferService = new FileTransferService(strategyResolver);
 const multiFileSearchService = new MultiFileSearchService(serverRegistryService, sshExecutorService);
+const sshTunnelService = new SshTunnelService(serverRegistryService, sshExecutorService, credentialResolverService);
 logPhase("Service layer", t);
 
 t = performance.now();
@@ -386,6 +388,25 @@ app.post("/api/logs/search/multi", async (req, res) => {
   } catch (error) {
     res.status(400).json({ message: error instanceof Error ? error.message : "Unknown error" });
   }
+});
+
+// --- SSH Tunnel ---
+app.post("/api/ssh/tunnel", async (req, res) => {
+  try {
+    const result = await sshTunnelService.createTunnel(req.body);
+    res.json(result);
+  } catch (error) {
+    res.status(400).json({ message: error instanceof Error ? error.message : "Unknown error" });
+  }
+});
+
+app.delete("/api/ssh/tunnel/:tunnelId", (req, res) => {
+  const result = sshTunnelService.closeTunnel(req.params.tunnelId);
+  res.json(result);
+});
+
+app.get("/api/ssh/tunnels", (_req, res) => {
+  res.json(sshTunnelService.listTunnels());
 });
 
 app.post("/api/logs/search", async (req, res) => {
