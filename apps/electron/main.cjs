@@ -322,6 +322,48 @@ ipcMain.handle("reveal-local-path", async (_event, targetPath) => {
   }
 });
 
+// --- Local File Browser ---
+ipcMain.handle("local-browse", async (_event, dirPath) => {
+  const target = dirPath || app.getPath("home");
+  try {
+    const entries = fs.readdirSync(target, { withFileTypes: true });
+    const items = entries
+      .filter((e) => !e.name.startsWith("."))
+      .map((e) => ({
+        name: e.name,
+        isDirectory: e.isDirectory(),
+        size: e.isFile() ? fs.statSync(path.join(target, e.name)).size : 0,
+        modifiedTime: fs.statSync(path.join(target, e.name)).mtime?.toISOString() || ""
+      }))
+      .sort((a, b) => {
+        if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
+        return a.name.localeCompare(b.name);
+      });
+    return { ok: true, path: target, entries: items };
+  } catch (error) {
+    return { ok: false, message: error && error.message ? error.message : "无法浏览目录" };
+  }
+});
+
+ipcMain.handle("local-read-file", async (_event, filePath) => {
+  try {
+    const content = fs.readFileSync(filePath, "utf-8");
+    const stat = fs.statSync(filePath);
+    return { ok: true, content, size: stat.size, modifiedTime: stat.mtime?.toISOString() || "" };
+  } catch (error) {
+    return { ok: false, message: error && error.message ? error.message : "无法读取文件" };
+  }
+});
+
+ipcMain.handle("local-pick-directory", async () => {
+  const win = BrowserWindow.getFocusedWindow() || mainWindow;
+  const { canceled, filePaths } = await dialog.showOpenDialog(win, {
+    properties: ["openDirectory", "createDirectory"]
+  });
+  if (canceled || !filePaths.length) return { ok: false, canceled: true };
+  return { ok: true, path: filePaths[0] };
+});
+
 // --- PiP Window ---
 ipcMain.handle("open-pip-window", (_event, config = {}) => {
   const pipMode = config.mode || "viewer";
