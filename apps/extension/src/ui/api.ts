@@ -123,6 +123,7 @@ export async function apiCreateSearchTask(params: {
   keyword: string;
   keywordTerms: string[];
   keywordMode: string;
+  excludeTerms?: string[];
   startDate: string;
   endDate: string;
   startTime: string;

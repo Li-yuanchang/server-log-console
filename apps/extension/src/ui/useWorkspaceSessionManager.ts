@@ -16,6 +16,7 @@ export type WorkspaceSessionSetters = {
   // Search/query
   setKeywordInput: (v: string) => void;
   setKeywordMode: (v: "phrase" | "any" | "all") => void;
+  setExcludeInput: (v: string) => void;
   setContextLines: (v: number) => void;
   setUseRegex: (v: boolean) => void;
   setSelectedPreset: (v: string) => void;
@@ -95,6 +96,7 @@ export type WorkspaceSessionManagerParams = {
   directoryPath: string;
   keywordInput: string;
   keywordMode: "phrase" | "any" | "all";
+  excludeInput: string;
   contextLines: number;
   useRegex: boolean;
   selectedPreset: string;
@@ -185,6 +187,7 @@ export function useWorkspaceSessionManager(params: WorkspaceSessionManagerParams
     directoryPath,
     keywordInput,
     keywordMode,
+    excludeInput,
     contextLines,
     useRegex,
     selectedPreset,
@@ -260,6 +263,7 @@ export function useWorkspaceSessionManager(params: WorkspaceSessionManagerParams
       directoryPath,
       keywordInput,
       keywordMode,
+      excludeInput,
       contextLines,
       useRegex,
       selectedPreset,
@@ -337,6 +341,7 @@ export function useWorkspaceSessionManager(params: WorkspaceSessionManagerParams
     setters.setServerId(session.serverId);
     setters.setKeywordInput(nextState.keywordInput);
     setters.setKeywordMode(nextState.keywordMode);
+    setters.setExcludeInput(nextState.excludeInput);
     setters.setContextLines(nextState.contextLines);
     setters.setUseRegex(nextState.useRegex);
     setters.setSelectedPreset(nextState.selectedPreset);

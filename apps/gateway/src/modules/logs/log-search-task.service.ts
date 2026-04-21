@@ -23,6 +23,7 @@ const searchSchema = z.object({
   keyword: z.string().optional(),
   keywordTerms: z.array(z.string()).optional(),
   keywordMode: z.enum(["phrase", "any", "all"]).optional(),
+  excludeTerms: z.array(z.string()).optional(),
   date: z.string().optional(),
   startDate: z.string().optional(),
   endDate: z.string().optional(),

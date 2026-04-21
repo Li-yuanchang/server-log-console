@@ -136,6 +136,8 @@ export function buildSearchCommand(server: ServerSummary, request: LogSearchRequ
     return buildFastSearchCommand(filePath, normalizedTerms[0], context, singleDayValue);
   }
 
+  const excludeTerms = (request.excludeTerms?.filter((item) => item.trim()) ?? []).map((item) => item.trim());
+
   const payload = {
     filePath,
     keywordMode: request.keywordMode || "phrase",
@@ -143,7 +145,8 @@ export function buildSearchCommand(server: ServerSummary, request: LogSearchRequ
     useRegex: Boolean(request.useRegex),
     rangeStart,
     rangeEnd,
-    keywordTerms: normalizedTerms
+    keywordTerms: normalizedTerms,
+    excludeTerms
   };
 
   const currentYear = new Date().getFullYear().toString();
@@ -155,19 +158,26 @@ export function buildSearchCommand(server: ServerSummary, request: LogSearchRequ
     `-v range_start=${shellEscape(payload.rangeStart)}`,
     `-v range_end=${shellEscape(payload.rangeEnd)}`,
     `-v term_count=${shellEscape(String(payload.keywordTerms.length))}`,
+    `-v exclude_count=${shellEscape(String(payload.excludeTerms.length))}`,
     `-v currentYear=${shellEscape(currentYear)}`
   ];
 
   payload.keywordTerms.forEach((term, index) => {
     awkVariables.push(`-v term_${index + 1}=${shellEscape(term)}`);
   });
+  payload.excludeTerms.forEach((term, index) => {
+    awkVariables.push(`-v exc_${index + 1}=${shellEscape(term)}`);
+  });
   const termAssignments = payload.keywordTerms.map((_, index) => `  terms[${index + 1}] = term_${index + 1};`);
+  const excludeAssignments = payload.excludeTerms.map((_, index) => `  excludes[${index + 1}] = exc_${index + 1};`);
 
   const script = [
     `LC_ALL=C $(command -v mawk 2>/dev/null || echo awk) ${awkVariables.join(" ")} '`,
     "BEGIN {",
     ...termAssignments,
+    ...excludeAssignments,
     "  termsCount = term_count + 0;",
+    "  excludesCount = exclude_count + 0;",
     "  context += 0;",
     "  pendingAfter = 0; lastPrinted = 0;",
     "}",
@@ -199,6 +209,13 @@ export function buildSearchCommand(server: ServerSummary, request: LogSearchRequ
     "  }",
     "  return 0;",
     "}",
+    "function excludeHit(line,   i) {",
+    "  if (excludesCount == 0) return 0;",
+    "  for (i = 1; i <= excludesCount; i++) {",
+    "    if (index(line, excludes[i]) > 0) return 1;",
+    "  }",
+    "  return 0;",
+    "}",
     "function inRange(line,   ts) {",
     "  if (range_start == \"\" && range_end == \"\") return 1;",
     "  ts = normalizeTime(line);",
@@ -209,7 +226,7 @@ export function buildSearchCommand(server: ServerSummary, request: LogSearchRequ
     "}",
     "{",
     "  line = $0;",
-    "  hit = inRange(line) && keywordHit(line);",
+    "  hit = inRange(line) && keywordHit(line) && !excludeHit(line);",
     "  if (hit) {",
     "    if (context > 0) {",
     "      start = NR - context; if (start < 1) start = 1;",
@@ -250,6 +267,9 @@ export function buildStreamingSearchCommand(server: ServerSummary, request: LogS
   const normalizedTerms = keywordTerms.length ? keywordTerms : request.keyword?.trim() ? [request.keyword.trim()] : [];
   const hasDateRange = Boolean(rangeStart || rangeEnd);
 
+  const excludeTerms = (request.excludeTerms?.filter((item) => item.trim()) ?? []).map((item) => item.trim());
+  const hasExcludes = excludeTerms.length > 0;
+
   const currentYear = new Date().getFullYear().toString();
   const awkVariables = [
     `-v file=${shellEscape(filePath)}`,
@@ -257,6 +277,7 @@ export function buildStreamingSearchCommand(server: ServerSummary, request: LogS
     `-v keyword_mode=${shellEscape(request.keywordMode || "phrase")}`,
     `-v use_regex=${shellEscape(request.useRegex ? "1" : "0")}`,
     `-v term_count=${shellEscape(String(normalizedTerms.length))}`,
+    `-v exclude_count=${shellEscape(String(excludeTerms.length))}`,
     `-v total_bytes=${shellEscape(String(options?.tailBytes || totalBytes))}`
   ];
 
@@ -271,8 +292,12 @@ export function buildStreamingSearchCommand(server: ServerSummary, request: LogS
   normalizedTerms.forEach((term, index) => {
     awkVariables.push(`-v term_${index + 1}=${shellEscape(term)}`);
   });
+  excludeTerms.forEach((term, index) => {
+    awkVariables.push(`-v exc_${index + 1}=${shellEscape(term)}`);
+  });
 
   const termAssignments = normalizedTerms.map((_, index) => `  terms[${index + 1}] = term_${index + 1};`);
+  const excludeAssignments = excludeTerms.map((_, index) => `  excludes[${index + 1}] = exc_${index + 1};`);
 
   const dateRangeFunctions = hasDateRange ? [
     "function normalizeTime(line,   ts) {",
@@ -293,15 +318,18 @@ export function buildStreamingSearchCommand(server: ServerSummary, request: LogS
     "}"
   ] : [];
 
+  const excludeExpression = hasExcludes ? " && !excludeHit(line)" : "";
   const hitExpression = hasDateRange
-    ? "keywordHit(line) && inRange(line)"
-    : "keywordHit(line)";
+    ? `keywordHit(line) && inRange(line)${excludeExpression}`
+    : `keywordHit(line)${excludeExpression}`;
 
   const script = [
     `LC_ALL=C $(command -v mawk 2>/dev/null || echo awk) ${awkVariables.join(" ")} '`,
     "BEGIN {",
     ...termAssignments,
+    ...excludeAssignments,
     "  termsCount = term_count + 0;",
+    "  excludesCount = exclude_count + 0;",
     "  context += 0;",
     "  pendingAfter = 0;",
     "  lastPrinted = 0;",
@@ -328,6 +356,13 @@ export function buildStreamingSearchCommand(server: ServerSummary, request: LogS
     "  for (i = 1; i <= termsCount; i++) {",
     "    found = use_regex ? (line ~ terms[i]) : (index(line, terms[i]) > 0);",
     "    if (found) return 1;",
+    "  }",
+    "  return 0;",
+    "}",
+    "function excludeHit(line,   i) {",
+    "  if (excludesCount == 0) return 0;",
+    "  for (i = 1; i <= excludesCount; i++) {",
+    "    if (index(line, excludes[i]) > 0) return 1;",
     "  }",
     "  return 0;",
     "}",

@@ -43,6 +43,7 @@ export type LogViewerState = {
   directoryInput: string;
   keywordInput: string;
   keywordMode: "phrase" | "any" | "all";
+  excludeInput: string;
   contextLines: number;
   useRegex: boolean;
   startDate: string;
@@ -397,10 +398,11 @@ export function useLogViewer(params: LogViewerParams): LogViewerAPI {
     const normalizedInput = normalizeSearchInput(state.keywordInput);
     const normalizedTerms = parseKeywordTerms(state.keywordInput);
     if (!normalizedInput || !normalizedTerms.length) { callbacks.setActionStatus("先输入关键字再搜索。"); return; }
+    const excludeTerms = parseKeywordTerms(state.excludeInput);
     if (state.activeViewerTabId !== "file" && activeResultTab) {
       const localResult = activeResultTab.matches.length
-        ? searchWithinMatches(activeResultTab.matches, state.keywordMode, normalizedTerms, state.useRegex, state.contextLines)
-        : searchWithinContent(activeResultTab.content, state.keywordMode, normalizedTerms, state.useRegex, state.contextLines);
+        ? searchWithinMatches(activeResultTab.matches, state.keywordMode, normalizedTerms, state.useRegex, state.contextLines, excludeTerms)
+        : searchWithinContent(activeResultTab.content, state.keywordMode, normalizedTerms, state.useRegex, state.contextLines, excludeTerms);
       setters.setResults(localResult);
       appendResultTab(localResult, activeResultTab.sourceLabel);
       setters.setActiveLogView("search");
@@ -416,7 +418,7 @@ export function useLogViewer(params: LogViewerParams): LogViewerAPI {
     setters.setResults(null);
     try {
       const primaryKeyword = state.keywordMode === "phrase" ? normalizedInput : normalizedTerms[0] || "";
-      const taskPayload = await apiCreateSearchTask({ serverId: state.serverId, filePath: state.filePath, keyword: primaryKeyword, keywordTerms: normalizedTerms, keywordMode: state.keywordMode, startDate: state.startDate, endDate: state.endDate, startTime: state.startTime, endTime: state.endTime, contextLines: state.contextLines, useRegex: state.useRegex });
+      const taskPayload = await apiCreateSearchTask({ serverId: state.serverId, filePath: state.filePath, keyword: primaryKeyword, keywordTerms: normalizedTerms, keywordMode: state.keywordMode, excludeTerms: excludeTerms.length ? excludeTerms : undefined, startDate: state.startDate, endDate: state.endDate, startTime: state.startTime, endTime: state.endTime, contextLines: state.contextLines, useRegex: state.useRegex });
       setters.setSearchTask(taskPayload);
       setters.setActiveLogView("search");
       callbacks.pushActivity(`搜索任务已启动：${taskPayload.strategyLabel || "分片扫描"} / ${taskPayload.scopeLabel || state.filePath}`);
