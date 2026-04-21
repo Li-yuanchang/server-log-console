@@ -31,7 +31,7 @@ import type {
   ServerCredentialStatus,
   ServerSummary
 } from "@server-log-console/shared";
-import { Radio, Wrench, Download, Copy, PictureInPicture2, Bug } from "lucide-react";
+import { Radio, Wrench, Download, Copy, PictureInPicture2, Bug, Bookmark } from "lucide-react";
 import { TerminalPanel } from "./TerminalWorkspace.js";
 import { ToolIcon } from "./ToolIcon.js";
 
@@ -239,6 +239,7 @@ export function App() {
   const [lineContextState, setLineContextState] = useState<LineContextState | null>(null);
   const [highlightCount, setHighlightCount] = useState(0);
   const [viewerSelMenu, setViewerSelMenu] = useState<{ x: number; y: number; text: string } | null>(null);
+  const [showBookmarkPanel, setShowBookmarkPanel] = useState(false);
   const keywordInputRef = useRef<HTMLInputElement | null>(null);
   const directoryInputRef = useRef<HTMLInputElement | null>(null);
   const virtualViewerRef = useRef<VirtualLogViewerHandle | null>(null);
@@ -2014,6 +2015,23 @@ export function App() {
     viewerLineClickHandlerRef.current?.(lineIndex, event);
   }, []);
 
+  const handleBookmarkToggle = useCallback((lineIndex: number) => {
+    setResultTabs((current) => {
+      const targetId = activeViewerTabId;
+      return current.map((tab) => {
+        if (tab.id !== targetId) return tab;
+        const next = { ...tab, bookmarks: { ...tab.bookmarks } };
+        if (next.bookmarks && lineIndex in next.bookmarks) {
+          delete next.bookmarks[lineIndex];
+        } else {
+          next.bookmarks = next.bookmarks || {};
+          next.bookmarks[lineIndex] = "";
+        }
+        return next;
+      });
+    });
+  }, [activeViewerTabId]);
+
 
   const {
     startLogRecording,
@@ -2434,6 +2452,11 @@ export function App() {
                         <Download size={14} strokeWidth={1.8} />
                       </button>
                     ) : null}
+                    {activeLogView === "search" && activeResultTab ? (
+                      <button className={`ghost-button icon-button${showBookmarkPanel ? " active" : ""}`} onClick={() => setShowBookmarkPanel(!showBookmarkPanel)} title="书签">
+                        <Bookmark size={14} strokeWidth={1.8} />
+                      </button>
+                    ) : null}
                     {activeViewerCommandPreview ? (
                       <button
                         className="ghost-button icon-button"
@@ -2577,6 +2600,8 @@ export function App() {
                         activeHighlightIndex={activeHighlightIndex}
                         focusLineIndex={lineContextState && activeViewerTabId === "file" ? lineContextState.lineNumber - lineContextState.startLine : undefined}
                         onLineClick={viewerLineClickEnabled ? handleViewerLineClick : undefined}
+                        bookmarks={activeResultTab?.bookmarks}
+                        onBookmarkToggle={handleBookmarkToggle}
                         onHighlightCountChange={setHighlightCount}
                         onMatchLineIndicesChange={setViewerMatchLineIndices}
                         onWheel={handleViewerWheelWithSelectionMenu}
@@ -2607,6 +2632,23 @@ export function App() {
                           >
                             <Copy size={14} />
                           </button>
+                        </div>
+                      ) : null}
+                      {showBookmarkPanel && activeResultTab?.bookmarks && Object.keys(activeResultTab.bookmarks).length > 0 ? (
+                        <div className="bookmark-panel">
+                          <div className="bookmark-panel-header">
+                            <span>书签 ({Object.keys(activeResultTab.bookmarks).length})</span>
+                            <button className="ghost-button slim-button" onClick={() => setShowBookmarkPanel(false)}>关闭</button>
+                          </div>
+                          <div className="bookmark-panel-list">
+                            {Object.entries(activeResultTab.bookmarks).sort(([a], [b]) => Number(a) - Number(b)).map(([lineIdx, note]) => (
+                              <div key={lineIdx} className="bookmark-entry" onClick={() => virtualViewerRef.current?.scrollToLine(Number(lineIdx))}>
+                                <span className="bookmark-line-no">行 {Number(lineIdx) + 1}</span>
+                                <span className="bookmark-note">{note || currentLogContent.split("\n")[Number(lineIdx)]?.slice(0, 60) || ""}</span>
+                                <button className="ghost-button slim-button" onClick={(e) => { e.stopPropagation(); handleBookmarkToggle(Number(lineIdx)); }}>✕</button>
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       ) : null}
                       {viewerNotAtBottom && activeViewerTabId === "file" ? (
