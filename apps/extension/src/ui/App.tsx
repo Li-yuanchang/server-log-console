@@ -19,6 +19,7 @@ import { SearchProgressPanel } from "./SearchProgressPanel.js";
 import { LocalFilePanel } from "./LocalFilePanel.js";
 import { SshTunnelPanel } from "./SshTunnelPanel.js";
 import { TerminalSplitView } from "./TerminalSplitView.js";
+import { BatchCommandPanel } from "./BatchCommandPanel.js";
 import { SearchToolbarActions } from "./SearchToolbarActions.js";
 import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, WheelEvent as ReactWheelEvent } from "react";
 import type { ReactNode } from "react";
@@ -34,7 +35,7 @@ import type {
   ServerCredentialStatus,
   ServerSummary
 } from "@server-log-console/shared";
-import { Radio, Wrench, Download, Copy, PictureInPicture2, Bug, Bookmark, FolderOpen, Plug, X } from "lucide-react";
+import { Radio, Wrench, Download, Copy, PictureInPicture2, Bug, Bookmark, FolderOpen, Plug, X, Terminal } from "lucide-react";
 import { TerminalPanel } from "./TerminalWorkspace.js";
 import { ToolIcon } from "./ToolIcon.js";
 
@@ -248,6 +249,7 @@ export function App() {
   const [showLocalPanel, setShowLocalPanel] = useState(false);
   const [showSshTunnelPanel, setShowSshTunnelPanel] = useState(false);
   const [terminalSplitMode, setTerminalSplitMode] = useState(false);
+  const [showBatchPanel, setShowBatchPanel] = useState(false);
   const keywordInputRef = useRef<HTMLInputElement | null>(null);
   const directoryInputRef = useRef<HTMLInputElement | null>(null);
   const virtualViewerRef = useRef<VirtualLogViewerHandle | null>(null);
@@ -2481,6 +2483,11 @@ export function App() {
                         <Plug size={14} strokeWidth={1.8} />
                       </button>
                     ) : null}
+                    {servers.length > 0 ? (
+                      <button className={`ghost-button icon-button${showBatchPanel ? " active" : ""}`} onClick={() => setShowBatchPanel(!showBatchPanel)} title="批量执行">
+                        <Terminal size={14} strokeWidth={1.8} />
+                      </button>
+                    ) : null}
                     {activeViewerCommandPreview ? (
                       <button
                         className="ghost-button icon-button"
@@ -2700,6 +2707,14 @@ export function App() {
                           visible={showSshTunnelPanel}
                           serverId={serverId}
                           onClose={() => setShowSshTunnelPanel(false)}
+                          onStatus={(msg) => setActionStatus(msg)}
+                        />
+                      ) : null}
+                      {showBatchPanel && servers.length > 0 ? (
+                        <BatchCommandPanel
+                          visible={showBatchPanel}
+                          servers={servers}
+                          onClose={() => setShowBatchPanel(false)}
                           onStatus={(msg) => setActionStatus(msg)}
                         />
                       ) : null}

@@ -28,6 +28,7 @@ import { LogSliceService } from "./modules/logs/log-slice.service.js";
 import { FileTransferService } from "./modules/logs/file-transfer.service.js";
 import { MultiFileSearchService } from "./modules/logs/multi-file-search.service.js";
 import { SshTunnelService } from "./modules/logs/ssh-tunnel.service.js";
+import { BatchCommandService } from "./modules/logs/batch-command.service.js";
 import { StrategyResolver } from "./modules/logs/strategies/index.js";
 import multer from "multer";
 import { shellEscape } from "./modules/logs/remote-shell.js";
@@ -100,6 +101,7 @@ const logSearchTaskService = new LogSearchTaskService(serverRegistryService, str
 const fileTransferService = new FileTransferService(strategyResolver);
 const multiFileSearchService = new MultiFileSearchService(serverRegistryService, sshExecutorService);
 const sshTunnelService = new SshTunnelService(serverRegistryService, sshExecutorService, credentialResolverService);
+const batchCommandService = new BatchCommandService(serverRegistryService, sshExecutorService);
 logPhase("Service layer", t);
 
 t = performance.now();
@@ -407,6 +409,16 @@ app.delete("/api/ssh/tunnel/:tunnelId", (req, res) => {
 
 app.get("/api/ssh/tunnels", (_req, res) => {
   res.json(sshTunnelService.listTunnels());
+});
+
+// --- Batch Command ---
+app.post("/api/batch/exec", async (req, res) => {
+  try {
+    const result = await batchCommandService.execute(req.body);
+    res.json(result);
+  } catch (error) {
+    res.status(400).json({ message: error instanceof Error ? error.message : "Unknown error" });
+  }
 });
 
 app.post("/api/logs/search", async (req, res) => {

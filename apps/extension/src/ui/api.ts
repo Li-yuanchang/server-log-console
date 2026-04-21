@@ -13,6 +13,8 @@ import type {
   SshTunnelRequest,
   SshTunnelResponse,
   SshTunnelListResponse,
+  BatchCommandRequest,
+  BatchCommandResponse,
   ServerConnectionTestResponse,
   ServerCredentialStatus,
   ServerRouteConfig,
@@ -479,6 +481,11 @@ export async function apiCloseSshTunnel(tunnelId: string): Promise<SshTunnelResp
 
 export async function apiListSshTunnels(): Promise<SshTunnelListResponse> {
   const res = await fetch(`${localServiceBase}/api/ssh/tunnels`);
+  return res.json();
+}
+
+export async function apiBatchExec(req: BatchCommandRequest): Promise<BatchCommandResponse> {
+  const res = await fetch(`${localServiceBase}/api/batch/exec`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(req) });
   return res.json();
 }
 
