@@ -63,7 +63,6 @@ export function useTerminalWindowManager(params: TerminalWindowManagerParams): T
     setTerminalPanelOpen,
     terminalOverlay,
     setTerminalOverlay,
-    setPreserveTerminalOnInactive,
     serverId,
     serverIdRef,
     isElectron,

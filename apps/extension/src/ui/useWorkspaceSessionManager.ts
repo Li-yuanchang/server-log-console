@@ -1,4 +1,4 @@
-import { useEffect, useRef, type Dispatch, type SetStateAction } from "react";
+import { type Dispatch, type SetStateAction } from "react";
 import type { LogFileEntry, LogSearchTaskResponse } from "@server-log-console/shared";
 import type { WorkspaceSession, WorkspaceSessionState } from "./types.js";
 import type { ViewerResultTab } from "./utils.js";
@@ -246,7 +246,6 @@ export function useWorkspaceSessionManager(params: WorkspaceSessionManagerParams
     isStandaloneTerminalWindow,
     defaultDirectoryPath,
     stopLiveFollow,
-    resetFileReaderState,
   } = params;
 
   function getDefaultWorkspaceSessionState(nextServerId: string): WorkspaceSessionState {

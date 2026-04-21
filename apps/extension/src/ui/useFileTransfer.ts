@@ -1,5 +1,4 @@
 import { useCallback } from "react";
-import type { LogFileEntry } from "@server-log-console/shared";
 import type { UploadProgressState, DownloadProgressState } from "./FeedbackOverlays.js";
 import {
   apiDownloadFile,

@@ -1,4 +1,4 @@
-import { useRef, useMemo } from "react";
+import { useMemo } from "react";
 import type {
   LogFileEntry,
   LogFileMetaResponse,
@@ -447,7 +447,7 @@ export function useLogViewer(params: LogViewerParams): LogViewerAPI {
     } finally { setters.setIsBusy(false); setters.setSearchStartedAt(null); }
   }
 
-  async function browseLogFiles(nextDirectoryPath?: string, options?: { manual?: boolean }) {
+  async function browseLogFiles(nextDirectoryPath?: string, _options?: { manual?: boolean }) {
     if (!state.serverId) return;
     callbacks.stopLiveFollow();
     setters.setShowPathHistory(false);

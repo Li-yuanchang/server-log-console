@@ -11,14 +11,13 @@ import { FileBrowserPathbar, buildBreadcrumbItems } from "./FileBrowserPathbar.j
 import { FileBrowserStrip } from "./FileBrowserStrip.js";
 import { FileBrowserTableRows } from "./FileBrowserTableRows.js";
 import { FileBrowserTreeColumn } from "./FileBrowserTreeColumn.js";
-import { FilePreviewDialog, type PreviewDialogState } from "./FilePreviewDialog.js";
-import { ConfirmDialog, TextInputDialog, type ConfirmDialogState } from "./ModalDialogs.js";
+import type { PreviewDialogState } from "./FilePreviewDialog.js";
+import type { ConfirmDialogState } from "./ModalDialogs.js";
 import { ConnectionSettingsWorkspace, type ManualServerDraft, type SettingsWorkspaceView } from "./ConnectionSettingsWorkspace.js";
 import { SearchQueryPanel } from "./SearchQueryPanel.js";
 import { SearchProgressPanel } from "./SearchProgressPanel.js";
 import { SearchToolbarActions } from "./SearchToolbarActions.js";
-import { TransferHistoryDialog } from "./TransferHistoryDialog.js";
-import type { DragEvent as ReactDragEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, WheelEvent as ReactWheelEvent } from "react";
+import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, WheelEvent as ReactWheelEvent } from "react";
 import type { ReactNode } from "react";
 import type {
   JumpServerAssetOption,
@@ -32,10 +31,10 @@ import type {
   ServerCredentialStatus,
   ServerSummary
 } from "@server-log-console/shared";
-import { Radio, Wrench, Download, Copy, PictureInPicture2, Bug, X } from "lucide-react";
+import { Radio, Wrench, Download, Copy, PictureInPicture2, Bug } from "lucide-react";
 import { TerminalPanel } from "./TerminalWorkspace.js";
 import { ToolIcon } from "./ToolIcon.js";
-import { looksLikeJumpServer } from "./terminal-utils.js";
+
 import { useTerminalSession } from "./useTerminalSession.js";
 import { useToasts } from "./useToasts.js";
 import { VirtualLogViewer, type VirtualLogViewerHandle, type VirtualLogViewerScrollState } from "./VirtualLogViewer.js";
@@ -46,8 +45,6 @@ import type { WorkspaceSession, WorkspaceSessionState, ViewerPipSnapshot } from 
 import {
   defaultDirectoryPath,
   MAX_PREVIEW_CACHE_ENTRIES,
-  MAX_RESULT_TABS,
-  VIEWER_PIP_SNAPSHOT_KEY,
 } from "./types.js";
 import {
   computeAutoSliceLength,
@@ -82,62 +79,43 @@ import { DialogOverlays } from "./DialogOverlays.js";
 import { useTerminalWindowManager } from "./useTerminalWindowManager.js";
 import { useKeyboardShortcuts } from "./useKeyboardShortcuts.js";
 import { useWorkspaceSessionManager, type WorkspaceSessionSetters } from "./useWorkspaceSessionManager.js";
-import { useLogViewer, type LogViewerState, type LogViewerRefs, type LogViewerCallbacks } from "./useLogViewer.js";
+import { useLogViewer } from "./useLogViewer.js";
 import {
   localServiceBase,
-  apiGetDirectoryListing,
   apiGetLogMeta,
   apiGetLogSlice,
-  apiGetLineContext,
-  apiCreateSearchTask,
-  apiPollSearchTask,
 } from "./api.js";
 import {
   buildConnectionSummary,
   clampPercent,
   clampSliceStart,
   copyText,
-  describeSearchScopeClient,
   describeSearchStrategyClient,
-  downloadTextFile,
   formatBytes,
   formatDateTime,
   formatDurationLabel,
   formatNumber,
   formatPercent,
   formatPreviewSnippet,
-  formatSearchViewerContent,
   formatSliceProgressLabel,
-  getLocalDateString,
   getParentDirectoryPath,
   getPreviewCacheKey,
-  lineMatchesSearch,
-  looksLikeShellPrompt,
   normalizeSearchInput,
   parseKeywordTerms,
   previewBucketSize,
   previewSliceLength,
-  searchWithinContent,
-  searchWithinMatches,
-  truncateText,
 } from "./utils.js";
 import type { LineContextState, ViewerResultTab } from "./utils.js";
 import {
-  clearTransferHistory,
   type TransferHistoryEntry,
-  pushDirectoryHistory,
-  pushTransferHistory,
   readActivityPanelHeight,
   readBrowserTreeWidth,
   readDirectoryHistory,
   readLastDirectoryMap,
-  readLastServerId,
   readTransferHistory,
   rememberDirectoryIfUseful,
   writeActivityPanelHeight,
   writeBrowserTreeWidth,
-  writeLastDirectory,
-  writeLastServerId,
 } from "./storage.js";
 
 
@@ -189,8 +167,7 @@ export function App() {
   const [finalShellPath, setFinalShellPath] = useState("");
   const [finalShellDetectedPaths, setFinalShellDetectedPaths] = useState<string[]>([]);
   const [finalShellLastImportedAt, setFinalShellLastImportedAt] = useState("");
-  const [xshellPath, setXshellPath] = useState("");
-  const [xshellDetectedPaths, setXshellDetectedPaths] = useState<string[]>([]);
+  const [xshellDetectedPaths] = useState<string[]>([]);
   const [xshellLastImportedAt, setXshellLastImportedAt] = useState("");
   const [uploadProgress, setUploadProgress] = useState<UploadProgressState | null>(null);
   const [downloadProgress, setDownloadProgress] = useState<DownloadProgressState | null>(null);
@@ -310,7 +287,7 @@ export function App() {
     liveFollowRetryCount, liveFollowPaused, viewerNotAtBottom,
     setLiveFollowPaused, setLiveFollowContent,
     startLiveFollow, stopLiveFollow,
-    handleViewerNearBottomChange, scrollViewerToBottom, clearLiveContent,
+    handleViewerNearBottomChange, scrollViewerToBottom,
   } = liveFollow;
 
   const captureViewerPipSnapshot = useCallback((): ViewerPipSnapshot => ({
@@ -341,7 +318,6 @@ export function App() {
     liveFollowContent,
   }), [serverId, filePath, directoryPath, keywordInput, keywordMode, useRegex, preferredBastionId, activeLogView, activeViewerTabId, results, resultTabs, searchStartedAt, fileMeta, sliceOffset, sliceLength, sliceLengthMode, sliceData, lineContextState, resultContextMode, activeHighlightIndex, showFileTools, errorHighlightEnabled, liveFollowEnabled, liveFollowPaused, liveFollowContent]);
 
-  const pipViewerRef = useRef<HTMLDivElement>(null);
   const pipLiveFollowRef = useRef(false);
   const pip = usePictureInPicture({
     width: 980,
@@ -502,11 +478,8 @@ export function App() {
   };
 
   const {
-    getDefaultWorkspaceSessionState,
-    captureCurrentWorkspaceSessionState,
     storeWorkspaceSessionState,
     readWorkspaceSessionState,
-    saveCurrentWorkspaceSessionState,
     applyWorkspaceSessionState,
     startWorkspaceActivation,
   } = useWorkspaceSessionManager({
@@ -1036,12 +1009,10 @@ export function App() {
   });
 
   const {
-    fetchDirectoryListing, fetchLogMeta, fetchLogSlice, fetchLineContext,
-    warmSlice, warmNeighborSlices, resolveViewerJumpTarget,
-    appendResultTab, replaceLastResultTab, closeResultTab,
-    focusHighlight, applySlicePayload, jumpToSearchMatch,
-    toggleLiveFollow, enterPathbarEditMode, exitPathbarEditMode,
-    clearViewerSelection, handleViewerSelectionMouseDown,
+    fetchDirectoryListing, fetchLogSlice, warmSlice, resolveViewerJumpTarget,
+    closeResultTab, focusHighlight, jumpToSearchMatch,
+    enterPathbarEditMode, exitPathbarEditMode,
+    handleViewerSelectionMouseDown,
     handleViewerSelectionMouseUp, handleCopyViewerSelection,
     openContextMenu, runSearch, browseLogFiles,
     commitDirectoryPath, openDirectoryFromInput, browseParentDirectory,
@@ -1050,7 +1021,7 @@ export function App() {
     loadHeadSlice, jumpToSliceRatio, commitReaderPosition,
     startReaderRailDrag, startViewerOverviewDrag, exportCurrentResults,
     selectedFileName, activeFileMeta, activeSliceData,
-    activeResultTab, activeViewerMatches, currentLogContent,
+    activeResultTab, currentLogContent,
     viewerLineClickEnabled, canDragReaderPosition,
   } = logViewerAPI;
 
@@ -1113,7 +1084,6 @@ export function App() {
     startCreateManualServer,
     startEditManualServer,
     saveManualServer,
-    deleteServerRecord,
     requestDeleteServer,
   } = useServerManagement({
     serverId,
@@ -1144,9 +1114,6 @@ export function App() {
   const {
     workspaceTabDragState,
     workspaceTabDragJustMovedRef,
-    clearWorkspaceTabDragState,
-    reorderWorkspaceSessions,
-    getWorkspaceTabDropPosition,
     handleWorkspaceTabDragStart,
     handleWorkspaceTabDragOver,
     handleWorkspaceTabDrop,
@@ -1263,7 +1230,6 @@ export function App() {
 
   const {
     appendTransferHistory,
-    handleClearTransferHistory,
     requestClearTransferHistory,
     handleBrowseTransferHistoryPath,
     handleCopyTransferHistoryValue,
@@ -1311,19 +1277,6 @@ export function App() {
     () => servers.filter((server) => server.connectionKind === "bastion"),
     [servers]
   );
-  const selectedBastion = useMemo(
-    () => availableBastions.find((server) => server.id === preferredBastionId) ?? null,
-    [availableBastions, preferredBastionId]
-  );
-  const jumpServerBastions = useMemo(
-    () => availableBastions.filter((server) => looksLikeJumpServer(server)),
-    [availableBastions]
-  );
-  const showJumpServerRouteFields = useMemo(
-    () => looksLikeJumpServer(selectedServer) || looksLikeJumpServer(selectedBastion) || (!preferredBastionId && jumpServerBastions.length > 0),
-    [jumpServerBastions.length, preferredBastionId, selectedBastion, selectedServer]
-  );
-
   const {
     fetchCredentialStatus,
     fetchServerRoute,
@@ -1403,17 +1356,13 @@ export function App() {
   });
 
   const {
-    ensureTerminalSessionId,
     openTerminalView,
     closeTerminalOverlay,
     toggleTerminalOverlay,
     restoreEmbeddedTerminalWindow,
-    reconcileDetachedTerminalOwnership,
     toggleTerminalPanel,
     openDetachedTerminalWindow,
     closeDetachedTerminalWindow,
-    terminalDetachedRef,
-    terminalSessionIdRef,
   } = useTerminalWindowManager({
     terminalSessionId,
     setTerminalSessionId,
@@ -1450,19 +1399,12 @@ export function App() {
   ]);
 
   const {
-    filteredEntries,
-    selectableFileEntries,
-    fileEntriesByPath,
     selectedFilePathSet,
     selectedFileEntries,
     directoryEntries,
-    fileOnlyEntries,
     tableEntries,
-    visibleSelectedFileCount,
     allVisibleFilesSelected,
-    groupedServers,
     filteredGroupedServers,
-    pathSegments,
     treeEntries,
     sidebarActivityLines,
     recentActivityLines,
@@ -1487,15 +1429,6 @@ export function App() {
         : localServiceState !== "online"
           ? (isElectron ? "正在等待内置连接服务启动..." : "本地连接服务未启动")
           : connectionStateText;
-  const nextStepText = !selectedServer
-    ? "先选择服务器"
-    : !connectionTestStatus?.connected
-      ? "正在自动连接并读取目录"
-        : !filePath
-          ? "在目录列表里进入目标目录，再选择日志文件"
-          : !keywordInput.trim()
-            ? "文件已打开，可直接搜索或读取尾部日志"
-            : "可直接搜索，也可以继续翻阅日志文件";
 
   const keywordTerms = useMemo(() => parseKeywordTerms(keywordInput), [keywordInput]);
   const selectedFileDirectory = resolvedFileDirectoryPath;
@@ -1862,7 +1795,6 @@ export function App() {
   }, [filePath, resultTabs, selectedFileName]);
   const activeViewerCommandPreview = activeResultTab?.commandPreview || (activeViewerTabId === "file" ? results?.commandPreview : "");
   const activeViewerStrategyLabel = activeResultTab?.strategyLabel || (activeViewerTabId === "file" ? results?.strategyLabel : "");
-  const activeViewerScopeLabel = activeResultTab?.scopeLabel || (activeViewerTabId === "file" ? results?.scopeLabel : "");
   const activeViewerMatchCount = activeResultTab?.matchCount ?? (activeViewerTabId === "file" ? results?.matches.length ?? 0 : 0);
   const hasSearchContent = Boolean(activeResultTab?.content || liveFollowContent || sliceData?.content || results?.rawOutput);
 
@@ -1975,15 +1907,10 @@ export function App() {
   const viewerEmptyHint = !filePath
     ? "先在目录中选择日志文件，系统会自动打开尾部片段。"
     : "输入关键字后回车搜索，或在右下角使用回到底部。";
-  const commandPreviewLabel = activeViewerCommandPreview ? truncateText(activeViewerCommandPreview.replace(/\s+/g, " "), 96) : "--";
   const liveStrategyLabel =
     searchTask?.strategyLabel ||
     activeViewerStrategyLabel ||
     describeSearchStrategyClient(keywordMode, keywordTerms, useRegex, startDate, endDate, startTime, endTime);
-  const liveScopeLabel =
-    searchTask?.scopeLabel ||
-    activeViewerScopeLabel ||
-    describeSearchScopeClient(filePath, startDate, endDate, startTime, endTime, keywordTerms);
   const searchElapsedLabel = searchStartedAt ? formatDurationLabel(searchStartedAt, searchNow) : "";
   const searchProgressPhaseLabel = searchTask
     ? `${searchTask.progressPhaseLabel || "正在查找"}${searchTask.progressPhaseCount && searchTask.progressPhaseIndex ? ` · 阶段 ${searchTask.progressPhaseIndex}/${searchTask.progressPhaseCount}` : ""}`
@@ -2009,12 +1936,10 @@ export function App() {
   const showSearchSummary = !showQueryAdvanced && isSearchView && Boolean(highlightCount || activeSearchResultCount || liveFollowEnabled || searchStartedAt);
   const canRecordLog = Boolean(serverId && filePath.trim() && isSearchView);
   const canToggleRecording = recordingSession ? Boolean(serverId) : canRecordLog;
-  const compactConnectionLabel = selectedServer ? `${selectedServer.host} · ${directoryPath || "/"}` : (directoryPath || "/");
   const terminalConnectionLabel = selectedServer
     ? `${selectedServer.host || selectedServer.name || "--"} · ${directoryPath || selectedServer.basePath || "/"}`
     : (directoryPath || "/");
   const compactViewerTitle = selectedFileName || activeResultTab?.label || "搜索结果";
-  const compactViewerSubtitle = activeResultTab?.sourceLabel || compactConnectionLabel;
   const compactReaderHint = activeViewerTabId === "file"
     ? (liveFollowEnabled
       ? `实时：${liveFollowConnected ? (liveFollowPaused ? "已暂停滚动" : "接收中") : (liveFollowRetryCount > 0 ? `重连中 ${liveFollowRetryCount}` : "连接中")}${liveFollowContent ? ` · ${formatNumber(liveFollowContent.split("\n").length)} 行` : ""}`
@@ -2036,7 +1961,7 @@ export function App() {
   viewerWheelHandlerRef.current = handleViewerWheel;
   viewerNearBottomHandlerRef.current = handleViewerNearBottomChange;
   viewerLineClickHandlerRef.current = viewerLineClickEnabled
-    ? (lineIndex: number, event: ReactMouseEvent<HTMLDivElement>) => {
+    ? (lineIndex: number, _event: ReactMouseEvent<HTMLDivElement>) => {
       const match = resolveViewerJumpTarget(lineIndex);
       if (match) void jumpToSearchMatch(match);
     }
@@ -2096,7 +2021,6 @@ export function App() {
 
   const {
     deleteRemoteFile,
-    deleteRemoteEntries,
     confirmDeleteSelectedFiles,
     toggleFileSelection,
     clearSelectedFiles,
@@ -2105,14 +2029,12 @@ export function App() {
     renameRemoteFile,
     openMoveDialog,
     openBatchMoveDialog,
-    buildMovedPath,
     moveRemoteFile,
     moveRemoteEntries,
     extractZipFile,
     mkdirRemoteDir,
     compressRemotePath,
     previewFile,
-    doLoadFile,
     saveFileContent,
   } = useFileOperations({
     serverId,
