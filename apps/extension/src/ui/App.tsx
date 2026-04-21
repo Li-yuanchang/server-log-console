@@ -17,6 +17,7 @@ import { ConnectionSettingsWorkspace, type ManualServerDraft, type SettingsWorks
 import { SearchQueryPanel } from "./SearchQueryPanel.js";
 import { SearchProgressPanel } from "./SearchProgressPanel.js";
 import { LocalFilePanel } from "./LocalFilePanel.js";
+import { SshTunnelPanel } from "./SshTunnelPanel.js";
 import { SearchToolbarActions } from "./SearchToolbarActions.js";
 import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, WheelEvent as ReactWheelEvent } from "react";
 import type { ReactNode } from "react";
@@ -32,7 +33,7 @@ import type {
   ServerCredentialStatus,
   ServerSummary
 } from "@server-log-console/shared";
-import { Radio, Wrench, Download, Copy, PictureInPicture2, Bug, Bookmark, FolderOpen } from "lucide-react";
+import { Radio, Wrench, Download, Copy, PictureInPicture2, Bug, Bookmark, FolderOpen, Plug } from "lucide-react";
 import { TerminalPanel } from "./TerminalWorkspace.js";
 import { ToolIcon } from "./ToolIcon.js";
 
@@ -244,6 +245,7 @@ export function App() {
   const [multiFileMode, setMultiFileMode] = useState(false);
   const [filePattern, setFilePattern] = useState("*.log");
   const [showLocalPanel, setShowLocalPanel] = useState(false);
+  const [showSshTunnelPanel, setShowSshTunnelPanel] = useState(false);
   const keywordInputRef = useRef<HTMLInputElement | null>(null);
   const directoryInputRef = useRef<HTMLInputElement | null>(null);
   const virtualViewerRef = useRef<VirtualLogViewerHandle | null>(null);
@@ -2472,6 +2474,11 @@ export function App() {
                         <FolderOpen size={14} strokeWidth={1.8} />
                       </button>
                     ) : null}
+                    {serverId ? (
+                      <button className={`ghost-button icon-button${showSshTunnelPanel ? " active" : ""}`} onClick={() => setShowSshTunnelPanel(!showSshTunnelPanel)} title="SSH 隧道">
+                        <Plug size={14} strokeWidth={1.8} />
+                      </button>
+                    ) : null}
                     {activeViewerCommandPreview ? (
                       <button
                         className="ghost-button icon-button"
@@ -2684,6 +2691,14 @@ export function App() {
                             setActionStatus(`已打开本地文件：${tabLabel}`);
                           }}
                           onClose={() => setShowLocalPanel(false)}
+                        />
+                      ) : null}
+                      {showSshTunnelPanel && serverId ? (
+                        <SshTunnelPanel
+                          visible={showSshTunnelPanel}
+                          serverId={serverId}
+                          onClose={() => setShowSshTunnelPanel(false)}
+                          onStatus={(msg) => setActionStatus(msg)}
                         />
                       ) : null}
                       {viewerNotAtBottom && activeViewerTabId === "file" ? (

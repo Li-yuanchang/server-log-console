@@ -443,6 +443,131 @@
   text-align: center;
 }
 
+/* --- SSH Tunnel Panel --- */
+.ssh-tunnel-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 300px;
+  max-height: 100%;
+  background: rgba(30, 30, 46, 0.96);
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+  overflow-y: auto;
+  z-index: 10;
+  font-size: 12px;
+}
+
+.ssh-tunnel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  font-weight: 600;
+}
+
+.ssh-tunnel-actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.ssh-tunnel-form {
+  padding: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ssh-tunnel-form-row {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.ssh-tunnel-form-row label {
+  flex-shrink: 0;
+  width: 60px;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 11px;
+}
+
+.ssh-tunnel-form-row input,
+.ssh-tunnel-form-row select {
+  flex: 1;
+  min-width: 0;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 3px;
+  color: #e0e0e0;
+  padding: 3px 6px;
+  font-size: 11px;
+}
+
+.ssh-tunnel-form-row input[type="number"] {
+  width: 70px;
+  flex: none;
+}
+
+.ssh-tunnel-list {
+  padding: 2px 0;
+}
+
+.ssh-tunnel-entry {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.ssh-tunnel-entry-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  overflow: hidden;
+}
+
+.ssh-tunnel-type {
+  flex-shrink: 0;
+  font-weight: 600;
+  color: #60a5fa;
+  font-size: 10px;
+}
+
+.ssh-tunnel-status {
+  flex-shrink: 0;
+  font-size: 10px;
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+.ssh-tunnel-status-active {
+  background: rgba(74, 222, 128, 0.15);
+  color: #4ade80;
+}
+
+.ssh-tunnel-status-error {
+  background: rgba(248, 113, 113, 0.15);
+  color: #f87171;
+}
+
+.ssh-tunnel-status-closed {
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.ssh-tunnel-loading,
+.ssh-tunnel-empty {
+  padding: 12px 8px;
+  color: rgba(255, 255, 255, 0.4);
+  text-align: center;
+  font-size: 11px;
+}
+
 .viewer-console-markup .log-highlight {
   padding: 0 1px;
   border-radius: 2px;

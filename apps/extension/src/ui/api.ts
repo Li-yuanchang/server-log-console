@@ -10,6 +10,9 @@ import type {
   ManualServerUpsertRequest,
   ManualServerUpsertResponse,
   MultiFileLogSearchResponse,
+  SshTunnelRequest,
+  SshTunnelResponse,
+  SshTunnelListResponse,
   ServerConnectionTestResponse,
   ServerCredentialStatus,
   ServerRouteConfig,
@@ -462,6 +465,21 @@ export async function apiExtractZip(
     throw new Error(err.message || "解压失败");
   }
   return response.json() as Promise<{ filePath: string; targetDir: string; output: string }>;
+}
+
+export async function apiCreateSshTunnel(req: SshTunnelRequest): Promise<SshTunnelResponse> {
+  const res = await fetch(`${localServiceBase}/api/ssh/tunnel`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(req) });
+  return res.json();
+}
+
+export async function apiCloseSshTunnel(tunnelId: string): Promise<SshTunnelResponse> {
+  const res = await fetch(`${localServiceBase}/api/ssh/tunnel/${encodeURIComponent(tunnelId)}`, { method: "DELETE" });
+  return res.json();
+}
+
+export async function apiListSshTunnels(): Promise<SshTunnelListResponse> {
+  const res = await fetch(`${localServiceBase}/api/ssh/tunnels`);
+  return res.json();
 }
 
 export async function apiMultiFileSearch(params: Record<string, unknown>): Promise<MultiFileLogSearchResponse> {
