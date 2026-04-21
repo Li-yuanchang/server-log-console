@@ -56,7 +56,6 @@ import {
   readViewerPipSnapshot,
   writeViewerPipSnapshot,
   buildWorkspaceSession,
-  createDefaultWorkspaceSessionState,
 } from "./app-utils.js";
 import { useAsyncStatus } from "./useAsyncStatus.js";
 import { useLocalService } from "./useLocalService.js";
@@ -82,6 +81,8 @@ import { WorkspaceStartupCards } from "./WorkspaceStartupCards.js";
 import { DialogOverlays } from "./DialogOverlays.js";
 import { useTerminalWindowManager } from "./useTerminalWindowManager.js";
 import { useKeyboardShortcuts } from "./useKeyboardShortcuts.js";
+import { useWorkspaceSessionManager, type WorkspaceSessionSetters } from "./useWorkspaceSessionManager.js";
+import { useLogViewer, type LogViewerState, type LogViewerRefs, type LogViewerCallbacks } from "./useLogViewer.js";
 import {
   localServiceBase,
   apiGetDirectoryListing,
@@ -258,6 +259,8 @@ export function App() {
   const [readerPreviewOffset, setReaderPreviewOffset] = useState<number | null>(null);
   const [readerPreviewLoading, setReaderPreviewLoading] = useState(false);
   const [lineContextState, setLineContextState] = useState<LineContextState | null>(null);
+  const [highlightCount, setHighlightCount] = useState(0);
+  const [viewerSelMenu, setViewerSelMenu] = useState<{ x: number; y: number; text: string } | null>(null);
   const keywordInputRef = useRef<HTMLInputElement | null>(null);
   const directoryInputRef = useRef<HTMLInputElement | null>(null);
   const virtualViewerRef = useRef<VirtualLogViewerHandle | null>(null);
@@ -431,183 +434,151 @@ export function App() {
     sliceWarmRef.current.clear();
   }
 
-  function getDefaultWorkspaceSessionState(nextServerId: string): WorkspaceSessionState {
-    const savedDirectory = readLastDirectoryMap()[nextServerId]?.trim() || defaultDirectoryPath;
-    return createDefaultWorkspaceSessionState(nextServerId, savedDirectory, isStandaloneViewerWindow, isStandaloneTerminalWindow);
-  }
+  const workspaceSessionSetters: WorkspaceSessionSetters = {
+    setActiveWorkspaceSessionId,
+    setServerId,
+    setKeywordInput,
+    setKeywordMode,
+    setContextLines,
+    setUseRegex,
+    setSelectedPreset,
+    setStartDate,
+    setEndDate,
+    setStartTime,
+    setEndTime,
+    setCredentialStatus,
+    setCredentialUsername,
+    setCredentialPassword,
+    setCredentialPrivateKey,
+    setServerRouteConfig,
+    setConnectionTestStatus,
+    setPreferredBastionId,
+    setJumpMode,
+    setJumpSearchKeyword,
+    setJumpAssetId,
+    setJumpAssetOptions,
+    setResults,
+    setResultTabs,
+    setSearchTask,
+    setSearchStartedAt,
+    setActiveLogView,
+    setActiveViewerTabId,
+    setDirectoryPath,
+    setDirectoryInput,
+    setFilePath,
+    setFileEntries,
+    setFileMeta,
+    setSliceOffset,
+    setSliceLength,
+    setSliceLengthMode,
+    setSliceData,
+    setLineContextState,
+    setResultContextMode,
+    setSelectedFilePaths,
+    setResultTabCounter,
+    setActiveHighlightIndex,
+    setShowQueryAdvanced,
+    setShowFileTools,
+    setErrorHighlightEnabled,
+    setPathbarMode,
+    setBatchMoveDialog,
+    setShowPathHistory,
+    setShowTransferHistory,
+    setFileLoadingName,
+    setTerminalSessionId,
+    setTerminalDetached,
+    setTerminalPanelOpen,
+    setTerminalOverlay,
+    setPreserveTerminalOnInactive,
+    setRecordingSession,
+    setLiveFollowContent,
+    setLiveFollowPaused,
+    setPendingLiveFollowRestore,
+    setReaderPositionDraft,
+    setReaderPositionDragging,
+    setReaderPreviewContent,
+    setReaderPreviewOffset,
+    setReaderPreviewLoading,
+  };
 
-  function captureCurrentWorkspaceSessionState(nextServerId: string = serverId): WorkspaceSessionState {
-    return {
-      serverId: nextServerId,
-      filePath,
-      directoryPath,
-      keywordInput,
-      keywordMode,
-      contextLines,
-      useRegex,
-      selectedPreset,
-      startDate,
-      endDate,
-      startTime,
-      endTime,
-      credentialStatus,
-      credentialUsername,
-      serverRouteConfig,
-      connectionTestStatus,
-      preferredBastionId,
-      jumpMode,
-      jumpSearchKeyword,
-      jumpAssetId,
-      jumpAssetOptions: [...jumpAssetOptions],
-      results,
-      resultTabs: [...resultTabs],
-      searchStartedAt,
-      activeLogView,
-      activeViewerTabId,
-      fileEntries: [...fileEntries],
-      fileMeta,
-      sliceOffset,
-      sliceLength,
-      sliceLengthMode,
-      sliceData,
-      lineContextState,
-      resultContextMode,
-      selectedFilePaths: [...selectedFilePaths],
-      resultTabCounter,
-      activeHighlightIndex,
-      showQueryAdvanced,
-      showFileTools,
-      errorHighlightEnabled,
-      showPathHistory,
-      showTransferHistory,
-      terminalPanelOpen,
-      terminalDetached,
-      terminalOverlay,
-      terminalSessionId,
-      recordingSession,
-      liveFollowEnabled,
-      liveFollowPaused,
-      liveFollowContent
-    };
-  }
-
-  function storeWorkspaceSessionState(sessionId: string, nextState: WorkspaceSessionState) {
-    workspaceSessionStatesRef.current[sessionId] = nextState;
-  }
-
-  function readWorkspaceSessionState(session: WorkspaceSession): WorkspaceSessionState {
-    return {
-      ...getDefaultWorkspaceSessionState(session.serverId),
-      ...workspaceSessionStatesRef.current[session.id]
-    };
-  }
-
-  function saveCurrentWorkspaceSessionState() {
-    if (!activeWorkspaceSessionId || !serverId) {
-      return;
-    }
-    storeWorkspaceSessionState(activeWorkspaceSessionId, captureCurrentWorkspaceSessionState(serverId));
-  }
-
-  function applyWorkspaceSessionState(session: WorkspaceSession, nextState: WorkspaceSessionState, options?: { fromCache?: boolean }) {
-    restoringWorkspaceStateRef.current = nextState;
-    restoringWorkspaceFromCacheRef.current = Boolean(options?.fromCache);
-    skipServerSelectionResetRef.current = true;
-    skipServerAutoConnectRef.current = Boolean(options?.fromCache);
-    setPendingLiveFollowRestore(nextState.liveFollowEnabled ? nextState : null);
-    setActiveWorkspaceSessionId(session.id);
-    writeLastServerId(session.serverId);
-    setServerId(session.serverId);
-    setKeywordInput(nextState.keywordInput);
-    setKeywordMode(nextState.keywordMode);
-    setContextLines(nextState.contextLines);
-    setUseRegex(nextState.useRegex);
-    setSelectedPreset(nextState.selectedPreset);
-    setStartDate(nextState.startDate);
-    setEndDate(nextState.endDate);
-    setStartTime(nextState.startTime);
-    setEndTime(nextState.endTime);
-    setCredentialStatus(nextState.credentialStatus);
-    setCredentialUsername(nextState.credentialUsername);
-    setCredentialPassword("");
-    setCredentialPrivateKey("");
-    setServerRouteConfig(nextState.serverRouteConfig);
-    setConnectionTestStatus(nextState.connectionTestStatus);
-    setPreferredBastionId(nextState.preferredBastionId);
-    setJumpMode(nextState.jumpMode);
-    setJumpSearchKeyword(nextState.jumpSearchKeyword);
-    setJumpAssetId(nextState.jumpAssetId);
-    setJumpAssetOptions([...nextState.jumpAssetOptions]);
-    jumpAssetAutoSearchKeyRef.current = "";
-    setResults(nextState.results);
-    setResultTabs(nextState.resultTabs);
-    setSearchTask(null);
-    setSearchStartedAt(nextState.searchStartedAt);
-    setActiveLogView(nextState.activeLogView);
-    setActiveViewerTabId(nextState.activeViewerTabId);
-    setDirectoryPath(nextState.directoryPath);
-    setDirectoryInput(nextState.directoryPath || "/");
-    setFilePath(nextState.filePath);
-    setFileEntries(nextState.fileEntries);
-    setFileMeta(nextState.fileMeta);
-    setSliceOffset(nextState.sliceOffset);
-    setSliceLength(nextState.sliceLength);
-    setSliceLengthMode(nextState.sliceLengthMode);
-    setSliceData(nextState.sliceData);
-    setLineContextState(nextState.lineContextState);
-    setResultContextMode(nextState.resultContextMode);
-    setSelectedFilePaths(nextState.selectedFilePaths);
-    setResultTabCounter(nextState.resultTabCounter);
-    setActiveHighlightIndex(nextState.activeHighlightIndex);
-    setShowQueryAdvanced(nextState.showQueryAdvanced);
-    setShowFileTools(nextState.showFileTools);
-    setErrorHighlightEnabled(nextState.errorHighlightEnabled);
-    setPathbarMode("browse");
-    setBatchMoveDialog(null);
-    setShowPathHistory(nextState.showPathHistory);
-    setShowTransferHistory(nextState.showTransferHistory);
-    setFileLoadingName("");
-    setTerminalSessionId(nextState.terminalSessionId);
-    setTerminalDetached(nextState.terminalDetached);
-    setTerminalPanelOpen(nextState.terminalPanelOpen);
-    setTerminalOverlay(nextState.terminalOverlay);
-    setRecordingSession(nextState.recordingSession);
-    setLiveFollowContent(nextState.liveFollowContent);
-    setLiveFollowPaused(nextState.liveFollowPaused);
-    setReaderPositionDragging(false);
-    setReaderPreviewLoading(false);
-    previewCacheRef.current.clear();
-    previewWarmRef.current.clear();
-    sliceCacheRef.current.clear();
-    sliceWarmRef.current.clear();
-    window.setTimeout(() => setPreserveTerminalOnInactive(false), 0);
-  }
-
-  function startWorkspaceActivation(session: WorkspaceSession, options?: { skipSaveCurrent?: boolean }) {
-    if (session.id === activeWorkspaceSessionId && session.serverId === serverId) {
-      setActiveWorkspaceSessionId(session.id);
-      return;
-    }
-
-    if (!options?.skipSaveCurrent) {
-      saveCurrentWorkspaceSessionState();
-    }
-
-    const hasCachedState = Boolean(workspaceSessionStatesRef.current[session.id]);
-    const nextState = readWorkspaceSessionState(session);
-    stopLiveFollow({ keepContent: true });
-
-    if (!isStandaloneTerminalWindow && (terminalPanelOpen || terminalDetached)) {
-      pendingWorkspaceActivationRef.current = { session, state: nextState, fromCache: hasCachedState };
-      setPreserveTerminalOnInactive(Boolean(terminalSessionId.trim()) || terminalDetached);
-      setTerminalDetached(false);
-      setTerminalPanelOpen(false);
-      return;
-    }
-
-    applyWorkspaceSessionState(session, nextState, { fromCache: hasCachedState });
-  }
-
+  const {
+    getDefaultWorkspaceSessionState,
+    captureCurrentWorkspaceSessionState,
+    storeWorkspaceSessionState,
+    readWorkspaceSessionState,
+    saveCurrentWorkspaceSessionState,
+    applyWorkspaceSessionState,
+    startWorkspaceActivation,
+  } = useWorkspaceSessionManager({
+    serverId,
+    activeWorkspaceSessionId,
+    filePath,
+    directoryPath,
+    keywordInput,
+    keywordMode,
+    contextLines,
+    useRegex,
+    selectedPreset,
+    startDate,
+    endDate,
+    startTime,
+    endTime,
+    credentialStatus,
+    credentialUsername,
+    serverRouteConfig,
+    connectionTestStatus,
+    preferredBastionId,
+    jumpMode,
+    jumpSearchKeyword,
+    jumpAssetId,
+    jumpAssetOptions,
+    results,
+    resultTabs,
+    searchStartedAt,
+    activeLogView,
+    activeViewerTabId,
+    fileEntries,
+    fileMeta,
+    sliceOffset,
+    sliceLength,
+    sliceLengthMode,
+    sliceData,
+    lineContextState,
+    resultContextMode,
+    selectedFilePaths,
+    resultTabCounter,
+    activeHighlightIndex,
+    showQueryAdvanced,
+    showFileTools,
+    errorHighlightEnabled,
+    showPathHistory,
+    showTransferHistory,
+    terminalPanelOpen,
+    terminalDetached,
+    terminalOverlay,
+    terminalSessionId,
+    recordingSession,
+    liveFollowEnabled,
+    liveFollowPaused,
+    liveFollowContent,
+    setters: workspaceSessionSetters,
+    workspaceSessionStatesRef,
+    pendingWorkspaceActivationRef,
+    restoringWorkspaceStateRef,
+    restoringWorkspaceFromCacheRef,
+    skipServerSelectionResetRef,
+    skipServerAutoConnectRef,
+    jumpAssetAutoSearchKeyRef,
+    previewCacheRef,
+    previewWarmRef,
+    sliceCacheRef,
+    sliceWarmRef,
+    isStandaloneViewerWindow,
+    isStandaloneTerminalWindow,
+    defaultDirectoryPath,
+    stopLiveFollow,
+    resetFileReaderState,
+  });
 
   useEffect(() => {
     if (!pendingWorkspaceActivationRef.current || terminalPanelOpen || terminalDetached) {
@@ -975,6 +946,113 @@ export function App() {
     };
   }, []);
 
+  const selectedServer = useMemo(
+    () => servers.find((server) => server.id === serverId) ?? null,
+    [servers, serverId]
+  );
+
+  const logViewerAPI = useLogViewer({
+    state: {
+      serverId,
+      filePath,
+      directoryPath,
+      directoryInput,
+      keywordInput,
+      keywordMode,
+      contextLines,
+      useRegex,
+      startDate,
+      endDate,
+      startTime,
+      endTime,
+      sliceOffset,
+      sliceLength,
+      sliceLengthMode,
+      sliceData,
+      fileMeta,
+      fileEntries,
+      results,
+      resultTabs,
+      resultTabCounter,
+      activeLogView,
+      activeViewerTabId,
+      activeHighlightIndex,
+      showPathHistory,
+      showTransferHistory,
+      isBusy,
+      liveFollowEnabled,
+      liveFollowPaused,
+      liveFollowContent,
+      lineContextState,
+      resultContextMode,
+      highlightCount,
+      selectedFilePaths,
+      viewerSelMenu,
+      readerPositionDraft,
+      readerPositionDragging,
+      viewerOverviewDragging,
+      viewerOverviewDraft,
+      viewerOverviewTotalLines: viewerScrollState?.totalLines ?? 0,
+    },
+    setters: {
+      ...workspaceSessionSetters,
+      setIsBusy,
+      setViewerSelMenu,
+      setViewerOverviewDragging,
+      setViewerOverviewDraft,
+      setHighlightCount,
+      setViewerMatchLineIndices,
+      setViewerScrollState,
+    },
+    refs: {
+      sliceRequestRef,
+      openFileRequestRef,
+      sliceScrollAnchorRef,
+      wheelSliceLockRef,
+      readerDraftFrameRef,
+      readerRailRef,
+      viewerOverviewRailRef,
+      virtualViewerRef,
+      viewerContentShellRef,
+      directoryInputRef,
+    },
+    callbacks: {
+      withBusy,
+      pushActivity,
+      setActionStatus,
+      showToast,
+      setIsBusy,
+      stopLiveFollow,
+      startLiveFollow,
+      scrollViewerToBottom,
+      resetFileReaderState,
+      cacheSlicePayload,
+      getCachedSlice,
+      warmSliceFromCache,
+      warmNeighborSlicesFromCache,
+      setContextMenu,
+    },
+    selectedServer,
+  });
+
+  const {
+    fetchDirectoryListing, fetchLogMeta, fetchLogSlice, fetchLineContext,
+    warmSlice, warmNeighborSlices, resolveViewerJumpTarget,
+    appendResultTab, replaceLastResultTab, closeResultTab,
+    focusHighlight, applySlicePayload, jumpToSearchMatch,
+    toggleLiveFollow, enterPathbarEditMode, exitPathbarEditMode,
+    clearViewerSelection, handleViewerSelectionMouseDown,
+    handleViewerSelectionMouseUp, handleCopyViewerSelection,
+    openContextMenu, runSearch, browseLogFiles,
+    commitDirectoryPath, openDirectoryFromInput, browseParentDirectory,
+    openEntry, loadFileMeta, loadSlice, navigateSlice,
+    handleViewerWheel, loadTailSlice, handleBackToBottom,
+    loadHeadSlice, jumpToSliceRatio, commitReaderPosition,
+    startReaderRailDrag, startViewerOverviewDrag, exportCurrentResults,
+    selectedFileName, activeFileMeta, activeSliceData,
+    activeResultTab, activeViewerMatches, currentLogContent,
+    viewerLineClickEnabled, canDragReaderPosition,
+  } = logViewerAPI;
 
   useKeyboardShortcuts({
     activeLogView,
@@ -1076,35 +1154,6 @@ export function App() {
   } = useWorkspaceTabDrag(isWorkspaceSwitchLocked, setWorkspaceSessions);
 
 
-  async function fetchDirectoryListing(targetDirectoryPath: string) {
-    const isBastionSftp = selectedServer?.connectionKind === "bastion" && looksLikeJumpServer(selectedServer);
-    return apiGetDirectoryListing(
-      isBastionSftp
-        ? { bastionId: serverId, directoryPath: targetDirectoryPath }
-        : { serverId, directoryPath: targetDirectoryPath }
-    );
-  }
-
-  async function fetchLogMeta(targetFilePath: string) {
-    return apiGetLogMeta(serverId, targetFilePath);
-  }
-
-  async function fetchLogSlice(targetFilePath: string, targetOffset: number, targetLength: number) {
-    return apiGetLogSlice(serverId, targetFilePath, targetOffset, targetLength);
-  }
-
-  async function fetchLineContext(targetFilePath: string, lineNumber: number, context = 12) {
-    return apiGetLineContext(serverId, targetFilePath, lineNumber, context);
-  }
-
-  async function warmSlice(targetFilePath: string, targetOffset: number, targetLength: number) {
-    return warmSliceFromCache(targetFilePath, targetOffset, targetLength, fetchLogSlice);
-  }
-
-  function warmNeighborSlices(targetFilePath: string, payload: LogSliceResponse, targetLength: number) {
-    warmNeighborSlicesFromCache(targetFilePath, payload, targetLength, fetchLogSlice);
-  }
-
   const {
     fetchFinalShellSettings,
     saveFinalShellPath,
@@ -1170,10 +1219,6 @@ export function App() {
   }, [showConnectionSettings, isStandalonePipWindow]);
 
 
-  const selectedServer = useMemo(
-    () => servers.find((server) => server.id === serverId) ?? null,
-    [servers, serverId]
-  );
   const currentServerTransferHistory = useMemo(
     () => (serverId ? transferHistory.filter((entry) => entry.serverId === serverId) : []),
     [transferHistory, serverId]
@@ -1339,7 +1384,6 @@ export function App() {
   }, [activeLogView, directoryPath, filePath, resolvedFileDirectoryPath]);
 
   const [termSelMenu, setTermSelMenu] = useState<{ x: number; y: number; text: string } | null>(null);
-  const [viewerSelMenu, setViewerSelMenu] = useState<{ x: number; y: number; text: string } | null>(null);
 
   const terminalSession = useTerminalSession({
     active: isStandaloneTerminalWindow || (terminalPanelOpen && !terminalDetached),
@@ -1454,7 +1498,6 @@ export function App() {
             : "可直接搜索，也可以继续翻阅日志文件";
 
   const keywordTerms = useMemo(() => parseKeywordTerms(keywordInput), [keywordInput]);
-  const selectedFileName = filePath ? filePath.split("/").pop() ?? filePath : "";
   const selectedFileDirectory = resolvedFileDirectoryPath;
   const breadcrumbDirectoryPath = activeLogView === "search" && filePath
     ? selectedFileDirectory
@@ -1480,16 +1523,6 @@ export function App() {
     };
   }, [fileMeta, filePath, sliceData]);
 
-  const activeFileMeta = fileMeta?.filePath === filePath ? fileMeta : null;
-  const activeSliceData = sliceData?.filePath === filePath ? sliceData : null;
-
-  const canDragReaderPosition = useMemo(() => {
-    if (!activeFileMeta?.size || !activeSliceData) {
-      return false;
-    }
-
-    return activeFileMeta.size > sliceLength;
-  }, [activeFileMeta, activeSliceData, sliceLength]);
 
   const readerPositionLabel = formatSliceProgressLabel(sliceProgress, {
     dragging: readerPositionDragging,
@@ -1820,10 +1853,6 @@ export function App() {
 
   const canOpenTerminal = Boolean(selectedServer);
   const isFileMode = activeLogView === "files";
-  const activeResultTab = useMemo(
-    () => resultTabs.find((tab) => tab.id === activeViewerTabId) ?? null,
-    [activeViewerTabId, resultTabs]
-  );
   const viewerTabs = useMemo(() => {
     const items: Array<{ id: string; label: string; kind: "file" | "result" }> = filePath
       ? [{ id: "file", label: selectedFileName || "当前文件", kind: "file" as const }]
@@ -1887,12 +1916,6 @@ export function App() {
     }
   }, [terminalPanelOpen, canOpenTerminal, isStandaloneTerminalWindow]);
 
-  const currentFileContent = liveFollowEnabled
-    ? liveFollowContent || activeSliceData?.content || ""
-    : lineContextState?.content || liveFollowContent || activeSliceData?.content || "";
-  const currentLogContent = activeResultTab
-    ? (resultContextMode && activeResultTab.fullContent ? activeResultTab.fullContent : activeResultTab.content)
-    : (resultContextMode && results?.contextOutput ? results.contextOutput : currentFileContent);
   const canToggleErrorHighlight = Boolean(currentLogContent);
   const canToggleResultContext = Boolean(activeResultTab?.fullContent || (activeViewerTabId === "file" && results?.contextOutput));
   const toggleErrorHighlight = useCallback(() => {
@@ -1952,7 +1975,6 @@ export function App() {
   const viewerEmptyHint = !filePath
     ? "先在目录中选择日志文件，系统会自动打开尾部片段。"
     : "输入关键字后回车搜索，或在右下角使用回到底部。";
-  const [highlightCount, setHighlightCount] = useState(0);
   const commandPreviewLabel = activeViewerCommandPreview ? truncateText(activeViewerCommandPreview.replace(/\s+/g, " "), 96) : "--";
   const liveStrategyLabel =
     searchTask?.strategyLabel ||
@@ -2000,226 +2022,16 @@ export function App() {
         ? `定位到 ${formatNumber(lineContextState.lineNumber)} 行`
         : (highlightCount ? `命中 ${highlightCount} 处` : "滚轮到边缘可翻页"))
     : `结果 ${formatNumber(activeViewerMatchCount)} 条`;
-  const activeViewerMatches = activeResultTab?.matches ?? (activeViewerTabId === "file" ? results?.matches ?? [] : []);
-  const viewerLineClickEnabled = activeViewerTabId !== "file" && activeViewerMatches.length > 0;
   const viewerWheelHandlerRef = useRef<(event: ReactWheelEvent<HTMLDivElement>) => void>(() => {});
   const viewerNearBottomHandlerRef = useRef<(nearBottom: boolean) => void>(() => {});
   const viewerLineClickHandlerRef = useRef<((lineIndex: number, event: ReactMouseEvent<HTMLDivElement>) => void) | undefined>(undefined);
 
-  function resolveViewerJumpTarget(lineIndex: number): LogSearchResponse["matches"][number] | null {
-    if (!activeViewerMatches.length) {
-      return null;
-    }
-    const lines = currentLogContent.split("\n");
-    const rawLine = lines[lineIndex] || "";
-    const parsed = rawLine.match(/^\s*(\d+)\s*(?:\||\t)\s?(.*)$/);
-    if (parsed) {
-      const lineNumber = Number(parsed[1]);
-      if (Number.isFinite(lineNumber) && lineNumber > 0) {
-        return {
-          source: activeViewerMatches[0]?.source || activeResultTab?.sourceLabel || filePath,
-          lineNumber,
-          preview: parsed[2] || rawLine.trim(),
-        };
-      }
-      return null;
-    }
-    return resultContextMode ? null : (activeViewerMatches[lineIndex] || null);
-  }
-
-  function appendResultTab(payload: LogSearchResponse, sourceLabel: string) {
-    const nextId = `result-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const nextLabel = `结果 ${resultTabCounter}`;
-    const compactContent = formatSearchViewerContent(payload, undefined);
-    const fullContent = formatSearchViewerContent(payload, "contextOutput");
-    const nextTab: ViewerResultTab = {
-      id: nextId,
-      label: nextLabel,
-      sourceLabel,
-      content: compactContent,
-      fullContent,
-      matches: payload.matches,
-      commandPreview: payload.commandPreview,
-      strategyLabel: payload.strategyLabel,
-      scopeLabel: payload.scopeLabel,
-      matchCount: payload.matches.length
-    };
-
-    setResultTabs((current) => {
-      const nextTabs = [...current, nextTab];
-      return nextTabs.length > MAX_RESULT_TABS ? nextTabs.slice(nextTabs.length - MAX_RESULT_TABS) : nextTabs;
-    });
-    setActiveViewerTabId(nextId);
-    setResultTabCounter((current) => current + 1);
-  }
-
-  function replaceLastResultTab(payload: LogSearchResponse) {
-    setResultTabs((current) => {
-      if (current.length === 0) return current;
-      const last = current[current.length - 1];
-      const compactContent = formatSearchViewerContent(payload, undefined);
-      const fullContent = payload.contextOutput || (payload.rawOutput && payload.rawOutput !== compactContent ? payload.rawOutput : undefined);
-      const updated: ViewerResultTab = {
-        ...last,
-        content: compactContent,
-        fullContent,
-        matches: payload.matches,
-        commandPreview: payload.commandPreview,
-        strategyLabel: payload.strategyLabel,
-        scopeLabel: payload.scopeLabel,
-        matchCount: payload.matches.length
-      };
-      return [...current.slice(0, -1), updated];
-    });
-  }
-
-  function closeResultTab(tabId: string) {
-    setResultTabs((current) => {
-      const nextTabs = current.filter((tab) => tab.id !== tabId);
-      if (activeViewerTabId === tabId) {
-        const fallback = nextTabs[nextTabs.length - 1];
-        setActiveViewerTabId(fallback?.id || (filePath ? "file" : ""));
-      }
-      return nextTabs;
-    });
-  }
-
-  function focusHighlight(direction: "prev" | "next") {
-    if (!highlightCount) {
-      return;
-    }
-
-    const nextIndex =
-      direction === "next"
-        ? (activeHighlightIndex + 1) % highlightCount
-        : (activeHighlightIndex - 1 + highlightCount) % highlightCount;
-
-    setActiveHighlightIndex(nextIndex);
-    setActionStatus(`已定位到第 ${nextIndex + 1} 个命中，共 ${highlightCount} 个。`);
-  }
-
-  function applySlicePayload(payload: LogSliceResponse, options?: { status?: string; activity?: string }) {
-    setLineContextState(null);
-    setSliceOffset(payload.actualOffset);
-    setSliceData({ ...payload });
-    setActiveLogView("search");
-    setActiveViewerTabId("file");
-    if (options?.status) {
-      setActionStatus(options.status);
-    }
-    if (options?.activity) {
-      pushActivity(options.activity);
-    }
-  }
-
-  async function jumpToSearchMatch(match: LogSearchResponse["matches"][number]) {
-    if (!match.source || match.source === "临时结果") {
-      setActionStatus("当前结果页来自临时筛选，暂时不能直接跳回原日志文件。");
-      return;
-    }
-
-    await withBusy("正在定位命中上下文...", async () => {
-      const targetFilePath = match.source;
-      setFilePath(targetFilePath);
-      setActiveLogView("search");
-      setActiveViewerTabId("file");
-      stopLiveFollow();
-
-      const [metaPayload, contextPayload] = await Promise.all([
-        fetchLogMeta(targetFilePath),
-        fetchLineContext(targetFilePath, match.lineNumber, Math.max(12, contextLines * 2))
-      ]);
-
-      setFileMeta(metaPayload);
-      setLineContextState({
-        ...contextPayload,
-        sourceLabel: targetFilePath.split("/").pop() || targetFilePath
-      });
-      setActionStatus(`已定位到第 ${formatNumber(match.lineNumber)} 行附近。`);
-      pushActivity(`已定位搜索命中：${targetFilePath} 第 ${formatNumber(match.lineNumber)} 行。`);
-    });
-  }
 
   liveReconnectRef.current = (target) => {
     void loadTailSlice().finally(() => {
       startLiveFollow(target.filePath, target.fileName, { isReconnect: true });
     });
   };
-
-  async function toggleLiveFollow(nextEnabled: boolean) {
-    if (!filePath.trim()) {
-      return;
-    }
-
-    if (!nextEnabled) {
-      stopLiveFollow({ keepContent: true });
-      showToast("success", "已关闭实时跟随。");
-      pushActivity(`已关闭实时跟随：${filePath}。`);
-      return;
-    }
-
-    await loadTailSlice();
-    startLiveFollow(filePath, selectedFileName || filePath);
-  }
-
-
-  function enterPathbarEditMode(options?: { selectAll?: boolean }) {
-    if (!serverId) {
-      return;
-    }
-    setShowPathHistory(false);
-    setDirectoryInput(directoryPath || directoryInput || "/");
-    setPathbarMode("edit");
-    window.setTimeout(() => {
-      const input = directoryInputRef.current;
-      if (!input) {
-        return;
-      }
-      input.focus();
-      if (options?.selectAll) {
-        input.select();
-        return;
-      }
-      const length = input.value.length;
-      input.setSelectionRange(length, length);
-    }, 0);
-  }
-
-  function exitPathbarEditMode() {
-    setPathbarMode("browse");
-    setDirectoryInput(directoryPath || "/");
-  }
-
-  function clearViewerSelection() {
-    globalThis.getSelection?.()?.removeAllRanges();
-  }
-
-  function handleViewerSelectionMouseDown() {
-    setViewerSelMenu(null);
-  }
-
-  function handleViewerSelectionMouseUp(event: ReactMouseEvent<HTMLDivElement>) {
-    window.setTimeout(() => {
-      const container = viewerContentShellRef.current;
-      const selection = globalThis.getSelection?.();
-      const text = selection?.toString().trim() || "";
-      if (
-        !container ||
-        !selection ||
-        selection.isCollapsed ||
-        !text ||
-        !((selection.anchorNode && container.contains(selection.anchorNode)) ||
-          (selection.focusNode && container.contains(selection.focusNode)))
-      ) {
-        setViewerSelMenu(null);
-        return;
-      }
-      const rect = container.getBoundingClientRect();
-      const nextX = Math.min(Math.max(8, event.clientX - rect.left), Math.max(8, rect.width - 44));
-      const nextY = Math.min(Math.max(8, event.clientY - rect.top), Math.max(8, rect.height - 44));
-      setViewerSelMenu({ x: nextX, y: nextY, text });
-    }, 10);
-  }
 
   viewerWheelHandlerRef.current = handleViewerWheel;
   viewerNearBottomHandlerRef.current = handleViewerNearBottomChange;
@@ -2243,32 +2055,6 @@ export function App() {
     viewerLineClickHandlerRef.current?.(lineIndex, event);
   }, []);
 
-  async function handleCopyViewerSelection() {
-    if (!viewerSelMenu?.text) {
-      return;
-    }
-    try {
-      await copyText(viewerSelMenu.text);
-      setActionStatus("已复制选中文本。");
-      showToast("success", "已复制选中文本");
-    } catch (error) {
-      const detail = error instanceof Error ? error.message : "未知错误";
-      setActionStatus(`复制失败：${detail}`);
-      showToast("error", `复制失败：${detail}`);
-    } finally {
-      clearViewerSelection();
-      setViewerSelMenu(null);
-    }
-  }
-
-  function openContextMenu(entry: LogFileEntry, x: number, y: number) {
-    const menuWidth = 180;
-    const menuHeight = entry.kind === "file" ? 260 : 190;
-    const nextX = Math.min(Math.max(8, x), Math.max(8, window.innerWidth - menuWidth - 8));
-    const nextY = Math.min(Math.max(8, y), Math.max(8, window.innerHeight - menuHeight - 8));
-    setContextMenu({ x: nextX, y: nextY, entry });
-  }
-
 
   const {
     startLogRecording,
@@ -2286,131 +2072,6 @@ export function App() {
     updateToast,
   });
 
-  async function runSearch() {
-    const normalizedInput = normalizeSearchInput(keywordInput);
-    const normalizedTerms = parseKeywordTerms(keywordInput);
-    if (!normalizedInput || !normalizedTerms.length) {
-      setActionStatus("先输入关键字再搜索。");
-      return;
-    }
-
-    if (activeViewerTabId !== "file" && activeResultTab) {
-      const localResult = activeResultTab.matches.length
-        ? searchWithinMatches(activeResultTab.matches, keywordMode, normalizedTerms, useRegex, contextLines)
-        : searchWithinContent(activeResultTab.content, keywordMode, normalizedTerms, useRegex, contextLines);
-      setResults(localResult);
-      appendResultTab(localResult, activeResultTab.sourceLabel);
-      setActiveLogView("search");
-      setActionStatus(`已在 ${activeResultTab.label} 内继续筛选，命中 ${localResult.matches.length} 行。`);
-      pushActivity(`结果页继续筛选完成：${activeResultTab.label} / 命中 ${localResult.matches.length} 行。`);
-      return;
-    }
-
-    const startedAt = Date.now();
-    setSearchStartedAt(startedAt);
-    setIsBusy(true);
-    setActionStatus("正在检索远程日志...");
-    setSearchTask(null);
-    setResults(null);
-
-    try {
-      const primaryKeyword = keywordMode === "phrase" ? normalizedInput : normalizedTerms[0] || "";
-      const taskPayload = await apiCreateSearchTask({
-        serverId,
-        filePath,
-        keyword: primaryKeyword,
-        keywordTerms: normalizedTerms,
-        keywordMode,
-        startDate,
-        endDate,
-        startTime,
-        endTime,
-        contextLines,
-        useRegex
-      });
-      setSearchTask(taskPayload);
-      setActiveLogView("search");
-      pushActivity(`搜索任务已启动：${taskPayload.strategyLabel || "分片扫描"} / ${taskPayload.scopeLabel || filePath}`);
-
-      let currentTask = taskPayload;
-      let quickResultShown = false;
-      while (currentTask.status === "queued" || currentTask.status === "running") {
-        await new Promise((resolve) => window.setTimeout(resolve, 450));
-        currentTask = await apiPollSearchTask(currentTask.taskId);
-        setSearchTask(currentTask);
-
-        // Phase 1 quick results: show immediately while full scan continues
-        if (currentTask.quickResult && !quickResultShown) {
-          quickResultShown = true;
-          setResults(currentTask.quickResult);
-          appendResultTab(currentTask.quickResult, selectedFileName || filePath || "当前文件");
-          setActionStatus(`尾部快搜命中 ${currentTask.quickResult.matches.length} 行，全文扫描继续中...`);
-          pushActivity(`尾部快搜完成：命中 ${currentTask.quickResult.matches.length} 行，全文扫描继续中...`);
-        }
-      }
-
-      if (currentTask.status === "failed") {
-        throw new Error(currentTask.errorMessage || "搜索任务失败");
-      }
-
-      const finalResult = currentTask.result || null;
-      setResults(finalResult);
-      if (finalResult) {
-        if (quickResultShown) {
-          replaceLastResultTab(finalResult);
-        } else {
-          appendResultTab(finalResult, selectedFileName || filePath || "当前文件");
-        }
-      }
-      setActionStatus(`检索完成，命中 ${finalResult?.matches.length ?? 0} 行。`);
-      pushActivity(`检索完成：${selectedServer?.name || serverId} / ${filePath} / 命中 ${finalResult?.matches.length ?? 0} 行。`);
-    } catch (error) {
-      const detail = error instanceof Error ? error.message : "未知错误";
-      setActionStatus(`操作失败：${detail}`);
-      pushActivity(`操作失败：${detail}`);
-    } finally {
-      setIsBusy(false);
-      setSearchStartedAt(null);
-    }
-  }
-
-
-  async function browseLogFiles(nextDirectoryPath?: string, options?: { manual?: boolean }) {
-    if (!serverId) return;
-    stopLiveFollow();
-    setShowPathHistory(false);
-    setShowTransferHistory(false);
-    await withBusy("正在读取远程目录...", async () => {
-      const payload = await fetchDirectoryListing(nextDirectoryPath || directoryPath || "/");
-      setDirectoryPath(payload.directoryPath);
-      setDirectoryInput(payload.directoryPath);
-      setPathbarMode("browse");
-      setSelectedFilePaths([]);
-      setBatchMoveDialog(null);
-      setFileEntries(payload.entries);
-      setActiveLogView("files");
-      rememberDirectoryIfUseful(serverId, payload.directoryPath, payload.entries.length);
-      pushDirectoryHistory(serverId, payload.directoryPath);
-      setActionStatus(`目录读取完成，共 ${payload.entries.length} 项。`);
-      pushActivity(`已打开目录：${payload.directoryPath}，共 ${payload.entries.length} 项。`);
-    });
-  }
-
-  async function commitDirectoryPath(nextDirectoryPath?: string) {
-    if (!serverId) return;
-    const targetDirectory = nextDirectoryPath?.trim() || directoryInput.trim() || directoryPath || "/";
-    await browseLogFiles(targetDirectory, { manual: true });
-  }
-
-  async function openDirectoryFromInput() {
-    if (!serverId) return;
-    await commitDirectoryPath(directoryInput);
-  }
-
-  async function browseParentDirectory() {
-    if (!serverId) return;
-    await commitDirectoryPath(getParentDirectoryPath(directoryPath || directoryInput || "/"));
-  }
 
   const {
     downloadFile,
@@ -2474,410 +2135,6 @@ export function App() {
     withBusy,
     browseLogFiles,
   });
-
-  async function openEntry(entry: LogFileEntry) {
-    if (entry.kind === "directory") {
-      await browseLogFiles(entry.path, { manual: true });
-      return;
-    }
-
-    const requestId = openFileRequestRef.current + 1;
-    openFileRequestRef.current = requestId;
-    stopLiveFollow();
-    setFilePath(entry.path);
-    resetFileReaderState();
-    setShowFileTools(false);
-    setActiveViewerTabId("file");
-    setActiveLogView("search");
-    setFileLoadingName(entry.name);
-    pushActivity(`已选择日志文件：${entry.path}`);
-    setIsBusy(true);
-    setActionStatus("正在打开日志文件...");
-    try {
-      // Single API call: offset=-1 means "read tail", backend computes offset and returns fileSize
-      const effectiveLength = sliceLengthMode === "auto" ? computeAutoSliceLength(0) : sliceLength;
-      const slicePayload = await fetchLogSlice(entry.path, -1, effectiveLength);
-      if (openFileRequestRef.current !== requestId || slicePayload.filePath !== entry.path) {
-        return;
-      }
-
-      // Derive meta from slice response (saves a separate SSH round-trip)
-      const derivedSize = slicePayload.fileSize ?? (slicePayload.actualOffset + slicePayload.actualLength);
-      setFileMeta({
-        filePath: entry.path,
-        size: derivedSize,
-        modifiedTime: slicePayload.modifiedTime ?? new Date().toISOString(),
-        readable: true,
-        encodingHint: "utf-8"
-      });
-
-      // Re-compute slice length now that we know the real file size
-      const realEffectiveLength = sliceLengthMode === "auto" ? computeAutoSliceLength(derivedSize) : sliceLength;
-      if (sliceLengthMode === "auto" && realEffectiveLength !== sliceLength) {
-        setSliceLength(realEffectiveLength);
-      }
-
-      cacheSlicePayload(slicePayload, slicePayload.actualOffset, realEffectiveLength);
-      warmNeighborSlices(entry.path, slicePayload, realEffectiveLength);
-      sliceRequestRef.current += 1;
-      setSliceOffset(slicePayload.actualOffset);
-      setSliceData(slicePayload);
-      setFileLoadingName("");
-      setActionStatus(`已打开 ${entry.name}，尾部切片已加载。`);
-      pushActivity(`已打开日志文件：${entry.path}，尾部 ${formatBytes(slicePayload.actualLength)} 已显示。`);
-
-      const lowerName = entry.name.toLowerCase();
-      if (lowerName.endsWith(".log") || lowerName.endsWith(".out")) {
-        startLiveFollow(entry.path, entry.name);
-      }
-    } catch (error) {
-      const detail = error instanceof Error ? error.message : "未知错误";
-      setActionStatus(`打开失败：${detail}`);
-      pushActivity(`打开失败：${detail}`);
-      showToast("error", `打开失败：${detail}`);
-    } finally {
-      setIsBusy(false);
-      setFileLoadingName("");
-    }
-  }
-
-  async function loadFileMeta(targetFilePath?: string) {
-    const nextFilePath = targetFilePath || filePath;
-    if (!nextFilePath.trim()) {
-      return;
-    }
-
-    await withBusy("正在读取日志元信息...", async () => {
-      const payload = await fetchLogMeta(nextFilePath);
-      if (payload.filePath !== nextFilePath) {
-        return;
-      }
-      setFileMeta(payload);
-      setActionStatus(`已读取元信息，文件大小 ${formatBytes(payload.size)}。`);
-      pushActivity(`已读取元信息：${payload.filePath}，大小 ${formatBytes(payload.size)}。`);
-    });
-  }
-
-  async function loadSlice(targetOffset = sliceOffset, targetLength = sliceLength) {
-    const targetFilePath = filePath;
-    if (!targetFilePath.trim()) {
-      return;
-    }
-
-    const cachedPayload = getCachedSlice(targetFilePath, targetOffset, targetLength);
-    if (cachedPayload) {
-      applySlicePayload(cachedPayload, {
-        status: `已从缓存切换，偏移 ${formatNumber(cachedPayload.actualOffset)}。`,
-        activity: `已命中缓存切片：偏移 ${formatNumber(cachedPayload.actualOffset)}。`
-      });
-      warmNeighborSlices(targetFilePath, cachedPayload, targetLength);
-      return;
-    }
-
-    const requestId = sliceRequestRef.current + 1;
-    sliceRequestRef.current = requestId;
-    await withBusy("正在按切片读取日志...", async () => {
-      const payload = await fetchLogSlice(targetFilePath, targetOffset, targetLength);
-      if (sliceRequestRef.current !== requestId || payload.filePath !== targetFilePath) {
-        return;
-      }
-      cacheSlicePayload(payload, targetOffset, targetLength);
-      warmNeighborSlices(targetFilePath, payload, targetLength);
-      applySlicePayload(payload, {
-        status: `切片加载完成，偏移 ${formatNumber(payload.actualOffset)}，返回 ${formatBytes(payload.actualLength)}。`,
-        activity: `切片读取完成：偏移 ${formatNumber(payload.actualOffset)}，长度 ${formatBytes(payload.actualLength)}。`
-      });
-    });
-  }
-
-  async function navigateSlice(direction: "prev" | "next", source: "button" | "wheel" | "keyboard" = "button") {
-    if (!filePath.trim() || isBusy) {
-      return;
-    }
-
-    if (liveFollowEnabled && !liveFollowPaused) {
-      setLiveFollowPaused(true);
-      pushActivity(`翻页浏览中，实时跟随已暂停。滚到底部可恢复。`);
-    }
-
-    if (direction === "prev") {
-      if (sliceOffset <= 0 || sliceData?.isStart) {
-        return;
-      }
-      sliceScrollAnchorRef.current = "bottom";
-      if (source === "wheel") {
-        wheelSliceLockRef.current = true;
-      }
-      await loadSlice(Math.max(0, sliceOffset - sliceLength), sliceLength);
-      return;
-    }
-
-    if (sliceData?.isEnd) {
-      return;
-    }
-
-    sliceScrollAnchorRef.current = "top";
-    if (source === "wheel") {
-      wheelSliceLockRef.current = true;
-    }
-    await loadSlice(sliceData?.nextOffset ?? sliceOffset + sliceLength, sliceLength);
-  }
-
-  function handleViewerWheel(event: ReactWheelEvent<HTMLDivElement>) {
-    if (activeLogView !== "search" || activeViewerTabId !== "file" || !filePath.trim() || isBusy || wheelSliceLockRef.current) {
-      return;
-    }
-
-    const scrollState = virtualViewerRef.current?.getScrollState();
-    if (!scrollState) return;
-
-    const { scrollTop, scrollHeight, clientHeight } = scrollState;
-    const maxScrollTop = Math.max(0, scrollHeight - clientHeight);
-    const nearTop = scrollTop <= 4;
-    const nearBottom = scrollTop >= maxScrollTop - 4;
-
-    if (event.deltaY < 0 && nearTop && sliceOffset > 0 && !sliceData?.isStart) {
-      void navigateSlice("prev", "wheel");
-      return;
-    }
-
-    if (event.deltaY > 0 && nearBottom && !sliceData?.isEnd) {
-      void navigateSlice("next", "wheel");
-    }
-  }
-
-  async function loadTailSlice() {
-    const targetFilePath = filePath;
-    if (!targetFilePath.trim()) {
-      return;
-    }
-    sliceScrollAnchorRef.current = "bottom";
-
-    const meta = activeFileMeta;
-    const cachedTailOffset = meta ? Math.max(0, meta.size - sliceLength) : null;
-    if (meta && cachedTailOffset !== null) {
-      const cachedPayload = getCachedSlice(targetFilePath, cachedTailOffset, sliceLength);
-      if (cachedPayload) {
-        applySlicePayload(cachedPayload, {
-          status: `已跳转到文件尾部，当前偏移 ${formatNumber(cachedPayload.actualOffset)}。`,
-          activity: `已跳转文件尾部：${targetFilePath}。`
-        });
-        warmNeighborSlices(targetFilePath, cachedPayload, sliceLength);
-        return;
-      }
-    }
-
-    const requestId = sliceRequestRef.current + 1;
-    sliceRequestRef.current = requestId;
-    await withBusy("正在定位文件尾部切片...", async () => {
-      const resolvedMeta =
-        (activeFileMeta?.filePath === targetFilePath ? activeFileMeta : null) ??
-        (await (async () => {
-          const payload = await fetchLogMeta(targetFilePath);
-          if (payload.filePath !== targetFilePath || sliceRequestRef.current !== requestId) {
-            return null;
-          }
-          setFileMeta(payload);
-          return payload;
-        })());
-      if (!resolvedMeta) {
-        return;
-      }
-
-      const nextOffset = Math.max(0, resolvedMeta.size - sliceLength);
-      const payload = await fetchLogSlice(targetFilePath, nextOffset, sliceLength);
-      if (sliceRequestRef.current !== requestId || payload.filePath !== targetFilePath) {
-        return;
-      }
-      cacheSlicePayload(payload, nextOffset, sliceLength);
-      warmNeighborSlices(targetFilePath, payload, sliceLength);
-      applySlicePayload(payload, {
-        status: `已跳转到文件尾部，当前偏移 ${formatNumber(payload.actualOffset)}。`,
-        activity: `已跳转文件尾部：${targetFilePath}。`
-      });
-    });
-  }
-
-  async function handleBackToBottom() {
-    if (liveFollowEnabled) {
-      if (liveFollowPaused) {
-        setLiveFollowPaused(false);
-      }
-      sliceScrollAnchorRef.current = "bottom";
-      scrollViewerToBottom();
-      return;
-    }
-
-    if (!sliceData?.isEnd) {
-      await loadTailSlice();
-      return;
-    }
-
-    sliceScrollAnchorRef.current = "bottom";
-    scrollViewerToBottom();
-  }
-
-  async function loadHeadSlice() {
-    const targetFilePath = filePath;
-    if (!targetFilePath.trim()) {
-      return;
-    }
-    sliceScrollAnchorRef.current = "top";
-    if (liveFollowEnabled) {
-      setLiveFollowPaused(true);
-    }
-    const cachedPayload = getCachedSlice(targetFilePath, 0, sliceLength);
-    if (cachedPayload) {
-      applySlicePayload(cachedPayload, {
-        status: "已跳转到文件头部。",
-        activity: `已跳转文件头部：${targetFilePath}。`
-      });
-      warmNeighborSlices(targetFilePath, cachedPayload, sliceLength);
-      return;
-    }
-    const requestId = sliceRequestRef.current + 1;
-    sliceRequestRef.current = requestId;
-    await withBusy("正在定位文件头部切片...", async () => {
-      const payload = await fetchLogSlice(targetFilePath, 0, sliceLength);
-      if (sliceRequestRef.current !== requestId || payload.filePath !== targetFilePath) {
-        return;
-      }
-      cacheSlicePayload(payload, 0, sliceLength);
-      warmNeighborSlices(targetFilePath, payload, sliceLength);
-      applySlicePayload(payload, {
-        status: "已跳转到文件头部。",
-        activity: `已跳转文件头部：${targetFilePath}。`
-      });
-    });
-  }
-
-  async function jumpToSliceRatio(ratio: number) {
-    const targetFilePath = filePath;
-    if (!targetFilePath.trim()) {
-      return;
-    }
-    sliceScrollAnchorRef.current = "top";
-    if (liveFollowEnabled) {
-      setLiveFollowPaused(true);
-    }
-    const directMeta = activeFileMeta?.filePath === targetFilePath ? activeFileMeta : null;
-    if (directMeta) {
-      const targetOffset = clampSliceStart(directMeta.size, Math.floor(directMeta.size * ratio), sliceLength);
-      const cachedPayload = getCachedSlice(targetFilePath, targetOffset, sliceLength);
-      if (cachedPayload) {
-        applySlicePayload(cachedPayload, {
-          status: `已跳转到 ${formatPercent(ratio * 100)} 附近，当前偏移 ${formatNumber(cachedPayload.actualOffset)}。`,
-          activity: `已跳转日志位置：${formatPercent(ratio * 100)} / ${targetFilePath}。`
-        });
-        warmNeighborSlices(targetFilePath, cachedPayload, sliceLength);
-        return;
-      }
-    }
-    const requestId = sliceRequestRef.current + 1;
-    sliceRequestRef.current = requestId;
-    await withBusy("正在按位置跳转日志...", async () => {
-      const meta =
-        (activeFileMeta?.filePath === targetFilePath ? activeFileMeta : null) ??
-        (await (async () => {
-          const payload = await fetchLogMeta(targetFilePath);
-          if (payload.filePath !== targetFilePath || sliceRequestRef.current !== requestId) {
-            return null;
-          }
-          setFileMeta(payload);
-          return payload;
-        })());
-      if (!meta) {
-        return;
-      }
-
-      const targetOffset = clampSliceStart(meta.size, Math.floor(meta.size * ratio), sliceLength);
-      const payload = await fetchLogSlice(targetFilePath, targetOffset, sliceLength);
-      if (sliceRequestRef.current !== requestId || payload.filePath !== targetFilePath) {
-        return;
-      }
-      cacheSlicePayload(payload, targetOffset, sliceLength);
-      warmNeighborSlices(targetFilePath, payload, sliceLength);
-      applySlicePayload(payload, {
-        status: `已跳转到 ${formatPercent(ratio * 100)} 附近，当前偏移 ${formatNumber(payload.actualOffset)}。`,
-        activity: `已跳转日志位置：${formatPercent(ratio * 100)} / ${targetFilePath}。`
-      });
-    });
-  }
-
-  async function commitReaderPosition(nextPercent: number) {
-    setReaderPositionDragging(false);
-    if (readerDraftFrameRef.current !== null) {
-      window.cancelAnimationFrame(readerDraftFrameRef.current);
-      readerDraftFrameRef.current = null;
-    }
-    if (!canDragReaderPosition) {
-      setReaderPositionDraft(0);
-      setReaderPreviewContent("");
-      setReaderPreviewOffset(null);
-      setReaderPreviewLoading(false);
-      return;
-    }
-
-    const normalizedPercent = Math.max(0, Math.min(100, nextPercent));
-    setReaderPositionDraft(normalizedPercent);
-    setReaderPreviewContent("");
-    setReaderPreviewOffset(null);
-    setReaderPreviewLoading(false);
-    sliceScrollAnchorRef.current = "top";
-    await jumpToSliceRatio(normalizedPercent / 100);
-  }
-
-  function startReaderRailDrag(clientY: number) {
-    if (!canDragReaderPosition || isBusy) {
-      return;
-    }
-
-    const rail = readerRailRef.current;
-    if (!rail) {
-      return;
-    }
-
-    const rect = rail.getBoundingClientRect();
-    if (!rect.height) {
-      return;
-    }
-
-    const nextPercent = clampPercent(((clientY - rect.top) / rect.height) * 100);
-    setReaderPositionDragging(true);
-    setReaderPreviewLoading(false);
-    setReaderPositionDraft(nextPercent);
-  }
-
-  function startViewerOverviewDrag(clientY: number) {
-    const rail = viewerOverviewRailRef.current;
-    if (!rail) {
-      return;
-    }
-
-    const rect = rail.getBoundingClientRect();
-    if (!rect.height) {
-      return;
-    }
-
-    const nextPercent = clampPercent(((clientY - rect.top) / rect.height) * 100);
-    setViewerOverviewDragging(true);
-    setViewerOverviewDraft(nextPercent);
-    if (viewerOverviewTotalLines) {
-      const targetLine = Math.round((nextPercent / 100) * Math.max(0, viewerOverviewTotalLines - 1));
-      virtualViewerRef.current?.scrollToLine(targetLine, "auto");
-    }
-  }
-
-  async function exportCurrentResults() {
-    const exportContent = activeResultTab?.content || (results ? results.rawOutput : "");
-    if (!exportContent) {
-      return;
-    }
-
-    await downloadTextFile(exportContent, `server-log-console/检索结果-${Date.now()}.log`);
-    setActionStatus("当前结果页已触发下载。");
-    pushActivity("已触发当前结果页下载。");
-  }
 
   if (isStandaloneTerminalWindow) {
     return (
