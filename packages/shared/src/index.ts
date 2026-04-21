@@ -135,6 +135,28 @@ export interface SshTunnelListResponse {
   tunnels: SshTunnelInfo[];
 }
 
+export interface BatchCommandRequest {
+  serverIds: string[];
+  command: string;
+  timeout?: number;
+}
+
+export interface BatchCommandResult {
+  serverId: string;
+  serverName?: string;
+  exitCode: number | null;
+  stdout: string;
+  stderr: string;
+  durationMs: number;
+  error?: string;
+}
+
+export interface BatchCommandResponse {
+  ok: boolean;
+  results: BatchCommandResult[];
+  message?: string;
+}
+
 export interface LiveTailRequest {
   serverId: string;
   filePath: string;
