@@ -1841,6 +1841,34 @@ export function App() {
     }
   }, [pip.isPip, selectedFileName, activeResultTab?.label]);
 
+  // PiP state sync: send errorHighlight/liveFollow changes to the other window
+  useEffect(() => {
+    const api = (window as any).electronAPI;
+    if (!api?.sendPipState) return;
+    api.sendPipState({ errorHighlight: errorHighlightEnabled, liveFollow: liveFollowEnabled });
+  }, [errorHighlightEnabled, liveFollowEnabled]);
+
+  // PiP state sync: push initial state when PiP opens
+  useEffect(() => {
+    const api = (window as any).electronAPI;
+    if (!api?.sendPipState || !pip.isPip) return;
+    api.sendPipState({ errorHighlight: errorHighlightEnabled, liveFollow: liveFollowEnabled });
+  }, [pip.isPip]);
+
+  // PiP state sync: listen for state updates from the other window
+  useEffect(() => {
+    const api = (window as any).electronAPI;
+    if (!api?.onPipStateUpdate) return;
+    const unsubscribe = api.onPipStateUpdate((state: { errorHighlight?: boolean; liveFollow?: boolean }) => {
+      if (state.errorHighlight !== undefined) setErrorHighlightEnabled(state.errorHighlight);
+      if (state.liveFollow !== undefined && state.liveFollow !== liveFollowEnabled) {
+        if (state.liveFollow && filePath) startLiveFollow(filePath, selectedFileName);
+        else if (!state.liveFollow) stopLiveFollow({ keepContent: true });
+      }
+    });
+    return () => { if (typeof unsubscribe === "function") unsubscribe(); };
+  }, [filePath, selectedFileName, liveFollowEnabled]);
+
   useEffect(() => {
     if (terminalPanelOpen && !canOpenTerminal && !isStandaloneTerminalWindow) {
       closeTerminalOverlay();
