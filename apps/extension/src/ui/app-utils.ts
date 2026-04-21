@@ -85,6 +85,7 @@ export function createDefaultWorkspaceSessionState(nextServerId: string, savedDi
     directoryPath: savedDirectory,
     keywordInput: "",
     keywordMode: "phrase" as const,
+    excludeInput: "",
     contextLines: 3,
     useRegex: false,
     selectedPreset: "未选择",

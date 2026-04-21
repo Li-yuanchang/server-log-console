@@ -19,6 +19,7 @@ type Props = {
   toolbarMetaLabel: string;
   settings: SearchSettingsState;
   onKeywordModeChange: (value: SearchSettingsState["keywordMode"]) => void;
+  onExcludeInputChange: (value: string) => void;
   onContextLinesChange: (value: number) => void;
   onToggleRegex: () => void;
   onStartDateChange: (value: string) => void;
@@ -83,6 +84,18 @@ export function SearchQueryPanel(props: Props) {
             >
               正则
             </button>
+          </div>
+          <div className="advanced-row advanced-row-exclude">
+            <label>
+              排除
+              <input
+                type="text"
+                placeholder="排除包含这些词的行，空格分隔"
+                value={props.settings.excludeInput}
+                onChange={(event) => props.onExcludeInputChange(event.target.value)}
+                disabled={!props.hasServer}
+              />
+            </label>
           </div>
           <div className="advanced-row advanced-row-time">
             <label>

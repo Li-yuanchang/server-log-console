@@ -26,6 +26,7 @@ export interface LogSearchRequest {
   keyword?: string;
   keywordTerms?: string[];
   keywordMode?: "phrase" | "any" | "all";
+  excludeTerms?: string[];
   date?: string;
   startDate?: string;
   endDate?: string;

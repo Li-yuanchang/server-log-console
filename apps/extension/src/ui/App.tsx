@@ -134,6 +134,7 @@ export function App() {
   const [fileFilter, setFileFilter] = useState("");
   const [keywordInput, setKeywordInput] = useState("");
   const [keywordMode, setKeywordMode] = useState<"phrase" | "any" | "all">("phrase");
+  const [excludeInput, setExcludeInput] = useState("");
   const [contextLines, setContextLines] = useState(3);
   const [useRegex, setUseRegex] = useState(false);
   const [selectedPreset, setSelectedPreset] = useState("未选择");
@@ -296,6 +297,7 @@ export function App() {
     directoryPath,
     keywordInput,
     keywordMode,
+    excludeInput,
     useRegex,
     preferredBastionId,
     activeLogView,
@@ -316,7 +318,7 @@ export function App() {
     liveFollowEnabled,
     liveFollowPaused,
     liveFollowContent,
-  }), [serverId, filePath, directoryPath, keywordInput, keywordMode, useRegex, preferredBastionId, activeLogView, activeViewerTabId, results, resultTabs, searchStartedAt, fileMeta, sliceOffset, sliceLength, sliceLengthMode, sliceData, lineContextState, resultContextMode, activeHighlightIndex, showFileTools, errorHighlightEnabled, liveFollowEnabled, liveFollowPaused, liveFollowContent]);
+  }), [serverId, filePath, directoryPath, keywordInput, keywordMode, excludeInput, useRegex, preferredBastionId, activeLogView, activeViewerTabId, results, resultTabs, searchStartedAt, fileMeta, sliceOffset, sliceLength, sliceLengthMode, sliceData, lineContextState, resultContextMode, activeHighlightIndex, showFileTools, errorHighlightEnabled, liveFollowEnabled, liveFollowPaused, liveFollowContent]);
 
   const pipLiveFollowRef = useRef(false);
   const pip = usePictureInPicture({
@@ -367,6 +369,7 @@ export function App() {
     standaloneViewerSnapshotAppliedRef.current = true;
     setKeywordInput(snapshot.keywordInput);
     setKeywordMode(snapshot.keywordMode);
+    setExcludeInput(snapshot.excludeInput || "");
     setUseRegex(snapshot.useRegex);
     setPreferredBastionId(snapshot.preferredBastionId);
     setResults(snapshot.results);
@@ -415,6 +418,7 @@ export function App() {
     setServerId,
     setKeywordInput,
     setKeywordMode,
+    setExcludeInput,
     setContextLines,
     setUseRegex,
     setSelectedPreset,
@@ -489,6 +493,7 @@ export function App() {
     directoryPath,
     keywordInput,
     keywordMode,
+    excludeInput,
     contextLines,
     useRegex,
     selectedPreset,
@@ -932,6 +937,7 @@ export function App() {
       directoryInput,
       keywordInput,
       keywordMode,
+      excludeInput,
       contextLines,
       useRegex,
       startDate,
@@ -1731,7 +1737,7 @@ export function App() {
         setKeywordMode("phrase");
         setContextLines(3);
         setUseRegex(false);
-        setStartDate(""); setEndDate(""); setStartTime(""); setEndTime("");
+        setExcludeInput(""); setStartDate(""); setEndDate(""); setStartTime(""); setEndTime("");
         setSelectedPreset("常规");
       }
     },
@@ -1741,7 +1747,7 @@ export function App() {
         setKeywordMode("all");
         setContextLines(2);
         setUseRegex(false);
-        setStartDate(""); setEndDate(""); setStartTime(""); setEndTime("");
+        setExcludeInput(""); setStartDate(""); setEndDate(""); setStartTime(""); setEndTime("");
         setSelectedPreset("查 SQL");
       }
     },
@@ -1751,7 +1757,7 @@ export function App() {
         setKeywordMode("any");
         setContextLines(8);
         setUseRegex(false);
-        setStartDate(""); setEndDate(""); setStartTime(""); setEndTime("");
+        setExcludeInput(""); setStartDate(""); setEndDate(""); setStartTime(""); setEndTime("");
         setSelectedPreset("查异常");
       }
     },
@@ -1761,7 +1767,7 @@ export function App() {
         setKeywordMode("phrase");
         setContextLines(1);
         setUseRegex(false);
-        setStartDate(""); setEndDate(""); setStartTime(""); setEndTime("");
+        setExcludeInput(""); setStartDate(""); setEndDate(""); setStartTime(""); setEndTime("");
         setSelectedPreset("大日志快筛");
       }
     },
@@ -1771,7 +1777,7 @@ export function App() {
         setKeywordMode("phrase");
         setContextLines(3);
         setUseRegex(true);
-        setStartDate(""); setEndDate(""); setStartTime(""); setEndTime("");
+        setExcludeInput(""); setStartDate(""); setEndDate(""); setStartTime(""); setEndTime("");
         setSelectedPreset("正则");
       }
     }
@@ -2230,6 +2236,7 @@ export function App() {
               settings={{
                 keywordInput,
                 keywordMode,
+                excludeInput,
                 contextLines,
                 useRegex,
                 selectedPreset,
@@ -2239,6 +2246,7 @@ export function App() {
                 endTime,
               }}
               onKeywordModeChange={setKeywordMode}
+              onExcludeInputChange={setExcludeInput}
               onContextLinesChange={setContextLines}
               onToggleRegex={() => {
                 setUseRegex(!useRegex);

@@ -32,6 +32,7 @@ export type WorkspaceSessionState = {
   directoryPath: string;
   keywordInput: string;
   keywordMode: "phrase" | "any" | "all";
+  excludeInput: string;
   contextLines: number;
   useRegex: boolean;
   selectedPreset: string;
@@ -85,6 +86,7 @@ export type ViewerPipSnapshot = {
   directoryPath: string;
   keywordInput: string;
   keywordMode: "phrase" | "any" | "all";
+  excludeInput?: string;
   useRegex: boolean;
   preferredBastionId: string;
   activeLogView: "search" | "files";

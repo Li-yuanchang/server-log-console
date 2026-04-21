@@ -91,6 +91,7 @@ export function readSavedSearchSettings(): SearchSettingsState | null {
     return {
       keywordInput: typeof parsed.keywordInput === "string" ? parsed.keywordInput : "",
       keywordMode,
+      excludeInput: typeof parsed.excludeInput === "string" ? parsed.excludeInput : "",
       contextLines: typeof parsed.contextLines === "number" ? Math.max(0, Math.min(20, parsed.contextLines)) : 3,
       useRegex: Boolean(parsed.useRegex),
       selectedPreset: typeof parsed.selectedPreset === "string" ? parsed.selectedPreset : "未选择",

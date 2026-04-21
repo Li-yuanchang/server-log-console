@@ -295,6 +295,7 @@ export interface ViewerResultTab {
 export interface SearchSettingsState {
   keywordInput: string;
   keywordMode: "phrase" | "any" | "all";
+  excludeInput: string;
   contextLines: number;
   useRegex: boolean;
   selectedPreset: string;
@@ -370,10 +371,18 @@ export function formatPreviewSnippet(content: string, maxLines = 7) {
     .join("\n");
 }
 
-export function lineMatchesSearch(line: string, keywordMode: "phrase" | "any" | "all", keywordTerms: string[], useRegex: boolean) {
+export function lineMatchesSearch(line: string, keywordMode: "phrase" | "any" | "all", keywordTerms: string[], useRegex: boolean, excludeTerms?: string[]) {
   const normalizedTerms = keywordTerms.filter(Boolean);
   if (!normalizedTerms.length) {
     return false;
+  }
+
+  // Exclude check: if any exclude term is found, reject the line
+  if (excludeTerms?.length) {
+    const lowered = line.toLowerCase();
+    if (excludeTerms.some((term) => lowered.includes(term.toLowerCase()))) {
+      return false;
+    }
   }
 
   if (useRegex) {
@@ -397,9 +406,9 @@ export function lineMatchesSearch(line: string, keywordMode: "phrase" | "any" | 
   return lowered.includes(loweredTerms[0]);
 }
 
-export function searchWithinContent(content: string, keywordMode: "phrase" | "any" | "all", keywordTerms: string[], useRegex: boolean, contextLines: number) {
+export function searchWithinContent(content: string, keywordMode: "phrase" | "any" | "all", keywordTerms: string[], useRegex: boolean, contextLines: number, excludeTerms?: string[]) {
   const lines = content.split(/\r?\n/);
-  const matchedIndices = lines.flatMap((line, index) => (lineMatchesSearch(line, keywordMode, keywordTerms, useRegex) ? [index] : []));
+  const matchedIndices = lines.flatMap((line, index) => (lineMatchesSearch(line, keywordMode, keywordTerms, useRegex, excludeTerms) ? [index] : []));
 
   if (!matchedIndices.length) {
     return {
@@ -438,8 +447,8 @@ export function searchWithinContent(content: string, keywordMode: "phrase" | "an
   } satisfies LogSearchResponse;
 }
 
-export function searchWithinMatches(baseMatches: LogSearchResponse["matches"], keywordMode: "phrase" | "any" | "all", keywordTerms: string[], useRegex: boolean, contextLines: number) {
-  const matchedIndexes = baseMatches.flatMap((match, index) => (lineMatchesSearch(match.preview, keywordMode, keywordTerms, useRegex) ? [index] : []));
+export function searchWithinMatches(baseMatches: LogSearchResponse["matches"], keywordMode: "phrase" | "any" | "all", keywordTerms: string[], useRegex: boolean, contextLines: number, excludeTerms?: string[]) {
+  const matchedIndexes = baseMatches.flatMap((match, index) => (lineMatchesSearch(match.preview, keywordMode, keywordTerms, useRegex, excludeTerms) ? [index] : []));
 
   if (!matchedIndexes.length) {
     return {
