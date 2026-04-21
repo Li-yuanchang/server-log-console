@@ -5,7 +5,6 @@ import type {
   LogFileListResponse,
   LogFileMetaResponse,
   LogLineContextResponse,
-  LogSearchResponse,
   LogSearchTaskResponse,
   LogSliceResponse,
   ManualServerUpsertRequest,

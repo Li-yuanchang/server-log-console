@@ -67,7 +67,6 @@ export function useFileOperations(deps: {
     isBusy,
     selectedFileEntries,
     tableEntries,
-    selectedFilePaths,
     previewDialog,
     setConfirmDialog,
     setRenameDialog,

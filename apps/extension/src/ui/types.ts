@@ -6,8 +6,7 @@ import type {
   LogSliceResponse,
   ServerConnectionTestResponse,
   ServerRouteConfig,
-  ServerCredentialStatus,
-  ServerSummary
+  ServerCredentialStatus
 } from "@server-log-console/shared";
 import type { LogRecordingSessionResponse } from "./api.js";
 import type { LineContextState, ViewerResultTab } from "./utils.js";
