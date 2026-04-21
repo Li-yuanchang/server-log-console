@@ -363,6 +363,86 @@
   color: #f8fbff;
 }
 
+/* --- Local File Panel --- */
+.local-file-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 280px;
+  max-height: 100%;
+  background: rgba(30, 30, 46, 0.96);
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+  overflow-y: auto;
+  z-index: 10;
+  font-size: 12px;
+}
+
+.local-file-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  font-weight: 600;
+}
+
+.local-file-actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.local-file-path {
+  padding: 4px 8px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.local-file-list {
+  padding: 2px 0;
+}
+
+.local-file-entry {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  cursor: pointer;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.local-file-entry:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.local-file-dir {
+  color: #60a5fa;
+  font-weight: 500;
+}
+
+.local-file-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.local-file-size {
+  flex-shrink: 0;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 10px;
+}
+
+.local-file-loading {
+  padding: 8px;
+  color: rgba(255, 255, 255, 0.5);
+  text-align: center;
+}
+
 .viewer-console-markup .log-highlight {
   padding: 0 1px;
   border-radius: 2px;

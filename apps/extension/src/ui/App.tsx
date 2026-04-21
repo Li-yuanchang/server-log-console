@@ -16,6 +16,7 @@ import type { ConfirmDialogState } from "./ModalDialogs.js";
 import { ConnectionSettingsWorkspace, type ManualServerDraft, type SettingsWorkspaceView } from "./ConnectionSettingsWorkspace.js";
 import { SearchQueryPanel } from "./SearchQueryPanel.js";
 import { SearchProgressPanel } from "./SearchProgressPanel.js";
+import { LocalFilePanel } from "./LocalFilePanel.js";
 import { SearchToolbarActions } from "./SearchToolbarActions.js";
 import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, WheelEvent as ReactWheelEvent } from "react";
 import type { ReactNode } from "react";
@@ -31,7 +32,7 @@ import type {
   ServerCredentialStatus,
   ServerSummary
 } from "@server-log-console/shared";
-import { Radio, Wrench, Download, Copy, PictureInPicture2, Bug, Bookmark } from "lucide-react";
+import { Radio, Wrench, Download, Copy, PictureInPicture2, Bug, Bookmark, FolderOpen } from "lucide-react";
 import { TerminalPanel } from "./TerminalWorkspace.js";
 import { ToolIcon } from "./ToolIcon.js";
 
@@ -242,6 +243,7 @@ export function App() {
   const [showBookmarkPanel, setShowBookmarkPanel] = useState(false);
   const [multiFileMode, setMultiFileMode] = useState(false);
   const [filePattern, setFilePattern] = useState("*.log");
+  const [showLocalPanel, setShowLocalPanel] = useState(false);
   const keywordInputRef = useRef<HTMLInputElement | null>(null);
   const directoryInputRef = useRef<HTMLInputElement | null>(null);
   const virtualViewerRef = useRef<VirtualLogViewerHandle | null>(null);
@@ -2465,6 +2467,11 @@ export function App() {
                         <Bookmark size={14} strokeWidth={1.8} />
                       </button>
                     ) : null}
+                    {isElectron ? (
+                      <button className={`ghost-button icon-button${showLocalPanel ? " active" : ""}`} onClick={() => setShowLocalPanel(!showLocalPanel)} title="本地文件">
+                        <FolderOpen size={14} strokeWidth={1.8} />
+                      </button>
+                    ) : null}
                     {activeViewerCommandPreview ? (
                       <button
                         className="ghost-button icon-button"
@@ -2658,6 +2665,26 @@ export function App() {
                             ))}
                           </div>
                         </div>
+                      ) : null}
+                      {showLocalPanel && isElectron ? (
+                        <LocalFilePanel
+                          visible={showLocalPanel}
+                          onOpenFile={(filePath, content) => {
+                            const tabLabel = filePath.split("/").pop() || filePath;
+                            const searchResponse: LogSearchResponse = {
+                              matches: [],
+                              rawOutput: content,
+                              truncated: false,
+                              commandPreview: "",
+                              strategyLabel: "本地文件",
+                              scopeLabel: filePath
+                            };
+                            logViewerAPI.appendResultTab(searchResponse, tabLabel);
+                            setActiveLogView("search");
+                            setActionStatus(`已打开本地文件：${tabLabel}`);
+                          }}
+                          onClose={() => setShowLocalPanel(false)}
+                        />
                       ) : null}
                       {viewerNotAtBottom && activeViewerTabId === "file" ? (
                         <button className="live-back-to-bottom" onClick={() => void handleBackToBottom()}>

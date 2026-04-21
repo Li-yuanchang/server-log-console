@@ -24,4 +24,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   },
   saveFile: (buffer, defaultName) => ipcRenderer.invoke("save-file", buffer, defaultName),
   revealLocalPath: (targetPath) => ipcRenderer.invoke("reveal-local-path", targetPath),
+  localBrowse: (dirPath) => ipcRenderer.invoke("local-browse", dirPath),
+  localReadFile: (filePath) => ipcRenderer.invoke("local-read-file", filePath),
+  localPickDirectory: () => ipcRenderer.invoke("local-pick-directory"),
 });
