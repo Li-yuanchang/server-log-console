@@ -397,6 +397,11 @@ ipcMain.handle("open-pip-window", (_event, config = {}) => {
       }
     } else if (viewerPipWindow === nextPipWindow) {
       viewerPipWindow = null;
+      // Forward last known PiP state to main window before reset
+      if (mainWindow && !mainWindow.isDestroyed() && Object.keys(lastPipState).length) {
+        mainWindow.webContents.send("pip-state-update", lastPipState);
+        lastPipState = {};
+      }
     }
     if (mainWindow) {
       mainWindow.webContents.send("pip-window-closed", {
@@ -426,6 +431,24 @@ ipcMain.handle("close-pip-window", (_event, config = {}) => {
 
   if (viewerPipWindow && !viewerPipWindow.isDestroyed()) {
     viewerPipWindow.close();
+  }
+  return { ok: true };
+});
+
+// --- PiP State Sync ---
+let lastPipState = {};
+
+ipcMain.handle("send-pip-state", (event, state = {}) => {
+  const senderWindow = BrowserWindow.fromWebContents(event.sender);
+  const isFromMain = senderWindow === mainWindow;
+  const isFromViewerPip = senderWindow === viewerPipWindow;
+
+  lastPipState = { ...lastPipState, ...state };
+
+  if (isFromMain && viewerPipWindow && !viewerPipWindow.isDestroyed()) {
+    viewerPipWindow.webContents.send("pip-state-update", state);
+  } else if (isFromViewerPip && mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("pip-state-update", state);
   }
   return { ok: true };
 });
