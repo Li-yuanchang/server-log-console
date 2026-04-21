@@ -290,6 +290,7 @@ export interface ViewerResultTab {
   strategyLabel?: string;
   scopeLabel?: string;
   matchCount: number;
+  bookmarks?: Record<number, string>;
 }
 
 export interface SearchSettingsState {

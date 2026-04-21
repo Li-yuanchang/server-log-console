@@ -31,7 +31,9 @@ interface Props {
   useRegex: boolean;
   activeHighlightIndex: number;
   focusLineIndex?: number;
+  bookmarks?: Record<number, string>;
   onLineClick?: (lineIndex: number, event: React.MouseEvent<HTMLDivElement>) => void;
+  onBookmarkToggle?: (lineIndex: number) => void;
   onHighlightCountChange?: (count: number) => void;
   onMatchLineIndicesChange?: (lineIndices: number[], totalLines: number) => void;
   onWheel?: (event: React.WheelEvent<HTMLDivElement>) => void;
@@ -55,7 +57,9 @@ const VirtualLogViewerImpl = forwardRef<VirtualLogViewerHandle, Props>(
       useRegex,
       activeHighlightIndex,
       focusLineIndex,
+      bookmarks,
       onLineClick,
+      onBookmarkToggle,
       onHighlightCountChange,
       onMatchLineIndicesChange,
       onWheel,
@@ -198,9 +202,10 @@ const VirtualLogViewerImpl = forwardRef<VirtualLogViewerHandle, Props>(
         const escaped = escapeHtml(item.text);
 
         const isFocused = index === focusLineIndex;
+        const isBookmarked = bookmarks ? index in bookmarks : false;
         const clickable = Boolean(onLineClick);
         const errorKind = item.errorKind;
-        const baseClass = `log-line${isFocused ? " log-line-focus" : ""}${clickable ? " log-line-clickable" : ""}${errorKind ? ` log-line-level-${errorKind}` : ""}`;
+        const baseClass = `log-line${isFocused ? " log-line-focus" : ""}${clickable ? " log-line-clickable" : ""}${errorKind ? ` log-line-level-${errorKind}` : ""}${isBookmarked ? " log-line-bookmarked" : ""}`;
         const handleClick = clickable ? (event: React.MouseEvent<HTMLDivElement>) => {
           if (!(event.metaKey || event.ctrlKey)) {
             return;
@@ -217,10 +222,15 @@ const VirtualLogViewerImpl = forwardRef<VirtualLogViewerHandle, Props>(
           }
           onLineClick!(index, event);
         } : undefined;
+        const handleDoubleClick = onBookmarkToggle ? () => onBookmarkToggle(index) : undefined;
         const title = clickable ? "按住 Ctrl 或 Cmd 点击可跳转到原日志" : undefined;
 
+        const bookmarkIcon = isBookmarked
+          ? `<span class="log-bookmark-icon" title="${bookmarks![index] || "书签"}">★</span>`
+          : `<span class="log-bookmark-icon log-bookmark-icon-empty">☆</span>`;
+
         if (!highlightRegex || !escaped) {
-          return <div className={baseClass} onClick={handleClick} title={title} dangerouslySetInnerHTML={{ __html: escaped || "\u00A0" }} />;
+          return <div className={baseClass} onClick={handleClick} onDoubleClick={handleDoubleClick} title={title} dangerouslySetInnerHTML={{ __html: bookmarkIcon + (escaped || "\u00A0") }} />;
         }
 
         const startMatchIdx = cumulativeOffsets[index] ?? 0;
@@ -232,9 +242,9 @@ const VirtualLogViewerImpl = forwardRef<VirtualLogViewerHandle, Props>(
           return `<mark class="${cls}">${capture}</mark>`;
         });
 
-        return <div className={baseClass} onClick={handleClick} title={title} dangerouslySetInnerHTML={{ __html: highlighted }} />;
+        return <div className={baseClass} onClick={handleClick} onDoubleClick={handleDoubleClick} title={title} dangerouslySetInnerHTML={{ __html: bookmarkIcon + highlighted }} />;
       },
-      [highlightRegex, cumulativeOffsets, activeHighlightIndex, focusLineIndex, onLineClick],
+      [highlightRegex, cumulativeOffsets, activeHighlightIndex, focusLineIndex, bookmarks, onLineClick, onBookmarkToggle],
     );
 
     useImperativeHandle(
