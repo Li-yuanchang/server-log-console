@@ -240,6 +240,8 @@ export function App() {
   const [highlightCount, setHighlightCount] = useState(0);
   const [viewerSelMenu, setViewerSelMenu] = useState<{ x: number; y: number; text: string } | null>(null);
   const [showBookmarkPanel, setShowBookmarkPanel] = useState(false);
+  const [multiFileMode, setMultiFileMode] = useState(false);
+  const [filePattern, setFilePattern] = useState("*.log");
   const keywordInputRef = useRef<HTMLInputElement | null>(null);
   const directoryInputRef = useRef<HTMLInputElement | null>(null);
   const virtualViewerRef = useRef<VirtualLogViewerHandle | null>(null);
@@ -973,6 +975,8 @@ export function App() {
       viewerOverviewDragging,
       viewerOverviewDraft,
       viewerOverviewTotalLines: viewerScrollState?.totalLines ?? 0,
+      multiFileMode,
+      filePattern,
     },
     setters: {
       ...workspaceSessionSetters,
@@ -2283,6 +2287,10 @@ export function App() {
                 setEndTime("");
                 setSelectedPreset("自定义");
               }}
+              multiFileMode={multiFileMode}
+              onToggleMultiFileMode={() => setMultiFileMode(!multiFileMode)}
+              filePattern={filePattern}
+              onFilePatternChange={setFilePattern}
             />
 
             {/* connection info in sidebar */}
