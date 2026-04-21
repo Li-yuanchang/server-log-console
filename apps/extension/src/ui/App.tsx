@@ -18,6 +18,7 @@ import { SearchQueryPanel } from "./SearchQueryPanel.js";
 import { SearchProgressPanel } from "./SearchProgressPanel.js";
 import { LocalFilePanel } from "./LocalFilePanel.js";
 import { SshTunnelPanel } from "./SshTunnelPanel.js";
+import { TerminalSplitView } from "./TerminalSplitView.js";
 import { SearchToolbarActions } from "./SearchToolbarActions.js";
 import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, WheelEvent as ReactWheelEvent } from "react";
 import type { ReactNode } from "react";
@@ -33,7 +34,7 @@ import type {
   ServerCredentialStatus,
   ServerSummary
 } from "@server-log-console/shared";
-import { Radio, Wrench, Download, Copy, PictureInPicture2, Bug, Bookmark, FolderOpen, Plug } from "lucide-react";
+import { Radio, Wrench, Download, Copy, PictureInPicture2, Bug, Bookmark, FolderOpen, Plug, X } from "lucide-react";
 import { TerminalPanel } from "./TerminalWorkspace.js";
 import { ToolIcon } from "./ToolIcon.js";
 
@@ -246,6 +247,7 @@ export function App() {
   const [filePattern, setFilePattern] = useState("*.log");
   const [showLocalPanel, setShowLocalPanel] = useState(false);
   const [showSshTunnelPanel, setShowSshTunnelPanel] = useState(false);
+  const [terminalSplitMode, setTerminalSplitMode] = useState(false);
   const keywordInputRef = useRef<HTMLInputElement | null>(null);
   const directoryInputRef = useRef<HTMLInputElement | null>(null);
   const virtualViewerRef = useRef<VirtualLogViewerHandle | null>(null);
@@ -3036,6 +3038,30 @@ export function App() {
               <button className="ghost-button" type="button" onClick={() => void restoreEmbeddedTerminalWindow()}>收回</button>
             </div>
           ) : terminalPanelOpen ? (
+            terminalSplitMode ? (
+              <div className="terminal-bottom-panel" style={{ flex: "0 0 auto", maxHeight: "35vh", minHeight: "120px" }}>
+                <div className="terminal-panel-bar">
+                  <div className="terminal-panel-bar-info">
+                    <span className={`terminal-status-dot ${terminalSession.connected ? "terminal-status-dot-connected" : ""}`} />
+                    <strong>{selectedServer?.name || "终端"}</strong>
+                    <span>分屏模式</span>
+                  </div>
+                  <div className="terminal-panel-bar-actions">
+                    <button type="button" onClick={() => setTerminalSplitMode(false)} title="切回单终端">单屏</button>
+                    <button type="button" onClick={() => { closeTerminalOverlay(); setTerminalPanelOpen(false); setTerminalDetached(false); }} title="关闭终端"><X size={13} /></button>
+                  </div>
+                </div>
+                <TerminalSplitView
+                  serverId={serverId}
+                  selectedServer={selectedServer}
+                  preferredBastionId={preferredBastionId}
+                  isBusy={isBusy}
+                  cwd={terminalWorkingDirectory}
+                  onStatus={setActionStatus}
+                  onActivity={pushActivity}
+                />
+              </div>
+            ) : (
             <TerminalPanel
               popupMode="embedded"
               server={selectedServer}
@@ -3066,7 +3092,9 @@ export function App() {
               pasteToTerminal={(text) => terminalSession.pasteToTerminal(text)}
               onToggleTerminalOverlay={toggleTerminalOverlay}
               onDismissMenu={() => setTermSelMenu(null)}
+              onSplitMode={() => setTerminalSplitMode(true)}
             />
+            )
           ) : null}
 
         </section>
