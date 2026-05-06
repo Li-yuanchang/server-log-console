@@ -1,10 +1,8 @@
 {
-  "name": "@server-log-console/electron",
-  "version": "0.3.4",
-  "description": "Server Log Console desktop app",
-  "author": "lyc",
+  "name": "server-log-console",
+  "version": "0.1.0",
   "private": true,
-  "main": "main.cjs",
+  "workspaces": ["apps/*", "packages/*"],
   "scripts": {
     "build:extension": "npm --prefix apps/extension run build"
   }

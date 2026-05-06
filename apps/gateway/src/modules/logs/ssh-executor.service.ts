@@ -861,7 +861,7 @@ export class SshExecutorService {
         ? await this.connectManagedViaJumpServerShell(serverId, bastion.id, timeoutMs)
         : await this.connectManagedViaBastion(serverId, bastion.id, timeoutMs);
     } else {
-      connection = await this.connectForStreaming(serverId, timeoutMs);
+      connection = await this.connectManaged(serverId, timeoutMs);
     }
 
     if (connection.shellStream) {

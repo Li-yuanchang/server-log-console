@@ -273,6 +273,10 @@ export function formatSearchViewerContent(results: LogSearchResponse | null, fal
       return results.matches.map((match) => `${match.lineNumber} | ${match.preview}`).join("\n");
     }
 
+    if (results.strategyLabel === "本地文件" && results.rawOutput) {
+      return results.rawOutput;
+    }
+
     return "本次检索没有命中结果。";
   }
 

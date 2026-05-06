@@ -257,26 +257,17 @@ export function TerminalAI(props: TerminalAIProps) {
   }, [messages, props.serverId]);
 
   useEffect(() => {
-    const handlePointerDown = (e: PointerEvent) => {
-      if (!panelRef.current) return;
-      if (e.target instanceof Node && panelRef.current.contains(e.target)) return;
-      props.onClose();
-    };
-    window.addEventListener("pointerdown", handlePointerDown, true);
-    return () => window.removeEventListener("pointerdown", handlePointerDown, true);
-  }, [props.onClose]);
-
-  useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        if (showSettings) setShowSettings(false);
-        else if (isLoading) { abortAIRequest(); setIsLoading(false); setStreamContent(""); }
-        else props.onClose();
-      }
+      if (e.key !== "Escape") return;
+      const panel = panelRef.current;
+      const active = document.activeElement;
+      if (!panel || !(active instanceof Node) || !panel.contains(active)) return;
+      if (showSettings) setShowSettings(false);
+      else if (isLoading) { abortAIRequest(); setIsLoading(false); setStreamContent(""); }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [showSettings, isLoading, props.onClose]);
+  }, [showSettings, isLoading]);
 
   const handleSend = useCallback(async (messageText?: string) => {
     const text = (messageText ?? input).trim();

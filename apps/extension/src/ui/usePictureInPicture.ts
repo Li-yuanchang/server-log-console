@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-const isElectron = typeof window !== "undefined" && "electronAPI" in window;
+const isElectron = typeof window !== "undefined" && Boolean((window as any).electronAPI);
 
 interface PipState {
   /** The PiP window object (null when not in PiP mode or in Electron IPC mode) */
@@ -59,6 +59,7 @@ export function usePictureInPicture(options?: {
   useEffect(() => {
     if (!isElectron) return;
     const api = (window as any).electronAPI;
+    if (!api?.onPipClosed) return;
     api.onPipClosed((payload?: { mode?: "viewer" | "terminal" }) => {
       if (payload?.mode && payload.mode !== "viewer") {
         return;

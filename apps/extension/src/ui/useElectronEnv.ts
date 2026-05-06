@@ -6,7 +6,7 @@ export type ElectronEnvAPI = {
 };
 
 export function useElectronEnv(): ElectronEnvAPI {
-  const [isElectron] = useState(() => !!(window as any).electronAPI || /Electron/.test(navigator.userAgent));
+  const [isElectron] = useState(() => Boolean((window as any).electronAPI));
   const [isMacOS] = useState(() => navigator.userAgent.includes("Mac") || navigator.platform.toUpperCase().includes("MAC"));
 
   useEffect(() => {

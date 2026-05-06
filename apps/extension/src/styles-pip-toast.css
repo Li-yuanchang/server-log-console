@@ -425,12 +425,22 @@
   gap: 12px;
   padding: 40px 20px;
   min-height: 200px;
+  width: 100%;
+  flex: 1 1 auto;
   color: var(--ink-muted);
+  text-align: center;
 }
 
 .viewer-pip-placeholder strong {
   font-size: 14px;
   color: var(--ink);
+}
+
+.viewer-pip-placeholder .ghost-button {
+  align-self: center;
+  display: inline-flex;
+  justify-content: center;
+  text-align: center;
 }
 
 .pip-viewer-wrap {
