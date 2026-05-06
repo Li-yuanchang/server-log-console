@@ -32,7 +32,7 @@ interface TerminalPanelProps {
   popupMode?: "embedded" | "standalone";
 }
 
-const isElectronRuntime = typeof window !== "undefined" && "electronAPI" in window;
+const isElectronRuntime = typeof window !== "undefined" && Boolean((window as any).electronAPI);
 type DocumentPictureInPictureWindowApi = {
   requestWindow: (options: { width: number; height: number }) => Promise<Window>;
 };
@@ -47,6 +47,7 @@ export function TerminalPanel(props: TerminalPanelProps) {
   const showDetachedPlaceholder = (isElectronRuntime ? props.detached : isBrowserPip) && !isStandalone;
   const showShortcuts = props.terminalOverlay === "shortcuts";
   const showAI = props.terminalOverlay === "ai";
+  const showSidePanel = (showShortcuts || showAI) && !showDetachedPlaceholder;
   const terminalTitle = props.server?.name || "终端";
   const terminalSubtitle = props.subtitleText?.trim() || props.server?.host || "--";
   const terminalStatusText = props.statusText?.trim() || (props.connected ? "终端已连接" : (props.serverId ? "等待连接终端..." : "未选择服务器"));
@@ -194,7 +195,7 @@ export function TerminalPanel(props: TerminalPanelProps) {
         <div className="terminal-panel-bar-actions">
           <button
             type="button"
-            className={showShortcuts ? "terminal-shortcuts-toggle-active" : undefined}
+            className={`terminal-toolbar-button${showShortcuts ? " terminal-shortcuts-toggle-active" : ""}`}
             onClick={() => props.onToggleTerminalOverlay("shortcuts")}
             disabled={!props.serverId}
             title="快捷命令"
@@ -203,18 +204,19 @@ export function TerminalPanel(props: TerminalPanelProps) {
           </button>
           <button
             type="button"
-            className={showAI ? "tai-toggle-active" : undefined}
+            className={`terminal-toolbar-button${showAI ? " tai-toggle-active" : ""}`}
             onClick={() => props.onToggleTerminalOverlay("ai")}
             disabled={!props.serverId}
             title="AI 助手"
           >
             <Sparkles size={13} />
           </button>
-          <button type="button" onClick={props.onReconnect} disabled={props.isBusy || !props.serverId} title={props.connected ? "重连" : "连接"}>
+          <button className="terminal-toolbar-button" type="button" onClick={props.onReconnect} disabled={props.isBusy || !props.serverId} title={props.connected ? "重连" : "连接"}>
             {props.connected ? <RefreshCw size={13} /> : <Plug size={13} />}
           </button>
           {!isStandalone ? (
             <button
+              className="terminal-toolbar-button"
               type="button"
               onClick={() => void togglePip()}
               title={(isElectronRuntime ? props.detached : isBrowserPip) ? "收回终端" : "弹出独立小窗"}
@@ -223,12 +225,12 @@ export function TerminalPanel(props: TerminalPanelProps) {
             </button>
           ) : null}
           {!isStandalone ? (
-            <button type="button" onClick={props.onSplitMode} title="分屏模式">
+            <button className="terminal-toolbar-button" type="button" onClick={props.onSplitMode} title="分屏模式">
               <Columns size={13} />
             </button>
           ) : null}
           {!isStandalone ? (
-            <button type="button" onClick={props.onClose} title="关闭终端">
+            <button className="terminal-toolbar-button" type="button" onClick={props.onClose} title="关闭终端">
               <X size={13} />
             </button>
           ) : null}
@@ -241,42 +243,50 @@ export function TerminalPanel(props: TerminalPanelProps) {
           {isJumpServer ? <span>堡垒机</span> : null}
         </div>
       ) : null}
-      <div ref={bodySlotRef} className="terminal-body-slot" style={{ position: "relative", display: showDetachedPlaceholder ? "none" : undefined }}>
-        {showShortcuts && props.serverId && (
-          <TerminalShortcuts
-            serverId={props.serverId}
-            serverLabel={props.server?.name || props.server?.host || props.serverId}
-            onExecute={(command) => {
-              props.pasteToTerminal(command + "\n");
-              props.onFocus();
-            }}
-            onClose={props.onCloseTerminalOverlay}
-          />
-        )}
-        {showAI && props.serverId && (
-          <TerminalAI
-            serverId={props.serverId}
-            serverLabel={props.server?.name || props.server?.host || props.serverId}
-            onExecute={(command) => {
-              props.pasteToTerminal(command);
-              props.onFocus();
-            }}
-            onClose={props.onCloseTerminalOverlay}
-          />
-        )}
-        <div ref={panelBodyRef} className="terminal-panel-body" onMouseDown={props.onFocus} onClick={props.onFocus}>
-          <div ref={props.containerRef} className="xterm-container" />
-        </div>
-        {props.selMenu && (
-          <div className="terminal-sel-menu" style={{ left: props.selMenu.x, top: props.selMenu.y }}>
-            <button type="button" title="复制" onMouseDown={(e) => e.stopPropagation()} onClick={() => void handleCopy()}>
-              <Clipboard size={14} />
-            </button>
-            <button type="button" title="复制并粘贴" onMouseDown={(e) => e.stopPropagation()} onClick={() => void handleCopyAndPaste()}>
-              <ClipboardPaste size={14} />
-            </button>
+      <div ref={bodySlotRef} className="terminal-body-slot" style={{ display: showDetachedPlaceholder ? "none" : undefined }}>
+        <div className="terminal-body-layout">
+          <div className="terminal-main-shell" style={{ position: "relative" }}>
+            <div ref={panelBodyRef} className="terminal-panel-body" onMouseDown={props.onFocus} onClick={props.onFocus}>
+              <div ref={props.containerRef} className="xterm-container" />
+            </div>
+            {props.selMenu && (
+              <div className="terminal-sel-menu" style={{ left: props.selMenu.x, top: props.selMenu.y }}>
+                <button type="button" title="复制" onMouseDown={(e) => e.stopPropagation()} onClick={() => void handleCopy()}>
+                  <Clipboard size={14} />
+                </button>
+                <button type="button" title="复制并粘贴" onMouseDown={(e) => e.stopPropagation()} onClick={() => void handleCopyAndPaste()}>
+                  <ClipboardPaste size={14} />
+                </button>
+              </div>
+            )}
           </div>
-        )}
+          {showSidePanel && props.serverId ? (
+            <aside className="terminal-side-panel">
+              {showShortcuts ? (
+                <TerminalShortcuts
+                  serverId={props.serverId}
+                  serverLabel={props.server?.name || props.server?.host || props.serverId}
+                  onExecute={(command) => {
+                    props.pasteToTerminal(command + "\n");
+                    props.onFocus();
+                  }}
+                  onClose={props.onCloseTerminalOverlay}
+                />
+              ) : null}
+              {showAI ? (
+                <TerminalAI
+                  serverId={props.serverId}
+                  serverLabel={props.server?.name || props.server?.host || props.serverId}
+                  onExecute={(command) => {
+                    props.pasteToTerminal(command);
+                    props.onFocus();
+                  }}
+                  onClose={props.onCloseTerminalOverlay}
+                />
+              ) : null}
+            </aside>
+          ) : null}
+        </div>
       </div>
       {showDetachedPlaceholder ? (
         <div className="viewer-pip-placeholder" style={{ padding: "20px", minHeight: "80px" }}>

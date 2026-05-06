@@ -6,6 +6,11 @@ import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import "@xterm/xterm/css/xterm.css";
 
+const MIN_TERMINAL_FIT_WIDTH = 180;
+const MIN_TERMINAL_FIT_HEIGHT = 72;
+const MIN_TERMINAL_COLS = 24;
+const MIN_TERMINAL_ROWS = 6;
+
 interface UseTerminalSessionOptions {
   active: boolean;
   localServiceBase: string;
@@ -39,6 +44,28 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
   const retryCountRef = useRef(0);
   const reconnectDesiredRef = useRef(false);
 
+  const canApplyTerminalFit = useCallback(() => {
+    const container = containerRef.current;
+    if (!container) {
+      return false;
+    }
+    const rect = container.getBoundingClientRect();
+    return rect.width >= MIN_TERMINAL_FIT_WIDTH && rect.height >= MIN_TERMINAL_FIT_HEIGHT;
+  }, []);
+
+  const syncResizeToSocket = useCallback(() => {
+    const terminal = terminalRef.current;
+    const socket = socketRef.current;
+    if (!terminal || socket?.readyState !== WebSocket.OPEN) {
+      return false;
+    }
+    if (terminal.cols < MIN_TERMINAL_COLS || terminal.rows < MIN_TERMINAL_ROWS) {
+      return false;
+    }
+    socket.send(JSON.stringify({ action: "resize", cols: terminal.cols, rows: terminal.rows }));
+    return true;
+  }, []);
+
   const clearFitTimers = useCallback(() => {
     for (const timer of fitTimersRef.current) {
       window.clearTimeout(timer);
@@ -52,8 +79,13 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
     if (terminal?.element && container && !container.contains(terminal.element)) {
       container.appendChild(terminal.element);
     }
+    if (!terminal || !canApplyTerminalFit()) {
+      return false;
+    }
     fitAddonRef.current?.fit();
-  }, []);
+    syncResizeToSocket();
+    return true;
+  }, [canApplyTerminalFit, syncResizeToSocket]);
 
   const scheduleFit = useCallback((delays: number[] = [0, 16, 80, 180, 320]) => {
     clearFitTimers();
@@ -226,8 +258,6 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
     retryCountRef.current = next;
     setRetryCount(next);
     const delay = Math.min(10000, 1500 * next);
-    const terminal = terminalRef.current;
-    terminal?.writeln(`\r\n\x1b[33m${Math.round(delay / 1000)} 秒后自动重连（第 ${next} 次）...\x1b[0m`);
     options.onStatus(`终端已断开，${Math.round(delay / 1000)} 秒后重连...`);
     options.onActivity(`终端已断开，准备第 ${next} 次重连。`);
     reconnectTimerRef.current = window.setTimeout(() => {
@@ -326,7 +356,11 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
     onResizeDisposableRef.current?.dispose();
     onResizeDisposableRef.current = terminal.onResize(({ cols, rows }) => {
       const socket = socketRef.current;
-      if (socket?.readyState === WebSocket.OPEN) {
+      if (
+        socket?.readyState === WebSocket.OPEN
+        && cols >= MIN_TERMINAL_COLS
+        && rows >= MIN_TERMINAL_ROWS
+      ) {
         socket.send(JSON.stringify({ action: "resize", cols, rows }));
       }
     });
@@ -370,7 +404,10 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
 
         if (payload.type === "error") {
           setConnected(false);
-          terminal.writeln(`\r\n\x1b[31m错误：${payload.message || "未知错误"}\x1b[0m`);
+          if (payload.message === "终端尚未连接。") {
+            options.onStatus("正在连接终端...");
+            return;
+          }
           options.onStatus(`终端失败：${payload.message || "未知错误"}`);
           options.onActivity(`终端失败：${payload.message || "未知错误"}`);
           return;
@@ -378,7 +415,6 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
 
         if (payload.type === "closed") {
           setConnected(false);
-          terminal.writeln("\r\n\x1b[33m终端已关闭。\x1b[0m");
           options.onStatus("终端已关闭。");
           options.onActivity("终端已关闭。");
           return;
@@ -410,10 +446,7 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
           options.onActivity(`终端已连接：${options.selectedServer?.name || options.serverId}`);
           terminal.focus();
           scheduleFit([0, 16, 80, 180, 320]);
-          const sock = socketRef.current;
-          if (sock?.readyState === WebSocket.OPEN) {
-            sock.send(JSON.stringify({ action: "resize", cols: terminal.cols, rows: terminal.rows }));
-          }
+          syncResizeToSocket();
           return;
         }
 

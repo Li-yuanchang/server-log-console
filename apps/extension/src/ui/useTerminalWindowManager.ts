@@ -97,6 +97,9 @@ export function useTerminalWindowManager(params: TerminalWindowManagerParams): T
     }
 
     const api = (window as any).electronAPI;
+    if (!api?.onPipClosed) {
+      return;
+    }
     api.onPipClosed((payload?: { mode?: "viewer" | "terminal"; terminalSessionId?: string }) => {
       const closedTerminalSessionId = String(payload?.terminalSessionId || "").trim();
       if (payload?.mode !== "terminal" || !closedTerminalSessionId) {

@@ -29,11 +29,15 @@ function nextNodeId() {
   return `split-${++nodeCounter}`;
 }
 
+function nextPaneId() {
+  return `pane-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
 function createInitialPane(serverId: string): SplitNode {
   return {
     id: nextNodeId(),
     type: "pane",
-    pane: { paneId: `pane-0`, sessionId: createTerminalSessionId(serverId) },
+    pane: { paneId: nextPaneId(), sessionId: createTerminalSessionId(serverId) },
   };
 }
 
@@ -48,39 +52,90 @@ function findPaneById(node: SplitNode, paneId: string): SplitNode | null {
   return null;
 }
 
-function findParentOf(node: SplitNode, targetId: string): SplitNode | null {
-  if (node.children) {
-    for (const child of node.children) {
-      if (child.id === targetId) return node;
-      const found = findParentOf(child, targetId);
-      if (found) return found;
-    }
-  }
-  return null;
-}
-
 function countPanes(node: SplitNode): number {
   if (node.type === "pane") return 1;
   return (node.children || []).reduce((sum, c) => sum + countPanes(c), 0);
 }
 
 function removePaneFromTree(root: SplitNode, paneId: string): SplitNode {
-  if (root.type === "pane") return root;
-  if (!root.children) return root;
-
-  // If only 2 children and one is the target, replace root with the other
-  if (root.children.length === 2) {
-    const targetIdx = root.children.findIndex((c) => findPaneById(c, paneId));
-    if (targetIdx >= 0) {
-      const survivor = root.children[1 - targetIdx];
-      return survivor;
-    }
+  if (root.type === "pane") {
+    return root;
+  }
+  if (!root.children) {
+    return root;
   }
 
-  // Recurse
+  const nextChildren = root.children
+    .map((child) => {
+      if (child.type === "pane" && child.pane?.paneId === paneId) {
+        return null;
+      }
+      return removePaneFromTree(child, paneId);
+    })
+    .filter((child): child is SplitNode => child !== null);
+
+  if (nextChildren.length === 0) {
+    return root;
+  }
+  if (nextChildren.length === 1) {
+    return nextChildren[0];
+  }
+
   return {
     ...root,
-    children: root.children.map((c) => removePaneFromTree(c, paneId)),
+    children: nextChildren,
+    sizes: nextChildren.map(() => 1),
+  };
+}
+
+function updatePaneSessionId(node: SplitNode, paneId: string, sessionId: string): SplitNode {
+  if (node.type === "pane" && node.pane) {
+    if (node.pane.paneId !== paneId) {
+      return node;
+    }
+    return {
+      ...node,
+      pane: {
+        ...node.pane,
+        sessionId,
+      },
+    };
+  }
+  if (!node.children) {
+    return node;
+  }
+  return {
+    ...node,
+    children: node.children.map((child) => updatePaneSessionId(child, paneId, sessionId)),
+  };
+}
+
+function splitPaneInTree(node: SplitNode, paneId: string, direction: SplitDirection, serverId: string): SplitNode {
+  if (node.type === "pane" && node.pane?.paneId === paneId) {
+    return {
+      id: nextNodeId(),
+      type: "split",
+      direction,
+      children: [
+        node,
+        {
+          id: nextNodeId(),
+          type: "pane",
+          pane: {
+            paneId: nextPaneId(),
+            sessionId: createTerminalSessionId(serverId),
+          },
+        },
+      ],
+      sizes: [1, 1],
+    };
+  }
+  if (!node.children) {
+    return node;
+  }
+  return {
+    ...node,
+    children: node.children.map((child) => splitPaneInTree(child, paneId, direction, serverId)),
   };
 }
 
@@ -88,13 +143,7 @@ export function TerminalSplitView({ serverId, selectedServer, preferredBastionId
   const [tree, setTree] = useState<SplitNode>(() => createInitialPane(serverId));
 
   const handleSessionIdChange = useCallback((paneId: string, sessionId: string) => {
-    setTree((prev) => {
-      const pane = findPaneById(prev, paneId);
-      if (pane?.pane) {
-        pane.pane.sessionId = sessionId;
-      }
-      return { ...prev };
-    });
+    setTree((prev) => updatePaneSessionId(prev, paneId, sessionId));
   }, []);
 
   const handleClose = useCallback((paneId: string) => {
@@ -105,41 +154,7 @@ export function TerminalSplitView({ serverId, selectedServer, preferredBastionId
   }, []);
 
   const handleSplit = useCallback((paneId: string, direction: SplitDirection) => {
-    setTree((prev) => {
-      const pane = findPaneById(prev, paneId);
-      if (!pane) return prev;
-
-      const newPaneId = `pane-${Date.now()}`;
-      const newPane: TerminalPaneConfig = {
-        paneId: newPaneId,
-        sessionId: createTerminalSessionId(serverId),
-      };
-
-      const newPaneNode: SplitNode = {
-        id: nextNodeId(),
-        type: "pane",
-        pane: newPane,
-      };
-
-      // Replace the found pane with a split node
-      const replaceInTree = (node: SplitNode): SplitNode => {
-        if (node.id === pane.id) {
-          return {
-            id: nextNodeId(),
-            type: "split",
-            direction,
-            children: [node, newPaneNode],
-            sizes: [50, 50],
-          };
-        }
-        if (node.children) {
-          return { ...node, children: node.children.map(replaceInTree) };
-        }
-        return node;
-      };
-
-      return replaceInTree(prev);
-    });
+    setTree((prev) => splitPaneInTree(prev, paneId, direction, serverId));
   }, [serverId]);
 
   const renderNode = (node: SplitNode): React.ReactNode => {
@@ -167,7 +182,11 @@ export function TerminalSplitView({ serverId, selectedServer, preferredBastionId
       return (
         <div key={node.id} className={`terminal-split-${dir}`} style={{ display: "flex", flex: 1, flexDirection: dir === "row" ? "row" : "column" }}>
           {node.children.map((child, i) => (
-            <div key={child.id} style={{ flex: node.sizes?.[i] || 1, overflow: "hidden" }}>
+            <div
+              key={child.id}
+              className={`terminal-split-child terminal-split-child-${dir}`}
+              style={{ flex: node.sizes?.[i] || 1, overflow: "hidden" }}
+            >
               {renderNode(child)}
             </div>
           ))}

@@ -5,6 +5,27 @@
   gap: 2px;
   min-height: 0;
   height: 100%;
+  flex: 1 1 0%;
+  min-width: 0;
+}
+
+.viewer-workbench {
+  display: flex;
+  gap: 10px;
+  min-height: 0;
+  flex: 1 1 0%;
+  width: 100%;
+  align-items: stretch;
+}
+
+.viewer-workbench > div:first-child {
+  flex: 1 1 0%;
+  min-width: 0;
+}
+
+.viewer-workbench-with-utility > div:first-child {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .jump-terminal-shell .jump-terminal-surface {

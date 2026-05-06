@@ -13,6 +13,10 @@ import {
   type TerminalSessionState,
 } from "./terminal-session-manager.js";
 
+function escapeShellSingleQuotes(value: string) {
+  return value.replace(/'/g, `'"'"'`);
+}
+
 interface TerminalMessagePayload {
   action?: "start" | "input" | "close" | "resize" | "detach";
   serverId?: string;
@@ -127,6 +131,12 @@ export function registerTerminalWebsocket(terminalWsServer: WebSocketServer, ssh
           shellStream.on("close", () => {
             destroyTerminalSession(sessionId);
           });
+
+          const requestedCwd = payload.cwd?.trim();
+          if (requestedCwd) {
+            const escapedCwd = escapeShellSingleQuotes(requestedCwd);
+            shellStream.write(`cd -- '${escapedCwd}' >/dev/null 2>&1 && clear || printf '\\n[slc] 无法进入目录: %s\\n' '${escapedCwd}'\r`);
+          }
 
           sendTerminalMessage(socket, {
             type: "ready",

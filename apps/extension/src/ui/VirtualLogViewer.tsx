@@ -35,6 +35,7 @@ interface Props {
   onLineClick?: (lineIndex: number, event: React.MouseEvent<HTMLDivElement>) => void;
   onBookmarkToggle?: (lineIndex: number) => void;
   onHighlightCountChange?: (count: number) => void;
+  onFocusLineHighlightIndex?: (index: number) => void;
   onMatchLineIndicesChange?: (lineIndices: number[], totalLines: number) => void;
   onWheel?: (event: React.WheelEvent<HTMLDivElement>) => void;
   onNearBottomChange?: (nearBottom: boolean) => void;
@@ -61,6 +62,7 @@ const VirtualLogViewerImpl = forwardRef<VirtualLogViewerHandle, Props>(
       onLineClick,
       onBookmarkToggle,
       onHighlightCountChange,
+      onFocusLineHighlightIndex,
       onMatchLineIndicesChange,
       onWheel,
       onNearBottomChange,
@@ -187,15 +189,25 @@ const VirtualLogViewerImpl = forwardRef<VirtualLogViewerHandle, Props>(
     );
 
     useEffect(() => {
+      if (focusLineIndex != null) return;
       if (activeHighlightIndex < 0 || activeHighlightIndex >= totalMatches) return;
       const targetLine = findLineForMatch(activeHighlightIndex);
       virtuosoRef.current?.scrollToIndex({ index: targetLine, align: "center", behavior: "smooth" });
-    }, [activeHighlightIndex, totalMatches, findLineForMatch]);
+    }, [activeHighlightIndex, totalMatches, findLineForMatch, focusLineIndex]);
 
     useEffect(() => {
       if (focusLineIndex == null || focusLineIndex < 0 || focusLineIndex >= lines.length) return;
       virtuosoRef.current?.scrollToIndex({ index: focusLineIndex, align: "center", behavior: "smooth" });
     }, [focusLineIndex, lines.length]);
+
+    useEffect(() => {
+      if (!onFocusLineHighlightIndex) return;
+      if (focusLineIndex == null || focusLineIndex < 0 || focusLineIndex >= lines.length) return;
+      if (totalMatches <= 0) return;
+      const startIdx = cumulativeOffsets[focusLineIndex] ?? 0;
+      const clamped = Math.max(0, Math.min(totalMatches - 1, startIdx));
+      onFocusLineHighlightIndex(clamped);
+    }, [focusLineIndex, lines.length, cumulativeOffsets, totalMatches, onFocusLineHighlightIndex]);
 
     const renderLine = useCallback(
       (index: number, item: VirtualLogViewerLineItem) => {

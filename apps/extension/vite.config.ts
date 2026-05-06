@@ -40,6 +40,7 @@ export default defineConfig({
           if (id.includes("/@xterm/")) return "vendor-xterm";
           if (id.includes("/lucide-react/")) return "vendor-lucide";
           if (id.includes("/react-virtuoso/")) return "vendor-virtuoso";
+          if (id.includes("/monaco-editor/") || id.includes("/@monaco-editor/")) return "vendor-monaco";
         }
       },
       input: {

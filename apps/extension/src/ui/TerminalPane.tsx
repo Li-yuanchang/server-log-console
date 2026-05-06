@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { X, Copy, ClipboardPaste, RefreshCw, Plug } from "lucide-react";
 import type { ServerSummary } from "@server-log-console/shared";
 import { useTerminalSession } from "./useTerminalSession.js";
@@ -69,6 +69,18 @@ export function TerminalPane({
     session.clearSelection();
     setSelMenu(null);
   }, [selMenu, session]);
+
+  useEffect(() => {
+    const timers = [0, 48, 160, 360, 720].map((delay) => window.setTimeout(() => {
+      session.fitTerminal();
+    }, delay));
+
+    return () => {
+      for (const timer of timers) {
+        window.clearTimeout(timer);
+      }
+    };
+  }, [config.paneId, serverId, session.connected]);
 
   return (
     <div className="terminal-pane">

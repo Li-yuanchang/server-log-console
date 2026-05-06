@@ -16,11 +16,13 @@ import type { ConfirmDialogState } from "./ModalDialogs.js";
 import { ConnectionSettingsWorkspace, type ManualServerDraft, type SettingsWorkspaceView } from "./ConnectionSettingsWorkspace.js";
 import { SearchQueryPanel } from "./SearchQueryPanel.js";
 import { SearchProgressPanel } from "./SearchProgressPanel.js";
-import { LocalFilePanel } from "./LocalFilePanel.js";
 import { SshTunnelPanel } from "./SshTunnelPanel.js";
 import { TerminalSplitView } from "./TerminalSplitView.js";
-import { BatchCommandPanel } from "./BatchCommandPanel.js";
 import { SearchToolbarActions } from "./SearchToolbarActions.js";
+import { BatchCommandPanel } from "./BatchCommandPanel.js";
+import { UtilityWorkspace } from "./UtilityWorkspace.js";
+import { DiffComparePanel } from "./DiffComparePanel.js";
+import type { UtilityPanelType } from "./UtilityWorkspace.js";
 import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, WheelEvent as ReactWheelEvent } from "react";
 import type { ReactNode } from "react";
 import type {
@@ -35,7 +37,7 @@ import type {
   ServerCredentialStatus,
   ServerSummary
 } from "@server-log-console/shared";
-import { Radio, Wrench, Download, Copy, PictureInPicture2, Bug, Bookmark, FolderOpen, Plug, X, Terminal } from "lucide-react";
+import { Radio, Wrench, Download, Copy, PictureInPicture2, Bug, Bookmark, X } from "lucide-react";
 import { TerminalPanel } from "./TerminalWorkspace.js";
 import { ToolIcon } from "./ToolIcon.js";
 
@@ -128,7 +130,8 @@ const pipUrlParams = new URLSearchParams(globalThis.location?.search ?? "");
 const pipMode = pipUrlParams.get("pip") ?? "";
 const isStandaloneViewerWindow = pipMode === "viewer";
 const isStandaloneTerminalWindow = pipMode === "terminal";
-const isStandalonePipWindow = isStandaloneViewerWindow || isStandaloneTerminalWindow;
+const isStandaloneUtilityWindow = pipMode === "utility";
+const isStandalonePipWindow = isStandaloneViewerWindow || isStandaloneTerminalWindow || isStandaloneUtilityWindow;
 
 export function App() {
   const [servers, setServers] = useState<ServerSummary[]>([]);
@@ -244,12 +247,11 @@ export function App() {
   const [highlightCount, setHighlightCount] = useState(0);
   const [viewerSelMenu, setViewerSelMenu] = useState<{ x: number; y: number; text: string } | null>(null);
   const [showBookmarkPanel, setShowBookmarkPanel] = useState(false);
+  const [showUtilityWorkspace, setShowUtilityWorkspace] = useState(false);
+  const [activeUtilityPanel, setActiveUtilityPanel] = useState<UtilityPanelType>("compare");
   const [multiFileMode, setMultiFileMode] = useState(false);
   const [filePattern, setFilePattern] = useState("*.log");
-  const [showLocalPanel, setShowLocalPanel] = useState(false);
-  const [showSshTunnelPanel, setShowSshTunnelPanel] = useState(false);
   const [terminalSplitMode, setTerminalSplitMode] = useState(false);
-  const [showBatchPanel, setShowBatchPanel] = useState(false);
   const keywordInputRef = useRef<HTMLInputElement | null>(null);
   const directoryInputRef = useRef<HTMLInputElement | null>(null);
   const virtualViewerRef = useRef<VirtualLogViewerHandle | null>(null);
@@ -267,6 +269,7 @@ export function App() {
   const wheelSliceLockRef = useRef(false);
   const { treeResizeRef, activityPanelResizeRef } = usePanelResize(setBrowserTreeWidth, setActivityPanelHeight);
   const readerPreviewRequestRef = useRef(0);
+  const jumpToMatchRequestRef = useRef(0);
   const openFileRequestRef = useRef(0);
   const sliceRequestRef = useRef(0);
   const jumpAssetAutoSearchKeyRef = useRef("");
@@ -997,6 +1000,7 @@ export function App() {
       setViewerScrollState,
     },
     refs: {
+      jumpToMatchRequestRef,
       sliceRequestRef,
       openFileRequestRef,
       sliceScrollAnchorRef,
@@ -1358,7 +1362,7 @@ export function App() {
   const [termSelMenu, setTermSelMenu] = useState<{ x: number; y: number; text: string } | null>(null);
 
   const terminalSession = useTerminalSession({
-    active: isStandaloneTerminalWindow || (terminalPanelOpen && !terminalDetached),
+    active: isStandaloneTerminalWindow || (terminalPanelOpen && !terminalDetached && !terminalSplitMode),
     localServiceBase,
     serverId,
     preferredBastionId,
@@ -1373,6 +1377,15 @@ export function App() {
     preserveSessionOnDispose: isStandaloneTerminalWindow,
     onSelectionMenu: setTermSelMenu,
   });
+
+  useEffect(() => {
+    if (terminalSplitMode || !terminalPanelOpen || terminalDetached || isStandaloneTerminalWindow) {
+      return;
+    }
+    requestAnimationFrame(() => {
+      terminalSession.fitTerminal();
+    });
+  }, [terminalSplitMode, terminalPanelOpen, terminalDetached, isStandaloneTerminalWindow, terminalSession]);
 
   const {
     openTerminalView,
@@ -1896,7 +1909,35 @@ export function App() {
   }, [terminalPanelOpen, canOpenTerminal, isStandaloneTerminalWindow]);
 
   const canToggleErrorHighlight = Boolean(currentLogContent);
-  const canToggleResultContext = Boolean(activeResultTab?.fullContent || (activeViewerTabId === "file" && results?.contextOutput));
+  const canOpenComparePanel = Boolean(isElectron && activeLogView === "search" && currentLogContent.trim());
+  const activeCompareLabel = activeResultTab?.label || selectedFileName || "当前内容";
+  const availableUtilityPanels = useMemo(() => {
+    const panels: UtilityPanelType[] = [];
+    if (canOpenComparePanel) {
+      panels.push("compare");
+    }
+    if (serverId && activeLogView === "search") {
+      panels.push("tunnels");
+    }
+    if (servers.length > 0 && activeLogView === "search") {
+      panels.push("batch");
+    }
+    return panels;
+  }, [activeLogView, canOpenComparePanel, serverId, servers.length]);
+  const canShowEmbeddedUtilityWorkspace = availableUtilityPanels.length > 0 && !showCompactViewerChrome;
+  const canToggleResultContext = Boolean((activeResultTab?.fullContent || (activeViewerTabId === "file" && results?.contextOutput)) && activeResultTab?.strategyLabel !== "本地文件");
+
+  useEffect(() => {
+    if (availableUtilityPanels.length === 0) {
+      setShowUtilityWorkspace(false);
+      return;
+    }
+    if (availableUtilityPanels.includes(activeUtilityPanel)) {
+      return;
+    }
+    setActiveUtilityPanel(availableUtilityPanels[0]);
+  }, [activeUtilityPanel, availableUtilityPanels]);
+
   const toggleErrorHighlight = useCallback(() => {
     if (!canToggleErrorHighlight) {
       return;
@@ -2329,6 +2370,11 @@ export function App() {
             {!showServiceOfflineState && !showNoServerState && (
               <>
                 {(!isFileMode || pip.isPip) ? (
+                <>
+                <div
+                  className={`viewer-workbench${showUtilityWorkspace ? " viewer-workbench-with-utility" : ""}`}
+                  style={isFileMode ? { display: "none" } : undefined}
+                >
                 <div style={isFileMode ? { display: "none" } : { display: "contents" }}>
                 {pip.isPip && !isFileMode && (
                   <div className="viewer-pip-placeholder">
@@ -2415,6 +2461,15 @@ export function App() {
                           <Download size={14} strokeWidth={1.8} />
                         </button>
                       ) : null}
+                      {activeLogView === "search" && activeResultTab ? (
+                        <button
+                          className={showBookmarkPanel ? "ghost-button icon-button tab-active" : "ghost-button icon-button"}
+                          onClick={() => setShowBookmarkPanel((current) => !current)}
+                          title={showBookmarkPanel ? "隐藏书签" : "显示书签"}
+                        >
+                          <Bookmark size={14} strokeWidth={1.8} />
+                        </button>
+                      ) : null}
                       {!isStandaloneViewerWindow ? (
                         <button
                           className={pip.isPip ? "ghost-button icon-button tab-active" : "ghost-button icon-button"}
@@ -2469,23 +2524,12 @@ export function App() {
                       </button>
                     ) : null}
                     {activeLogView === "search" && activeResultTab ? (
-                      <button className={`ghost-button icon-button${showBookmarkPanel ? " active" : ""}`} onClick={() => setShowBookmarkPanel(!showBookmarkPanel)} title="书签">
+                      <button
+                        className={showBookmarkPanel ? "ghost-button icon-button tab-active" : "ghost-button icon-button"}
+                        onClick={() => setShowBookmarkPanel((current) => !current)}
+                        title={showBookmarkPanel ? "隐藏书签" : "显示书签"}
+                      >
                         <Bookmark size={14} strokeWidth={1.8} />
-                      </button>
-                    ) : null}
-                    {isElectron ? (
-                      <button className={`ghost-button icon-button${showLocalPanel ? " active" : ""}`} onClick={() => setShowLocalPanel(!showLocalPanel)} title="本地文件">
-                        <FolderOpen size={14} strokeWidth={1.8} />
-                      </button>
-                    ) : null}
-                    {serverId ? (
-                      <button className={`ghost-button icon-button${showSshTunnelPanel ? " active" : ""}`} onClick={() => setShowSshTunnelPanel(!showSshTunnelPanel)} title="SSH 隧道">
-                        <Plug size={14} strokeWidth={1.8} />
-                      </button>
-                    ) : null}
-                    {servers.length > 0 ? (
-                      <button className={`ghost-button icon-button${showBatchPanel ? " active" : ""}`} onClick={() => setShowBatchPanel(!showBatchPanel)} title="批量执行">
-                        <Terminal size={14} strokeWidth={1.8} />
                       </button>
                     ) : null}
                     {activeViewerCommandPreview ? (
@@ -2634,6 +2678,7 @@ export function App() {
                         bookmarks={activeResultTab?.bookmarks}
                         onBookmarkToggle={handleBookmarkToggle}
                         onHighlightCountChange={setHighlightCount}
+                        onFocusLineHighlightIndex={setActiveHighlightIndex}
                         onMatchLineIndicesChange={setViewerMatchLineIndices}
                         onWheel={handleViewerWheelWithSelectionMenu}
                         onNearBottomChange={handleViewerNearBottomChangeStable}
@@ -2665,58 +2710,26 @@ export function App() {
                           </button>
                         </div>
                       ) : null}
-                      {showBookmarkPanel && activeResultTab?.bookmarks && Object.keys(activeResultTab.bookmarks).length > 0 ? (
+                      {showBookmarkPanel ? (
                         <div className="bookmark-panel">
                           <div className="bookmark-panel-header">
-                            <span>书签 ({Object.keys(activeResultTab.bookmarks).length})</span>
+                            <span>书签{activeResultTab?.bookmarks && Object.keys(activeResultTab.bookmarks).length > 0 ? ` (${Object.keys(activeResultTab.bookmarks).length})` : ""}</span>
                             <button className="ghost-button slim-button" onClick={() => setShowBookmarkPanel(false)}>关闭</button>
                           </div>
-                          <div className="bookmark-panel-list">
-                            {Object.entries(activeResultTab.bookmarks).sort(([a], [b]) => Number(a) - Number(b)).map(([lineIdx, note]) => (
-                              <div key={lineIdx} className="bookmark-entry" onClick={() => virtualViewerRef.current?.scrollToLine(Number(lineIdx))}>
-                                <span className="bookmark-line-no">行 {Number(lineIdx) + 1}</span>
-                                <span className="bookmark-note">{note || currentLogContent.split("\n")[Number(lineIdx)]?.slice(0, 60) || ""}</span>
-                                <button className="ghost-button slim-button" onClick={(e) => { e.stopPropagation(); handleBookmarkToggle(Number(lineIdx)); }}>✕</button>
-                              </div>
-                            ))}
-                          </div>
+                          {activeResultTab?.bookmarks && Object.keys(activeResultTab.bookmarks).length > 0 ? (
+                            <div className="bookmark-panel-list">
+                              {Object.entries(activeResultTab.bookmarks).sort(([a], [b]) => Number(a) - Number(b)).map(([lineIdx, note]) => (
+                                <div key={lineIdx} className="bookmark-entry" onClick={() => virtualViewerRef.current?.scrollToLine(Number(lineIdx))}>
+                                  <span className="bookmark-line-no">行 {Number(lineIdx) + 1}</span>
+                                  <span className="bookmark-note">{note || currentLogContent.split("\n")[Number(lineIdx)]?.slice(0, 60) || ""}</span>
+                                  <button className="ghost-button slim-button" onClick={(e) => { e.stopPropagation(); handleBookmarkToggle(Number(lineIdx)); }}>✕</button>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="bookmark-panel-empty">双击日志行可添加书签</div>
+                          )}
                         </div>
-                      ) : null}
-                      {showLocalPanel && isElectron ? (
-                        <LocalFilePanel
-                          visible={showLocalPanel}
-                          onOpenFile={(filePath, content) => {
-                            const tabLabel = filePath.split("/").pop() || filePath;
-                            const searchResponse: LogSearchResponse = {
-                              matches: [],
-                              rawOutput: content,
-                              truncated: false,
-                              commandPreview: "",
-                              strategyLabel: "本地文件",
-                              scopeLabel: filePath
-                            };
-                            logViewerAPI.appendResultTab(searchResponse, tabLabel);
-                            setActiveLogView("search");
-                            setActionStatus(`已打开本地文件：${tabLabel}`);
-                          }}
-                          onClose={() => setShowLocalPanel(false)}
-                        />
-                      ) : null}
-                      {showSshTunnelPanel && serverId ? (
-                        <SshTunnelPanel
-                          visible={showSshTunnelPanel}
-                          serverId={serverId}
-                          onClose={() => setShowSshTunnelPanel(false)}
-                          onStatus={(msg) => setActionStatus(msg)}
-                        />
-                      ) : null}
-                      {showBatchPanel && servers.length > 0 ? (
-                        <BatchCommandPanel
-                          visible={showBatchPanel}
-                          servers={servers}
-                          onClose={() => setShowBatchPanel(false)}
-                          onStatus={(msg) => setActionStatus(msg)}
-                        />
                       ) : null}
                       {viewerNotAtBottom && activeViewerTabId === "file" ? (
                         <button className="live-back-to-bottom" onClick={() => void handleBackToBottom()}>
@@ -2823,17 +2836,45 @@ export function App() {
                 </div>
                 </div>
                 )}
+                {showUtilityWorkspace && canShowEmbeddedUtilityWorkspace ? (
+                  <UtilityWorkspace
+                    activePanel={activeUtilityPanel}
+                    panels={availableUtilityPanels}
+                    onSelectPanel={setActiveUtilityPanel}
+                    onClose={() => setShowUtilityWorkspace(false)}
+                  >
+                    {activeUtilityPanel === "compare" ? (
+                      <DiffComparePanel
+                        visible
+                        remoteContent={currentLogContent}
+                        remoteLabel={activeCompareLabel}
+                        onClose={() => setShowUtilityWorkspace(false)}
+                      />
+                    ) : null}
+                    {activeUtilityPanel === "tunnels" && serverId ? (
+                      <SshTunnelPanel
+                        visible
+                        serverId={serverId}
+                        onClose={() => setShowUtilityWorkspace(false)}
+                        onStatus={(msg) => setActionStatus(msg)}
+                      />
+                    ) : null}
+                    {activeUtilityPanel === "batch" && servers.length > 0 ? (
+                      <BatchCommandPanel
+                        visible
+                        servers={servers}
+                        onClose={() => setShowUtilityWorkspace(false)}
+                        onStatus={(msg) => setActionStatus(msg)}
+                      />
+                    ) : null}
+                  </UtilityWorkspace>
+                ) : null}
                 </div>
+                </div>
+                </>
                 ) : null}
                 {isFileMode ? (
               <>
-                {pip.isPip && (
-                  <div className="viewer-pip-placeholder">
-                    <PictureInPicture2 size={24} strokeWidth={1.5} />
-                    <strong>日志查看器已弹出到独立小窗</strong>
-                    <button className="ghost-button" onClick={() => void pip.togglePip()}>收回</button>
-                  </div>
-                )}
                 <FileBrowserStrip
                   pathbar={<FileBrowserPathbar
                     mode={pathbarMode}
@@ -3062,7 +3103,15 @@ export function App() {
                     <span>分屏模式</span>
                   </div>
                   <div className="terminal-panel-bar-actions">
-                    <button type="button" onClick={() => setTerminalSplitMode(false)} title="切回单终端">单屏</button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTerminalSplitMode(false);
+                      }}
+                      title="切回单终端"
+                    >
+                      单屏
+                    </button>
                     <button type="button" onClick={() => { closeTerminalOverlay(); setTerminalPanelOpen(false); setTerminalDetached(false); }} title="关闭终端"><X size={13} /></button>
                   </div>
                 </div>
@@ -3107,7 +3156,10 @@ export function App() {
               pasteToTerminal={(text) => terminalSession.pasteToTerminal(text)}
               onToggleTerminalOverlay={toggleTerminalOverlay}
               onDismissMenu={() => setTermSelMenu(null)}
-              onSplitMode={() => setTerminalSplitMode(true)}
+              onSplitMode={() => {
+                closeTerminalOverlay();
+                setTerminalSplitMode(true);
+              }}
             />
             )
           ) : null}

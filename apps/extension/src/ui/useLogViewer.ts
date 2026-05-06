@@ -84,6 +84,7 @@ export type LogViewerState = {
 };
 
 export type LogViewerRefs = {
+  jumpToMatchRequestRef: React.MutableRefObject<number>;
   sliceRequestRef: React.MutableRefObject<number>;
   openFileRequestRef: React.MutableRefObject<number>;
   sliceScrollAnchorRef: React.MutableRefObject<"top" | "bottom" | null>;
@@ -137,7 +138,7 @@ export type LogViewerAPI = {
   warmSlice: (path: string, offset: number, length: number) => Promise<LogSliceResponse | null>;
   warmNeighborSlices: (path: string, payload: LogSliceResponse, length: number) => void;
   resolveViewerJumpTarget: (lineIndex: number) => LogSearchResponse["matches"][number] | null;
-  appendResultTab: (payload: LogSearchResponse, label: string) => void;
+  appendResultTab: (payload: LogSearchResponse, label: string, tabLabelOverride?: string) => void;
   replaceLastResultTab: (payload: LogSearchResponse) => void;
   closeResultTab: (tabId: string) => void;
   focusHighlight: (direction: "prev" | "next") => void;
@@ -251,9 +252,9 @@ export function useLogViewer(params: LogViewerParams): LogViewerAPI {
     return state.resultContextMode ? null : (activeViewerMatches[lineIndex] || null);
   }
 
-  function appendResultTab(payload: LogSearchResponse, sourceLabel: string) {
+  function appendResultTab(payload: LogSearchResponse, sourceLabel: string, tabLabelOverride?: string) {
     const nextId = `result-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const nextLabel = `结果 ${state.resultTabCounter}`;
+    const nextLabel = tabLabelOverride || `结果 ${state.resultTabCounter}`;
     const compactContent = formatSearchViewerContent(payload, undefined);
     const fullContent = formatSearchViewerContent(payload, "contextOutput");
     const nextTab: ViewerResultTab = { id: nextId, label: nextLabel, sourceLabel, content: compactContent, fullContent, matches: payload.matches, commandPreview: payload.commandPreview, strategyLabel: payload.strategyLabel, scopeLabel: payload.scopeLabel, matchCount: payload.matches.length };
@@ -310,18 +311,47 @@ export function useLogViewer(params: LogViewerParams): LogViewerAPI {
       callbacks.setActionStatus("当前结果页来自临时筛选，暂时不能直接跳回原日志文件。");
       return;
     }
-    await callbacks.withBusy("正在定位命中上下文...", async () => {
-      const targetFilePath = match.source;
-      setters.setFilePath(targetFilePath);
-      setters.setActiveLogView("search");
-      setters.setActiveViewerTabId("file");
-      callbacks.stopLiveFollow();
-      const [metaPayload, contextPayload] = await Promise.all([fetchLogMeta(targetFilePath), fetchLineContext(targetFilePath, match.lineNumber, Math.max(12, state.contextLines * 2))]);
-      setters.setFileMeta(metaPayload);
+    const targetFilePath = match.source;
+    const requestId = refs.jumpToMatchRequestRef.current + 1;
+    refs.jumpToMatchRequestRef.current = requestId;
+
+    setters.setFilePath(targetFilePath);
+    setters.setActiveLogView("search");
+    setters.setActiveViewerTabId("file");
+    setters.setFileMeta(null);
+    setters.setLineContextState(null);
+    setters.setActiveHighlightIndex(-1);
+    callbacks.stopLiveFollow();
+    callbacks.setActionStatus(`正在定位第 ${formatNumber(match.lineNumber)} 行附近...`);
+
+    try {
+      const contextPayload = await fetchLineContext(targetFilePath, match.lineNumber, Math.max(60, state.contextLines * 4));
+      if (refs.jumpToMatchRequestRef.current !== requestId) {
+        return;
+      }
+
       setters.setLineContextState({ ...contextPayload, sourceLabel: targetFilePath.split("/").pop() || targetFilePath });
       callbacks.setActionStatus(`已定位到第 ${formatNumber(match.lineNumber)} 行附近。`);
       callbacks.pushActivity(`已定位搜索命中：${targetFilePath} 第 ${formatNumber(match.lineNumber)} 行。`);
-    });
+
+      void fetchLogMeta(targetFilePath)
+        .then((metaPayload) => {
+          if (refs.jumpToMatchRequestRef.current !== requestId) {
+            return;
+          }
+          setters.setFileMeta(metaPayload);
+        })
+        .catch(() => {
+          // Metadata is supplemental for jump navigation; ignore late failures here.
+        });
+    } catch (error) {
+      if (refs.jumpToMatchRequestRef.current !== requestId) {
+        return;
+      }
+      const detail = error instanceof Error ? error.message : "未知错误";
+      callbacks.setActionStatus(`按行定位失败：${detail}`);
+      callbacks.pushActivity(`按行定位失败：${detail}`);
+    }
   }
 
   async function toggleLiveFollow(nextEnabled: boolean) {
@@ -655,8 +685,19 @@ export function useLogViewer(params: LogViewerParams): LogViewerAPI {
   }
 
   async function handleBackToBottom() {
-    if (state.liveFollowEnabled) { if (state.liveFollowPaused) setters.setLiveFollowPaused(false); refs.sliceScrollAnchorRef.current = "bottom"; callbacks.scrollViewerToBottom(); return; }
-    if (!state.sliceData?.isEnd) { await loadTailSlice(); return; }
+    const shouldResumeLiveFollow = state.liveFollowEnabled && state.liveFollowPaused;
+    if (!state.sliceData?.isEnd) {
+      await loadTailSlice();
+      refs.sliceScrollAnchorRef.current = "bottom";
+      if (shouldResumeLiveFollow) {
+        setters.setLiveFollowPaused(false);
+      }
+      callbacks.scrollViewerToBottom();
+      return;
+    }
+    if (state.liveFollowEnabled && state.liveFollowPaused) {
+      setters.setLiveFollowPaused(false);
+    }
     refs.sliceScrollAnchorRef.current = "bottom";
     callbacks.scrollViewerToBottom();
   }

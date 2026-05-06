@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
-import { Plus, Pencil, Trash2, X, Check, Save, ChevronRight } from "lucide-react";
+import { Plus, Pencil, Trash2, X, Check, Save, ChevronRight, TerminalSquare } from "lucide-react";
 import type { ShortcutCommand } from "./storage.js";
 import {
   getShortcutCommandsForServer,
@@ -59,25 +59,16 @@ export function TerminalShortcuts(props: TerminalShortcutsProps) {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        if (isAdding) { setIsAdding(false); setAddLabel(""); setAddCommand(""); }
-        else if (editingId) { setEditingId(null); }
-        else { props.onClose(); }
-      }
+      if (e.key !== "Escape") return;
+      const panel = panelRef.current;
+      const active = document.activeElement;
+      if (!panel || !(active instanceof Node) || !panel.contains(active)) return;
+      if (isAdding) { setIsAdding(false); setAddLabel(""); setAddCommand(""); }
+      else if (editingId) { setEditingId(null); }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isAdding, editingId, props.onClose]);
-
-  useEffect(() => {
-    const handlePointerDown = (e: PointerEvent) => {
-      if (!panelRef.current) return;
-      if (e.target instanceof Node && panelRef.current.contains(e.target)) return;
-      props.onClose();
-    };
-    window.addEventListener("pointerdown", handlePointerDown, true);
-    return () => window.removeEventListener("pointerdown", handlePointerDown, true);
-  }, [props.onClose]);
+  }, [isAdding, editingId]);
 
   const savedCommandSet = useMemo(() => new Set(commands.map((c) => c.command)), [commands]);
   const visiblePresets = useMemo(() => PRESET_COMMANDS.filter((p) => !savedCommandSet.has(p.command)), [savedCommandSet]);
@@ -95,6 +86,18 @@ export function TerminalShortcuts(props: TerminalShortcutsProps) {
 
   return (
     <div ref={panelRef} className="tsc-dropdown" onMouseDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()}>
+      <div className="tsc-header">
+        <div className="tsc-header-title">
+          <TerminalSquare size={13} />
+          <span>快捷命令</span>
+          <span className="tsc-header-subtitle" title={props.serverLabel}>{props.serverLabel}</span>
+        </div>
+        <div className="tsc-header-actions">
+          <button type="button" className="tsc-hdr-btn" title="关闭" onClick={props.onClose}>
+            <X size={13} />
+          </button>
+        </div>
+      </div>
       <div className="tsc-scroll">
         {commands.length > 0 && (
           <>

@@ -10,19 +10,22 @@
   z-index: 150;
   width: 340px;
   max-width: calc(100% - 12px);
-  background: rgba(24, 24, 28, 0.97);
+  background:
+    radial-gradient(circle at top left, rgba(245, 158, 11, 0.16), transparent 32%),
+    linear-gradient(180deg, rgba(17, 24, 39, 0.98) 0%, rgba(15, 23, 42, 0.98) 100%);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255,255,255,0.08);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 8px;
   box-shadow:
-    0 8px 32px rgba(0,0,0,0.45),
-    0 6px 18px rgba(15,23,42,0.34),
-    inset 0 1px 0 rgba(255,255,255,0.08);
+    0 8px 32px rgba(0, 0, 0, 0.42),
+    0 6px 18px rgba(15, 23, 42, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
   font-size: 12px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  color: rgba(248, 250, 252, 0.92);
 }
 
 .tsc-dropdown button {
@@ -43,8 +46,8 @@
   align-items: center;
   justify-content: space-between;
   padding: 10px 12px;
-  border-bottom: 1px solid rgba(255,255,255,0.06);
-  background: linear-gradient(180deg, rgba(99,102,241,0.08), rgba(99,102,241,0.02));
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: linear-gradient(180deg, rgba(245, 158, 11, 0.08), rgba(245, 158, 11, 0.02));
   flex-shrink: 0;
 }
 
@@ -52,10 +55,21 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  color: rgba(248,250,252,0.94);
+  color: rgba(248, 250, 252, 0.94);
   font-weight: 600;
   font-size: 12px;
   letter-spacing: 0.2px;
+  min-width: 0;
+}
+
+.tsc-header-subtitle {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: rgba(191, 219, 254, 0.64);
+  font-size: 11px;
+  font-weight: 500;
 }
 
 .tsc-sparkle {
@@ -84,15 +98,15 @@
   justify-content: center;
   width: 28px;
   height: 28px;
-  color: rgba(226,232,240,0.58);
+  color: rgba(226, 232, 240, 0.68);
   border-radius: 7px;
-  border: 1px solid rgba(148,163,184,0.08);
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .tsc-hdr-btn:hover {
-  background: rgba(129,140,248,0.12);
-  border-color: rgba(129,140,248,0.18);
-  color: rgba(248,250,252,0.92);
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.96);
 }
 
 .tsc-hdr-btn:disabled {
@@ -102,8 +116,8 @@
 
 .tsc-hdr-btn:disabled:hover {
   background: transparent;
-  border-color: rgba(148,163,184,0.08);
-  color: rgba(226,232,240,0.58);
+  border-color: rgba(255, 255, 255, 0.08);
+  color: rgba(226, 232, 240, 0.68);
 }
 
 .tsc-hdr-btn-chat {
@@ -124,6 +138,152 @@
 .tsc-hdr-btn-chat:hover {
   background: rgba(99,102,241,0.18);
   border-color: rgba(129,140,248,0.3);
+}
+
+.tsc-scroll {
+  flex: 1 1 0%;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px 10px 0;
+}
+
+.tsc-section-label {
+  display: flex;
+  align-items: center;
+  margin: 10px 2px 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(191, 219, 254, 0.64);
+}
+
+.tsc-section-label:first-child {
+  margin-top: 0;
+}
+
+.tsc-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, auto) minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 10px;
+  margin-bottom: 8px;
+  border: 1px solid rgba(245, 158, 11, 0.12);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+  transition: border-color 120ms ease, box-shadow 120ms ease, transform 120ms ease, background 120ms ease;
+}
+
+.tsc-row:hover {
+  border-color: rgba(245, 158, 11, 0.24);
+  box-shadow: 0 6px 16px rgba(245, 158, 11, 0.08);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.tsc-row-arrow {
+  color: #fbbf24;
+  flex-shrink: 0;
+}
+
+.tsc-row-label {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  color: rgba(248, 250, 252, 0.92);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.tsc-row-cmd {
+  min-width: 0;
+  color: rgba(226, 232, 240, 0.72);
+  font-family: "SFMono-Regular", "Consolas", monospace;
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tsc-row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.tsc-edit-row,
+.tsc-add-form {
+  display: grid;
+  grid-template-columns: minmax(0, 112px) minmax(0, 1fr) auto auto;
+  gap: 6px;
+  align-items: center;
+  padding: 10px;
+  margin-bottom: 8px;
+  border: 1px solid rgba(245, 158, 11, 0.16);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.tsc-add-form {
+  margin: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-right: 0;
+  border-bottom: 0;
+  border-left: 0;
+  border-radius: 0;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.tsc-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 7px !important;
+  color: rgba(226, 232, 240, 0.72) !important;
+  background: rgba(255, 255, 255, 0.05) !important;
+  transition: border-color 120ms ease, color 120ms ease, background 120ms ease;
+}
+
+.tsc-btn:hover:not(:disabled) {
+  border-color: rgba(245, 158, 11, 0.24) !important;
+  color: rgba(255, 255, 255, 0.96) !important;
+  background: rgba(255, 255, 255, 0.09) !important;
+}
+
+.tsc-btn-ok {
+  color: #fbbf24 !important;
+}
+
+.tsc-btn-del {
+  color: #fca5a5 !important;
+}
+
+.tsc-input-mono {
+  font-family: "SFMono-Regular", "Consolas", monospace;
+}
+
+.tsc-add-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 38px;
+  margin: 10px;
+  border: 1px dashed rgba(245, 158, 11, 0.28) !important;
+  border-radius: 10px !important;
+  color: #fcd34d !important;
+  background: rgba(245, 158, 11, 0.08) !important;
+  font-weight: 600;
+}
+
+.tsc-add-trigger:hover:not(:disabled) {
+  background: rgba(245, 158, 11, 0.14) !important;
+  border-color: rgba(245, 158, 11, 0.34) !important;
 }
 
 /* Messages area */
@@ -446,10 +606,10 @@
 
 .tsc-input {
   height: 28px;
-  border: 1px solid rgba(129,140,248,0.14);
+  border: 1px solid rgba(245, 158, 11, 0.14);
   border-radius: 5px;
-  background: rgba(15,23,42,0.22);
-  color: rgba(248,250,252,0.9);
+  background: rgba(15, 23, 42, 0.22);
+  color: rgba(248, 250, 252, 0.9);
   font-size: 12px;
   padding: 0 8px;
   outline: none;
@@ -457,8 +617,8 @@
 }
 
 .tsc-input:focus {
-  border-color: rgba(129,140,248,0.42);
-  box-shadow: 0 0 0 3px rgba(99,102,241,0.12);
+  border-color: rgba(245, 158, 11, 0.42);
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.12);
 }
 
 .tsc-settings-check {
@@ -554,5 +714,567 @@
 }
 
 .tsc-toggle-active {
-  color: #a78bfa !important;
+  color: #f59e0b !important;
+}
+
+/* ---------------------------------------------------------------------------
+   Terminal AI assistant – base styles
+   --------------------------------------------------------------------------- */
+
+.tai-dropdown {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  z-index: 150;
+  width: 340px;
+  max-width: calc(100% - 12px);
+  background:
+    radial-gradient(circle at top left, rgba(59, 130, 246, 0.16), transparent 30%),
+    linear-gradient(180deg, rgba(17, 24, 39, 0.98) 0%, rgba(15, 23, 42, 0.98) 100%);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.42),
+    0 6px 18px rgba(15, 23, 42, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  color: rgba(248, 250, 252, 0.92);
+}
+
+.tai-dropdown button {
+  background: transparent;
+  border: none;
+  padding: 0;
+  border-radius: 4px;
+  box-shadow: none;
+  font-size: inherit;
+  line-height: 1;
+  cursor: pointer;
+  color: inherit;
+}
+
+.tai-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: linear-gradient(180deg, rgba(59, 130, 246, 0.08), rgba(59, 130, 246, 0.02));
+  flex-shrink: 0;
+}
+
+.tai-header-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: rgba(248, 250, 252, 0.94);
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 0.2px;
+}
+
+.tai-sparkle {
+  color: #60a5fa;
+}
+
+.tai-badge-unconfigured {
+  font-size: 9px;
+  font-weight: 500;
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.12);
+  padding: 1px 5px;
+  border-radius: 3px;
+  letter-spacing: 0;
+}
+
+.tai-header-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.tai-hdr-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  color: rgba(226, 232, 240, 0.58);
+  border-radius: 7px;
+  border: 1px solid rgba(148, 163, 184, 0.08);
+}
+
+.tai-hdr-btn:hover {
+  background: rgba(59, 130, 246, 0.12);
+  border-color: rgba(59, 130, 246, 0.18);
+  color: rgba(248, 250, 252, 0.92);
+}
+
+.tai-hdr-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.tai-hdr-btn:disabled:hover {
+  background: transparent;
+  border-color: rgba(148, 163, 184, 0.08);
+  color: rgba(226, 232, 240, 0.58);
+}
+
+.tai-hdr-btn-chat {
+  width: auto;
+  min-width: 70px;
+  padding: 0 10px;
+  gap: 5px;
+  color: rgba(224, 231, 255, 0.88);
+  background: rgba(59, 130, 246, 0.12);
+  border-color: rgba(59, 130, 246, 0.2);
+}
+
+.tai-hdr-btn-chat span {
+  font-size: 11px;
+  line-height: 1;
+}
+
+.tai-hdr-btn-chat:hover {
+  background: rgba(59, 130, 246, 0.18);
+  border-color: rgba(59, 130, 246, 0.3);
+}
+
+.tai-messages {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+.tai-messages::-webkit-scrollbar {
+  width: 4px;
+}
+
+.tai-messages::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.22);
+  border-radius: 2px;
+}
+
+.tai-welcome {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 20px 16px;
+  text-align: center;
+}
+
+.tai-welcome-icon {
+  color: #60a5fa;
+  opacity: 0.82;
+  margin-bottom: 10px;
+}
+
+.tai-welcome-title {
+  color: rgba(248, 250, 252, 0.9);
+  font-weight: 600;
+  font-size: 13px;
+  margin: 0 0 4px;
+}
+
+.tai-welcome-desc {
+  color: rgba(191, 219, 254, 0.62);
+  font-size: 11px;
+  margin: 0 0 16px;
+  line-height: 1.4;
+}
+
+.tai-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+}
+
+.tai-suggestion {
+  font-size: 11px;
+  color: rgba(224, 231, 255, 0.78);
+  border: 1px solid rgba(59, 130, 246, 0.18) !important;
+  border-radius: 14px !important;
+  padding: 5px 10px !important;
+  background: rgba(59, 130, 246, 0.08);
+  transition: all 100ms;
+  white-space: nowrap;
+}
+
+.tai-suggestion:hover {
+  color: rgba(248, 250, 252, 0.95);
+  border-color: rgba(59, 130, 246, 0.34) !important;
+  background: rgba(59, 130, 246, 0.16);
+}
+
+.tai-msg {
+  padding: 4px 12px;
+}
+
+.tai-msg p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.tai-msg-user {
+  text-align: right;
+}
+
+.tai-msg-user p {
+  display: inline-block;
+  background: rgba(59, 130, 246, 0.22);
+  color: rgba(248, 250, 252, 0.94);
+  padding: 5px 10px;
+  border-radius: 10px 10px 2px 10px;
+  max-width: 85%;
+  text-align: left;
+  font-size: 12px;
+}
+
+.tai-msg-ai {
+  padding: 6px 12px;
+}
+
+.tai-msg-text {
+  color: rgba(226, 232, 240, 0.82);
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.tai-msg-streaming {
+  opacity: 0.7;
+}
+
+.tai-thinking {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: rgba(191, 219, 254, 0.62);
+  font-size: 11px;
+  padding: 8px 12px;
+}
+
+@keyframes tai-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.tai-spin {
+  animation: tai-spin 1s linear infinite;
+}
+
+.tai-cmd-group {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 6px 0;
+}
+
+.tai-cmd-block {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(59, 130, 246, 0.14);
+  border-radius: 6px;
+  transition: border-color 100ms;
+}
+
+.tai-cmd-block:hover {
+  border-color: rgba(59, 130, 246, 0.28);
+}
+
+.tai-cmd-block code {
+  flex: 1;
+  min-width: 0;
+  font-family: "SFMono-Regular", "Consolas", monospace;
+  font-size: 11px;
+  color: rgba(241, 245, 249, 0.84);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tai-cmd-danger {
+  border-color: rgba(239, 68, 68, 0.3);
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.tai-cmd-needs-backup {
+  border-color: rgba(245, 158, 11, 0.28);
+  background: rgba(245, 158, 11, 0.09);
+}
+
+.tai-cmd-blocked {
+  opacity: 0.95;
+}
+
+.tai-cmd-warn-icon {
+  color: #f59e0b;
+  flex-shrink: 0;
+}
+
+.tai-cmd-badge {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  height: 16px;
+  padding: 0 5px;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+}
+
+.tai-cmd-badge-danger {
+  color: #fca5a5;
+  background: rgba(239, 68, 68, 0.14);
+}
+
+.tai-cmd-badge-backup {
+  color: #fcd34d;
+  background: rgba(245, 158, 11, 0.14);
+}
+
+.tai-cmd-badge-safe {
+  color: #86efac;
+  background: rgba(34, 197, 94, 0.14);
+}
+
+.tai-cmd-run {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  color: #34d399;
+  flex-shrink: 0;
+  border-radius: 4px;
+}
+
+.tai-cmd-run:hover {
+  background: rgba(52, 211, 153, 0.16);
+}
+
+.tai-cmd-run:disabled {
+  opacity: 0.28;
+  cursor: not-allowed;
+}
+
+.tai-cmd-run:disabled:hover {
+  background: transparent;
+}
+
+.tai-input-bar {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  padding: 8px 10px;
+  border-top: 1px solid rgba(59, 130, 246, 0.12);
+  background: linear-gradient(180deg, rgba(59, 130, 246, 0.05), rgba(59, 130, 246, 0.01));
+  flex-shrink: 0;
+}
+
+.tai-textarea {
+  flex: 1;
+  min-width: 0;
+  min-height: 24px;
+  max-height: 72px;
+  resize: none;
+  border: 1px solid rgba(59, 130, 246, 0.14);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.22);
+  color: rgba(248, 250, 252, 0.9);
+  font-size: 12px;
+  padding: 5px 10px;
+  outline: none;
+  line-height: 1.5;
+  font-family: inherit;
+}
+
+.tai-textarea:focus {
+  border-color: rgba(59, 130, 246, 0.42);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+}
+
+.tai-textarea::placeholder {
+  color: rgba(191, 219, 254, 0.36);
+}
+
+.tai-textarea:disabled {
+  opacity: 0.4;
+}
+
+.tai-send-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  color: #bfdbfe;
+  background: rgba(59, 130, 246, 0.12);
+  flex-shrink: 0;
+  transition: background 80ms;
+}
+
+.tai-send-btn:hover:not(:disabled) {
+  background: rgba(59, 130, 246, 0.22);
+}
+
+.tai-send-btn:disabled {
+  opacity: 0.25;
+  cursor: default;
+}
+
+.tai-settings {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.tai-settings-title {
+  font-weight: 600;
+  color: rgba(248, 250, 252, 0.88);
+  font-size: 12px;
+  margin-bottom: 2px;
+}
+
+.tai-settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.tai-settings-field > span {
+  font-size: 11px;
+  color: rgba(191, 219, 254, 0.6);
+}
+
+.tai-input {
+  height: 28px;
+  border: 1px solid rgba(59, 130, 246, 0.14);
+  border-radius: 5px;
+  background: rgba(15, 23, 42, 0.22);
+  color: rgba(248, 250, 252, 0.9);
+  font-size: 12px;
+  padding: 0 8px;
+  outline: none;
+  width: 100%;
+}
+
+.tai-input:focus {
+  border-color: rgba(59, 130, 246, 0.42);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+}
+
+.tai-settings-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: rgba(226, 232, 240, 0.78);
+  cursor: pointer;
+}
+
+.tai-settings-check input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  accent-color: #60a5fa;
+}
+
+.tai-preset-list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+}
+
+.tai-preset-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  padding: 6px 8px !important;
+  border: 1px solid rgba(59, 130, 246, 0.14) !important;
+  border-radius: 6px !important;
+  transition: all 80ms;
+  text-align: left;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.tai-preset-btn strong {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(248, 250, 252, 0.82);
+}
+
+.tai-preset-btn span {
+  font-size: 9px;
+  color: rgba(191, 219, 254, 0.5);
+}
+
+.tai-preset-btn:hover {
+  border-color: rgba(59, 130, 246, 0.24) !important;
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.tai-preset-active {
+  border-color: rgba(59, 130, 246, 0.38) !important;
+  background: rgba(59, 130, 246, 0.16) !important;
+}
+
+.tai-preset-active strong {
+  color: #dbeafe;
+}
+
+.tai-settings-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.tai-btn-save {
+  flex: 1;
+  height: 28px;
+  border-radius: 6px;
+  background: rgba(59, 130, 246, 0.2) !important;
+  color: #dbeafe;
+  font-size: 12px;
+  font-weight: 500;
+  transition: background 80ms;
+}
+
+.tai-btn-save:hover {
+  background: rgba(59, 130, 246, 0.3) !important;
+}
+
+.tai-btn-cancel {
+  flex: 1;
+  height: 28px;
+  border-radius: 6px;
+  color: rgba(226, 232, 240, 0.68);
+  font-size: 12px;
+}
+
+.tai-btn-cancel:hover {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.tai-toggle-active {
+  color: #60a5fa !important;
 }

@@ -368,6 +368,7 @@ ipcMain.handle("local-pick-directory", async () => {
 ipcMain.handle("open-pip-window", (_event, config = {}) => {
   const pipMode = config.mode || "viewer";
   const isTerminalMode = pipMode === "terminal";
+  const isUtilityMode = pipMode === "utility";
   const terminalSessionId = String(config.terminalSessionId || "").trim();
   if (isTerminalMode && !terminalSessionId) {
     return { ok: false, message: "缺少终端会话标识" };
@@ -388,6 +389,7 @@ ipcMain.handle("open-pip-window", (_event, config = {}) => {
   if (config.directoryPath) query.set("directoryPath", config.directoryPath);
   if (config.bastionId) query.set("bastionId", config.bastionId);
   if (config.terminalSessionId) query.set("terminalSessionId", config.terminalSessionId);
+  if (config.utilityPanel) query.set("utilityPanel", config.utilityPanel);
   if (config.activeLogView) query.set("activeLogView", config.activeLogView);
   if (config.errorHighlight) query.set("errorHighlight", "1");
   if (config.liveFollow) query.set("liveFollow", "1");
@@ -399,9 +401,9 @@ ipcMain.handle("open-pip-window", (_event, config = {}) => {
     minWidth: 720,
     minHeight: 420,
     title: config.title || "日志控制台",
-    alwaysOnTop: true,
-    titleBarStyle: "hiddenInset",
-    trafficLightPosition: { x: 12, y: 12 },
+    alwaysOnTop: isUtilityMode ? false : true,
+    titleBarStyle: isUtilityMode ? "default" : "hiddenInset",
+    trafficLightPosition: isUtilityMode ? undefined : { x: 12, y: 12 },
     backgroundColor: "#1a1a2e",
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
