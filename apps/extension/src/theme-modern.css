@@ -1701,6 +1701,23 @@
   background: rgba(255, 255, 255, 0.14);
 }
 
+.theme-modern .terminal-toolbar-button {
+  font-size: 12px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border: none;
+  color: var(--shell-ink);
+}
+
+.theme-modern .terminal-toolbar-button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.theme-modern .terminal-toolbar-button:disabled {
+  opacity: 0.42;
+}
+
 .theme-modern .selection-copy-menu,
 .theme-modern .terminal-sel-menu {
   background: rgba(248, 250, 252, 0.96);

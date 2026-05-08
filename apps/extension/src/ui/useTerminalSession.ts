@@ -41,8 +41,26 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
   const onResizeDisposableRef = useRef<{ dispose: () => void } | null>(null);
   const reconnectTimerRef = useRef<number | null>(null);
   const fitTimersRef = useRef<number[]>([]);
+  const outputSettleTimerRef = useRef<number | null>(null);
   const retryCountRef = useRef(0);
   const reconnectDesiredRef = useRef(false);
+  const followOutputRef = useRef(true);
+
+  const clampSelectionMenuPosition = useCallback((x: number, y: number) => {
+    const container = containerRef.current;
+    if (!container) {
+      return { x, y };
+    }
+    const rect = container.getBoundingClientRect();
+    const horizontalPadding = 8;
+    const verticalPadding = 8;
+    const estimatedMenuWidth = 68;
+    const estimatedMenuHeight = 40;
+    return {
+      x: Math.max(horizontalPadding, Math.min(x, rect.width - estimatedMenuWidth - horizontalPadding)),
+      y: Math.max(estimatedMenuHeight + verticalPadding, Math.min(y, rect.height - verticalPadding)),
+    };
+  }, []);
 
   const canApplyTerminalFit = useCallback(() => {
     const container = containerRef.current;
@@ -73,6 +91,23 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
     fitTimersRef.current = [];
   }, []);
 
+  const clearOutputSettleTimer = useCallback(() => {
+    if (outputSettleTimerRef.current !== null) {
+      window.clearTimeout(outputSettleTimerRef.current);
+      outputSettleTimerRef.current = null;
+    }
+  }, []);
+
+  const updateFollowOutputState = useCallback(() => {
+    const viewport = containerRef.current?.querySelector(".xterm-viewport") as HTMLDivElement | null;
+    if (!viewport) {
+      followOutputRef.current = true;
+      return;
+    }
+    const remaining = viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop;
+    followOutputRef.current = remaining <= 6;
+  }, []);
+
   const runFit = useCallback(() => {
     const terminal = terminalRef.current;
     const container = containerRef.current;
@@ -86,6 +121,17 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
     syncResizeToSocket();
     return true;
   }, [canApplyTerminalFit, syncResizeToSocket]);
+
+  const settleTerminalViewport = useCallback(() => {
+    clearOutputSettleTimer();
+    outputSettleTimerRef.current = window.setTimeout(() => {
+      outputSettleTimerRef.current = null;
+      runFit();
+      if (followOutputRef.current) {
+        terminalRef.current?.scrollToBottom();
+      }
+    }, 32);
+  }, [clearOutputSettleTimer, runFit]);
 
   const scheduleFit = useCallback((delays: number[] = [0, 16, 80, 180, 320]) => {
     clearFitTimers();
@@ -166,7 +212,10 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
         const text = terminal.getSelection();
         if (text && options.onSelectionMenu) {
           const rect = container.getBoundingClientRect();
-          options.onSelectionMenu({ x: e.clientX - rect.left, y: e.clientY - rect.top, text });
+          const relativeX = e.clientX - rect.left;
+          const relativeY = e.clientY - rect.top;
+          const nextPosition = clampSelectionMenuPosition(relativeX, relativeY);
+          options.onSelectionMenu({ x: nextPosition.x, y: nextPosition.y, text });
         } else if (!text && options.onSelectionMenu) {
           options.onSelectionMenu(null);
         }
@@ -177,14 +226,21 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
       options.onSelectionMenu?.(null);
     };
 
+    const onViewportScroll = () => {
+      updateFollowOutputState();
+    };
+
     container.addEventListener("mouseup", onMouseUp);
     container.addEventListener("mousedown", onMouseDown);
+    container.addEventListener("scroll", onViewportScroll, true);
+    updateFollowOutputState();
 
     return () => {
       container.removeEventListener("mouseup", onMouseUp);
       container.removeEventListener("mousedown", onMouseDown);
+      container.removeEventListener("scroll", onViewportScroll, true);
     };
-  }, [options.active, ensureTerminal, options.onSelectionMenu, scheduleFit]);
+  }, [clampSelectionMenuPosition, options.active, ensureTerminal, options.onSelectionMenu, scheduleFit, updateFollowOutputState]);
 
   useEffect(() => {
     if (!options.active) {
@@ -211,8 +267,9 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
       resizeObserver?.disconnect();
       window.clearTimeout(timer);
       clearFitTimers();
+      clearOutputSettleTimer();
     };
-  }, [options.active, clearFitTimers, scheduleFit]);
+  }, [options.active, clearFitTimers, clearOutputSettleTimer, scheduleFit]);
 
   useEffect(() => {
     if (!options.active || !options.serverId) {
@@ -229,6 +286,7 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
 
   useEffect(() => () => {
     clearFitTimers();
+    clearOutputSettleTimer();
     stopTerminal({
       preserveSession: options.preserveSessionOnDispose,
       preserveSessionKey: options.preserveSessionOnDispose,
@@ -242,7 +300,7 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
     terminalRef.current?.dispose();
     terminalRef.current = null;
     fitAddonRef.current = null;
-  }, [clearFitTimers, options.preserveSessionOnDispose]);
+  }, [clearFitTimers, clearOutputSettleTimer, options.preserveSessionOnDispose]);
 
   function clearReconnectTimer() {
     if (reconnectTimerRef.current !== null) {
@@ -288,6 +346,7 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
     setConnected(false);
     if (!optionsArg?.keepContent) {
       terminalRef.current?.clear();
+      followOutputRef.current = true;
     }
     if (!optionsArg?.preserveSessionKey) {
       sessionKeyRef.current = "";
@@ -437,6 +496,7 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
           }
           if (payload.chunk) {
             terminal.write(payload.chunk);
+            settleTerminalViewport();
           }
           options.onStatus(
             looksLikeJumpServer(options.selectedServer)
@@ -447,11 +507,13 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
           terminal.focus();
           scheduleFit([0, 16, 80, 180, 320]);
           syncResizeToSocket();
+          terminal.scrollToBottom();
           return;
         }
 
         if (payload.chunk) {
           terminal.write(payload.chunk);
+          settleTerminalViewport();
           if (!connected) {
             setConnected(true);
           }
@@ -486,6 +548,9 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
 
   function fitTerminal() {
     scheduleFit([0, 16, 64, 140, 260]);
+    if (followOutputRef.current) {
+      terminalRef.current?.scrollToBottom();
+    }
   }
 
   function getSelection(): string {

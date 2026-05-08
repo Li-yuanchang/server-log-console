@@ -174,6 +174,18 @@ export function TerminalPanel(props: TerminalPanelProps) {
     };
   }, [isStandalone, props.connected, props.onFit]);
 
+  useEffect(() => {
+    const timers = [0, 48, 140, 320, 640].map((delay) => window.setTimeout(() => {
+      props.onFit?.();
+    }, delay));
+
+    return () => {
+      for (const timer of timers) {
+        window.clearTimeout(timer);
+      }
+    };
+  }, [isStandalone, props.connected, props.detached, props.serverId, showSidePanel, showDetachedPlaceholder, props.onFit]);
+
   return (
     <section className={`terminal-bottom-panel${isStandalone ? " terminal-bottom-panel-standalone" : ""}`}>
       <div className={`terminal-panel-bar${isStandalone ? " terminal-panel-bar-standalone" : ""}`}>

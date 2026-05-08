@@ -536,6 +536,17 @@ function createWindow() {
   mainWindow.webContents.on("did-finish-load", () => probe("createWindow did-finish-load"));
   mainWindow.webContents.on("did-fail-load", (_event, code, description) => probe(`createWindow did-fail-load ${code} ${description}`));
   mainWindow.webContents.on("render-process-gone", (_event, details) => probe(`createWindow render-process-gone ${details.reason} ${details.exitCode}`));
+  mainWindow.webContents.on("console-message", (_event, level, message, line, sourceId) => {
+    probe(`renderer console level=${level} line=${line} source=${sourceId || ""} ${message}`);
+  });
+  mainWindow.webContents.on("preload-error", (_event, preloadPath, error) => {
+    probe(`renderer preload-error ${preloadPath} ${error && error.stack ? error.stack : String(error)}`);
+  });
+  mainWindow.webContents.on("did-start-navigation", (_event, url, isInPlace, isMainFrame) => {
+    if (isMainFrame && !isInPlace) {
+      probe(`renderer did-start-navigation ${url}`);
+    }
+  });
 
   mainWindow.on("closed", () => {
     probe("createWindow window closed");
