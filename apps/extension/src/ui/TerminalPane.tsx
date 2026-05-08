@@ -100,17 +100,17 @@ export function TerminalPane({
       </div>
       <div className="terminal-pane-body" onMouseDown={() => session.focusTerminal()} onClick={() => session.focusTerminal()}>
         <div ref={session.containerRef} className="xterm-container" />
+        {selMenu && (
+          <div className="terminal-sel-menu" style={{ left: selMenu.x, top: selMenu.y }}>
+            <button type="button" title="复制" onMouseDown={(e) => e.stopPropagation()} onClick={() => void handleCopy()}>
+              <Copy size={14} />
+            </button>
+            <button type="button" title="复制并粘贴" onMouseDown={(e) => e.stopPropagation()} onClick={() => void handleCopyAndPaste()}>
+              <ClipboardPaste size={14} />
+            </button>
+          </div>
+        )}
       </div>
-      {selMenu && (
-        <div className="terminal-sel-menu" style={{ left: selMenu.x, top: selMenu.y }}>
-          <button type="button" title="复制" onMouseDown={(e) => e.stopPropagation()} onClick={() => void handleCopy()}>
-            <Copy size={14} />
-          </button>
-          <button type="button" title="复制并粘贴" onMouseDown={(e) => e.stopPropagation()} onClick={() => void handleCopyAndPaste()}>
-            <ClipboardPaste size={14} />
-          </button>
-        </div>
-      )}
     </div>
   );
 }
