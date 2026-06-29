@@ -192,13 +192,16 @@ export function useLogViewer(params: LogViewerParams): LogViewerAPI {
     () => state.resultTabs.find((tab) => tab.id === state.activeViewerTabId) ?? null,
     [state.activeViewerTabId, state.resultTabs]
   );
-  const activeViewerMatches = activeResultTab?.matches ?? (state.activeViewerTabId === "file" ? state.results?.matches ?? [] : []);
+  const showingPrimaryResults = state.activeViewerTabId === "results-root";
+  const activeViewerMatches = activeResultTab?.matches ?? (state.activeViewerTabId === "file" ? state.results?.matches ?? [] : (showingPrimaryResults ? state.results?.matches ?? [] : []));
   const currentFileContent = state.liveFollowEnabled
     ? state.liveFollowContent || state.sliceData?.content || ""
     : state.lineContextState?.content || state.liveFollowContent || state.sliceData?.content || "";
   const currentLogContent = activeResultTab
     ? (state.resultContextMode && activeResultTab.fullContent ? activeResultTab.fullContent : activeResultTab.content)
-    : (state.resultContextMode && state.results?.contextOutput ? state.results.contextOutput : currentFileContent);
+    : (showingPrimaryResults
+      ? (state.resultContextMode && state.results?.contextOutput ? state.results.contextOutput : state.results?.rawOutput || "")
+      : currentFileContent);
   const viewerLineClickEnabled = state.activeViewerTabId !== "file" && activeViewerMatches.length > 0;
   const canDragReaderPosition = useMemo(() => {
     if (!activeFileMeta?.size || !activeSliceData) {

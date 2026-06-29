@@ -74,6 +74,7 @@ const VirtualLogViewerImpl = forwardRef<VirtualLogViewerHandle, Props>(
 
     const virtuosoRef = useRef<VirtuosoHandle>(null);
     const scrollerRef = useRef<HTMLElement | null>(null);
+    const lastScrollStateEmitRef = useRef(0);
 
     const lines = useMemo(() => {
       if (!content) return [];
@@ -93,7 +94,21 @@ const VirtualLogViewerImpl = forwardRef<VirtualLogViewerHandle, Props>(
       [errorLineKinds, lines],
     );
 
-    const highlightRegex = useMemo(() => {
+    const rawHighlightRegex = useMemo(() => {
+      const normalized = [...new Set(keywordTerms.map((t) => t.trim()).filter(Boolean))];
+      if (!normalized.length) return null;
+      const patterns = normalized
+        .map((t) => (useRegex ? t : escapeRegExp(t)))
+        .filter(Boolean);
+      if (!patterns.length) return null;
+      try {
+        return new RegExp(`(${patterns.join("|")})`, "gi");
+      } catch {
+        return null;
+      }
+    }, [keywordTerms, useRegex]);
+
+    const displayHighlightRegex = useMemo(() => {
       const normalized = [...new Set(keywordTerms.map((t) => t.trim()).filter(Boolean))];
       if (!normalized.length) return null;
       const patterns = normalized
@@ -108,7 +123,7 @@ const VirtualLogViewerImpl = forwardRef<VirtualLogViewerHandle, Props>(
     }, [keywordTerms, useRegex]);
 
     const { lineMatchCounts, cumulativeOffsets, totalMatches } = useMemo(() => {
-      if (!highlightRegex || !lines.length) {
+      if (!rawHighlightRegex || !lines.length) {
         return { lineMatchCounts: [] as number[], cumulativeOffsets: [] as number[], totalMatches: 0 };
       }
       const counts: number[] = [];
@@ -116,14 +131,13 @@ const VirtualLogViewerImpl = forwardRef<VirtualLogViewerHandle, Props>(
       let cumulative = 0;
       for (const line of lines) {
         offsets.push(cumulative);
-        const escaped = escapeHtml(line);
-        const matches = escaped.match(highlightRegex);
+        const matches = line.match(rawHighlightRegex);
         const count = matches?.length ?? 0;
         counts.push(count);
         cumulative += count;
       }
       return { lineMatchCounts: counts, cumulativeOffsets: offsets, totalMatches: cumulative };
-    }, [lines, highlightRegex]);
+    }, [lines, rawHighlightRegex]);
 
     useEffect(() => {
       onHighlightCountChange?.(totalMatches);
@@ -152,6 +166,11 @@ const VirtualLogViewerImpl = forwardRef<VirtualLogViewerHandle, Props>(
       let frame = 0;
       const emit = () => {
         frame = 0;
+        const now = performance.now();
+        if (now - lastScrollStateEmitRef.current < 80) {
+          return;
+        }
+        lastScrollStateEmitRef.current = now;
         onScrollStateChange({
           scrollTop: el.scrollTop,
           scrollHeight: el.scrollHeight,
@@ -214,7 +233,8 @@ const VirtualLogViewerImpl = forwardRef<VirtualLogViewerHandle, Props>(
         const escaped = escapeHtml(item.text);
 
         const isFocused = index === focusLineIndex;
-        const isBookmarked = bookmarks ? index in bookmarks : false;
+        const showBookmarkControls = Boolean(bookmarks && onBookmarkToggle);
+        const isBookmarked = showBookmarkControls ? index in bookmarks! : false;
         const clickable = Boolean(onLineClick);
         const errorKind = item.errorKind;
         const baseClass = `log-line${isFocused ? " log-line-focus" : ""}${clickable ? " log-line-clickable" : ""}${errorKind ? ` log-line-level-${errorKind}` : ""}${isBookmarked ? " log-line-bookmarked" : ""}`;
@@ -234,29 +254,34 @@ const VirtualLogViewerImpl = forwardRef<VirtualLogViewerHandle, Props>(
           }
           onLineClick!(index, event);
         } : undefined;
-        const handleDoubleClick = onBookmarkToggle ? () => onBookmarkToggle(index) : undefined;
+        const handleDoubleClick = showBookmarkControls ? () => onBookmarkToggle!(index) : undefined;
         const title = clickable ? "按住 Ctrl 或 Cmd 点击可跳转到原日志" : undefined;
 
-        const bookmarkIcon = isBookmarked
-          ? `<span class="log-bookmark-icon" title="${bookmarks![index] || "书签"}">★</span>`
-          : `<span class="log-bookmark-icon log-bookmark-icon-empty">☆</span>`;
+        const bookmarkIcon = showBookmarkControls
+          ? (isBookmarked
+            ? `<span class="log-bookmark-icon" title="${bookmarks![index] || "书签"}">★</span>`
+            : `<span class="log-bookmark-icon log-bookmark-icon-empty">☆</span>`)
+          : "";
+        const focusBadge = isFocused
+          ? `<span class="log-focus-badge" title="当前跳转定位">定位</span>`
+          : "";
 
-        if (!highlightRegex || !escaped) {
-          return <div className={baseClass} onClick={handleClick} onDoubleClick={handleDoubleClick} title={title} dangerouslySetInnerHTML={{ __html: bookmarkIcon + (escaped || "\u00A0") }} />;
+        if (!displayHighlightRegex || !escaped) {
+          return <div className={baseClass} onClick={handleClick} onDoubleClick={handleDoubleClick} title={title} dangerouslySetInnerHTML={{ __html: bookmarkIcon + focusBadge + (escaped || "\u00A0") }} />;
         }
 
         const startMatchIdx = cumulativeOffsets[index] ?? 0;
         let matchIdx = startMatchIdx;
-        const highlighted = escaped.replace(highlightRegex, (_match, capture: string) => {
+        const highlighted = escaped.replace(displayHighlightRegex, (_match, capture: string) => {
           const cls =
             matchIdx === activeHighlightIndex ? "log-highlight log-highlight-active" : "log-highlight";
           matchIdx++;
           return `<mark class="${cls}">${capture}</mark>`;
         });
 
-        return <div className={baseClass} onClick={handleClick} onDoubleClick={handleDoubleClick} title={title} dangerouslySetInnerHTML={{ __html: bookmarkIcon + highlighted }} />;
+        return <div className={baseClass} onClick={handleClick} onDoubleClick={handleDoubleClick} title={title} dangerouslySetInnerHTML={{ __html: bookmarkIcon + focusBadge + highlighted }} />;
       },
-      [highlightRegex, cumulativeOffsets, activeHighlightIndex, focusLineIndex, bookmarks, onLineClick, onBookmarkToggle],
+      [displayHighlightRegex, cumulativeOffsets, activeHighlightIndex, focusLineIndex, bookmarks, onLineClick, onBookmarkToggle],
     );
 
     useImperativeHandle(

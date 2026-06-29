@@ -267,11 +267,13 @@ export function App() {
   const autoConnectServerRef = useRef("");
   const sliceScrollAnchorRef = useRef<"top" | "bottom" | null>(null);
   const wheelSliceLockRef = useRef(false);
+  const lastResultTabIdRef = useRef("");
   const { treeResizeRef, activityPanelResizeRef } = usePanelResize(setBrowserTreeWidth, setActivityPanelHeight);
   const readerPreviewRequestRef = useRef(0);
   const jumpToMatchRequestRef = useRef(0);
   const openFileRequestRef = useRef(0);
   const sliceRequestRef = useRef(0);
+  const lastSearchResultsRef = useRef<LogSearchResponse | null>(null);
   const jumpAssetAutoSearchKeyRef = useRef("");
   const readerDraftFrameRef = useRef<number | null>(null);
   const readerPendingDraftRef = useRef<number | null>(null);
@@ -335,11 +337,22 @@ export function App() {
   }), [serverId, filePath, directoryPath, keywordInput, keywordMode, excludeInput, useRegex, preferredBastionId, activeLogView, activeViewerTabId, results, resultTabs, searchStartedAt, fileMeta, sliceOffset, sliceLength, sliceLengthMode, sliceData, lineContextState, resultContextMode, activeHighlightIndex, showFileTools, errorHighlightEnabled, liveFollowEnabled, liveFollowPaused, liveFollowContent]);
 
   const pipLiveFollowRef = useRef(false);
+  const liveFollowEnabledRef = useRef(false);
+  const errorHighlightEnabledRef = useRef(false);
+  liveFollowEnabledRef.current = liveFollowEnabled;
+  errorHighlightEnabledRef.current = errorHighlightEnabled;
+  function resolveCurrentLiveFollowEnabled() {
+    if (liveFollowEnabled || liveFollowConnected || liveFollowEnabledRef.current) {
+      return true;
+    }
+    const liveButton = document.querySelector<HTMLButtonElement>('button[title*="实时跟随"]');
+    return Boolean(liveButton?.classList.contains("btn-live-active") || liveButton?.title.includes("停止"));
+  }
   const pip = usePictureInPicture({
     width: 980,
     height: 680,
     onOpen: () => {
-      if (liveFollowEnabled) {
+      if (resolveCurrentLiveFollowEnabled()) {
         pipLiveFollowRef.current = true;
         stopLiveFollow({ keepContent: true });
         setActionStatus("实时跟随已转移到小窗。");
@@ -361,8 +374,8 @@ export function App() {
         directoryPath,
         bastionId: preferredBastionId,
         activeLogView,
-        errorHighlight: errorHighlightEnabled,
-        liveFollow: liveFollowEnabled,
+        errorHighlight: errorHighlightEnabledRef.current,
+        liveFollow: resolveCurrentLiveFollowEnabled(),
       };
     },
   });
@@ -1097,6 +1110,22 @@ export function App() {
     setActiveHighlightIndex(0);
   }, [activeViewerTabId, resultTabs, sliceData?.content, results?.rawOutput, keywordInput, useRegex]);
 
+  useEffect(() => {
+    lastSearchResultsRef.current = null;
+  }, [serverId]);
+
+  useEffect(() => {
+    if (results && (results.matches.length > 0 || results.rawOutput || results.contextOutput)) {
+      lastSearchResultsRef.current = results;
+    }
+  }, [results]);
+
+  useEffect(() => {
+    if (activeViewerTabId !== "file") {
+      lastResultTabIdRef.current = activeViewerTabId;
+    }
+  }, [activeViewerTabId]);
+
   // VirtualLogViewer handles scrollToHighlight internally via activeHighlightIndex prop
 
   const {
@@ -1818,6 +1847,21 @@ export function App() {
 
   const canOpenTerminal = Boolean(selectedServer);
   const isFileMode = activeLogView === "files";
+  const effectiveResults = results ?? lastSearchResultsRef.current;
+  const hasSearchResults = Boolean(
+    resultTabs.length > 0 ||
+    effectiveResults?.matches?.length ||
+    effectiveResults?.rawOutput ||
+    effectiveResults?.contextOutput
+  );
+  const searchResultsTabId = useMemo(() => {
+    if (lastResultTabIdRef.current && resultTabs.some((tab) => tab.id === lastResultTabIdRef.current)) {
+      return lastResultTabIdRef.current;
+    }
+    return resultTabs[resultTabs.length - 1]?.id ?? "";
+  }, [resultTabs]);
+  const showingSearchResults = activeLogView === "search";
+  const showingDocumentContent = activeLogView === "files";
   const viewerTabs = useMemo(() => {
     const items: Array<{ id: string; label: string; kind: "file" | "result" }> = filePath
       ? [{ id: "file", label: selectedFileName || "当前文件", kind: "file" as const }]
@@ -1825,10 +1869,73 @@ export function App() {
 
     return items.concat(resultTabs.map((tab) => ({ id: tab.id, label: tab.label, kind: "result" as const })));
   }, [filePath, resultTabs, selectedFileName]);
-  const activeViewerCommandPreview = activeResultTab?.commandPreview || (activeViewerTabId === "file" ? results?.commandPreview : "");
-  const activeViewerStrategyLabel = activeResultTab?.strategyLabel || (activeViewerTabId === "file" ? results?.strategyLabel : "");
-  const activeViewerMatchCount = activeResultTab?.matchCount ?? (activeViewerTabId === "file" ? results?.matches.length ?? 0 : 0);
-  const hasSearchContent = Boolean(activeResultTab?.content || liveFollowContent || sliceData?.content || results?.rawOutput);
+  const showingPrimaryResults = activeViewerTabId === "results-root";
+  const activeViewerCommandPreview = activeResultTab?.commandPreview || ((activeViewerTabId === "file" || showingPrimaryResults) ? effectiveResults?.commandPreview : "");
+  const activeViewerStrategyLabel = activeResultTab?.strategyLabel || ((activeViewerTabId === "file" || showingPrimaryResults) ? effectiveResults?.strategyLabel : "");
+  const activeViewerMatchCount = activeResultTab?.matchCount ?? ((activeViewerTabId === "file" || showingPrimaryResults) ? effectiveResults?.matches.length ?? 0 : 0);
+  const hasSearchContent = Boolean(activeResultTab?.content || liveFollowContent || sliceData?.content || effectiveResults?.rawOutput);
+  const viewerStripLabel = activeViewerTabId === "file"
+    ? `文件预览${selectedFileName ? ` · ${selectedFileName}` : ""}`
+    : activeResultTab
+      ? `${activeResultTab.label} · ${activeResultTab.sourceLabel}`
+      : "搜索结果";
+  const canSwitchToDocumentContent = Boolean(serverId);
+
+  function switchToSearchResultsView() {
+    console.info("[toolbar-view-switch] click search", {
+      serverId,
+      hasSearchResults,
+      activeLogView,
+      activeViewerTabId,
+      searchResultsTabId,
+      resultTabs: resultTabs.length,
+    });
+    if (!serverId) return;
+    if (activeLogView === "search") {
+      setActionStatus("已在搜索结果。");
+      return;
+    }
+    setActionStatus("正在切换到搜索结果...");
+    setActiveLogView("search");
+    if (filePath.trim()) {
+      setActiveViewerTabId("file");
+    } else if (!activeViewerTabId) {
+      setActiveViewerTabId(searchResultsTabId || "results-root");
+    }
+  }
+
+  function switchToDocumentContentView() {
+    console.info("[toolbar-view-switch] click files", {
+      serverId,
+      activeLogView,
+      activeViewerTabId,
+      directoryPath,
+      fileEntries: fileEntries.length,
+    });
+    if (!serverId) return;
+    if (activeLogView === "files") {
+      setActionStatus("已在文档内容。");
+      return;
+    }
+    setActionStatus("正在切换到文档内容...");
+    setActiveLogView("files");
+    if (!fileEntries.length && directoryPath.trim()) {
+      void browseLogFiles(directoryPath);
+    }
+  }
+
+  function selectViewerTab(tab: { id: string; label: string; kind: "file" | "result" }) {
+    console.info("[viewer-tab] click", {
+      id: tab.id,
+      label: tab.label,
+      kind: tab.kind,
+      activeLogView,
+      activeViewerTabId,
+    });
+    setActiveLogView("search");
+    setActiveViewerTabId(tab.id);
+    setActionStatus(tab.kind === "file" ? `已切换到文件预览：${tab.label}` : `已切换到搜索结果：${tab.label}`);
+  }
 
   function handleTreeResizeStart(event: ReactPointerEvent<HTMLDivElement>) {
     if (!browserGridRef.current) {
@@ -1877,15 +1984,17 @@ export function App() {
   useEffect(() => {
     const api = (window as any).electronAPI;
     if (!api?.sendPipState) return;
-    api.sendPipState({ errorHighlight: errorHighlightEnabled, liveFollow: liveFollowEnabled });
-  }, [errorHighlightEnabled, liveFollowEnabled]);
+    const transferredLiveFollow = pip.isPip && pipLiveFollowRef.current;
+    api.sendPipState({ errorHighlight: errorHighlightEnabled, liveFollow: transferredLiveFollow ? true : liveFollowEnabled });
+  }, [errorHighlightEnabled, liveFollowEnabled, pip.isPip]);
 
   // PiP state sync: push initial state when PiP opens
   useEffect(() => {
     const api = (window as any).electronAPI;
     if (!api?.sendPipState || !pip.isPip) return;
-    api.sendPipState({ errorHighlight: errorHighlightEnabled, liveFollow: liveFollowEnabled });
-  }, [pip.isPip]);
+    const transferredLiveFollow = pipLiveFollowRef.current;
+    api.sendPipState({ errorHighlight: errorHighlightEnabled, liveFollow: transferredLiveFollow ? true : liveFollowEnabled });
+  }, [pip.isPip, errorHighlightEnabled, liveFollowEnabled]);
 
   // PiP state sync: listen for state updates from the other window
   useEffect(() => {
@@ -1894,12 +2003,18 @@ export function App() {
     const unsubscribe = api.onPipStateUpdate((state: { errorHighlight?: boolean; liveFollow?: boolean }) => {
       if (state.errorHighlight !== undefined) setErrorHighlightEnabled(state.errorHighlight);
       if (state.liveFollow !== undefined && state.liveFollow !== liveFollowEnabled) {
+        if (pip.isPip && pipLiveFollowRef.current) {
+          if (!state.liveFollow) {
+            pipLiveFollowRef.current = false;
+          }
+          return;
+        }
         if (state.liveFollow && filePath) startLiveFollow(filePath, selectedFileName);
         else if (!state.liveFollow) stopLiveFollow({ keepContent: true });
       }
     });
     return () => { if (typeof unsubscribe === "function") unsubscribe(); };
-  }, [filePath, selectedFileName, liveFollowEnabled]);
+  }, [filePath, selectedFileName, liveFollowEnabled, pip.isPip]);
 
   useEffect(() => {
     if (terminalPanelOpen && !canOpenTerminal && !isStandaloneTerminalWindow) {
@@ -1925,7 +2040,7 @@ export function App() {
     return panels;
   }, [activeLogView, canOpenComparePanel, serverId, servers.length]);
   const canShowEmbeddedUtilityWorkspace = availableUtilityPanels.length > 0 && !showCompactViewerChrome;
-  const canToggleResultContext = Boolean((activeResultTab?.fullContent || (activeViewerTabId === "file" && results?.contextOutput)) && activeResultTab?.strategyLabel !== "本地文件");
+  const canToggleResultContext = Boolean(activeViewerTabId !== "file" && activeResultTab?.fullContent && activeResultTab.strategyLabel !== "本地文件");
 
   useEffect(() => {
     if (availableUtilityPanels.length === 0) {
@@ -2244,30 +2359,28 @@ export function App() {
           ) : null}
           <section className="toolbar-panel">
             <div className="toolbar-commandbar">
-              <nav
-                className={`toolbar-breadcrumb${isFileMode ? " breadcrumb-active" : ""}`}
-                onClick={() => { if (serverId) setActiveLogView(activeLogView === "files" ? "search" : "files"); }}
-                title={serverId ? (activeLogView === "files" ? "点击返回搜索结果" : "点击打开文件列表") : "先选择服务器"}
-                role="button"
-                tabIndex={serverId ? 0 : -1}
-                onKeyDown={(e) => { if (e.key === "Enter" && serverId) setActiveLogView(activeLogView === "files" ? "search" : "files"); }}
-              >
-                <span className="breadcrumb-segment breadcrumb-server">
-                  {selectedServer?.name || selectedServer?.host || (serverId ? serverId : "未选择服务器")}
-                </span>
-                {breadcrumbDirectoryLabel ? (
-                  <>
-                    <span className="breadcrumb-sep" aria-hidden="true">/</span>
-                    <span className="breadcrumb-segment breadcrumb-dir">{"\u202D"}{breadcrumbDirectoryLabel}{"\u202C"}</span>
-                  </>
-                ) : null}
-                {breadcrumbFileName ? (
-                  <>
-                    <span className="breadcrumb-sep" aria-hidden="true">/</span>
-                    <span className="breadcrumb-segment breadcrumb-file">{breadcrumbFileName}</span>
-                  </>
-                ) : null}
-              </nav>
+              <div className="toolbar-view-switch" aria-label="内容视图切换">
+                <button
+                  type="button"
+                  className={showingSearchResults ? "toolbar-view-switch-btn is-active" : "toolbar-view-switch-btn"}
+                  aria-pressed={showingSearchResults}
+                  onClick={switchToSearchResultsView}
+                  disabled={!serverId}
+                  title={filePath.trim() ? "查看文件预览" : (hasSearchResults ? "查看搜索结果" : "暂无搜索结果")}
+                >
+                  搜索结果
+                </button>
+                <button
+                  type="button"
+                  className={showingDocumentContent ? "toolbar-view-switch-btn is-active" : "toolbar-view-switch-btn"}
+                  aria-pressed={showingDocumentContent}
+                  onClick={switchToDocumentContentView}
+                  disabled={!canSwitchToDocumentContent}
+                  title={canSwitchToDocumentContent ? "查看当前文档内容" : "先打开日志文件"}
+                >
+                  文档内容
+                </button>
+              </div>
               <SearchToolbarActions
                 uiTheme={uiTheme}
                 isElectron={isElectron}
@@ -2484,7 +2597,7 @@ export function App() {
                   </>
                 ) : (
                 <div className="workspace-strip viewer-actions-strip">
-                  <span className="viewer-strip-label">{activeResultTab ? `${activeResultTab.label} · ${activeResultTab.sourceLabel}` : "搜索结果"}</span>
+                  <span className="viewer-strip-label">{viewerStripLabel}</span>
                   <div className="toolbar-inline workspace-actions compact-actions">
                     {filePath && activeLogView === "search" && activeViewerTabId === "file" ? (
                       <button
@@ -2559,7 +2672,7 @@ export function App() {
                   <div className="result-tab-strip">
                     {viewerTabs.map((tab) => (
                       <div key={tab.id} className={`result-tab-chip ${tab.id === activeViewerTabId ? "result-tab-chip-active" : ""}`}>
-                        <button className="result-tab-main" type="button" onClick={() => setActiveViewerTabId(tab.id)}>
+                        <button className="result-tab-main" type="button" aria-pressed={tab.id === activeViewerTabId} onClick={() => selectViewerTab(tab)}>
                           {tab.label}
                         </button>
                         {tab.kind === "result" ? (
@@ -2675,14 +2788,14 @@ export function App() {
                         activeHighlightIndex={activeHighlightIndex}
                         focusLineIndex={lineContextState && activeViewerTabId === "file" ? lineContextState.lineNumber - lineContextState.startLine : undefined}
                         onLineClick={viewerLineClickEnabled ? handleViewerLineClick : undefined}
-                        bookmarks={activeResultTab?.bookmarks}
-                        onBookmarkToggle={handleBookmarkToggle}
+                        bookmarks={activeResultTab ? (activeResultTab.bookmarks || {}) : undefined}
+                        onBookmarkToggle={activeResultTab ? handleBookmarkToggle : undefined}
                         onHighlightCountChange={setHighlightCount}
                         onFocusLineHighlightIndex={setActiveHighlightIndex}
                         onMatchLineIndicesChange={setViewerMatchLineIndices}
                         onWheel={handleViewerWheelWithSelectionMenu}
                         onNearBottomChange={handleViewerNearBottomChangeStable}
-                        onScrollStateChange={setViewerScrollState}
+                        onScrollStateChange={showSearchResultsOverviewRail || viewerOverviewDragging ? setViewerScrollState : undefined}
                         errorHighlightEnabled={errorHighlightEnabled}
                         followOutput={liveFollowEnabled && !liveFollowPaused}
                         className="console-block viewer-console viewer-console-markup"

@@ -5,60 +5,55 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>日志控制台</title>
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
-    <script>window.__SLC_PIP_MODE__=new URLSearchParams(location.search).get('pip')||'';</script>
+    <script>
+      window.__SLC_PIP_MODE__=new URLSearchParams(location.search).get('pip')||'';
+      document.documentElement.dataset.slcPip=window.__SLC_PIP_MODE__?'1':'0';
+      document.documentElement.dataset.slcElectron=/Electron/.test(navigator.userAgent)?'1':'0';
+    </script>
+    <style>
+      html,body,#root{margin:0;width:100%;height:100%;min-height:100%;overflow:hidden;background:#fafafa}
+      html[data-slc-pip="1"],html[data-slc-pip="1"] body,html[data-slc-pip="1"] #root{background:#0a0a0a}
+      #app-loading{position:fixed;inset:0;z-index:9999;display:flex;background:#fafafa;font-family:-apple-system,BlinkMacSystemFont,'Geist Sans','PingFang SC',sans-serif;transition:opacity .25s ease}
+      #sk-side{width:260px;min-width:260px;background:#fff;border-right:1px solid #eaeaea;padding:12px;display:flex;flex-direction:column;gap:10px}
+      #sk-main{flex:1;display:flex;flex-direction:column;background:#fafafa}
+      #sk-toolbar{height:auto;background:#fff;border-bottom:1px solid #eaeaea;display:flex;align-items:center;padding:8px 16px;gap:8px}
+      #sk-content{flex:1;display:flex;align-items:center;justify-content:center;color:#8b95a3;font-size:13px;letter-spacing:.3px;background:#fafafa}
+      #sk-status{height:28px;background:#fff;border-top:1px solid #eaeaea;display:flex;align-items:center;padding:0 12px}
+      .sk-block{border-radius:6px;background:#edf0f3}
+      html[data-slc-electron="1"] #sk-side{padding-top:38px}
+      html[data-slc-pip="1"] #app-loading,html[data-slc-pip="1"] #sk-main,html[data-slc-pip="1"] #sk-content,html[data-slc-pip="1"] #sk-status{background:#0a0a0a}
+      html[data-slc-pip="1"] #sk-side,html[data-slc-pip="1"] #sk-toolbar{display:none}
+      html[data-slc-pip="1"] #sk-content{color:rgba(195,208,224,.72)}
+      html[data-slc-pip="1"] #sk-status{border-top:1px solid rgba(126,200,227,.08)}
+      html[data-slc-pip="1"] .sk-block{background:rgba(126,200,227,.14)}
+    </style>
     <script type="module" src="./src/main.tsx"></script>
   </head>
-  <body style="margin:0;background:#e3e7eb;min-height:100vh;overflow:hidden">
-    <div id="app-loading" style="position:fixed;inset:0;z-index:9999;display:flex;background:#e3e7eb;font-family:-apple-system,BlinkMacSystemFont,'Geist Sans','PingFang SC',sans-serif;transition:opacity .25s ease">
+  <body>
+    <div id="app-loading">
       <!-- Skeleton: sidebar -->
-      <div id="sk-side" style="width:260px;min-width:260px;background:#f2f4f6;border-right:1px solid #d5dbe2;padding:12px;display:flex;flex-direction:column;gap:10px">
-        <div style="height:32px;border-radius:6px;background:#e3e7eb"></div>
-        <div style="height:28px;border-radius:6px;background:#e8ebef;width:70%"></div>
+      <div id="sk-side">
+        <div class="sk-block" style="height:32px"></div>
+        <div class="sk-block" style="height:28px;width:70%"></div>
         <div style="flex:1"></div>
-        <div style="height:20px;border-radius:4px;background:#e3e7eb;width:60%;opacity:.5"></div>
+        <div class="sk-block" style="height:20px;width:60%;opacity:.5"></div>
       </div>
       <!-- Skeleton: main area -->
-      <div id="sk-main" style="flex:1;display:flex;flex-direction:column">
+      <div id="sk-main">
         <!-- Toolbar -->
-        <div id="sk-toolbar" style="height:auto;background:#f2f4f6;border-bottom:1px solid #d5dbe2;display:flex;align-items:center;padding:8px 16px;gap:8px">
-      <script>
-        const __slcPipMode=window.__SLC_PIP_MODE__||'';
-        const __slcSetStyle=(id, styles)=>{
-          const el=document.getElementById(id);
-          if(!el)return;
-          Object.assign(el.style, styles);
-        };
-        const __slcApplySkeletonTheme=()=>{
-          if(/Electron/.test(navigator.userAgent)){
-            __slcSetStyle('sk-side',{paddingTop:'38px'});
-            __slcSetStyle('app-loading',{paddingTop:'0'});
-          }
-          if(__slcPipMode){
-            document.body.style.background='#0a0a0a';
-            __slcSetStyle('app-loading',{background:'#0a0a0a'});
-            __slcSetStyle('sk-side',{display:'none'});
-            __slcSetStyle('sk-main',{background:'#0a0a0a'});
-            __slcSetStyle('sk-toolbar',{display:'none'});
-            __slcSetStyle('sk-content',{background:'#0a0a0a',color:'rgba(195,208,224,.72)'});
-            __slcSetStyle('sk-status',{background:'#0a0a0a',borderTop:'1px solid rgba(126,200,227,.08)'});
-            __slcSetStyle('sk-status-chip',{background:'rgba(126,200,227,.14)'});
-          }
-        };
-        __slcApplySkeletonTheme();
-        window.addEventListener('DOMContentLoaded', __slcApplySkeletonTheme, { once: true });
-      </script>
-          <div style="height:28px;width:120px;border-radius:6px;background:#e3e7eb"></div>
-          <div style="height:28px;width:80px;border-radius:6px;background:#e8ebef"></div>
+        <div id="sk-toolbar">
+          <div class="sk-block" style="height:28px;width:120px"></div>
+          <div class="sk-block" style="height:28px;width:80px"></div>
           <div style="flex:1"></div>
-          <div style="height:28px;width:28px;border-radius:6px;background:#e3e7eb"></div>
+          <div class="sk-block" style="height:28px;width:28px"></div>
         </div>
         <!-- Content -->
-        <div id="sk-content" style="flex:1;display:flex;align-items:center;justify-content:center;color:#8b95a3;font-size:13px;letter-spacing:.3px">
+        <div id="sk-content">
           正在连接服务…
         </div>
         <!-- Status bar -->
-        <div id="sk-status" style="height:28px;background:#f2f4f6;border-top:1px solid #d5dbe2;display:flex;align-items:center;padding:0 12px">
-          <div id="sk-status-chip" style="height:12px;width:100px;border-radius:3px;background:#e3e7eb"></div>
+        <div id="sk-status">
+          <div id="sk-status-chip" class="sk-block" style="height:12px;width:100px;border-radius:3px"></div>
         </div>
       </div>
     </div>
