@@ -32,6 +32,7 @@ import { BatchCommandService } from "./modules/logs/batch-command.service.js";
 import { StrategyResolver } from "./modules/logs/strategies/index.js";
 import multer from "multer";
 import { shellEscape } from "./modules/logs/remote-shell.js";
+import { buildJumpServerAssetKeyword, parseJumpServerSftpPath } from "./modules/logs/jumpserver-path.js";
 import { registerTerminalWebsocket } from "./modules/terminals/terminal-websocket.js";
 
 const bootStart = performance.now();
@@ -564,7 +565,7 @@ app.post("/api/logs/recordings/start", async (req, res) => {
 
     if (isJumpServer && parsed) {
       // JumpServer bastion: connect to target asset via JumpServer menu navigation
-      const assetKeyword = parsed.assetKey.replace(/[_\s].*/g, "");
+      const assetKeyword = buildJumpServerAssetKeyword(parsed.assetKey);
       console.log(`[recording] JumpServer asset="${assetKeyword}" realPath="${realFilePath}" realOut="${realOutputPath}"`);
       const connection = await sshExecutorService.connectToJumpServerAsset(serverId, assetKeyword, 30000);
       // Run setup + foreground tail through the persistent shell to the target
@@ -849,7 +850,7 @@ wsServer.on("connection", (socket: WebSocket) => {
           return;
         }
         tailFilePath = parsed.realPath;
-        const assetKeyword = parsed.assetKey.replace(/[_\s].*/g, "");
+        const assetKeyword = buildJumpServerAssetKeyword(parsed.assetKey);
         console.log(`[live] JumpServer asset="${assetKeyword}" realPath="${tailFilePath}"`);
         connection = await sshExecutorService.connectToJumpServerAsset(payload.serverId, assetKeyword, 45000);
       } else {
@@ -1046,21 +1047,6 @@ const gracefulShutdown = () => {
 };
 process.on("SIGTERM", gracefulShutdown);
 process.on("SIGINT", gracefulShutdown);
-
-function parseJumpServerSftpPath(virtualPath: string): { assetKey: string; realPath: string } | null {
-  const parts = virtualPath.split("/").filter(Boolean);
-  const fsRoots = new Set(["home", "var", "opt", "tmp", "root", "etc", "usr", "srv", "data", "mnt", "media", "run", "log", "logs", "app", "apps", "www"]);
-  for (let i = 0; i < parts.length; i++) {
-    if (fsRoots.has(parts[i].toLowerCase())) {
-      if (i === 0) return null;
-      return {
-        assetKey: parts[i - 1],
-        realPath: "/" + parts.slice(i).join("/")
-      };
-    }
-  }
-  return null;
-}
 
 function appendConnectionHint(
   server: { connectionKind?: string; connectionHint?: string } | null,

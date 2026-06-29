@@ -264,13 +264,24 @@ export function useServerConnection(deps: {
       if (payload.connected && selectedServer?.connectionKind === "bastion" && looksLikeJumpServer(selectedServer)) {
         try {
           pushActivity("已连接 JumpServer 入口，可在终端中继续检索资产并进入目标机。");
-          const directoryPayload = await fetchDirectoryListing("/");
+          const preferredDirectory = targetDirectoryPath?.trim() || directoryPath.trim() || "/";
+          let directoryPayload;
+          try {
+            directoryPayload = await fetchDirectoryListing(preferredDirectory);
+          } catch (directoryError) {
+            if (preferredDirectory === "/") {
+              throw directoryError;
+            }
+            pushActivity(`堡垒机目录 ${preferredDirectory} 读取失败，已回退到根目录。`);
+            directoryPayload = await fetchDirectoryListing("/");
+          }
           if (serverIdRef.current !== requestServerId) {
             return;
           }
           setDirectoryPath(directoryPayload.directoryPath);
           setDirectoryInput(directoryPayload.directoryPath);
           setFileEntries(directoryPayload.entries);
+          rememberDirectoryIfUseful(requestServerId, directoryPayload.directoryPath, directoryPayload.entries.length);
           pushActivity(`已通过 SFTP 读取堡垒机目录，共 ${directoryPayload.entries.length} 项。`);
         } catch (sftpError) {
           const sftpDetail = sftpError instanceof Error ? sftpError.message : "未知错误";

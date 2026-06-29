@@ -45,6 +45,8 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
   const retryCountRef = useRef(0);
   const reconnectDesiredRef = useRef(false);
   const followOutputRef = useRef(true);
+  const activeSessionIdRef = useRef("");
+  const terminalReadyRef = useRef(false);
 
   const clampSelectionMenuPosition = useCallback((x: number, y: number) => {
     const container = containerRef.current;
@@ -74,13 +76,13 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
   const syncResizeToSocket = useCallback(() => {
     const terminal = terminalRef.current;
     const socket = socketRef.current;
-    if (!terminal || socket?.readyState !== WebSocket.OPEN) {
+    if (!terminal || socket?.readyState !== WebSocket.OPEN || !terminalReadyRef.current) {
       return false;
     }
     if (terminal.cols < MIN_TERMINAL_COLS || terminal.rows < MIN_TERMINAL_ROWS) {
       return false;
     }
-    socket.send(JSON.stringify({ action: "resize", cols: terminal.cols, rows: terminal.rows }));
+    socket.send(JSON.stringify({ action: "resize", sessionId: activeSessionIdRef.current || undefined, cols: terminal.cols, rows: terminal.rows }));
     return true;
   }, []);
 
@@ -328,6 +330,7 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
     expectedCloseRef.current = true;
     clearReconnectTimer();
     reconnectDesiredRef.current = false;
+    terminalReadyRef.current = false;
     if (!optionsArg?.preserveRetryCount) {
       retryCountRef.current = 0;
       setRetryCount(0);
@@ -383,6 +386,7 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
             : undefined;
     const activeSessionId = (startOptions?.sessionId || options.sessionId || "").trim();
     if (activeSessionId) {
+      activeSessionIdRef.current = activeSessionId;
       options.onSessionIdChange?.(activeSessionId);
     }
     const sessionKey = [options.serverId, bastionId || "", activeSessionId].join("|");
@@ -396,6 +400,7 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
 
     stopTerminal({ keepContent: startOptions?.isReconnect, preserveSessionKey: true, preserveRetryCount: startOptions?.isReconnect });
     reconnectDesiredRef.current = true;
+    terminalReadyRef.current = false;
     sessionKeyRef.current = sessionKey;
     setConnected(false);
 
@@ -407,8 +412,8 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
     onDataDisposableRef.current?.dispose();
     onDataDisposableRef.current = terminal.onData((data: string) => {
       const socket = socketRef.current;
-      if (socket?.readyState === WebSocket.OPEN) {
-        socket.send(JSON.stringify({ action: "input", data }));
+      if (socket?.readyState === WebSocket.OPEN && terminalReadyRef.current) {
+        socket.send(JSON.stringify({ action: "input", sessionId: activeSessionIdRef.current || undefined, data }));
       }
     });
 
@@ -417,12 +422,13 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
       const socket = socketRef.current;
       if (
         socket?.readyState === WebSocket.OPEN
+        && terminalReadyRef.current
         && cols >= MIN_TERMINAL_COLS
         && rows >= MIN_TERMINAL_ROWS
       ) {
-        socket.send(JSON.stringify({ action: "resize", cols, rows }));
+        socket.send(JSON.stringify({ action: "resize", sessionId: activeSessionIdRef.current || undefined, cols, rows }));
       }
-    });
+	    });
 
     const wsUrl = options.localServiceBase.replace(/^http/, "ws") + "/ws/terminal";
     const socket = new WebSocket(wsUrl);
@@ -485,9 +491,11 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
         }
 
         if (payload.type === "ready") {
-          if (payload.sessionId) {
-            options.onSessionIdChange?.(payload.sessionId);
-          }
+	          if (payload.sessionId) {
+	            activeSessionIdRef.current = payload.sessionId;
+	            options.onSessionIdChange?.(payload.sessionId);
+	          }
+	          terminalReadyRef.current = true;
           setConnected(true);
           retryCountRef.current = 0;
           setRetryCount(0);
@@ -495,6 +503,7 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
             terminal.clear();
           }
           if (payload.chunk) {
+            terminalReadyRef.current = true;
             terminal.write(payload.chunk);
             settleTerminalViewport();
           }
@@ -537,8 +546,9 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
         return;
       }
 
-      setConnected(false);
-      scheduleReconnect();
+	      setConnected(false);
+	      terminalReadyRef.current = false;
+	      scheduleReconnect();
     });
   }
 

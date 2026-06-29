@@ -77,6 +77,16 @@ function humanizeSshError(error: unknown, context: { username?: string; host?: s
   return `${raw} (${target})`;
 }
 
+function escapeShellSingleQuotes(value: string) {
+  return value.replace(/'/g, `'"'"'`);
+}
+
+const TARGET_SHELL_PROMPT_PATTERN = /(\[[^\]\n]+@[^\]\n]+[^\n]*[#$]\s*$)|([#$]\s*$)/m;
+
+function buildJumpServerCwdMarker() {
+  return `__SLC_CWD_READY_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}__`;
+}
+
 export class SshExecutorService {
   private static readonly IDLE_TTL = 120_000;
   private static readonly MAX_LIFETIME = 600_000;
@@ -345,7 +355,7 @@ export class SshExecutorService {
                 `/${targetHost}\r`,
                 [
                   { key: "host-select", pattern: /\[Host\]>\s*$/m },
-                  { key: "target-shell", pattern: /(\[[^\]\n]+@[^\]\n]+[^\n]*[#$]\s*$)|([#$]\s*$)/m },
+                  { key: "target-shell", pattern: TARGET_SHELL_PROMPT_PATTERN },
                   { key: "no-match", pattern: /(没有匹配|No matched asset|没有找到)/i }
                 ],
                 timeoutMs,
@@ -1648,7 +1658,7 @@ export class SshExecutorService {
     );
   }
 
-  async connectToJumpServerAsset(bastionServerId: string, assetKeyword: string, timeoutMs = 45000): Promise<ManagedSshConnection> {
+  async connectToJumpServerAsset(bastionServerId: string, assetKeyword: string, timeoutMs = 45000, cwd?: string): Promise<ManagedSshConnection> {
     const server = this.serverRegistry.getServer(bastionServerId);
     const credentials = this.credentialResolver.resolve(server);
 
@@ -1679,7 +1689,7 @@ export class SshExecutorService {
                 `/${assetKeyword}\r`,
                 [
                   { key: "host-select", pattern: /\[Host\]>\s*$/m },
-                  { key: "target-shell", pattern: /(\[[^\]\n]+@[^\]\n]+[^\n]*[#$]\s*$)|([#$]\s*$)/m },
+                  { key: "target-shell", pattern: TARGET_SHELL_PROMPT_PATTERN },
                   { key: "no-match", pattern: /(没有匹配|No matched asset|没有找到)/i }
                 ],
                 timeoutMs,
@@ -1695,7 +1705,7 @@ export class SshExecutorService {
                   stream,
                   "1\r",
                   [
-                    { key: "target-shell", pattern: /(\[[^\]\n]+@[^\]\n]+[^\n]*[#$]\s*$)|([#$]\s*$)/m },
+                    { key: "target-shell", pattern: TARGET_SHELL_PROMPT_PATTERN },
                     { key: "auth-failed", pattern: /(permission denied|认证失败|连接失败)/i }
                   ],
                   timeoutMs,
@@ -1703,6 +1713,24 @@ export class SshExecutorService {
                 );
                 if (selectOutput.key === "auth-failed") {
                   throw new Error(`JumpServer 进入目标主机失败`);
+                }
+              }
+
+              const targetCwd = cwd?.trim();
+              if (targetCwd) {
+                const marker = buildJumpServerCwdMarker();
+                const cdOutput = await sendAndWaitForPatterns(
+                  stream,
+                  `cd -- '${escapeShellSingleQuotes(targetCwd)}' >/dev/null 2>&1; printf '\\n${marker}:%s:%s\\n' "$?" "$PWD"\r`,
+                  [
+                    { key: "target-shell", pattern: TARGET_SHELL_PROMPT_PATTERN }
+                  ],
+                  Math.min(timeoutMs, 12000),
+                  "JumpServer 切换目标目录超时"
+                );
+                const markerMatch = cdOutput.buffer.match(new RegExp(`${marker}:(\\d+):([^\\r\\n]*)`));
+                if (!markerMatch || markerMatch[1] !== "0") {
+                  throw new Error(`JumpServer 已进入目标资产，但无法切换到目录：${targetCwd}`);
                 }
               }
 
@@ -1749,6 +1777,10 @@ export class SshExecutorService {
     const name = (server.name || "").toLowerCase();
     const hint = (server.connectionHint || "").toLowerCase();
     return server.port === 2222 || name.includes("jumpserver") || name.includes("堡垒机") || hint.includes("jumpserver");
+  }
+
+  isJumpServerServer(serverId: string) {
+    return this.isJumpServerBastion(this.serverRegistry.getServer(serverId));
   }
 
   private shouldTryBastion(server: ReturnType<ServerRegistryService["getServer"]>) {
