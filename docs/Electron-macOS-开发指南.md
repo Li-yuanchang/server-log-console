@@ -139,6 +139,40 @@ grep "electron-immersive" /Applications/日志控制台.app/Contents/Resources/e
 grep "paddingTop:0" /Applications/日志控制台.app/Contents/Resources/extension/dist/assets/main-*.js
 ```
 
+### 4.4 macOS 状态栏图标替换
+
+运行时读取路径在 `apps/electron/main.cjs` 的 `createTray()`：
+
+- 开发态：`apps/electron/resources/trayTemplate.png`
+- 打包后：`/Applications/ServerLogConsole.app/Contents/Resources/resources/trayTemplate.png`
+- `@2x` 资源：同目录 `trayTemplate@2x.png`
+- 设计源文件：`apps/electron/resources/tray-icon.svg`
+
+macOS tray 使用 template image，核心是 PNG alpha mask。替换时优先直接替换 `trayTemplate.png` 和 `trayTemplate@2x.png`，不要反复依赖 `sips` 或 `sharp` 渲染带 `mask` 的 SVG；这类 SVG 可能被渲染成全透明 PNG，表现为菜单栏图标“被吃掉”。
+
+推荐尺寸：
+
+- `trayTemplate.png`：`22x22`
+- `trayTemplate@2x.png`：`44x44`
+- 实际可见图形建议落在约 `18x16 pt` 的 bbox 内，避免比系统状态栏图标明显偏小
+
+快速验证：
+
+```bash
+file apps/electron/resources/trayTemplate.png apps/electron/resources/trayTemplate@2x.png
+sips -g pixelWidth -g pixelHeight -g hasAlpha apps/electron/resources/trayTemplate.png apps/electron/resources/trayTemplate@2x.png
+shasum apps/electron/resources/trayTemplate.png /Applications/ServerLogConsole.app/Contents/Resources/resources/trayTemplate.png
+```
+
+调试安装包时必须杀掉旧进程后再同步资源并重启，因为 `Tray` 在创建时读取图标，运行中不会自动刷新：
+
+```bash
+pkill -f ServerLogConsole 2>/dev/null || true
+cp apps/electron/resources/trayTemplate.png /Applications/ServerLogConsole.app/Contents/Resources/resources/trayTemplate.png
+cp apps/electron/resources/trayTemplate@2x.png /Applications/ServerLogConsole.app/Contents/Resources/resources/trayTemplate@2x.png
+open -a /Applications/ServerLogConsole.app
+```
+
 ---
 
 ## 5. 常见问题与解决方案
