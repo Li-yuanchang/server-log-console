@@ -1,3 +1,4 @@
+import { useState, type CSSProperties } from "react";
 import type { JumpServerAssetOption, LogProfile, ServerConnectionKind, ServerCredentialStatus, ServerSummary } from "@server-log-console/shared";
 import { looksLikeJumpServer } from "./terminal-utils.js";
 
@@ -107,7 +108,15 @@ function serviceTone(state: Props["localServiceState"]) {
 }
 
 export function ConnectionSettingsWorkspace(props: Props) {
+  const [showCredentialPassword, setShowCredentialPassword] = useState(false);
+  const [showCredentialPrivateKey, setShowCredentialPrivateKey] = useState(false);
   const selectedServer = props.currentServerSection.selectedServer;
+  const credentialStatus = props.currentServerSection.credentialStatus;
+  const hasCredentialDraft = Boolean(
+    props.currentServerSection.credentialPassword
+    || props.currentServerSection.credentialPrivateKey
+    || props.currentServerSection.credentialUsername !== (credentialStatus?.username || selectedServer?.username || "")
+  );
   const selectedBastion = props.currentServerSection.availableBastions.find(
     (server) => server.id === props.currentServerSection.preferredBastionId
   ) ?? null;
@@ -358,17 +367,31 @@ export function ConnectionSettingsWorkspace(props: Props) {
                 <div>
                   <span className="settings-card-kicker">连接凭证</span>
                   <strong>按服务器维度保存</strong>
+                  <p className="settings-card-note">
+                    已保存的密码/私钥不会回显；留空表示继续沿用现有凭证，填写后保存会覆盖。
+                  </p>
                 </div>
                 <div className="settings-inline-actions">
                   <button className="ghost-button" type="button" onClick={props.currentServerSection.onTestConnection} disabled={props.isBusy}>重连</button>
-                  <button className="ghost-button" type="button" onClick={props.currentServerSection.onSaveCredential} disabled={props.isBusy}>保存凭证</button>
+                  <button className="ghost-button settings-primary-action" type="button" onClick={props.currentServerSection.onSaveCredential} disabled={props.isBusy}>
+                    {props.isBusy ? "保存中..." : hasCredentialDraft ? "保存并覆盖" : "保存凭证"}
+                  </button>
                 </div>
               </div>
-              <div className="settings-meta-grid">
-                <span>来源：{props.currentServerSection.credentialStatus?.source || "--"}</span>
-                <span>用户名：{props.currentServerSection.credentialStatus?.username || selectedServer.username || "--"}</span>
-                <span>密码：{props.currentServerSection.credentialStatus?.hasPassword ? "已保存" : "未配置"}</span>
-                <span>私钥：{props.currentServerSection.credentialStatus?.hasPrivateKey ? "已保存" : "未配置"}</span>
+              <div className="credential-status-panel">
+                <div className="credential-status-main">
+                  <span className={`credential-status-dot ${credentialStatus?.hasUsableCredential ? "credential-status-dot-ok" : "credential-status-dot-warn"}`} />
+                  <div>
+                    <strong>{credentialStatus?.hasUsableCredential ? "已有可用凭证" : "尚未配置可用凭证"}</strong>
+                    <span>{credentialStatus?.message || "读取凭证状态后会显示保存来源和可用性。"}</span>
+                  </div>
+                </div>
+                <div className="credential-status-tags">
+                  <span>来源：{credentialStatus?.source || "--"}</span>
+                  <span>用户名：{credentialStatus?.username || selectedServer.username || "--"}</span>
+                  <span className={credentialStatus?.hasPassword ? "credential-tag-ok" : ""}>密码：{credentialStatus?.hasPassword ? "已保存" : "未配置"}</span>
+                  <span className={credentialStatus?.hasPrivateKey ? "credential-tag-ok" : ""}>私钥：{credentialStatus?.hasPrivateKey ? "已保存" : "未配置"}</span>
+                </div>
               </div>
               <div className="settings-form-grid settings-form-grid-single">
                 <label className="settings-field">
@@ -377,11 +400,32 @@ export function ConnectionSettingsWorkspace(props: Props) {
                 </label>
                 <label className="settings-field">
                   <span>密码</span>
-                  <input type="password" value={props.currentServerSection.credentialPassword} onChange={(event) => props.currentServerSection.onCredentialPasswordChange(event.target.value)} />
+                  <div className="settings-secret-field">
+                    <input
+                      type={showCredentialPassword ? "text" : "password"}
+                      value={props.currentServerSection.credentialPassword}
+                      onChange={(event) => props.currentServerSection.onCredentialPasswordChange(event.target.value)}
+                      placeholder={credentialStatus?.hasPassword ? "已保存，留空不覆盖" : "输入密码后保存"}
+                    />
+                    <button type="button" className="ghost-button slim-button" onClick={() => setShowCredentialPassword((current) => !current)}>
+                      {showCredentialPassword ? "隐藏" : "显示"}
+                    </button>
+                  </div>
                 </label>
                 <label className="settings-field">
                   <span>私钥</span>
-                  <textarea value={props.currentServerSection.credentialPrivateKey} onChange={(event) => props.currentServerSection.onCredentialPrivateKeyChange(event.target.value)} placeholder="可直接粘贴私钥内容" />
+                  <div className="settings-secret-field settings-secret-field-textarea">
+                    <textarea
+                      value={props.currentServerSection.credentialPrivateKey}
+                      onChange={(event) => props.currentServerSection.onCredentialPrivateKeyChange(event.target.value)}
+                      placeholder={credentialStatus?.hasPrivateKey ? "已保存，留空不覆盖；需要替换时粘贴新私钥" : "可直接粘贴私钥内容"}
+                      spellCheck={false}
+                      style={showCredentialPrivateKey ? undefined : { WebkitTextSecurity: "disc" } as CSSProperties}
+                    />
+                    <button type="button" className="ghost-button slim-button" onClick={() => setShowCredentialPrivateKey((current) => !current)}>
+                      {showCredentialPrivateKey ? "隐藏" : "显示"}
+                    </button>
+                  </div>
                 </label>
               </div>
             </section>

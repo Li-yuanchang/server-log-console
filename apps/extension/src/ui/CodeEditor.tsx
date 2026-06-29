@@ -83,8 +83,47 @@ const lightTheme = EditorView.theme({
 });
 
 const darkOverride = EditorView.theme({
-  "&": { height: "100%", fontSize: "12.5px" },
-  ".cm-scroller": { overflow: "auto", fontFamily: "'Geist Mono', 'SFMono-Regular', monospace" },
+  "&": {
+    height: "100%",
+    fontSize: "12.5px",
+    background: "#050607",
+    color: "#d7dde5"
+  },
+  ".cm-scroller": {
+    overflow: "auto",
+    fontFamily: "'Geist Mono', 'SFMono-Regular', 'Menlo', monospace",
+    background: "#050607",
+    color: "#d7dde5"
+  },
+  ".cm-content": {
+    padding: "8px 0",
+    caretColor: "#cfe8ff"
+  },
+  ".cm-line": {
+    padding: "0 10px"
+  },
+  ".cm-gutters": {
+    background: "#050607",
+    color: "#6f7d90",
+    borderRight: "1px solid rgba(255,255,255,0.06)"
+  },
+  ".cm-activeLineGutter": {
+    background: "rgba(148, 163, 184, 0.12)",
+    color: "#cbd5e1"
+  },
+  ".cm-activeLine": {
+    background: "rgba(148, 163, 184, 0.08)"
+  },
+  ".cm-selectionBackground, .cm-content ::selection": {
+    background: "rgba(82, 136, 190, 0.36) !important"
+  },
+  ".cm-cursor": {
+    borderLeftColor: "#cfe8ff"
+  },
+  ".cm-matchingBracket, .cm-nonmatchingBracket": {
+    background: "rgba(96, 165, 250, 0.18)",
+    outline: "1px solid rgba(147, 197, 253, 0.26)"
+  }
 });
 
 interface CodeEditorProps {

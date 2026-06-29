@@ -39,9 +39,9 @@ export function ConfirmDialog(props: ConfirmDialogProps) {
         <div className="confirm-title">{dialog.title}</div>
         <div className="confirm-message">{dialog.message}</div>
         <div className="confirm-actions">
-          <div role="button" className="confirm-btn confirm-btn-cancel" onClick={onClose}>取消</div>
-          <div
-            role="button"
+          <button type="button" className="confirm-btn confirm-btn-cancel" onClick={onClose}>取消</button>
+          <button
+            type="button"
             className={`confirm-btn ${dialog.danger ? "confirm-btn-danger" : "confirm-btn-primary"}`}
             onClick={() => {
               dialog.onConfirm();
@@ -49,7 +49,7 @@ export function ConfirmDialog(props: ConfirmDialogProps) {
             }}
           >
             确定
-          </div>
+          </button>
         </div>
       </div>
     </div>
@@ -99,9 +99,9 @@ export function TextInputDialog(props: TextInputDialogProps) {
           autoFocus
         />
         <div className="confirm-actions">
-          <div role="button" className="confirm-btn confirm-btn-cancel" onClick={onClose}>取消</div>
-          <div
-            role="button"
+          <button type="button" className="confirm-btn confirm-btn-cancel" onClick={onClose}>取消</button>
+          <button
+            type="button"
             className={`confirm-btn ${confirmDanger ? "confirm-btn-danger" : "confirm-btn-primary"} ${!canConfirm ? "confirm-btn-disabled" : ""}`}
             onClick={() => {
               if (!canConfirm) {
@@ -112,7 +112,7 @@ export function TextInputDialog(props: TextInputDialogProps) {
             }}
           >
             {confirmText}
-          </div>
+          </button>
         </div>
       </div>
     </div>

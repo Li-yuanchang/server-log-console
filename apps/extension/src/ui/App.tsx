@@ -161,6 +161,7 @@ export function App() {
   const [workspaceSessions, setWorkspaceSessions] = useState<WorkspaceSession[]>([]);
   const [activeWorkspaceSessionId, setActiveWorkspaceSessionId] = useState<string | null>(null);
   const [fileEntries, setFileEntries] = useState<LogFileEntry[]>([]);
+  const [isDirectoryLoading, setIsDirectoryLoading] = useState(false);
   const [directoryPath, setDirectoryPath] = useState(pipUrlParams.get("directoryPath") || defaultDirectoryPath);
   const [fileMeta, setFileMeta] = useState<LogFileMetaResponse | null>(null);
   const [sliceOffset, setSliceOffset] = useState(0);
@@ -656,6 +657,7 @@ export function App() {
       setCredentialPrivateKey("");
       setServerRouteConfig(null);
       setConnectionTestStatus(null);
+      setIsDirectoryLoading(false);
       setPreferredBastionId("");
       setJumpMode("auto");
       setJumpSearchKeyword("");
@@ -676,6 +678,7 @@ export function App() {
 
     if (!isRestoringFromCache) {
       setConnectionTestStatus(null);
+      setIsDirectoryLoading(false);
     }
 
     if (!isRestoringWorkspace) {
@@ -1011,6 +1014,7 @@ export function App() {
       setHighlightCount,
       setViewerMatchLineIndices,
       setViewerScrollState,
+      setIsDirectoryLoading,
     },
     refs: {
       jumpToMatchRequestRef,
@@ -1368,6 +1372,7 @@ export function App() {
     setDirectoryPath,
     setDirectoryInput,
     setFileEntries,
+    setIsDirectoryLoading,
     jumpAssetAutoSearchKeyRef,
     withBusy,
     fetchServers,
@@ -1963,6 +1968,9 @@ export function App() {
   const isConnectingWorkspace =
     isFileMode && !hasDirectoryConnectionError && (!selectedServer || (!connectionTestStatus?.connected && !fileEntries.length));
   const hasFileWorkspaceEntries = fileEntries.length > 0;
+  const isDirectoryContentLoading =
+    isFileMode
+    && isDirectoryLoading;
   const showServiceOfflineState = localServiceState === "offline";
   const showNoServerState = localServiceState === "online" && !servers.length && !isBusy;
   const showViewerEmptyState = activeLogView === "search" && !hasSearchContent && !filePath.trim() && !resultTabs.length && !fileLoadingName;
@@ -3147,21 +3155,29 @@ export function App() {
                         </button>
                       </>}
                     >
-                      <FileBrowserTableRows
-                        entries={tableEntries}
-                        activeFilePath={filePath}
-                        selectedFilePathSet={selectedFilePathSet}
-                        isBusy={isBusy}
-                        uiTheme={uiTheme}
-                        formatBytes={formatBytes}
-                        formatDateTime={formatDateTime}
-                        onOpenEntry={(entry) => { void openEntry(entry); }}
-                        onOpenContextMenu={(entry, clientX, clientY) => { openContextMenu(entry, clientX, clientY); }}
-                        onToggleSelection={toggleFileSelection}
-                        onDownload={(path) => { void downloadFile(path); }}
-                        onRename={openRenameDialog}
-                        onDelete={deleteRemoteFile}
-                      />
+                      {isDirectoryContentLoading && !tableEntries.length ? (
+                        <div className="directory-loading-state table-empty-large">
+                          <span className="connect-spinner" aria-hidden="true" />
+                          <strong>正在加载目录内容</strong>
+                          <span>{actionStatus || "正在读取远程目录，请稍候..."}</span>
+                        </div>
+                      ) : (
+                        <FileBrowserTableRows
+                          entries={tableEntries}
+                          activeFilePath={filePath}
+                          selectedFilePathSet={selectedFilePathSet}
+                          isBusy={isBusy}
+                          uiTheme={uiTheme}
+                          formatBytes={formatBytes}
+                          formatDateTime={formatDateTime}
+                          onOpenEntry={(entry) => { void openEntry(entry); }}
+                          onOpenContextMenu={(entry, clientX, clientY) => { openContextMenu(entry, clientX, clientY); }}
+                          onToggleSelection={toggleFileSelection}
+                          onDownload={(path) => { void downloadFile(path); }}
+                          onRename={openRenameDialog}
+                          onDelete={deleteRemoteFile}
+                        />
+                      )}
                     </FileBrowserContentColumn>
                   </FileBrowserGrid>
                 ) : (
@@ -3190,7 +3206,15 @@ export function App() {
                         <span>类型</span>
                       </>}
                     >
-                      <div className="empty-box table-empty table-empty-large">当前目录为空</div>
+                      {isDirectoryContentLoading ? (
+                        <div className="directory-loading-state table-empty-large">
+                          <span className="connect-spinner" aria-hidden="true" />
+                          <strong>正在加载目录内容</strong>
+                          <span>{actionStatus || "正在读取远程目录，请稍候..."}</span>
+                        </div>
+                      ) : (
+                        <div className="empty-box table-empty table-empty-large">当前目录为空</div>
+                      )}
                     </FileBrowserContentColumn>
                   </FileBrowserGrid>
                 )}

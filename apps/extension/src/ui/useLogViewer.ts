@@ -124,6 +124,7 @@ export type LogViewerParams = {
     setHighlightCount: (n: number) => void;
     setViewerMatchLineIndices: (indices: number[]) => void;
     setViewerScrollState: (s: any) => void;
+    setIsDirectoryLoading: (b: boolean) => void;
   };
   refs: LogViewerRefs;
   callbacks: LogViewerCallbacks;
@@ -533,6 +534,7 @@ export function useLogViewer(params: LogViewerParams): LogViewerAPI {
     callbacks.stopLiveFollow();
     setters.setShowPathHistory(false);
     setters.setShowTransferHistory(false);
+    setters.setIsDirectoryLoading(true);
     await callbacks.withBusy("正在读取远程目录...", async () => {
       const payload = await fetchDirectoryListing(nextDirectoryPath || state.directoryPath || "/");
       setters.setDirectoryPath(payload.directoryPath);
@@ -546,6 +548,8 @@ export function useLogViewer(params: LogViewerParams): LogViewerAPI {
       pushDirectoryHistory(state.serverId, payload.directoryPath);
       callbacks.setActionStatus(`目录读取完成，共 ${payload.entries.length} 项。`);
       callbacks.pushActivity(`已打开目录：${payload.directoryPath}，共 ${payload.entries.length} 项。`);
+    }).finally(() => {
+      setters.setIsDirectoryLoading(false);
     });
   }
 
