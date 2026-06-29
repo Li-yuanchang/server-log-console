@@ -12,7 +12,7 @@ server-log-console/
 │   ├── extension/          # 前端 UI（React + Vite）
 │   │   ├── src/
 │   │   │   ├── ui/App.tsx  # 主组件，含 Electron 检测逻辑
-│   │   │   ├── styles.css  # 基础样式 + Electron 沉浸式布局
+│   │   │   ├── styles.css  # 样式聚合入口，实际样式拆在 styles-* 文件
 │   │   │   └── theme-modern.css
 │   │   ├── index.html      # 入口 HTML（含骨架屏）
 │   │   └── dist/           # Vite 构建产物
@@ -35,10 +35,10 @@ server-log-console/
 
 ```bash
 # 启动前端 dev server
-npm run dev:extension
+npm --prefix apps/extension run dev
 
 # 启动后端 gateway
-npm run dev:gateway
+npm --prefix apps/gateway run dev
 ```
 
 Web 模式下不涉及 Electron，直接在浏览器调试。
@@ -47,7 +47,7 @@ Web 模式下不涉及 Electron，直接在浏览器调试。
 
 ```bash
 # 从项目根目录
-npm --workspace @server-log-console/electron run start
+npm --prefix apps/electron run start
 ```
 
 这会通过 `apps/electron/package.json` 中的预设脚本启动 Electron。当前脚本会先清理 `ELECTRON_RUN_AS_NODE`，再执行真正的 `electron` 命令，避免 IDE 宿主环境把打包 app 或本地调试进程错误地带成 Node 模式。
@@ -60,20 +60,18 @@ npm --workspace @server-log-console/electron run start
 
 ```bash
 # 从项目根目录
-npm --workspace @server-log-console/electron run dist:mac
+npm --prefix apps/electron run dist:mac
 ```
 
 执行流程：
-1. `build:shared` → 编译共享模块
-2. `build:gateway` → 编译后端
-3. `build:extension` → Vite 构建前端
-4. `predist:mac` → `prepare-gateway.cjs` 收集资源到 `.electron-build/`
-5. `run-clean-electron-env.cjs` → 清理 `ELECTRON_RUN_AS_NODE`
-6. `electron-builder --mac` → 打包为 `.app` + `.dmg`
+1. `predist:mac` → `bump-version.cjs && prepare-gateway.cjs`
+2. `prepare-gateway.cjs` → 编译 shared、gateway、extension 并收集资源到 `.electron-build/`
+3. `run-clean-electron-env.cjs` → 清理 `ELECTRON_RUN_AS_NODE`
+4. `electron-builder --mac` → 打包为 `.app` + `.dmg`
 
 规则：打包和启动优先走 `package.json` 中已定义的脚本入口，不长期依赖临时手写 shell 命令。临时命令只用于排障，验证有效后必须回写到脚本中。
 
-本次事故归档见：`docs/Electron-macOS-打包归档-2026-04-12.md`
+历史事故归档见：`archive/Electron-macOS-打包归档-2026-04-12.md`
 
 ### 3.2 安装到 /Applications
 
@@ -152,7 +150,7 @@ grep "paddingTop:0" /Applications/日志控制台.app/Contents/Resources/extensi
 **解决**：
 ```bash
 rm -rf apps/extension/dist apps/extension/node_modules/.vite
-npm run build:extension
+npm --prefix apps/extension run build
 ```
 
 > 每次修改 CSS 后，建议清除 `dist/` 和 `.vite/` 缓存再构建。

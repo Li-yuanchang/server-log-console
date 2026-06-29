@@ -473,6 +473,42 @@ section.terminal-bottom-panel
 
 典型链路：
 
+## 5.3 Electron / PiP 首屏背景链路
+
+Electron 和 PiP 的背景不是单一 CSS 决定，而是多层同时生效：
+
+1. `apps/electron/main.cjs` 的 `BrowserWindow.backgroundColor`
+2. `apps/extension/index.html` 里的首屏 skeleton 背景
+3. `styles-base.css` 的 `html / body / #root` 背景
+4. `theme-modern.css` 的 `:root:has(.theme-modern)` 和 `.theme-modern`
+5. `styles-pip-toast.css` / `theme-modern.css` 里的 `.pip-standalone` 特例
+
+已复现的问题：
+
+- 主窗先露出浅灰或白条，然后 React 挂载后变成现代主题背景
+- PiP 小窗先露出蓝紫色或浅色边缘，然后内容区变成黑色
+- 底部状态条先按浅色 skeleton 渲染，DOMContentLoaded 后才被脚本改成黑色，形成视觉跳动
+
+根因：
+
+- `BrowserWindow.backgroundColor`、HTML skeleton、React 主题背景三者颜色不一致
+- `index.html` 早期用脚本在 DOM 解析过程中补 PiP 深色样式，但脚本执行时部分节点还没创建
+- `.theme-modern .main-panel` 与 `.pip-standalone .main-panel` 优先级接近，且 `theme-modern.css` 后加载，会把 PiP 深色容器重新盖成浅色
+
+当前处理口径：
+
+- 主窗口底色统一为现代浅色 `#fafafa`
+- viewer / terminal PiP 底色统一为 `--shell`
+- PiP 判断在 `head` 阶段写入 `html[data-slc-pip]`，首屏 skeleton 直接走 CSS，不再依赖 DOMContentLoaded 二次修正
+- PiP 下同时覆盖 `html / body / #root / .app-shell / .shell-layout / .main-panel / .workspace-panel`，不能只覆盖内容区
+
+后续改样式时的检查规则：
+
+1. 改 Electron 或 PiP 背景时，必须同时检查 `main.cjs`、`index.html`、`styles-base.css`、`theme-modern.css`、`styles-pip-toast.css`
+2. 深色 PiP 特例要写成 `.theme-modern.pip-standalone ...`，不要只写 `.pip-standalone ...`
+3. 首屏 skeleton 不能依赖“元素创建后再用脚本改颜色”，否则会出现短暂白条
+4. 验证时必须用 Electron 源码态先看 `getComputedStyle(document.documentElement/body/#root/.app-shell)`，再打包安装版验证
+
 1. `:root` 提供 `--panel`
 2. `styles-layout.css` 把 `workspace-panel` 设为 `background: var(--panel)`
 3. `theme-modern .workspace-panel` 进一步把 padding/gap/background 改成现代风格

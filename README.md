@@ -125,15 +125,16 @@ cd server-log-console
 npm install
 
 # 开发模式（同时启动网关和前端）
-npm run dev:gateway    # 终端 1：启动本地网关 → http://localhost:4040
-npm run dev:extension  # 终端 2：启动前端    → http://localhost:5173
+npm --prefix apps/gateway run dev    # 终端 1：启动本地网关 → http://localhost:4040
+npm --prefix apps/extension run dev  # 终端 2：启动前端    → http://127.0.0.1:5173
 ```
 
 ### 生产构建
 
 ```bash
-npm run build
-npm run start:gateway   # 网关同时托管前端静态文件 → http://localhost:4040
+npm --prefix apps/extension run build
+npm --prefix apps/gateway run build
+npm --prefix apps/gateway run start   # 网关同时托管前端静态文件 → http://localhost:4040
 ```
 
 ### Chrome 插件模式
@@ -169,13 +170,12 @@ export SERVER_LOG_CREDENTIALS_JSON='{
 
 | 文档 | 说明 |
 |------|------|
+| [业务功能总览](./docs/业务功能总览.md) | 当前业务能力、前端入口、网关接口、核心服务和风险点 |
+| [当前系统梳理与排查计划](./docs/当前系统梳理与排查计划.md) | 当前主链路、高风险问题、排查顺序和验证矩阵 |
 | [架构与修改地图](./docs/架构与修改地图.md) | 模块职责、关键数据流、常见改动入口与验证矩阵 |
-| [拆分清单](./docs/拆分清单.md) | App.tsx / 样式 / gateway 拆分方案与推荐顺序 |
-| [文档总览](./docs/文档总览.md) | 产品功能、架构设计、API 参考、安装运行 |
+| [文档总览](./docs/文档总览.md) | 当前有效文档入口、设计参考和历史归档入口 |
 | [Electron macOS 开发指南](./docs/Electron-macOS-开发指南.md) | 桌面应用开发、打包与排障 |
-| [Electron macOS 打包归档](./docs/Electron-macOS-打包归档-2026-04-12.md) | macOS 打包启动问题排障与结论 |
-| [版本修复归档 2026-04-14](./docs/版本修复归档-2026-04-14.md) | UI、上传、下载、解压、并发隔离修复记录 |
-| [版本修复归档 2026-04-19](./docs/版本修复归档-2026-04-19.md) | 传输记录弹框重构与样式修复记录 |
+| [历史归档](./docs/archive/README.md) | 旧拆分规划、版本修复记录和历史排障记录 |
 
 ---
 
