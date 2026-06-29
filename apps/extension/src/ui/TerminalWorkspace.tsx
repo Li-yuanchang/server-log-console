@@ -42,6 +42,7 @@ export function TerminalPanel(props: TerminalPanelProps) {
   const isStandalone = props.popupMode === "standalone";
   const panelBodyRef = useRef<HTMLDivElement | null>(null);
   const bodySlotRef = useRef<HTMLDivElement | null>(null);
+  const onFitRef = useRef(props.onFit);
   const [pipWindow, setPipWindow] = useState<Window | null>(null);
   const isBrowserPip = pipWindow !== null;
   const showDetachedPlaceholder = (isElectronRuntime ? props.detached : isBrowserPip) && !isStandalone;
@@ -53,6 +54,10 @@ export function TerminalPanel(props: TerminalPanelProps) {
   const terminalStatusText = props.statusText?.trim() || (props.connected ? "终端已连接" : (props.serverId ? "等待连接终端..." : "未选择服务器"));
   const standaloneMetaText = terminalSubtitle && terminalSubtitle !== terminalTitle ? terminalSubtitle : "";
   const showStandaloneConnectionStrip = false;
+
+  useEffect(() => {
+    onFitRef.current = props.onFit;
+  }, [props.onFit]);
 
   const handleCopy = useCallback(async () => {
     if (!props.selMenu) return;
@@ -144,11 +149,11 @@ export function TerminalPanel(props: TerminalPanelProps) {
           slot.appendChild(el);
         }
         setPipWindow(null);
-        setTimeout(() => props.onFit?.(), 60);
+        setTimeout(() => onFitRef.current?.(), 60);
       });
 
       setPipWindow(pip);
-      setTimeout(() => props.onFit?.(), 100);
+      setTimeout(() => onFitRef.current?.(), 100);
     } catch (error) {
       console.error("Failed to open terminal PiP:", error);
     }
@@ -166,17 +171,17 @@ export function TerminalPanel(props: TerminalPanelProps) {
     }
 
     const timer = window.setTimeout(() => {
-      props.onFit?.();
+      onFitRef.current?.();
     }, 80);
 
     return () => {
       window.clearTimeout(timer);
     };
-  }, [isStandalone, props.connected, props.onFit]);
+  }, [isStandalone, props.connected]);
 
   useEffect(() => {
     const timers = [0, 48, 140, 320, 640].map((delay) => window.setTimeout(() => {
-      props.onFit?.();
+      onFitRef.current?.();
     }, delay));
 
     return () => {
@@ -184,7 +189,7 @@ export function TerminalPanel(props: TerminalPanelProps) {
         window.clearTimeout(timer);
       }
     };
-  }, [isStandalone, props.connected, props.detached, props.serverId, showSidePanel, showDetachedPlaceholder, props.onFit]);
+  }, [isStandalone, props.connected, props.detached, props.serverId, showSidePanel, showDetachedPlaceholder]);
 
   return (
     <section className={`terminal-bottom-panel${isStandalone ? " terminal-bottom-panel-standalone" : ""}`}>
@@ -258,7 +263,15 @@ export function TerminalPanel(props: TerminalPanelProps) {
       <div ref={bodySlotRef} className="terminal-body-slot" style={{ display: showDetachedPlaceholder ? "none" : undefined }}>
         <div className="terminal-body-layout">
           <div className="terminal-main-shell" style={{ position: "relative" }}>
-            <div ref={panelBodyRef} className="terminal-panel-body" onMouseDown={props.onFocus} onClick={props.onFocus}>
+            <div
+              ref={panelBodyRef}
+              className="terminal-panel-body"
+              onMouseDown={(event) => {
+                if (event.button === 0) {
+                  props.onFocus();
+                }
+              }}
+            >
               <div ref={props.containerRef} className="xterm-container" />
             </div>
             {props.selMenu && (

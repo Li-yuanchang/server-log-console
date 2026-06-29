@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { RawData, WebSocket, WebSocketServer } from "ws";
 import { SshExecutorService } from "../logs/ssh-executor.service.js";
+import { buildJumpServerAssetKeyword, parseJumpServerSftpPath } from "../logs/jumpserver-path.js";
 import {
   appendTerminalTranscript,
   attachTerminalSession,
@@ -69,7 +70,19 @@ export function registerTerminalWebsocket(terminalWsServer: WebSocketServer, ssh
             return;
           }
 
-          const connection = await sshExecutorService.connectTerminal(payload.serverId, payload.bastionId, 30000, payload.cwd);
+          const requestedCwd = payload.cwd?.trim();
+          const jumpServerPath = requestedCwd && sshExecutorService.isJumpServerServer(payload.serverId)
+            ? parseJumpServerSftpPath(requestedCwd)
+            : null;
+          const effectiveCwd = jumpServerPath?.realPath || requestedCwd;
+          const connection = jumpServerPath
+            ? await sshExecutorService.connectToJumpServerAsset(
+                payload.serverId,
+                buildJumpServerAssetKeyword(jumpServerPath.assetKey),
+                45000,
+                effectiveCwd
+              )
+            : await sshExecutorService.connectTerminal(payload.serverId, payload.bastionId, 30000, payload.cwd);
           const shellStream = connection.shellStream;
 
           if (!shellStream) {
@@ -92,6 +105,22 @@ export function registerTerminalWebsocket(terminalWsServer: WebSocketServer, ssh
           createTerminalSession(sessionState);
           activeSessionId = sessionId;
 
+          const forwardTerminalChunk = (chunk: Buffer | string, type: "output" | "stderr") => {
+            const text = chunk.toString();
+            const current = getTerminalSession(sessionId);
+            if (!current) {
+              return;
+            }
+
+            appendTerminalTranscript(sessionId, text);
+            sendTerminalMessage(current.socket, {
+              type,
+              sessionId,
+              chunk: text,
+              timestamp: new Date().toISOString()
+            });
+          };
+
           connection.client.on("error", (error) => {
             const current = getTerminalSession(sessionId);
             if (!current) {
@@ -101,42 +130,16 @@ export function registerTerminalWebsocket(terminalWsServer: WebSocketServer, ssh
           });
 
           shellStream.on("data", (chunk: Buffer | string) => {
-            const current = getTerminalSession(sessionId);
-            if (!current) {
-              return;
-            }
-            appendTerminalTranscript(sessionId, chunk);
-            sendTerminalMessage(current.socket, {
-              type: "output",
-              sessionId,
-              chunk: chunk.toString(),
-              timestamp: new Date().toISOString()
-            });
+            forwardTerminalChunk(chunk, "output");
           });
 
           shellStream.stderr.on("data", (chunk: Buffer | string) => {
-            const current = getTerminalSession(sessionId);
-            if (!current) {
-              return;
-            }
-            appendTerminalTranscript(sessionId, chunk);
-            sendTerminalMessage(current.socket, {
-              type: "stderr",
-              sessionId,
-              chunk: chunk.toString(),
-              timestamp: new Date().toISOString()
-            });
+            forwardTerminalChunk(chunk, "stderr");
           });
 
           shellStream.on("close", () => {
             destroyTerminalSession(sessionId);
           });
-
-          const requestedCwd = payload.cwd?.trim();
-          if (requestedCwd) {
-            const escapedCwd = escapeShellSingleQuotes(requestedCwd);
-            shellStream.write(`cd -- '${escapedCwd}' >/dev/null 2>&1 && clear || printf '\\n[slc] 无法进入目录: %s\\n' '${escapedCwd}'\r`);
-          }
 
           sendTerminalMessage(socket, {
             type: "ready",

@@ -11,7 +11,6 @@ export interface TerminalSessionState {
   transcript: string;
 }
 
-const SHELL_KEEPALIVE_MS = 4 * 60 * 1000;
 const DETACHED_SESSION_TTL_MS = 90 * 1000;
 const MAX_TRANSCRIPT_CHARS = 200_000;
 const terminalSessions = new Map<string, TerminalSessionState>();
@@ -42,9 +41,8 @@ export function resetTerminalKeepalive(sessionId: string) {
     return;
   }
   clearKeepaliveTimer(state);
-  state.keepaliveTimer = setInterval(() => {
-    state.shellStream.write(" \x08");
-  }, SHELL_KEEPALIVE_MS);
+  // SSH and WebSocket already have protocol-level keepalive. Do not write
+  // invisible characters into the interactive shell: JumpServer may echo them.
 }
 
 export function appendTerminalTranscript(sessionId: string, chunk: Buffer | string) {
