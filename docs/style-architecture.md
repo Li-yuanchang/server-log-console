@@ -178,6 +178,8 @@
 
 - 相对独立
 - 风险主要来自 `theme-modern.css` 对弹窗表面的二次美化
+- 确认 / 输入弹窗按钮必须复用 `.confirm-btn`、`.confirm-btn-cancel`、`.confirm-btn-primary`、`.confirm-btn-danger`，基础层与 `.theme-modern` 覆盖层都要处理
+- 弹窗按钮 hover / active 不允许使用 `translateY`、`scale` 等会改变几何位置的动效；这类按钮在遮罩层上会产生明显抖动，只保留颜色、边框、轻微阴影变化
 
 ### 3.7 `styles-pip-toast.css`
 

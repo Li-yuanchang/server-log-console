@@ -51,6 +51,7 @@ export function useServerConnection(deps: {
   setDirectoryPath: (v: string) => void;
   setDirectoryInput: (v: string) => void;
   setFileEntries: (v: any[]) => void;
+  setIsDirectoryLoading: (v: boolean) => void;
   jumpAssetAutoSearchKeyRef: React.MutableRefObject<string>;
   withBusy: <T>(message: string, task: () => Promise<T>, successMessage?: string) => Promise<T | null>;
   fetchServers: () => Promise<ServerSummary[]>;
@@ -87,6 +88,7 @@ export function useServerConnection(deps: {
     setDirectoryPath,
     setDirectoryInput,
     setFileEntries,
+    setIsDirectoryLoading,
     jumpAssetAutoSearchKeyRef,
     withBusy,
     fetchServers,
@@ -150,6 +152,8 @@ export function useServerConnection(deps: {
       return;
     }
 
+    const willUpdatePassword = Boolean(credentialPassword);
+    const willUpdatePrivateKey = Boolean(credentialPrivateKey);
     await withBusy("正在保存连接凭证...", async () => {
       const payload = await apiSaveCredential(serverId, {
         username: credentialUsername.trim() || undefined,
@@ -159,10 +163,15 @@ export function useServerConnection(deps: {
       setCredentialStatus(payload);
       setCredentialPassword("");
       setCredentialPrivateKey("");
-      setActionStatus(`连接凭证已保存：${payload.serverName}`);
-      pushActivity(`已保存连接凭证：${payload.serverName}，后续刷新页面仍会保留。`);
+      const updatedSecrets = [
+        willUpdatePassword ? "密码" : "",
+        willUpdatePrivateKey ? "私钥" : ""
+      ].filter(Boolean).join("、");
+      const detail = updatedSecrets ? `已更新${updatedSecrets}` : "未填写新密码/私钥，继续沿用已有密钥信息";
+      setActionStatus(`连接凭证已保存：${payload.serverName}（${detail}）`);
+      pushActivity(`已保存连接凭证：${payload.serverName}，${detail}。`);
       await fetchServers();
-    });
+    }, "连接凭证已保存");
   }, [serverId, credentialUsername, credentialPassword, credentialPrivateKey, withBusy, setCredentialStatus, setCredentialPassword, setCredentialPrivateKey, setActionStatus, pushActivity, fetchServers]);
 
   const saveServerRouteForServer = useCallback(async () => {
@@ -235,6 +244,7 @@ export function useServerConnection(deps: {
     const requestServerId = serverId;
     const autoMode = Boolean(options?.auto);
     setIsBusy(true);
+    setIsDirectoryLoading(true);
     setActionStatus(autoMode ? "正在自动连接服务器..." : "正在测试服务器连接...");
 
     try {
@@ -325,9 +335,10 @@ export function useServerConnection(deps: {
         openSettingsWorkspace("server");
       }
     } finally {
+      setIsDirectoryLoading(false);
       setIsBusy(false);
     }
-  }, [serverId, directoryPath, selectedServer, availableBastions, setIsBusy, setActionStatus, pushActivity, setConnectionTestStatus, setDirectoryPath, setDirectoryInput, setFileEntries, fetchDirectoryListing, rememberDirectoryIfUseful, openSettingsWorkspace]);
+  }, [serverId, directoryPath, selectedServer, availableBastions, setIsBusy, setIsDirectoryLoading, setActionStatus, pushActivity, setConnectionTestStatus, setDirectoryPath, setDirectoryInput, setFileEntries, fetchDirectoryListing, rememberDirectoryIfUseful, openSettingsWorkspace]);
 
   return {
     fetchCredentialStatus,

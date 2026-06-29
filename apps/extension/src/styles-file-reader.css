@@ -629,6 +629,32 @@
   min-height: 180px;
 }
 
+.directory-loading-state {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 7px;
+  width: 100%;
+  color: var(--ink-muted);
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(251, 252, 253, 0.86), rgba(245, 248, 251, 0.72));
+}
+
+.directory-loading-state strong {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.directory-loading-state span:last-child {
+  max-width: min(420px, 80%);
+  font-size: 11px;
+  line-height: 1.5;
+  text-align: center;
+  color: var(--ink-muted);
+}
+
 .file-tools-panel {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   align-items: start;
@@ -836,4 +862,3 @@
   white-space: pre-wrap;
   word-break: break-word;
 }
-
