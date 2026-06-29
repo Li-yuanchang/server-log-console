@@ -13,10 +13,14 @@
 }
 
 .electron-immersive .sidebar-head,
-.electron-immersive .toolbar-panel,
 .electron-immersive .workspace-session-strip,
 .electron-immersive .workspace-session-tabs {
   -webkit-app-region: drag;
+}
+
+.electron-immersive .toolbar-panel,
+.electron-immersive .toolbar-panel * {
+  -webkit-app-region: no-drag;
 }
 
 .electron-immersive button,
@@ -33,6 +37,14 @@
 .electron-immersive .workspace-session-tab,
 .electron-immersive .workspace-session-tab * {
   -webkit-app-region: no-drag;
+}
+
+.electron-immersive .toolbar-commandbar,
+.electron-immersive .toolbar-view-switch,
+.electron-immersive .toolbar-view-switch *,
+.electron-immersive .toolbar-view-switch-btn {
+  -webkit-app-region: no-drag;
+  pointer-events: auto;
 }
 
 .electron-immersive .sidebar-panel,
@@ -582,13 +594,13 @@ button:disabled {
 }
 
 .btn-highlight-active {
-  color: #dc2626 !important;
-  background: rgba(220, 38, 38, 0.08) !important;
-  border-color: rgba(220, 38, 38, 0.18) !important;
+  color: #b45309 !important;
+  background: rgba(245, 158, 11, 0.12) !important;
+  border-color: rgba(245, 158, 11, 0.24) !important;
 }
 
 .btn-highlight-active svg {
-  filter: drop-shadow(0 0 3px rgba(220, 38, 38, 0.4));
+  filter: drop-shadow(0 0 3px rgba(245, 158, 11, 0.35));
 }
 
 /* 浮动头部中的实时按钮：激活时绿色背景药丸 */

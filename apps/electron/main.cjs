@@ -378,6 +378,15 @@ ipcMain.handle("open-pip-window", (_event, config = {}) => {
     ? terminalPipWindows.get(terminalSessionId)
     : viewerPipWindow;
   if (existingWindow && !existingWindow.isDestroyed()) {
+    if (!isTerminalMode) {
+      const nextPipState = {
+        ...lastPipState,
+        ...(Object.prototype.hasOwnProperty.call(config, "errorHighlight") ? { errorHighlight: Boolean(config.errorHighlight) } : {}),
+        ...(Object.prototype.hasOwnProperty.call(config, "liveFollow") ? { liveFollow: Boolean(config.liveFollow) } : {}),
+      };
+      lastPipState = nextPipState;
+      existingWindow.webContents.send("pip-state-update", nextPipState);
+    }
     existingWindow.focus();
     return { ok: true };
   }
@@ -391,8 +400,21 @@ ipcMain.handle("open-pip-window", (_event, config = {}) => {
   if (config.terminalSessionId) query.set("terminalSessionId", config.terminalSessionId);
   if (config.utilityPanel) query.set("utilityPanel", config.utilityPanel);
   if (config.activeLogView) query.set("activeLogView", config.activeLogView);
-  if (config.errorHighlight) query.set("errorHighlight", "1");
-  if (config.liveFollow) query.set("liveFollow", "1");
+  const effectiveErrorHighlight = Object.prototype.hasOwnProperty.call(config, "errorHighlight")
+    ? Boolean(config.errorHighlight)
+    : Boolean(lastPipState.errorHighlight);
+  const effectiveLiveFollow = Object.prototype.hasOwnProperty.call(config, "liveFollow")
+    ? Boolean(config.liveFollow)
+    : Boolean(lastPipState.liveFollow);
+  if (!isTerminalMode) {
+    lastPipState = {
+      ...lastPipState,
+      errorHighlight: effectiveErrorHighlight,
+      liveFollow: effectiveLiveFollow,
+    };
+  }
+  if (effectiveErrorHighlight) query.set("errorHighlight", "1");
+  if (effectiveLiveFollow) query.set("liveFollow", "1");
   const indexFile = path.join(getExtensionDistDir(), "index.html");
 
   const nextPipWindow = new BrowserWindow({
@@ -404,7 +426,7 @@ ipcMain.handle("open-pip-window", (_event, config = {}) => {
     alwaysOnTop: isUtilityMode ? false : true,
     titleBarStyle: isUtilityMode ? "default" : "hiddenInset",
     trafficLightPosition: isUtilityMode ? undefined : { x: 12, y: 12 },
-    backgroundColor: "#1a1a2e",
+    backgroundColor: "#0a0a0a",
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
@@ -509,7 +531,7 @@ function createWindow() {
     minHeight: 600,
     title: "",
     show: false,
-    backgroundColor: "#e3e7eb",
+    backgroundColor: "#fafafa",
     titleBarStyle: "hiddenInset",
     trafficLightPosition: { x: 12, y: 12 },
     webPreferences: {

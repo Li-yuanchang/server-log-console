@@ -27,9 +27,10 @@
   display: grid;
   gap: 4px;
   padding: 6px 10px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--panel);
+  border: 1px solid rgba(15, 23, 42, 0.075);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.045);
 }
 
 .search-progress-head,
@@ -64,26 +65,26 @@
 
 .search-progress-track {
   position: relative;
-  height: 6px;
+  height: 4px;
   overflow: hidden;
   border-radius: 999px;
-  background: var(--panel-muted);
+  background: rgba(15, 23, 42, 0.055);
 }
 
 .search-progress-indicator {
   position: absolute;
   top: 0;
   bottom: 0;
-  left: -40%;
-  width: 40%;
+  left: -34%;
+  width: 34%;
   border-radius: 999px;
-  background: linear-gradient(90deg, transparent, rgba(49, 95, 141, 0.18), rgba(49, 95, 141, 0.35), rgba(49, 95, 141, 0.18), transparent);
-  animation: search-progress-slide 1.6s ease-in-out infinite;
+  background: linear-gradient(90deg, transparent, rgba(100, 116, 139, 0.14), rgba(100, 116, 139, 0.36), rgba(100, 116, 139, 0.14), transparent);
+  animation: search-progress-slide 2.5s ease-in-out infinite;
 }
 
 @keyframes search-progress-slide {
   0% {
-    left: -40%;
+    left: -34%;
   }
 
   100% {
