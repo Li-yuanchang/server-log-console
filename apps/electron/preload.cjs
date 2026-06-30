@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer } = require("electron");
+const { contextBridge, ipcRenderer, webUtils } = require("electron");
 
 // Mark body with is-electron class for conditional CSS (e.g. immersive titlebar padding)
 const addElectronClass = () => document.body.classList.add("is-electron");
@@ -27,4 +27,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
   localBrowse: (dirPath) => ipcRenderer.invoke("local-browse", dirPath),
   localReadFile: (filePath) => ipcRenderer.invoke("local-read-file", filePath),
   localPickDirectory: () => ipcRenderer.invoke("local-pick-directory"),
+  localPickFiles: () => ipcRenderer.invoke("local-pick-files"),
+  getPathForFile: (file) => webUtils.getPathForFile(file),
 });

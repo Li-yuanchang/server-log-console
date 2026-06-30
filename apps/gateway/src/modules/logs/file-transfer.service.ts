@@ -1,4 +1,5 @@
 import { randomUUID } from "crypto";
+import { stat } from "node:fs/promises";
 import { Readable } from "stream";
 import { z } from "zod";
 import type { StrategyResolver } from "./strategies/index.js";
@@ -14,6 +15,10 @@ const downloadSchema = z.object({
 const uploadSchema = z.object({
   serverId: z.string(),
   filePath: z.string()
+});
+
+const localUploadSchema = uploadSchema.extend({
+  localPath: z.string().min(1)
 });
 
 interface UploadSession {
@@ -151,6 +156,24 @@ export class FileTransferService {
     const strategy = this.strategyResolver.resolve(serverId);
     await strategy.uploadFile(filePath, content);
     return { filePath, size: content.length };
+  }
+
+  async uploadLocal(
+    serverId: string,
+    filePath: string,
+    localPath: string,
+    onProgress?: (transferred: number, chunkBytes: number, totalBytes: number) => void
+  ): Promise<{ filePath: string; size: number }> {
+    localUploadSchema.parse({ serverId, filePath, localPath });
+    const strategy = this.strategyResolver.resolve(serverId);
+    const fileStat = await stat(localPath);
+    if (!fileStat.isFile()) {
+      throw new Error("本地路径不是文件");
+    }
+    await strategy.uploadLocalFile(filePath, localPath, (transferred, chunkBytes, totalBytes) => {
+      onProgress?.(transferred, chunkBytes, totalBytes || fileStat.size);
+    });
+    return { filePath, size: fileStat.size };
   }
 
   /* ── 分片上传 ── */

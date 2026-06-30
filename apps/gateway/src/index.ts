@@ -686,6 +686,60 @@ app.post("/api/files/upload", (req, res, next) => {
   }
 });
 
+app.post("/api/files/upload/local", async (req, res) => {
+  try {
+    const serverId = req.body?.serverId as string;
+    const filePath = req.body?.filePath as string;
+    const localPath = req.body?.localPath as string;
+    if (!serverId || !filePath || !localPath) throw new Error("serverId、filePath 和 localPath 必填");
+    console.log(`[upload/local] serverId=${serverId} filePath=${filePath} localPath=${localPath}`);
+    const result = await fileTransferService.uploadLocal(serverId, filePath, localPath);
+    res.json(result);
+  } catch (error) {
+    console.error("[upload/local] error:", error);
+    res.status(400).json({ message: error instanceof Error ? error.message : "Unknown error" });
+  }
+});
+
+app.post("/api/files/upload/local/stream", async (req, res) => {
+  const writeEvent = (payload: Record<string, unknown>) => {
+    res.write(`${JSON.stringify(payload)}\n`);
+  };
+
+  try {
+    const serverId = req.body?.serverId as string;
+    const filePath = req.body?.filePath as string;
+    const localPath = req.body?.localPath as string;
+    if (!serverId || !filePath || !localPath) throw new Error("serverId、filePath 和 localPath 必填");
+
+    res.setHeader("Content-Type", "application/x-ndjson; charset=utf-8");
+    res.setHeader("Cache-Control", "no-cache, no-transform");
+    res.setHeader("X-Accel-Buffering", "no");
+    res.flushHeaders?.();
+
+    console.log(`[upload/local/stream] serverId=${serverId} filePath=${filePath} localPath=${localPath}`);
+    let lastEmit = 0;
+    const result = await fileTransferService.uploadLocal(serverId, filePath, localPath, (transferred, chunkBytes, totalBytes) => {
+      const now = Date.now();
+      if (now - lastEmit < 200 && transferred < totalBytes) {
+        return;
+      }
+      lastEmit = now;
+      writeEvent({ type: "progress", transferred, chunkBytes, totalBytes });
+    });
+    writeEvent({ type: "done", filePath: result.filePath, size: result.size });
+    res.end();
+  } catch (error) {
+    console.error("[upload/local/stream] error:", error);
+    if (!res.headersSent) {
+      res.status(400);
+      res.setHeader("Content-Type", "application/x-ndjson; charset=utf-8");
+    }
+    writeEvent({ type: "error", message: error instanceof Error ? error.message : "Unknown error" });
+    res.end();
+  }
+});
+
 app.post("/api/files/upload/start", async (req, res) => {
   try {
     const { serverId, filePath } = req.body || {};

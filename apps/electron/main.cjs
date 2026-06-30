@@ -364,6 +364,24 @@ ipcMain.handle("local-pick-directory", async () => {
   return { ok: true, path: filePaths[0] };
 });
 
+ipcMain.handle("local-pick-files", async () => {
+  const win = BrowserWindow.getFocusedWindow() || mainWindow;
+  const { canceled, filePaths } = await dialog.showOpenDialog(win, {
+    properties: ["openFile", "multiSelections"]
+  });
+  if (canceled || !filePaths.length) return { ok: false, canceled: true };
+  const files = filePaths.map((filePath) => {
+    const stat = fs.statSync(filePath);
+    return {
+      path: filePath,
+      name: path.basename(filePath),
+      size: stat.size,
+      modifiedTime: stat.mtime?.toISOString() || ""
+    };
+  });
+  return { ok: true, files };
+});
+
 // --- PiP Window ---
 ipcMain.handle("open-pip-window", (_event, config = {}) => {
   const pipMode = config.mode || "viewer";

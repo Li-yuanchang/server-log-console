@@ -336,7 +336,9 @@ section.terminal-bottom-panel
 2. `terminal-main-shell`
 3. `terminal-side-panel`
 
-这三个新 class 已经进入 JSX，但当前没在 CSS 中找到定义。这不是“继承导致看起来不对”，而是“布局骨架本身还没写”。
+这三个 class 现在已经在 `styles-terminal-workspace.css` 中补齐基础 flex / 宽度 / overflow / 分隔边框定义。
+
+当前风险不再是“缺失定义”，而是终端侧栏在 embedded、detached、standalone 和分屏模式下的尺寸联动与状态同步。
 
 ## 4.4 Terminal Split 区域
 
@@ -534,17 +536,19 @@ Electron 和 PiP 的背景不是单一 CSS 决定，而是多层同时生效：
 
 ## 6. 当前已识别的高风险区域
 
-## 6.1 明确缺失样式
+## 6.1 已收口的缺失样式
 
-以下 class 已在 JSX 使用，但未找到对应 CSS：
+以下 class 曾经在 JSX 使用但缺少 CSS，目前已经补齐：
 
 - `terminal-body-layout`
 - `terminal-main-shell`
 - `terminal-side-panel`
 
-影响：
+当前状态：
 
-- 终端主体和快捷指令/AI 侧栏无法形成可靠的并排布局
+- `terminal-body-layout`：负责终端主体和侧栏的横向 flex 骨架
+- `terminal-main-shell`：负责 xterm 主区域伸缩和 selection menu 定位边界
+- `terminal-side-panel`：负责快捷指令 / AI 面板的固定宽度、边框和 overflow
 
 ## 6.2 明确存在配色错位
 
@@ -602,13 +606,13 @@ CSS 在 [styles-file-reader.css](/Users/lyc/Git/GitHub/server-log-console/apps/e
   实际是：旧深色容器仍在，但内部文本迁到了浅色主题配色
 
 - “布局失效了”
-  实际是：新 DOM 容器类名已经改了，但 CSS 没补齐
+  实际是：新 DOM 容器类名、挂载状态和 CSS 定义要一起核对；不能只看某一层
 
 ## 8. 后续建议
 
-如果继续排迁移问题，建议下一步按这三个维度分别建清单：
+如果继续排迁移问题，建议按这三个维度分别建清单：
 
-1. 缺失定义的 class
+1. JSX 已使用但 CSS 未定义的 class
 2. 已定义但无引用的 class
 3. 组件已存在但未挂载的面板
 
@@ -616,33 +620,36 @@ CSS 在 [styles-file-reader.css](/Users/lyc/Git/GitHub/server-log-console/apps/e
 
 ## 9. 迁移审计清单
 
-这一节把当前已经确认的“迁移缺口”按类型列出来，便于逐项处理。
+这一节把当前已经核对过的迁移审计结果按类型列出来，便于后续触达对应模块时继续复核。
 
-### 9.1 缺失定义的 class
+### 9.1 已补齐定义的 terminal class
 
-以下 class 已在 JSX 中使用，但当前没有找到对应 CSS 定义：
+以下 class 已在 JSX 中使用，并且当前已经有对应 CSS 定义：
 
 1. `terminal-body-layout`
    证据：
    [TerminalWorkspace.tsx](/Users/lyc/Git/GitHub/server-log-console/apps/extension/src/ui/TerminalWorkspace.tsx#L246)
+   [styles-terminal-workspace.css](/Users/lyc/Git/GitHub/server-log-console/apps/extension/src/styles-terminal-workspace.css#L134)
 
 2. `terminal-main-shell`
    证据：
    [TerminalWorkspace.tsx](/Users/lyc/Git/GitHub/server-log-console/apps/extension/src/ui/TerminalWorkspace.tsx#L247)
+   [styles-terminal-workspace.css](/Users/lyc/Git/GitHub/server-log-console/apps/extension/src/styles-terminal-workspace.css#L142)
 
 3. `terminal-side-panel`
    证据：
    [TerminalWorkspace.tsx](/Users/lyc/Git/GitHub/server-log-console/apps/extension/src/ui/TerminalWorkspace.tsx#L263)
+   [styles-terminal-workspace.css](/Users/lyc/Git/GitHub/server-log-console/apps/extension/src/styles-terminal-workspace.css#L151)
 
 影响判断：
 
 - 这三个类本来承担 terminal 主体与侧栏的布局骨架职责
-- 由于不存在定义，布局只能退回普通文档流
-- 这是明确的“迁移时 DOM 改了，但 CSS 没补齐”
+- 现在基础布局已经补齐，后续重点是多宿主 / 多模式下继续做实态回归
 
 建议状态：
 
-- `todo` 先补基础 flex / 宽度 / overflow / 分隔边框
+- `done` 基础 flex / 宽度 / overflow / 分隔边框已补齐
+- `follow-up` 后续触达终端侧栏时，继续核对 embedded、detached、standalone、split 模式下侧栏尺寸和 hover / focus 状态
 
 ### 9.2 已定义且已重新接线的 utility class
 
@@ -683,7 +690,7 @@ CSS 在 [styles-file-reader.css](/Users/lyc/Git/GitHub/server-log-console/apps/e
 建议状态：
 
 - `done` tabs 结构已接回
-- `todo` 继续做浏览器回归，确认多面板切换时的宽度、滚动和 hover 反馈
+- `follow-up` 后续触达 utility workspace 时，继续做浏览器回归，确认多面板切换时的宽度、滚动和 hover 反馈
 
 ### 9.3 组件存在、样式存在，并已并入右侧 utility workspace
 
@@ -724,7 +731,7 @@ CSS 在 [styles-file-reader.css](/Users/lyc/Git/GitHub/server-log-console/apps/e
 建议状态：
 
 - `done` 已接入新的 utility workspace
-- `todo` 继续检查 utility workspace 顶栏文案、面板关闭行为和多工具切换是否一致
+- `follow-up` 后续触达 utility workspace 时，继续检查顶栏文案、面板关闭行为和多工具切换是否一致
 
 ### 9.4 组件还能渲染，但当前无入口触发
 
@@ -754,7 +761,7 @@ CSS 在 [styles-file-reader.css](/Users/lyc/Git/GitHub/server-log-console/apps/e
 建议状态：
 
 - `done` 入口已恢复
-- `todo` 继续观察不同主题下的浮层对比度与层级
+- `follow-up` 后续触达书签浮层时，继续观察不同主题下的对比度与层级
 
 ### 9.5 已确认的样式错配
 
@@ -772,19 +779,18 @@ CSS 在 [styles-file-reader.css](/Users/lyc/Git/GitHub/server-log-console/apps/e
 建议状态：
 
 - `done` 目前走的是“保留深色浮层，但把文字/分隔线/hover 调回深色面板配套色”
-- `todo` 若后面统一右侧工具面板视觉，可再决定是否整体转为浅色 utility 风格
+- `follow-up` 若后面统一右侧工具面板视觉，可再决定是否整体转为浅色 utility 风格
 
-### 9.6 当前建议的修复优先级
+### 9.6 当前回归关注项
 
-建议按这个顺序推进：
+当前迁移主体已完成，下面不是必须立即执行的修复清单，而是后续继续改 utility / bookmark / terminal 相关功能时的回归关注项：
 
-1. `P1` 先补 `terminal-body-layout` / `terminal-main-shell` / `terminal-side-panel`
-2. `P1` 清理 utility 迁移后的残留样式、旧注释和过时文档描述
-3. `P2` 继续核对 utility workspace / bookmark / terminal side panel 的浏览器实态
-4. `P2` 清理无引用样式，避免误导后续排查
+1. 清理 utility 迁移后的残留样式、旧注释和过时文档描述
+2. 继续核对 utility workspace / bookmark / terminal side panel 的浏览器实态
+3. 清理无引用样式，避免误导后续排查
 
 这样处理的好处是：
 
-- 先把真正的布局断层补上
-- 再处理“功能还在但入口没了”
-- 最后清理迁移残留，降低后续维护噪音
+- 不把“长期可优化项”误判成“拆分没完成”
+- 只在触达对应区域时收口，降低无业务目标重构带来的回归风险
+- 保留必要的排查线索，避免后续样式问题又从零梳理
