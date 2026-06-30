@@ -219,8 +219,8 @@
   100% { transform: translateX(180%); }
 }
 @keyframes file-loading-fade-in {
-  from { opacity: 0; transform: translateY(4px) scale(0.99); }
-  to   { opacity: 1; transform: translateY(0) scale(1); }
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 @keyframes file-loading-pulse {
   0%, 100% { opacity: 0.58; }
@@ -230,54 +230,65 @@
 /* ── Toast notifications ── */
 .toast-container {
   position: fixed;
-  bottom: 16px;
+  bottom: 24px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 9999;
+  z-index: 11050;
   display: flex;
   flex-direction: column-reverse;
-  gap: 8px;
+  gap: 7px;
   pointer-events: none;
-  max-width: 420px;
-  width: calc(100% - 32px);
+  max-width: min(420px, calc(100vw - 48px));
+  width: max-content;
 }
 .toast-item {
   pointer-events: auto;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 9px 13px;
-  min-height: 38px;
-  border-radius: 12px;
-  font-size: 12.5px;
-  line-height: 1;
+  gap: 10px;
+  width: min(420px, calc(100vw - 48px));
+  min-height: 48px;
+  padding: 11px 13px 11px 14px;
+  border-radius: 16px;
+  font-size: 13px;
+  line-height: 1.35;
   color: var(--ink, #1e293b);
-  background: rgba(255, 255, 255, 0.9);
-  border: 1px solid rgba(17, 24, 39, 0.08);
-  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.07), 0 1px 2px rgba(15, 23, 42, 0.04);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  animation: toast-slide-in 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
+  background: rgba(252, 253, 255, 0.94);
+  border: 1px solid rgba(21, 27, 37, 0.1);
+  box-shadow: 0 16px 46px rgba(15, 23, 42, 0.12), 0 2px 8px rgba(15, 23, 42, 0.05);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  animation: toast-slide-in 0.2s cubic-bezier(0.22, 1, 0.36, 1) both;
   cursor: default;
   word-break: break-word;
 }
 .toast-item-exit {
-  animation: toast-slide-out 0.18s ease-in both;
+  animation: toast-slide-out 0.16s ease-in both;
 }
 .toast-icon {
   flex-shrink: 0;
-  width: 18px;
-  height: 18px;
+  width: 30px;
+  height: 30px;
   display: flex;
   align-items: center;
   justify-content: center;
+  border-radius: 11px;
+  background: rgba(100, 116, 139, 0.08);
 }
 .toast-icon-loading {
-  animation: toast-spin 1.4s linear infinite;
-  opacity: 0.62;
+  opacity: 0.76;
 }
-.toast-icon-loading svg { color: #64748b; }
+.toast-icon-loading svg {
+  color: #64748b;
+  animation: toast-spin 1.4s linear infinite;
+}
+.toast-icon-success {
+  background: rgba(106, 163, 106, 0.12);
+}
 .toast-icon-success svg { color: #6aa36a; }
+.toast-icon-error {
+  background: rgba(200, 122, 110, 0.12);
+}
 .toast-icon-error svg { color: #c87a6e; }
 .toast-message {
   flex: 1;
@@ -285,6 +296,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   color: var(--ink-soft, #475569);
+  font-weight: 520;
 }
 .toast-dismiss {
   flex-shrink: 0;
@@ -314,17 +326,146 @@
 .toast-item:hover .toast-dismiss { visibility: visible; opacity: 0.4; }
 .toast-item:hover .toast-dismiss:hover { opacity: 0.8; }
 @keyframes toast-slide-in {
-  from { opacity: 0; transform: translateY(6px) scale(0.985); }
-  to   { opacity: 1; transform: translateY(0) scale(1); }
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 @keyframes toast-slide-out {
-  from { opacity: 1; transform: translateY(0) scale(1); }
-  to   { opacity: 0; transform: translateY(5px) scale(0.985); }
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(6px); }
 }
 @keyframes toast-spin {
   from { transform: rotate(0deg); }
   to   { transform: rotate(360deg); }
 }
+
+/* ── Transfer progress HUD ── */
+.upload-progress-bar {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  width: min(420px, calc(100vw - 48px));
+  z-index: 11040;
+  pointer-events: none;
+}
+
+.upload-progress-card {
+  display: grid;
+  gap: 12px;
+  padding: 14px 15px 13px;
+  border: 1px solid rgba(21, 27, 37, 0.12);
+  border-radius: 16px;
+  background: rgba(252, 253, 255, 0.96);
+  box-shadow: 0 18px 52px rgba(15, 23, 42, 0.18), 0 2px 8px rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  color: var(--ink, #1d2733);
+}
+
+.upload-progress-card-complete .upload-progress-icon {
+  background: rgba(106, 163, 106, 0.12);
+  color: #6aa36a;
+}
+
+.upload-progress-card-complete .upload-progress-percent {
+  color: #6aa36a;
+}
+
+.upload-progress-card-complete .upload-progress-fill {
+  background: linear-gradient(90deg, #6aa36a, #8fc68f);
+  box-shadow: 0 0 18px rgba(106, 163, 106, 0.2);
+}
+
+.upload-progress-card-head {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.upload-progress-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  background: linear-gradient(145deg, rgba(35, 105, 255, 0.12), rgba(35, 105, 255, 0.04));
+  color: var(--accent, #2369ff);
+}
+
+.download-progress-icon {
+  background: linear-gradient(145deg, rgba(15, 159, 110, 0.14), rgba(15, 159, 110, 0.04));
+  color: #0f9f6e;
+}
+
+.upload-progress-title-block {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.upload-progress-kicker {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-muted, #7d8794);
+}
+
+.upload-progress-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--ink, #1d2733);
+}
+
+.upload-progress-percent {
+  font-size: 18px;
+  font-weight: 720;
+  color: var(--accent, #2369ff);
+  font-variant-numeric: tabular-nums;
+}
+
+.download-progress-percent {
+  color: #0f9f6e;
+}
+
+.upload-progress-track {
+  height: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.08);
+  contain: paint;
+}
+
+.upload-progress-fill {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #2d72ff, #4aa3ff);
+  box-shadow: 0 0 18px rgba(45, 114, 255, 0.28);
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 260ms cubic-bezier(0.2, 0.78, 0.2, 1);
+  will-change: transform;
+}
+
+.download-progress-fill {
+  background: linear-gradient(90deg, #0f9f6e, #34c99a);
+  box-shadow: 0 0 18px rgba(15, 159, 110, 0.24);
+}
+
+.upload-progress-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 14px;
+  color: var(--ink-muted, #7d8794);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
 .file-loading-overlay {
   display: flex;
   align-items: center;
@@ -599,9 +740,8 @@
   gap: 4px;
   justify-self: end;
   opacity: 0;
-  transform: translateY(-2px);
   pointer-events: none;
-  transition: opacity 160ms ease, transform 160ms ease;
+  transition: opacity 160ms ease;
   -webkit-app-region: no-drag;
 }
 

@@ -2,6 +2,7 @@ import { useCallback } from "react";
 import type { UploadProgressState, DownloadProgressState } from "./FeedbackOverlays.js";
 import {
   apiDownloadFile,
+  apiUploadLocalFile,
   apiUploadSmall,
   apiUploadStart,
   apiUploadChunk,
@@ -14,6 +15,47 @@ const UPLOAD_JUNK_FILES = new Set([
   ".Spotlight-V100", ".Trashes", "__MACOSX", ".fseventsd", ".TemporaryItems",
   "ehthumbs.db", "ehthumbs_vista.db", "$RECYCLE.BIN", "System Volume Information",
 ].map((name) => name.toLowerCase()));
+
+const UPLOAD_SPEED_SAMPLE_MS = 300;
+const TRANSFER_SUCCESS_HOLD_MS = 1200;
+
+type LocalUploadFile = {
+  path: string;
+  name: string;
+  size: number;
+};
+
+function getElectronFilePath(file: File): string {
+  const directPath = String((file as { path?: string }).path || "").trim();
+  if (directPath) {
+    return directPath;
+  }
+  const api = (globalThis as any).electronAPI;
+  if (api?.getPathForFile) {
+    return String(api.getPathForFile(file) || "").trim();
+  }
+  return "";
+}
+
+function getUploadEtaSeconds(fileSize: number, bytesUploaded: number, speed: number): number | undefined {
+  if (!speed || speed <= 0 || bytesUploaded <= 0 || fileSize <= bytesUploaded) return undefined;
+  return Math.max(1, (fileSize - bytesUploaded) / speed);
+}
+
+function getUploadBatchSize(files: Array<{ size: number }>): number {
+  return files.reduce((sum, file) => sum + Math.max(0, file.size || 0), 0);
+}
+
+function getUploadPercent(bytesUploaded: number, totalBytes: number): number {
+  if (totalBytes <= 0) return 100;
+  return Math.min(100, Math.max(0, Math.floor((bytesUploaded / totalBytes) * 100)));
+}
+
+function clearTransferProgressAfterHold(setUploadProgress: (v: UploadProgressState | null | ((prev: UploadProgressState | null) => UploadProgressState | null)) => void) {
+  window.setTimeout(() => {
+    setUploadProgress((prev) => prev?.stage === "completed" ? null : prev);
+  }, TRANSFER_SUCCESS_HOLD_MS);
+}
 
 function isJunkFile(name: string): boolean {
   const normalized = (name || "").trim().toLowerCase();
@@ -106,7 +148,7 @@ export function useFileTransfer(deps: {
   updateToast: (id: string, type: "success" | "error" | "loading", message: string) => void;
   dismissToast: (id: string) => void;
   appendTransferHistory: (entry: Omit<TransferHistoryEntry, "id" | "serverId" | "serverLabel" | "createdAt">) => void;
-  browseLogFiles: (path: string, options?: { manual?: boolean }) => Promise<void>;
+  browseLogFiles: (path: string, options?: { manual?: boolean; silent?: boolean }) => Promise<void>;
   setIsDragOver: (v: boolean) => void;
 }): FileTransferAPI {
   const {
@@ -118,46 +160,87 @@ export function useFileTransfer(deps: {
     setActionStatus,
     pushActivity,
     showToast,
-    updateToast,
-    dismissToast,
     appendTransferHistory,
     browseLogFiles,
     setIsDragOver,
   } = deps;
 
-  const uploadOneFile = useCallback(async (file: File, targetPath: string): Promise<void> => {
+  const uploadOneFileWithBatchProgress = useCallback(async (
+    file: File,
+    targetPath: string,
+    batch: {
+      uploadedBefore: number;
+      totalBytes: number;
+      fileIndex: number;
+      totalFiles: number;
+      displayName: string;
+      speedState: { sampleTime: number; sampleOffset: number; speed: number };
+    },
+  ): Promise<void> => {
     const CHUNK_THRESHOLD = 10 * 1024 * 1024;
+    const updateBatchProgress = (
+      fileBytesUploaded: number,
+      stage: UploadProgressState["stage"] = "uploading",
+      chunkIndex?: number,
+      totalChunks?: number,
+    ) => {
+      const uploaded = Math.min(batch.totalBytes, batch.uploadedBefore + Math.min(fileBytesUploaded, file.size));
+      const now = Date.now();
+      const elapsedMs = now - batch.speedState.sampleTime;
+      if (elapsedMs >= UPLOAD_SPEED_SAMPLE_MS || uploaded >= batch.totalBytes) {
+        const delta = uploaded - batch.speedState.sampleOffset;
+        if (delta > 0) {
+          batch.speedState.speed = (delta / Math.max(elapsedMs, 1)) * 1000;
+          batch.speedState.sampleTime = now;
+          batch.speedState.sampleOffset = uploaded;
+        }
+      }
+      const current = batch.totalBytes > 0
+        ? getUploadPercent(uploaded, batch.totalBytes)
+        : 100;
+      setUploadProgress((prev) => prev ? {
+        ...prev,
+        current: Math.max(prev.current, current),
+        fileName: `(${batch.fileIndex}/${batch.totalFiles}) ${batch.displayName}`,
+        fileSize: batch.totalBytes,
+        bytesUploaded: uploaded,
+        speed: batch.speedState.speed,
+        stage,
+        transferMode: "browser",
+        fileIndex: batch.fileIndex,
+        totalFiles: batch.totalFiles,
+        remainingFiles: Math.max(0, batch.totalFiles - batch.fileIndex),
+        chunkIndex,
+        totalChunks,
+        etaSeconds: getUploadEtaSeconds(batch.totalBytes, uploaded, batch.speedState.speed),
+      } : null);
+    };
 
     if (file.size < CHUNK_THRESHOLD) {
-      await apiUploadSmall(serverId!, targetPath, file);
-      setUploadProgress((prev) => prev ? { ...prev, current: 100, bytesUploaded: file.size, speed: 0 } : null);
+      updateBatchProgress(0, "uploading");
+      await apiUploadSmall(serverId!, targetPath, file, ({ loaded }) => {
+        updateBatchProgress(Math.min(loaded, file.size), "uploading");
+      });
+      updateBatchProgress(file.size, "uploading");
       return;
     }
 
-    const chunkSize = Math.max(1 * 1024 * 1024, Math.min(8 * 1024 * 1024, Math.ceil(file.size / 50)));
+    const chunkSize = 1024 * 1024;
     const totalChunks = Math.ceil(file.size / chunkSize);
-
     const uploadId = await apiUploadStart(serverId, targetPath);
-
     let offset = 0;
-    let speedSampleTime = Date.now();
-    let speedSampleOffset = 0;
-    let speed = 0;
 
     for (let i = 0; i < totalChunks; i++) {
       const end = Math.min(offset + chunkSize, file.size);
       const blob = file.slice(offset, end);
-      await apiUploadChunk(uploadId, blob);
+      const chunkStart = offset;
+      updateBatchProgress(offset, "uploading", i + 1, totalChunks);
+      await apiUploadChunk(uploadId, blob, ({ loaded }) => {
+        updateBatchProgress(Math.min(chunkStart + loaded, file.size), "uploading", i + 1, totalChunks);
+      });
 
       offset = end;
-      const now = Date.now();
-      const elapsed = (now - speedSampleTime) / 1000;
-      if (elapsed >= 0.5) {
-        speed = (offset - speedSampleOffset) / elapsed;
-        speedSampleTime = now;
-        speedSampleOffset = offset;
-      }
-      setUploadProgress((prev) => prev ? { ...prev, current: Math.round((offset / file.size) * 100), bytesUploaded: offset, speed } : null);
+      updateBatchProgress(offset, "uploading", i + 1, totalChunks);
     }
 
     await apiUploadFinish(uploadId);
@@ -168,7 +251,6 @@ export function useFileTransfer(deps: {
     const fileName = targetFilePath.split("/").pop() || "download";
     let downloadedBytes = 0;
     setDownloadProgress({ fileName, fileSize: 0, bytesDownloaded: 0, speed: 0, percent: 0 });
-    const tid = String(showToast("loading", `正在下载 ${fileName}...`));
     try {
       const blob = await apiDownloadFile(serverId, targetFilePath, (downloaded, total, speed) => {
         downloadedBytes = downloaded;
@@ -192,7 +274,6 @@ export function useFileTransfer(deps: {
               size: blob.size || downloadedBytes,
               message,
             });
-            dismissToast(tid);
             return;
           }
           throw new Error(result?.message || "保存下载文件失败");
@@ -207,7 +288,7 @@ export function useFileTransfer(deps: {
           size: blob.size || downloadedBytes,
           localPath: result.filePath,
         });
-        updateToast(tid, "success", `已保存到 ${result.filePath}`);
+        showToast("success", `已保存到 ${result.filePath}`);
       } else {
         const url = URL.createObjectURL(blob);
         try {
@@ -234,7 +315,7 @@ export function useFileTransfer(deps: {
               size: blob.size || downloadedBytes,
               message: "浏览器已弹出保存对话框",
             });
-            updateToast(tid, "success", `请选择保存位置：${fileName}`);
+            showToast("success", `请选择保存位置：${fileName}`);
           } else {
             const a = document.createElement("a");
             a.href = url;
@@ -252,7 +333,7 @@ export function useFileTransfer(deps: {
               size: blob.size || downloadedBytes,
               message: "浏览器已开始下载",
             });
-            updateToast(tid, "success", `已开始下载 ${fileName}`);
+            showToast("success", `已开始下载 ${fileName}`);
           }
         } finally {
           window.setTimeout(() => URL.revokeObjectURL(url), 1000);
@@ -272,51 +353,96 @@ export function useFileTransfer(deps: {
         size: downloadedBytes,
         message: detail,
       });
-      updateToast(tid, "error", `下载失败：${detail}`);
+      showToast("error", `下载失败：${detail}`);
     } finally {
       setDownloadProgress(null);
     }
-  }, [serverId, setDownloadProgress, setActionStatus, pushActivity, showToast, updateToast, dismissToast, appendTransferHistory]);
+  }, [serverId, setDownloadProgress, setActionStatus, pushActivity, showToast, appendTransferHistory]);
 
-  const uploadFileList = useCallback(async (fileList: File[]) => {
-    if (!serverId || !directoryPath || fileList.length === 0) return;
-    const { accepted, skipped } = splitUploadFiles(fileList);
-    if (accepted.length === 0) {
-      const message = skipped.length > 0 ? `已过滤 ${skipped.length} 个垃圾文件，无需上传` : "没有可上传的文件";
-      setActionStatus(message);
-      pushActivity(message);
-      showToast("success", message);
-      return;
-    }
-    const skippedCount = skipped.length;
-    const total = accepted.length;
+  const uploadLocalFileList = useCallback(async (files: LocalUploadFile[]) => {
+    if (!serverId || !directoryPath || files.length === 0) return;
+    const total = files.length;
+    const batchTotalBytes = getUploadBatchSize(files);
     const uploadDir = directoryPath.endsWith("/") ? directoryPath.slice(0, -1) : directoryPath;
-    let currentUpload: { fileName: string; relativePath: string; localPath: string; targetPath: string; size: number } | null = null;
-    setActionStatus(`正在上传 ${total} 个文件${skippedCount ? `（已过滤 ${skippedCount} 个垃圾文件）` : ""}...`);
-    const tid = String(showToast("loading", `正在上传 ${total} 个文件${skippedCount ? `（已过滤 ${skippedCount} 个垃圾文件）` : ""}...`));
+    let currentUpload: { fileName: string; localPath: string; targetPath: string; size: number } | null = null;
+    let uploadedBefore = 0;
+    const speedState = { sampleTime: Date.now(), sampleOffset: 0, speed: 0 };
+    setActionStatus(`正在本地直传 ${total} 个文件...`);
     try {
-      for (let i = 0; i < accepted.length; i++) {
-        const file = accepted[i];
-        const relativePath = getUploadRelativePath(file);
-        const localPath = getUploadLocalPath(file);
-        const targetPath = `${uploadDir}/${relativePath}`;
-        currentUpload = { fileName: file.name, relativePath, localPath, targetPath, size: file.size };
-        setUploadProgress({ current: 0, total, fileName: `(${i + 1}/${total}) ${relativePath}`, fileSize: file.size, bytesUploaded: 0, speed: 0 });
-        updateToast(tid, "loading", `正在上传 (${i + 1}/${total}) ${relativePath}...`);
-        await uploadOneFile(file, targetPath);
-        pushActivity(`已上传文件：${targetPath}`);
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const targetPath = `${uploadDir}/${file.name}`;
+        currentUpload = { fileName: file.name, localPath: file.path, targetPath, size: file.size };
+        const updateLocalProgress = (bytesUploaded: number, chunkBytes = 0, _remoteTotalBytes = file.size) => {
+          const now = Date.now();
+          const overallUploaded = Math.min(batchTotalBytes, uploadedBefore + Math.min(bytesUploaded, file.size));
+          const elapsedMs = now - speedState.sampleTime;
+          if (elapsedMs >= UPLOAD_SPEED_SAMPLE_MS || overallUploaded >= batchTotalBytes) {
+            const delta = overallUploaded - speedState.sampleOffset;
+            if (delta > 0) {
+              speedState.speed = (delta / Math.max(elapsedMs, 1)) * 1000;
+              speedState.sampleTime = now;
+              speedState.sampleOffset = overallUploaded;
+            } else if (chunkBytes > 0) {
+              speedState.speed = (chunkBytes / Math.max(elapsedMs, 1)) * 1000;
+            }
+          }
+          const current = getUploadPercent(overallUploaded, batchTotalBytes);
+          setUploadProgress((prev) => prev ? {
+            ...prev,
+            current: Math.max(prev.current, current),
+            fileName: `(${i + 1}/${total}) ${file.name}`,
+            fileSize: batchTotalBytes,
+            bytesUploaded: overallUploaded,
+            speed: speedState.speed,
+            stage: overallUploaded >= batchTotalBytes && batchTotalBytes > 0 ? "finishing" : "uploading",
+            transferMode: "local",
+            fileIndex: i + 1,
+            totalFiles: total,
+            remainingFiles: Math.max(0, total - i - 1),
+            etaSeconds: getUploadEtaSeconds(batchTotalBytes, overallUploaded, speedState.speed),
+          } : null);
+        };
+
+        setUploadProgress({
+          current: getUploadPercent(uploadedBefore, batchTotalBytes),
+          total,
+          fileName: `(${i + 1}/${total}) ${file.name}`,
+          fileSize: batchTotalBytes,
+          bytesUploaded: uploadedBefore,
+          speed: speedState.speed,
+          stage: "uploading",
+          transferMode: "local",
+          fileIndex: i + 1,
+          totalFiles: total,
+          remainingFiles: Math.max(0, total - i - 1),
+        });
+        await apiUploadLocalFile(serverId, targetPath, file.path, ({ transferred, chunkBytes, totalBytes }) => {
+          updateLocalProgress(transferred, chunkBytes, totalBytes);
+        });
+        updateLocalProgress(file.size, 0, file.size);
+        uploadedBefore += file.size;
+        pushActivity(`已本地直传文件：${targetPath}`);
         appendTransferHistory({
           direction: "upload",
           status: "success",
           fileName: file.name,
           filePath: targetPath,
           size: file.size,
-          localPath,
+          localPath: file.path,
+          message: "本地路径直传",
         });
       }
-      setActionStatus(`已上传 ${total} 个文件到 ${uploadDir}${skippedCount ? `（跳过 ${skippedCount} 个垃圾文件）` : ""}`);
-      updateToast(tid, "success", skippedCount ? `已上传 ${total} 个文件，已过滤 ${skippedCount} 个垃圾文件` : `已上传 ${total} 个文件`);
-      await browseLogFiles(uploadDir);
+      setUploadProgress((prev) => prev ? {
+        ...prev,
+        current: 100,
+        bytesUploaded: prev.fileSize,
+        stage: "completed",
+        etaSeconds: undefined,
+      } : null);
+      setActionStatus(`已本地直传 ${total} 个文件到 ${uploadDir}`);
+      await browseLogFiles(uploadDir, { silent: true });
+      clearTransferProgressAfterHold(setUploadProgress);
     } catch (error) {
       const detail = error instanceof Error ? error.message : "未知错误";
       setActionStatus(`上传失败：${detail}`);
@@ -332,14 +458,122 @@ export function useFileTransfer(deps: {
           message: detail,
         });
       }
-      updateToast(tid, "error", `上传失败：${detail}`);
+      showToast("error", `上传失败：${detail}`);
     } finally {
-      setUploadProgress(null);
+      setUploadProgress((prev) => prev?.stage === "completed" ? prev : null);
     }
-  }, [serverId, directoryPath, uploadOneFile, setUploadProgress, setActionStatus, pushActivity, showToast, updateToast, appendTransferHistory, browseLogFiles]);
+  }, [serverId, directoryPath, setUploadProgress, setActionStatus, pushActivity, showToast, appendTransferHistory, browseLogFiles]);
+
+  const uploadFileList = useCallback(async (fileList: File[]) => {
+    if (!serverId || !directoryPath || fileList.length === 0) return;
+    const { accepted, skipped } = splitUploadFiles(fileList);
+    if (accepted.length === 0) {
+      const message = skipped.length > 0 ? `已过滤 ${skipped.length} 个垃圾文件，无需上传` : "没有可上传的文件";
+      setActionStatus(message);
+      pushActivity(message);
+      showToast("success", message);
+      return;
+    }
+    const electronLocalFiles = accepted
+      .map((file): LocalUploadFile | null => {
+        const localPath = getElectronFilePath(file);
+        if (!localPath) {
+          return null;
+        }
+        return { path: localPath, name: getUploadRelativePath(file) || file.name, size: file.size };
+      });
+    if (electronLocalFiles.every(Boolean)) {
+      await uploadLocalFileList(electronLocalFiles as LocalUploadFile[]);
+      return;
+    }
+    const skippedCount = skipped.length;
+    const total = accepted.length;
+    const totalBytes = getUploadBatchSize(accepted);
+    const uploadDir = directoryPath.endsWith("/") ? directoryPath.slice(0, -1) : directoryPath;
+    let currentUpload: { fileName: string; relativePath: string; localPath: string; targetPath: string; size: number } | null = null;
+    let uploadedBefore = 0;
+    const speedState = { sampleTime: Date.now(), sampleOffset: 0, speed: 0 };
+    setActionStatus(`正在上传 ${total} 个文件${skippedCount ? `（已过滤 ${skippedCount} 个垃圾文件）` : ""}...`);
+    try {
+      for (let i = 0; i < accepted.length; i++) {
+        const file = accepted[i];
+        const relativePath = getUploadRelativePath(file);
+        const localPath = getUploadLocalPath(file);
+        const targetPath = `${uploadDir}/${relativePath}`;
+        currentUpload = { fileName: file.name, relativePath, localPath, targetPath, size: file.size };
+        setUploadProgress({
+          current: getUploadPercent(uploadedBefore, totalBytes),
+          total,
+          fileName: `(${i + 1}/${total}) ${relativePath}`,
+          fileSize: totalBytes,
+          bytesUploaded: uploadedBefore,
+          speed: speedState.speed,
+          stage: "preparing",
+          transferMode: "browser",
+          fileIndex: i + 1,
+          totalFiles: total,
+          remainingFiles: Math.max(0, total - i - 1),
+        });
+        await uploadOneFileWithBatchProgress(file, targetPath, {
+          uploadedBefore,
+          totalBytes,
+          fileIndex: i + 1,
+          totalFiles: total,
+          displayName: relativePath,
+          speedState,
+        });
+        uploadedBefore += file.size;
+        pushActivity(`已上传文件：${targetPath}`);
+        appendTransferHistory({
+          direction: "upload",
+          status: "success",
+          fileName: file.name,
+          filePath: targetPath,
+          size: file.size,
+          localPath,
+        });
+      }
+      setUploadProgress((prev) => prev ? {
+        ...prev,
+        current: 100,
+        bytesUploaded: prev.fileSize,
+        stage: "completed",
+        etaSeconds: undefined,
+      } : null);
+      setActionStatus(`已上传 ${total} 个文件到 ${uploadDir}${skippedCount ? `（跳过 ${skippedCount} 个垃圾文件）` : ""}`);
+      await browseLogFiles(uploadDir, { silent: true });
+      clearTransferProgressAfterHold(setUploadProgress);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "未知错误";
+      setActionStatus(`上传失败：${detail}`);
+      pushActivity(`上传失败：${detail}`);
+      if (currentUpload) {
+        appendTransferHistory({
+          direction: "upload",
+          status: "error",
+          fileName: currentUpload.fileName,
+          filePath: currentUpload.targetPath,
+          size: currentUpload.size,
+          localPath: currentUpload.localPath,
+          message: detail,
+        });
+      }
+      showToast("error", `上传失败：${detail}`);
+    } finally {
+      setUploadProgress((prev) => prev?.stage === "completed" ? prev : null);
+    }
+  }, [serverId, directoryPath, uploadOneFileWithBatchProgress, uploadLocalFileList, setUploadProgress, setActionStatus, pushActivity, showToast, appendTransferHistory, browseLogFiles]);
 
   const uploadFiles = useCallback(async () => {
     if (!serverId || !directoryPath) return;
+    const electronAPI = (window as any).electronAPI;
+    if (electronAPI?.localPickFiles) {
+      const result = await electronAPI.localPickFiles();
+      if (result?.ok && Array.isArray(result.files)) {
+        await uploadLocalFileList(result.files);
+      }
+      return;
+    }
     const input = document.createElement("input");
     input.type = "file";
     input.multiple = true;
@@ -349,7 +583,7 @@ export function useFileTransfer(deps: {
       await uploadFileList(Array.from(files));
     };
     input.click();
-  }, [serverId, directoryPath, uploadFileList]);
+  }, [serverId, directoryPath, uploadFileList, uploadLocalFileList]);
 
   const uploadDirectory = useCallback(async () => {
     if (!serverId || !directoryPath) return;

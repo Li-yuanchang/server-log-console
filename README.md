@@ -127,6 +127,11 @@ npm install
 # 开发模式（同时启动网关和前端）
 npm --prefix apps/gateway run dev    # 终端 1：启动本地网关 → http://localhost:4040
 npm --prefix apps/extension run dev  # 终端 2：启动前端    → http://127.0.0.1:5173
+
+# Electron 桌面端开发
+npm --prefix apps/extension run build
+npm --prefix apps/gateway run build
+npm --prefix apps/electron run start
 ```
 
 ### 生产构建
@@ -135,6 +140,12 @@ npm --prefix apps/extension run dev  # 终端 2：启动前端    → http://127
 npm --prefix apps/extension run build
 npm --prefix apps/gateway run build
 npm --prefix apps/gateway run start   # 网关同时托管前端静态文件 → http://localhost:4040
+```
+
+### macOS 桌面端打包安装
+
+```bash
+npm --prefix apps/electron run release:mac
 ```
 
 ### Chrome 插件模式
