@@ -77,6 +77,7 @@ export interface VirtualLogViewerHandle {
   scrollToBottom(): void;
   scrollToLine(index: number, behavior?: "auto" | "smooth"): void;
   scrollToHighlight(index: number): void;
+  getLineRangeText(startLine: number, endLine: number): string;
   getSelectionText(selection: Selection): string;
   getScrollState(): { scrollTop: number; scrollHeight: number; clientHeight: number } | null;
   getScrollerElement(): HTMLElement | null;
@@ -95,8 +96,10 @@ interface Props {
   useRegex: boolean;
   activeHighlightIndex: number;
   focusLineIndex?: number;
+  selectedLineRange?: { start: number; end: number } | null;
   bookmarks?: Record<number, string>;
   onLineClick?: (lineIndex: number, event: React.MouseEvent<HTMLDivElement>) => void;
+  lineActionTitle?: string;
   onBookmarkToggle?: (lineIndex: number) => void;
   onHighlightCountChange?: (count: number) => void;
   onFocusLineHighlightIndex?: (index: number) => void;
@@ -122,8 +125,10 @@ const VirtualLogViewerImpl = forwardRef<VirtualLogViewerHandle, Props>(
       useRegex,
       activeHighlightIndex,
       focusLineIndex,
+      selectedLineRange,
       bookmarks,
       onLineClick,
+      lineActionTitle,
       onBookmarkToggle,
       onHighlightCountChange,
       onFocusLineHighlightIndex,
@@ -292,11 +297,14 @@ const VirtualLogViewerImpl = forwardRef<VirtualLogViewerHandle, Props>(
         const escaped = escapeHtml(item.text);
 
         const isFocused = index === focusLineIndex;
+        const rangeStart = selectedLineRange ? Math.min(selectedLineRange.start, selectedLineRange.end) : -1;
+        const rangeEnd = selectedLineRange ? Math.max(selectedLineRange.start, selectedLineRange.end) : -1;
+        const isRangeSelected = rangeStart >= 0 && index >= rangeStart && index <= rangeEnd;
         const showBookmarkControls = Boolean(bookmarks && onBookmarkToggle);
         const isBookmarked = showBookmarkControls ? index in bookmarks! : false;
         const clickable = Boolean(onLineClick);
         const errorKind = item.errorKind;
-        const baseClass = `log-line${isFocused ? " log-line-focus" : ""}${clickable ? " log-line-clickable" : ""}${errorKind ? ` log-line-level-${errorKind}` : ""}${isBookmarked ? " log-line-bookmarked" : ""}`;
+        const baseClass = `log-line${isFocused ? " log-line-focus" : ""}${clickable ? " log-line-clickable" : ""}${isRangeSelected ? " log-line-range-selected" : ""}${isRangeSelected && index === rangeStart ? " log-line-range-start" : ""}${isRangeSelected && index === rangeEnd ? " log-line-range-end" : ""}${errorKind ? ` log-line-level-${errorKind}` : ""}${isBookmarked ? " log-line-bookmarked" : ""}`;
         const handleClick = clickable ? (event: React.MouseEvent<HTMLDivElement>) => {
           if (!(event.metaKey || event.ctrlKey)) {
             return;
@@ -314,7 +322,7 @@ const VirtualLogViewerImpl = forwardRef<VirtualLogViewerHandle, Props>(
           onLineClick!(index, event);
         } : undefined;
         const handleDoubleClick = showBookmarkControls ? () => onBookmarkToggle!(index) : undefined;
-        const title = clickable ? "按住 Ctrl 或 Cmd 点击可跳转到原日志" : undefined;
+        const title = clickable ? (lineActionTitle || "按住 Ctrl 或 Cmd 点击执行行操作") : undefined;
 
         const bookmarkIcon = showBookmarkControls
           ? (isBookmarked
@@ -340,7 +348,7 @@ const VirtualLogViewerImpl = forwardRef<VirtualLogViewerHandle, Props>(
 
         return <div className={baseClass} data-line-index={index} onClick={handleClick} onDoubleClick={handleDoubleClick} title={title} dangerouslySetInnerHTML={{ __html: bookmarkIcon + focusBadge + highlighted }} />;
       },
-      [displayHighlightRegex, cumulativeOffsets, activeHighlightIndex, focusLineIndex, bookmarks, onLineClick, onBookmarkToggle],
+      [displayHighlightRegex, cumulativeOffsets, activeHighlightIndex, focusLineIndex, selectedLineRange, bookmarks, onLineClick, lineActionTitle, onBookmarkToggle],
     );
 
     const handleMouseDown = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
@@ -395,6 +403,12 @@ const VirtualLogViewerImpl = forwardRef<VirtualLogViewerHandle, Props>(
           if (index < 0 || index >= totalMatches) return;
           const targetLine = findLineForMatch(index);
           virtuosoRef.current?.scrollToIndex({ index: targetLine, align: "center", behavior: "smooth" });
+        },
+        getLineRangeText(startLine: number, endLine: number) {
+          if (!lines.length) return "";
+          const start = Math.max(0, Math.min(startLine, endLine));
+          const end = Math.min(lines.length - 1, Math.max(startLine, endLine));
+          return lines.slice(start, end + 1).join("\n");
         },
         getSelectionText(selection: Selection) {
           const anchorLine = findClosestLineIndex(selection.anchorNode);

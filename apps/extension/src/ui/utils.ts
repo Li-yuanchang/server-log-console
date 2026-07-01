@@ -297,6 +297,15 @@ export interface ViewerResultTab {
   bookmarks?: Record<number, string>;
 }
 
+export interface LineContextJumpSource {
+  tabId: string;
+  tabLabel: string;
+  sourceLabel: string;
+  resultLineIndex: number;
+  lineNumber: number;
+  preview: string;
+}
+
 export interface SearchSettingsState {
   keywordInput: string;
   keywordMode: "phrase" | "any" | "all";
@@ -312,6 +321,7 @@ export interface SearchSettingsState {
 
 export interface LineContextState extends LogLineContextResponse {
   sourceLabel: string;
+  jumpSource?: LineContextJumpSource;
 }
 
 export async function copyText(text: string) {

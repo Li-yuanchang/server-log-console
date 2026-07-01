@@ -37,7 +37,7 @@ import type {
   ServerCredentialStatus,
   ServerSummary
 } from "@server-log-console/shared";
-import { Radio, Wrench, Download, Copy, PictureInPicture2, Bug, Bookmark, X } from "lucide-react";
+import { ArrowLeft, Radio, Wrench, Download, Copy, PictureInPicture2, Bug, Bookmark, X } from "lucide-react";
 import { TerminalPanel } from "./TerminalWorkspace.js";
 import { ToolIcon } from "./ToolIcon.js";
 
@@ -249,6 +249,7 @@ export function App() {
   const [lineContextState, setLineContextState] = useState<LineContextState | null>(null);
   const [highlightCount, setHighlightCount] = useState(0);
   const [viewerSelMenu, setViewerSelMenu] = useState<{ x: number; y: number; text: string } | null>(null);
+  const [viewerLineCopyRange, setViewerLineCopyRange] = useState<{ start: number; end: number } | null>(null);
   const [showBookmarkPanel, setShowBookmarkPanel] = useState(false);
   const [showUtilityWorkspace, setShowUtilityWorkspace] = useState(false);
   const [activeUtilityPanel, setActiveUtilityPanel] = useState<UtilityPanelType>("compare");
@@ -271,6 +272,7 @@ export function App() {
   const autoConnectServerRef = useRef("");
   const sliceScrollAnchorRef = useRef<"top" | "bottom" | null>(null);
   const wheelSliceLockRef = useRef(false);
+  const wheelSliceIntentRef = useRef<{ direction: "prev" | "next"; count: number; at: number } | null>(null);
   const lastResultTabIdRef = useRef("");
   const { treeResizeRef, activityPanelResizeRef } = usePanelResize(setBrowserTreeWidth, setActivityPanelHeight);
   const readerPreviewRequestRef = useRef(0);
@@ -1031,6 +1033,7 @@ export function App() {
       openFileRequestRef,
       sliceScrollAnchorRef,
       wheelSliceLockRef,
+      wheelSliceIntentRef,
       readerDraftFrameRef,
       readerRailRef,
       viewerOverviewRailRef,
@@ -1124,6 +1127,7 @@ export function App() {
 
   useEffect(() => {
     setActiveHighlightIndex(0);
+    setViewerLineCopyRange(null);
   }, [activeViewerTabId, resultTabs, sliceData?.content, results?.rawOutput, keywordInput, useRegex]);
 
   useEffect(() => {
@@ -1844,7 +1848,7 @@ export function App() {
     { label: "25%", action: () => void jumpToSliceRatio(0.25) },
     { label: "50%", action: () => void jumpToSliceRatio(0.5) },
     { label: "75%", action: () => void jumpToSliceRatio(0.75) },
-    { label: "尾", action: () => loadTailSlice() }
+    { label: "尾", action: () => loadTailSlice({ forceRefresh: true }) }
   ];
 
   const canOpenTerminal = Boolean(selectedServer);
@@ -2212,13 +2216,28 @@ export function App() {
         ? `定位到 ${formatNumber(lineContextState.lineNumber)} 行`
         : (highlightCount ? `命中 ${highlightCount} 处` : "滚轮到边缘可翻页"))
     : `结果 ${formatNumber(activeViewerMatchCount)} 条`;
+  const viewerContextModeLabel = activeViewerTabId === "file"
+    ? (lineContextState ? "定位片段" : (liveFollowEnabled ? "实时日志" : "文件片段"))
+    : (activeResultTab ? "搜索结果" : "日志结果");
+  const viewerContextTitle = activeViewerTabId === "file"
+    ? (selectedFileName || "当前文件")
+    : (activeResultTab?.label || "当前结果");
+  const viewerContextSource = activeViewerTabId === "file"
+    ? (filePath || selectedFileName || "--")
+    : (activeResultTab?.sourceLabel || selectedFileName || "--");
+  const viewerContextPosition = activeViewerTabId === "file"
+    ? (lineContextState ? `第 ${formatNumber(lineContextState.lineNumber)} 行附近` : formatSliceProgressLabel(sliceProgress))
+    : `共 ${formatNumber(activeViewerMatchCount)} 条`;
+  const viewerContextState = searchStartedAt
+    ? `检索中${searchElapsedLabel ? ` · ${searchElapsedLabel}` : ""}`
+    : compactReaderHint;
   const viewerWheelHandlerRef = useRef<(event: ReactWheelEvent<HTMLDivElement>) => void>(() => {});
   const viewerNearBottomHandlerRef = useRef<(nearBottom: boolean) => void>(() => {});
   const viewerLineClickHandlerRef = useRef<((lineIndex: number, event: ReactMouseEvent<HTMLDivElement>) => void) | undefined>(undefined);
 
 
   liveReconnectRef.current = (target) => {
-    void loadTailSlice().finally(() => {
+    void loadTailSlice({ forceRefresh: true }).finally(() => {
       startLiveFollow(target.filePath, target.fileName, { isReconnect: true });
     });
   };
@@ -2228,7 +2247,21 @@ export function App() {
   viewerLineClickHandlerRef.current = viewerLineClickEnabled
     ? (lineIndex: number, _event: ReactMouseEvent<HTMLDivElement>) => {
       const match = resolveViewerJumpTarget(lineIndex);
-      if (match) void jumpToSearchMatch(match);
+      const sourceTab = activeResultTab || (showingPrimaryResults ? {
+        id: "results-root",
+        label: "当前结果",
+        sourceLabel: selectedFileName || filePath || "日志结果"
+      } : null);
+      if (match) {
+        void jumpToSearchMatch(match, sourceTab ? {
+          tabId: sourceTab.id,
+          tabLabel: sourceTab.label,
+          sourceLabel: sourceTab.sourceLabel,
+          resultLineIndex: lineIndex,
+          lineNumber: match.lineNumber,
+          preview: match.preview || ""
+        } : undefined);
+      }
     }
     : undefined;
 
@@ -2244,6 +2277,50 @@ export function App() {
   const handleViewerLineClick = useCallback((lineIndex: number, event: ReactMouseEvent<HTMLDivElement>) => {
     viewerLineClickHandlerRef.current?.(lineIndex, event);
   }, []);
+
+  const handleViewerFileLineClick = useCallback((lineIndex: number, event: ReactMouseEvent<HTMLDivElement>) => {
+    if (!(event.metaKey || event.ctrlKey)) {
+      return;
+    }
+    setViewerSelMenu(null);
+    setViewerLineCopyRange((current) => {
+      if (!current || current.start !== current.end) {
+        setActionStatus(`已选择复制起点：第 ${formatNumber(lineIndex + 1)} 行。`);
+        return { start: lineIndex, end: lineIndex };
+      }
+      const next = { start: Math.min(current.start, lineIndex), end: Math.max(current.start, lineIndex) };
+      setActionStatus(`已选择复制范围：第 ${formatNumber(next.start + 1)} - ${formatNumber(next.end + 1)} 行。`);
+      return next;
+    });
+  }, [setActionStatus]);
+
+  const handleCopyViewerLineRange = useCallback(async () => {
+    if (!viewerLineCopyRange) return;
+    const text = virtualViewerRef.current?.getLineRangeText(viewerLineCopyRange.start, viewerLineCopyRange.end) || "";
+    if (!text) return;
+    try {
+      await copyText(text);
+      const count = Math.abs(viewerLineCopyRange.end - viewerLineCopyRange.start) + 1;
+      setActionStatus(`已复制 ${formatNumber(count)} 行日志。`);
+      showToast("success", `已复制 ${formatNumber(count)} 行日志`);
+      setViewerLineCopyRange(null);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "未知错误";
+      setActionStatus(`复制失败：${detail}`);
+      showToast("error", `复制失败：${detail}`);
+    }
+  }, [showToast, viewerLineCopyRange]);
+
+  const returnToJumpSource = useCallback(() => {
+    const source = lineContextState?.jumpSource;
+    if (!source) return;
+    setActiveLogView("search");
+    setActiveViewerTabId(source.tabId);
+    setActionStatus(`已返回${source.tabLabel}，原命中第 ${formatNumber(source.lineNumber)} 行。`);
+    requestAnimationFrame(() => {
+      virtualViewerRef.current?.scrollToLine(source.resultLineIndex, "auto");
+    });
+  }, [lineContextState?.jumpSource]);
 
   const handleBookmarkToggle = useCallback((lineIndex: number) => {
     setResultTabs((current) => {
@@ -2817,10 +2894,46 @@ export function App() {
                 {!showViewerEmptyState ? (
                   <>
                     {!(showFileTools && filePath && activeLogView === "search" && activeViewerTabId === "file") && !showCompactViewerChrome && !(fileLoadingName && !currentLogContent) ? (
-                      <div className="meta-list compact-meta">
-                        <span>{activeResultTab ? activeResultTab.sourceLabel : (selectedFileName || "--")}</span>
-                        <span>{activeViewerTabId === "file" ? formatSliceProgressLabel(sliceProgress) : "结果页"}</span>
-                        <span>{compactReaderHint}</span>
+                      <div className="viewer-context-bar">
+                        <div className="viewer-context-main">
+                          <span className="viewer-context-mode">{viewerContextModeLabel}</span>
+                          <strong>{viewerContextTitle}</strong>
+                          <span title={viewerContextSource}>{viewerContextSource}</span>
+                        </div>
+                        <div className="viewer-context-meta">
+                          <span>{viewerContextPosition}</span>
+                          <span>{viewerContextState}</span>
+                        </div>
+                      </div>
+                    ) : null}
+                    {lineContextState?.jumpSource && activeLogView === "search" && activeViewerTabId === "file" && !showCompactViewerChrome ? (
+                      <div className="viewer-jump-context-bar">
+                        <div className="viewer-jump-context-main">
+                          <span className="viewer-jump-context-kicker">搜索定位</span>
+                          <strong>{lineContextState.jumpSource.tabLabel}</strong>
+                          <span>{lineContextState.jumpSource.sourceLabel}</span>
+                          <span>第 {formatNumber(lineContextState.jumpSource.lineNumber)} 行</span>
+                        </div>
+                        <button type="button" className="ghost-button slim-button viewer-jump-context-back" onClick={returnToJumpSource}>
+                          <ArrowLeft size={13} strokeWidth={1.8} />
+                          返回结果
+                        </button>
+                      </div>
+                    ) : null}
+                    {viewerLineCopyRange && activeLogView === "search" && activeViewerTabId === "file" && !showCompactViewerChrome ? (
+                      <div className="viewer-line-copy-bar">
+                        <div className="viewer-line-copy-main">
+                          <span className="viewer-line-copy-kicker">按行复制</span>
+                          <strong>第 {formatNumber(viewerLineCopyRange.start + 1)} - {formatNumber(viewerLineCopyRange.end + 1)} 行</strong>
+                          <span>Cmd/Ctrl 点击另一行可调整范围</span>
+                        </div>
+                        <div className="viewer-line-copy-actions">
+                          <button type="button" className="ghost-button slim-button" onClick={() => setViewerLineCopyRange(null)}>取消</button>
+                          <button type="button" className="ghost-button slim-button viewer-line-copy-primary" onClick={() => void handleCopyViewerLineRange()}>
+                            <Copy size={13} strokeWidth={1.8} />
+                            复制范围
+                          </button>
+                        </div>
                       </div>
                     ) : null}
                     {fileLoadingName && !currentLogContent ? (
@@ -2851,7 +2964,9 @@ export function App() {
                         useRegex={useRegex}
                         activeHighlightIndex={activeHighlightIndex}
                         focusLineIndex={lineContextState && activeViewerTabId === "file" ? lineContextState.lineNumber - lineContextState.startLine : undefined}
-                        onLineClick={viewerLineClickEnabled ? handleViewerLineClick : undefined}
+                        selectedLineRange={activeViewerTabId === "file" ? viewerLineCopyRange : null}
+                        onLineClick={viewerLineClickEnabled ? handleViewerLineClick : (activeViewerTabId === "file" ? handleViewerFileLineClick : undefined)}
+                        lineActionTitle={viewerLineClickEnabled ? "按住 Ctrl 或 Cmd 点击可跳转到原日志" : "按住 Ctrl 或 Cmd 点击选择复制行范围"}
                         bookmarks={activeResultTab ? (activeResultTab.bookmarks || {}) : undefined}
                         onBookmarkToggle={activeResultTab ? handleBookmarkToggle : undefined}
                         onHighlightCountChange={setHighlightCount}

@@ -13,7 +13,7 @@ export type KeyboardShortcutsParams = {
   setActiveViewerTabId: (tab: string) => void;
   enterPathbarEditMode: (options?: { selectAll?: boolean }) => void;
   loadHeadSlice: () => Promise<void>;
-  loadTailSlice: () => Promise<void>;
+  loadTailSlice: (options?: { forceRefresh?: boolean }) => Promise<void>;
   navigateSlice: (direction: "prev" | "next", source: "button" | "wheel" | "keyboard") => Promise<void>;
   focusHighlight: (direction: "prev" | "next") => void;
   normalizeSearchInput: (input: string) => string;
@@ -96,7 +96,7 @@ export function useKeyboardShortcuts(params: KeyboardShortcutsParams) {
 
       if ((event.metaKey || event.ctrlKey) && event.key === "End") {
         event.preventDefault();
-        void loadTailSlice();
+        void loadTailSlice({ forceRefresh: true });
         return;
       }
 
