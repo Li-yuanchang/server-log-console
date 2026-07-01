@@ -6,7 +6,7 @@ import type {
   LogSliceResponse,
   ServerSummary,
 } from "@server-log-console/shared";
-import type { ViewerResultTab, LineContextState } from "./utils.js";
+import type { ViewerResultTab, LineContextState, LineContextJumpSource } from "./utils.js";
 import type { WorkspaceSessionSetters } from "./useWorkspaceSessionManager.js";
 import {
   apiGetDirectoryListing,
@@ -89,6 +89,7 @@ export type LogViewerRefs = {
   openFileRequestRef: React.MutableRefObject<number>;
   sliceScrollAnchorRef: React.MutableRefObject<"top" | "bottom" | null>;
   wheelSliceLockRef: React.MutableRefObject<boolean>;
+  wheelSliceIntentRef: React.MutableRefObject<{ direction: "prev" | "next"; count: number; at: number } | null>;
   readerDraftFrameRef: React.MutableRefObject<number | null>;
   readerRailRef: React.MutableRefObject<HTMLElement | null>;
   viewerOverviewRailRef: React.MutableRefObject<HTMLElement | null>;
@@ -144,7 +145,7 @@ export type LogViewerAPI = {
   closeResultTab: (tabId: string) => void;
   focusHighlight: (direction: "prev" | "next") => void;
   applySlicePayload: (payload: LogSliceResponse, options?: { status?: string; activity?: string }) => void;
-  jumpToSearchMatch: (match: LogSearchResponse["matches"][number]) => Promise<void>;
+  jumpToSearchMatch: (match: LogSearchResponse["matches"][number], source?: LineContextJumpSource) => Promise<void>;
   toggleLiveFollow: (enabled: boolean) => Promise<void>;
   enterPathbarEditMode: (options?: { selectAll?: boolean }) => void;
   exitPathbarEditMode: () => void;
@@ -163,7 +164,7 @@ export type LogViewerAPI = {
   loadSlice: (offset?: number, length?: number) => Promise<void>;
   navigateSlice: (direction: "prev" | "next", source?: "button" | "wheel" | "keyboard") => Promise<void>;
   handleViewerWheel: (event: any) => void;
-  loadTailSlice: () => Promise<void>;
+  loadTailSlice: (options?: { forceRefresh?: boolean }) => Promise<void>;
   handleBackToBottom: () => Promise<void>;
   loadHeadSlice: () => Promise<void>;
   jumpToSliceRatio: (ratio: number) => Promise<void>;
@@ -311,7 +312,7 @@ export function useLogViewer(params: LogViewerParams): LogViewerAPI {
     if (options?.activity) callbacks.pushActivity(options.activity);
   }
 
-  async function jumpToSearchMatch(match: LogSearchResponse["matches"][number]) {
+  async function jumpToSearchMatch(match: LogSearchResponse["matches"][number], source?: LineContextJumpSource) {
     if (!match.source || match.source === "临时结果") {
       callbacks.setActionStatus("当前结果页来自临时筛选，暂时不能直接跳回原日志文件。");
       return;
@@ -335,7 +336,7 @@ export function useLogViewer(params: LogViewerParams): LogViewerAPI {
         return;
       }
 
-      setters.setLineContextState({ ...contextPayload, sourceLabel: targetFilePath.split("/").pop() || targetFilePath });
+      setters.setLineContextState({ ...contextPayload, sourceLabel: targetFilePath.split("/").pop() || targetFilePath, jumpSource: source });
       callbacks.setActionStatus(`已定位到第 ${formatNumber(match.lineNumber)} 行附近。`);
       callbacks.pushActivity(`已定位搜索命中：${targetFilePath} 第 ${formatNumber(match.lineNumber)} 行。`);
 
@@ -686,17 +687,35 @@ export function useLogViewer(params: LogViewerParams): LogViewerAPI {
     if (!scrollState) return;
     const { scrollTop, scrollHeight, clientHeight } = scrollState;
     const maxScrollTop = Math.max(0, scrollHeight - clientHeight);
-    if (event.deltaY < 0 && scrollTop <= 4 && state.sliceOffset > 0 && !state.sliceData?.isStart) { void navigateSlice("prev", "wheel"); return; }
-    if (event.deltaY > 0 && scrollTop >= maxScrollTop - 4 && !state.sliceData?.isEnd) { void navigateSlice("next", "wheel"); }
+    const direction = event.deltaY < 0 && scrollTop <= 4 && state.sliceOffset > 0 && !state.sliceData?.isStart
+      ? "prev"
+      : event.deltaY > 0 && scrollTop >= maxScrollTop - 4 && !state.sliceData?.isEnd
+        ? "next"
+        : null;
+    if (!direction) {
+      refs.wheelSliceIntentRef.current = null;
+      return;
+    }
+
+    const now = Date.now();
+    const previous = refs.wheelSliceIntentRef.current;
+    const count = previous?.direction === direction && now - previous.at < 900 ? previous.count + 1 : 1;
+    refs.wheelSliceIntentRef.current = { direction, count, at: now };
+    if (count < 2) {
+      callbacks.setActionStatus(direction === "prev" ? "已到当前片段顶部，再向上滚动加载上一段。" : "已到当前片段底部，再向下滚动加载下一段。");
+      return;
+    }
+    refs.wheelSliceIntentRef.current = null;
+    void navigateSlice(direction, "wheel");
   }
 
-  async function loadTailSlice() {
+  async function loadTailSlice(options?: { forceRefresh?: boolean }) {
     const targetFilePath = state.filePath;
     if (!targetFilePath.trim()) return;
     refs.sliceScrollAnchorRef.current = "bottom";
     const meta = activeFileMeta;
     const cachedTailOffset = meta ? Math.max(0, meta.size - state.sliceLength) : null;
-    if (meta && cachedTailOffset !== null) {
+    if (!options?.forceRefresh && meta && cachedTailOffset !== null) {
       const cachedPayload = callbacks.getCachedSlice(targetFilePath, cachedTailOffset, state.sliceLength);
       if (cachedPayload) {
         applySlicePayload(cachedPayload, { status: `已跳转到文件尾部，当前偏移 ${formatNumber(cachedPayload.actualOffset)}。`, activity: `已跳转文件尾部：${targetFilePath}。` });
@@ -726,16 +745,10 @@ export function useLogViewer(params: LogViewerParams): LogViewerAPI {
 
   async function handleBackToBottom() {
     const shouldResumeLiveFollow = state.liveFollowEnabled && state.liveFollowPaused;
-    if (!state.sliceData?.isEnd) {
-      await loadTailSlice();
-      refs.sliceScrollAnchorRef.current = "bottom";
-      if (shouldResumeLiveFollow) {
-        setters.setLiveFollowPaused(false);
-      }
-      callbacks.scrollViewerToBottom();
-      return;
+    if (state.activeViewerTabId === "file") {
+      await loadTailSlice({ forceRefresh: true });
     }
-    if (state.liveFollowEnabled && state.liveFollowPaused) {
+    if (shouldResumeLiveFollow) {
       setters.setLiveFollowPaused(false);
     }
     refs.sliceScrollAnchorRef.current = "bottom";
