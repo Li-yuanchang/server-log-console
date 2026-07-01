@@ -6,6 +6,7 @@ import {
   apiDeleteFile,
   apiRenameFile,
   apiPreviewFile,
+  apiPreviewArchiveEntry,
   apiSaveFile,
   apiExtractZip,
   apiMkdir,
@@ -30,6 +31,7 @@ export type FileOperationsAPI = {
   mkdirRemoteDir: (parentDir: string, dirName: string) => Promise<void>;
   compressRemotePath: (sourcePath: string, archiveType: "tar.gz" | "zip", targetDir?: string) => Promise<void>;
   previewFile: (entry: LogFileEntry) => void;
+  previewArchiveEntry: (entryName: string) => Promise<void>;
   doLoadFile: (entry: LogFileEntry) => Promise<void>;
   saveFileContent: () => Promise<void>;
 };
@@ -38,6 +40,15 @@ function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+export function isSpecialPreviewFile(fileNameOrPath: string): boolean {
+  const lower = fileNameOrPath.toLowerCase();
+  return lower.endsWith(".class")
+    || lower.endsWith(".zip")
+    || lower.endsWith(".jar")
+    || lower.endsWith(".war")
+    || lower.endsWith(".ear");
 }
 
 export function useFileOperations(deps: {
@@ -59,7 +70,7 @@ export function useFileOperations(deps: {
   showToast: (type: "success" | "error" | "loading", message: string) => string | number;
   updateToast: (id: string, type: "success" | "error" | "loading", message: string) => void;
   withBusy: <T>(message: string, task: () => Promise<T>, successMessage?: string) => Promise<T | null>;
-  browseLogFiles: (path: string, options?: { manual?: boolean }) => Promise<void>;
+  browseLogFiles: (path: string, options?: { manual?: boolean; silent?: boolean }) => Promise<void>;
 }): FileOperationsAPI {
   const {
     serverId,
@@ -101,7 +112,7 @@ export function useFileOperations(deps: {
           await apiDeleteFile(serverId, entry.path);
           setActionStatus(`已删除 ${fileName}`);
           pushActivity(`已删除${targetLabel}：${entry.path}`);
-          if (refreshPath) await browseLogFiles(refreshPath);
+          if (refreshPath) await browseLogFiles(refreshPath, { silent: true });
         }, `已删除 ${fileName}`);
       }
     });
@@ -154,7 +165,7 @@ export function useFileOperations(deps: {
       clearSelectedFiles();
       setActionStatus(`已删除 ${targetCount} 项`);
       pushActivity(`批量删除 ${targetCount} 项：${entries.map((entry) => entry.path).join(" | ")}`);
-      if (directoryPath) await browseLogFiles(directoryPath);
+      if (directoryPath) await browseLogFiles(directoryPath, { silent: true });
     }, `已删除 ${targetCount} 项`);
   }, [serverId, directoryPath, withBusy, clearSelectedFiles, setActionStatus, pushActivity, browseLogFiles]);
 
@@ -188,7 +199,7 @@ export function useFileOperations(deps: {
       await apiRenameFile(serverId, entry.path, newPath);
       setActionStatus(`已重命名 ${entry.name} → ${newName.trim()}`);
       pushActivity(`重命名：${entry.name} → ${newName.trim()}`);
-      if (directoryPath) await browseLogFiles(directoryPath);
+      if (directoryPath) await browseLogFiles(directoryPath, { silent: true });
     }, `已重命名 ${entry.name} → ${newName.trim()}`);
   }, [serverId, directoryPath, withBusy, setActionStatus, pushActivity, browseLogFiles]);
 
@@ -214,7 +225,7 @@ export function useFileOperations(deps: {
       await apiRenameFile(serverId, entry.path, newPath);
       setActionStatus(`已移动 ${entry.name} → ${targetDir}`);
       pushActivity(`移动：${entry.path} → ${newPath}`);
-      if (directoryPath) await browseLogFiles(directoryPath);
+      if (directoryPath) await browseLogFiles(directoryPath, { silent: true });
     }, `已移动 ${entry.name}`);
   }, [serverId, directoryPath, withBusy, buildMovedPath, setActionStatus, pushActivity, browseLogFiles]);
 
@@ -237,7 +248,7 @@ export function useFileOperations(deps: {
       clearSelectedFiles();
       setActionStatus(`已移动 ${moveTargets.length} 项 → ${targetDir}`);
       pushActivity(`批量移动 ${moveTargets.length} 项到 ${targetDir}`);
-      if (directoryPath) await browseLogFiles(directoryPath);
+      if (directoryPath) await browseLogFiles(directoryPath, { silent: true });
     }, `已移动 ${moveTargets.length} 项`);
   }, [serverId, directoryPath, withBusy, buildMovedPath, clearSelectedFiles, setActionStatus, pushActivity, browseLogFiles]);
 
@@ -248,7 +259,7 @@ export function useFileOperations(deps: {
       const result = await apiExtractZip(serverId, filePath, targetDir);
       setActionStatus(`已解压 ${fileName} 到 ${result.targetDir}`);
       pushActivity(`已解压：${filePath} → ${result.targetDir}`);
-      if (directoryPath) await browseLogFiles(directoryPath);
+      if (directoryPath) await browseLogFiles(directoryPath, { silent: true });
     }, `已解压 ${fileName}`);
   }, [serverId, directoryPath, withBusy, setActionStatus, pushActivity, browseLogFiles]);
 
@@ -259,7 +270,7 @@ export function useFileOperations(deps: {
       await apiMkdir(serverId, fullPath);
       setActionStatus(`已创建目录 ${dirName.trim()}`);
       pushActivity(`新建目录：${fullPath}`);
-      if (directoryPath) await browseLogFiles(directoryPath);
+      if (directoryPath) await browseLogFiles(directoryPath, { silent: true });
     }, `已创建目录 ${dirName.trim()}`);
   }, [serverId, directoryPath, withBusy, setActionStatus, pushActivity, browseLogFiles]);
 
@@ -270,7 +281,7 @@ export function useFileOperations(deps: {
       const result = await apiCompress(serverId, sourcePath, archiveType, targetDir);
       setActionStatus(`已压缩 ${sourceName} → ${result.archivePath}`);
       pushActivity(`压缩：${sourcePath} → ${result.archivePath}`);
-      if (directoryPath) await browseLogFiles(directoryPath);
+      if (directoryPath) await browseLogFiles(directoryPath, { silent: true });
     }, `已压缩 ${sourceName}`);
   }, [serverId, directoryPath, withBusy, setActionStatus, pushActivity, browseLogFiles]);
 
@@ -278,7 +289,19 @@ export function useFileOperations(deps: {
     setPreviewDialog({ filePath: entry.path, fileName: entry.name, content: "", originalContent: "", size: typeof entry.size === "number" ? entry.size : 0, loading: true });
     try {
       const data = await apiPreviewFile(serverId, entry.path);
-      setPreviewDialog({ filePath: data.filePath, fileName: entry.name, content: data.content, originalContent: data.content, size: data.size, readOnly: data.readOnly });
+      setPreviewDialog({
+        filePath: data.filePath,
+        fileName: entry.name,
+        content: data.content,
+        originalContent: data.content,
+        size: data.size,
+        readOnly: data.readOnly,
+        previewKind: data.previewKind,
+        previewLabel: data.previewLabel,
+        archiveEntries: data.archiveEntries,
+        archiveInfo: data.archiveInfo,
+        classInfo: data.classInfo,
+      });
       pushActivity(`${data.readOnly ? "预览" : "打开"}文件：${entry.name}（${formatBytes(data.size)}）`);
     } catch (error) {
       setPreviewDialog(null);
@@ -286,8 +309,37 @@ export function useFileOperations(deps: {
     }
   }, [serverId, setPreviewDialog, pushActivity, setActionStatus]);
 
+  const previewArchiveEntry = useCallback(async (entryName: string) => {
+    if (!serverId || !previewDialog || previewDialog.previewKind !== "archive") return;
+    setPreviewDialog((prev) => prev ? { ...prev, selectedArchiveEntryName: entryName, archiveEntryLoading: true, archiveEntryError: undefined } : prev);
+    try {
+      const data = await apiPreviewArchiveEntry(serverId, previewDialog.filePath, entryName);
+      setPreviewDialog((prev) => prev ? {
+        ...prev,
+        selectedArchiveEntryName: entryName,
+        archiveEntryLoading: false,
+        archiveEntryError: undefined,
+        archiveEntryPreview: data
+      } : prev);
+      pushActivity(`预览归档条目：${previewDialog.filePath}!/${entryName}`);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "未知错误";
+      setPreviewDialog((prev) => prev ? {
+        ...prev,
+        selectedArchiveEntryName: entryName,
+        archiveEntryLoading: false,
+        archiveEntryError: detail
+      } : prev);
+      setActionStatus(`归档条目加载失败：${detail}`);
+    }
+  }, [serverId, previewDialog, setPreviewDialog, pushActivity, setActionStatus]);
+
   const previewFile = useCallback((entry: LogFileEntry) => {
     if (isBusy || !serverId || entry.kind !== "file") return;
+    if (isSpecialPreviewFile(entry.name || entry.path)) {
+      void doLoadFile(entry);
+      return;
+    }
     const sizeBytes = typeof entry.size === "number" ? entry.size : 0;
     const editLimit = 10 * 1024 * 1024;
     if (sizeBytes > editLimit) {
@@ -347,6 +399,7 @@ export function useFileOperations(deps: {
     mkdirRemoteDir,
     compressRemotePath,
     previewFile,
+    previewArchiveEntry,
     doLoadFile,
     saveFileContent,
   };

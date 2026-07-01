@@ -122,7 +122,7 @@
 .result-tab-strip {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 6px;
   min-width: 0;
   overflow-x: auto;
   margin-top: 4px;
@@ -133,9 +133,10 @@
   display: inline-flex;
   align-items: center;
   min-width: 0;
-  border: 1px solid transparent;
+  border: 1px solid #d8e1ec;
   border-radius: 8px;
-  background: transparent;
+  background: rgba(255, 255, 255, 0.68);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.86);
   transition: background 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
 }
 
@@ -162,6 +163,7 @@
   border-radius: 8px;
   font-weight: 500;
   font-size: 10px;
+  cursor: pointer;
 }
 
 .result-tab-close {
@@ -173,6 +175,7 @@
   border-radius: 999px;
   color: var(--ink-muted);
   font-size: 10px;
+  cursor: pointer;
 }
 
 .result-tab-chip-active .result-tab-main,
@@ -181,7 +184,9 @@
 }
 
 .result-tab-chip:hover:not(.result-tab-chip-active) {
-  background: rgba(255, 255, 255, 0.72);
+  border-color: #b8c8da;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 1px 4px rgba(28, 41, 56, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.92);
 }
 
 .result-tab-close:hover:not(:disabled) {
@@ -333,8 +338,8 @@
 .file-table-head,
 .file-row {
   display: grid;
-  grid-template-columns: 28px minmax(0, 1fr) 84px 138px 52px;
-  gap: 4px;
+  grid-template-columns: 48px minmax(0, 1fr) 84px 138px 52px;
+  column-gap: 10px;
   align-items: center;
   width: 100%;
 }
@@ -424,18 +429,29 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  align-self: stretch;
+  min-height: 30px;
+  margin: -4px 0;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: background 120ms ease, box-shadow 120ms ease;
 }
 
 .file-select-cell-head {
-  padding-right: 2px;
+  min-height: 24px;
+  margin: 0;
 }
 
 .file-select-checkbox {
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   margin: 0;
   cursor: pointer;
   accent-color: #4e7ea8;
+}
+
+.file-select-cell:hover {
+  background: rgba(78, 126, 168, 0.1);
 }
 
 .file-select-checkbox:disabled {
@@ -469,8 +485,9 @@
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
+  padding-left: 2px;
 }
 
 .file-name-cell strong {
@@ -536,6 +553,18 @@
 .file-row-selected {
   background: #eef4fb;
   box-shadow: inset 2px 0 0 #9eb9d4;
+}
+
+.file-row-select-mode {
+  cursor: default;
+}
+
+.file-row-select-mode .file-name-cell {
+  cursor: pointer;
+}
+
+.file-row-selected .file-select-cell {
+  background: rgba(78, 126, 168, 0.14);
 }
 
 .file-row-selected strong,

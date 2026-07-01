@@ -200,9 +200,9 @@ export function useLiveFollow(opts: UseLiveFollowOptions): UseLiveFollowReturn {
     if (liveFollowEnabled) {
       setLiveFollowPaused(false);
     }
-    setTimeout(() => {
+    window.requestAnimationFrame(() => {
       viewerRef.current?.scrollToBottom();
-    }, 0);
+    });
   }
 
   function clearLiveContent() {

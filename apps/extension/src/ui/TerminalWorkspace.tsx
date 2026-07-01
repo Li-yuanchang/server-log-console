@@ -5,6 +5,7 @@ import type { ServerSummary } from "@server-log-console/shared";
 import { looksLikeJumpServer } from "./terminal-utils.js";
 import { TerminalShortcuts } from "./TerminalShortcuts.js";
 import { TerminalAI } from "./TerminalAI.js";
+import { copyText } from "./utils.js";
 
 interface TerminalPanelProps {
   server: ServerSummary | null;
@@ -24,6 +25,7 @@ interface TerminalPanelProps {
   onAttach: () => void;
   onFit?: () => void;
   selMenu: { x: number; y: number; text: string } | null;
+  getSelectionText?: () => string;
   clearSelection: () => void;
   pasteToTerminal: (text: string) => void;
   onToggleTerminalOverlay: (overlay: "shortcuts" | "ai") => void;
@@ -61,17 +63,20 @@ export function TerminalPanel(props: TerminalPanelProps) {
 
   const handleCopy = useCallback(async () => {
     if (!props.selMenu) return;
-    await navigator.clipboard.writeText(props.selMenu.text);
+    await copyText(props.getSelectionText?.() || props.selMenu.text);
     props.clearSelection();
     props.onDismissMenu();
+    window.requestAnimationFrame(() => props.onFocus());
   }, [props]);
 
   const handleCopyAndPaste = useCallback(async () => {
     if (!props.selMenu) return;
-    await navigator.clipboard.writeText(props.selMenu.text);
-    props.pasteToTerminal(props.selMenu.text);
+    const text = props.getSelectionText?.() || props.selMenu.text;
+    await copyText(text);
+    props.pasteToTerminal(text);
     props.clearSelection();
     props.onDismissMenu();
+    window.requestAnimationFrame(() => props.onFocus());
   }, [props]);
 
   const togglePip = useCallback(async () => {
@@ -276,10 +281,10 @@ export function TerminalPanel(props: TerminalPanelProps) {
             </div>
             {props.selMenu && (
               <div className="terminal-sel-menu" style={{ left: props.selMenu.x, top: props.selMenu.y }}>
-                <button type="button" title="复制" onMouseDown={(e) => e.stopPropagation()} onClick={() => void handleCopy()}>
+                <button type="button" title="复制" onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }} onClick={() => void handleCopy()}>
                   <Clipboard size={14} />
                 </button>
-                <button type="button" title="复制并粘贴" onMouseDown={(e) => e.stopPropagation()} onClick={() => void handleCopyAndPaste()}>
+                <button type="button" title="复制并粘贴" onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }} onClick={() => void handleCopyAndPaste()}>
                   <ClipboardPaste size={14} />
                 </button>
               </div>

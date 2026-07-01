@@ -40,6 +40,7 @@ export type DialogOverlaysProps = {
   onPreviewDialogChange: (value: string) => void;
   onPreviewDialogDownload: () => void;
   onPreviewDialogSave: () => void;
+  onPreviewArchiveEntry: (entryName: string) => void;
   onPreviewDialogToggleMaximize: () => void;
   onPreviewDialogClose: () => void;
   onConfirmDialogClose: () => void;
@@ -88,6 +89,7 @@ export function DialogOverlays(props: DialogOverlaysProps) {
     onPreviewDialogChange,
     onPreviewDialogDownload,
     onPreviewDialogSave,
+    onPreviewArchiveEntry,
     onPreviewDialogToggleMaximize,
     onPreviewDialogClose,
     onConfirmDialogClose,
@@ -189,6 +191,7 @@ export function DialogOverlays(props: DialogOverlaysProps) {
         onChange={onPreviewDialogChange}
         onDownload={onPreviewDialogDownload}
         onSave={onPreviewDialogSave}
+        onPreviewArchiveEntry={onPreviewArchiveEntry}
         onToggleMaximize={onPreviewDialogToggleMaximize}
         onClose={onPreviewDialogClose}
       />

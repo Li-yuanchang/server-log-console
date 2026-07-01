@@ -154,7 +154,7 @@ export type LogViewerAPI = {
   handleCopyViewerSelection: () => Promise<void>;
   openContextMenu: (entry: LogFileEntry, x: number, y: number) => void;
   runSearch: () => Promise<void>;
-  browseLogFiles: (path?: string, options?: { manual?: boolean }) => Promise<void>;
+  browseLogFiles: (path?: string, options?: { manual?: boolean; silent?: boolean }) => Promise<string | null>;
   commitDirectoryPath: (path?: string) => Promise<void>;
   openDirectoryFromInput: () => Promise<void>;
   browseParentDirectory: () => Promise<void>;
@@ -297,6 +297,7 @@ export function useLogViewer(params: LogViewerParams): LogViewerAPI {
     if (!count) return;
     const nextIndex = direction === "next" ? (state.activeHighlightIndex + 1) % count : (state.activeHighlightIndex - 1 + count) % count;
     setters.setActiveHighlightIndex(nextIndex);
+    refs.virtualViewerRef.current?.scrollToHighlight(nextIndex);
     callbacks.setActionStatus(`已定位到第 ${nextIndex + 1} 个命中，共 ${count} 个。`);
   }
 
@@ -398,7 +399,8 @@ export function useLogViewer(params: LogViewerParams): LogViewerAPI {
     window.setTimeout(() => {
       const container = refs.viewerContentShellRef.current;
       const selection = globalThis.getSelection?.();
-      const text = selection?.toString().trim() || "";
+      const selectedText = selection ? refs.virtualViewerRef.current?.getSelectionText(selection) || selection.toString() : "";
+      const text = selectedText.trim();
       if (!container || !selection || selection.isCollapsed || !text || !((selection.anchorNode && container.contains(selection.anchorNode)) || (selection.focusNode && container.contains(selection.focusNode)))) {
         setters.setViewerSelMenu(null);
         return;
@@ -411,9 +413,12 @@ export function useLogViewer(params: LogViewerParams): LogViewerAPI {
   }
 
   async function handleCopyViewerSelection() {
-    if (!state.viewerSelMenu?.text) return;
+    const selection = globalThis.getSelection?.();
+    const selectedText = selection ? refs.virtualViewerRef.current?.getSelectionText(selection) || selection.toString() : "";
+    const text = selectedText.trim() ? selectedText : state.viewerSelMenu?.text;
+    if (!text) return;
     try {
-      await copyText(state.viewerSelMenu.text);
+      await copyText(text);
       callbacks.setActionStatus("已复制选中文本。");
       callbacks.showToast("success", "已复制选中文本");
     } catch (error) {
@@ -529,14 +534,16 @@ export function useLogViewer(params: LogViewerParams): LogViewerAPI {
     } finally { setters.setIsBusy(false); setters.setSearchStartedAt(null); }
   }
 
-  async function browseLogFiles(nextDirectoryPath?: string, _options?: { manual?: boolean }) {
-    if (!state.serverId) return;
+  async function browseLogFiles(nextDirectoryPath?: string, options?: { manual?: boolean; silent?: boolean }): Promise<string | null> {
+    if (!state.serverId) return null;
     callbacks.stopLiveFollow();
     setters.setShowPathHistory(false);
     setters.setShowTransferHistory(false);
     setters.setIsDirectoryLoading(true);
-    await callbacks.withBusy("正在读取远程目录...", async () => {
+    let openedPath: string | null = null;
+    const readDirectory = async () => {
       const payload = await fetchDirectoryListing(nextDirectoryPath || state.directoryPath || "/");
+      openedPath = payload.directoryPath;
       setters.setDirectoryPath(payload.directoryPath);
       setters.setDirectoryInput(payload.directoryPath);
       setters.setPathbarMode("browse");
@@ -546,11 +553,18 @@ export function useLogViewer(params: LogViewerParams): LogViewerAPI {
       setters.setActiveLogView("files");
       rememberDirectoryIfUseful(state.serverId, payload.directoryPath, payload.entries.length);
       pushDirectoryHistory(state.serverId, payload.directoryPath);
-      callbacks.setActionStatus(`目录读取完成，共 ${payload.entries.length} 项。`);
-      callbacks.pushActivity(`已打开目录：${payload.directoryPath}，共 ${payload.entries.length} 项。`);
-    }).finally(() => {
+      if (!options?.silent) {
+        callbacks.setActionStatus(`目录读取完成，共 ${payload.entries.length} 项。`);
+        callbacks.pushActivity(`已打开目录：${payload.directoryPath}，共 ${payload.entries.length} 项。`);
+      }
+    };
+    const task = options?.silent
+      ? readDirectory()
+      : callbacks.withBusy("正在读取远程目录...", readDirectory);
+    await task.finally(() => {
       setters.setIsDirectoryLoading(false);
     });
+    return openedPath;
   }
 
   async function commitDirectoryPath(nextDirectoryPath?: string) {
@@ -584,6 +598,11 @@ export function useLogViewer(params: LogViewerParams): LogViewerAPI {
     setters.setIsBusy(true);
     callbacks.setActionStatus("正在打开日志文件...");
     try {
+      const lowerName = entry.name.toLowerCase();
+      const shouldOpenAtTail = lowerName.endsWith(".log") || lowerName.endsWith(".out");
+      if (shouldOpenAtTail) {
+        refs.sliceScrollAnchorRef.current = "bottom";
+      }
       const effectiveLength = state.sliceLengthMode === "auto" ? computeAutoSliceLength(0) : state.sliceLength;
       const slicePayload = await fetchLogSlice(entry.path, -1, effectiveLength);
       if (refs.openFileRequestRef.current !== requestId || slicePayload.filePath !== entry.path) return;
@@ -599,8 +618,12 @@ export function useLogViewer(params: LogViewerParams): LogViewerAPI {
       setters.setFileLoadingName("");
       callbacks.setActionStatus(`已打开 ${entry.name}，尾部切片已加载。`);
       callbacks.pushActivity(`已打开日志文件：${entry.path}，尾部 ${formatBytes(slicePayload.actualLength)} 已显示。`);
-      const lowerName = entry.name.toLowerCase();
-      if (lowerName.endsWith(".log") || lowerName.endsWith(".out")) callbacks.startLiveFollow(entry.path, entry.name);
+      if (shouldOpenAtTail) {
+        callbacks.scrollViewerToBottom();
+        window.setTimeout(callbacks.scrollViewerToBottom, 80);
+        window.setTimeout(callbacks.scrollViewerToBottom, 180);
+        callbacks.startLiveFollow(entry.path, entry.name);
+      }
     } catch (error) {
       const detail = error instanceof Error ? error.message : "未知错误";
       callbacks.setActionStatus(`打开失败：${detail}`);
@@ -675,7 +698,14 @@ export function useLogViewer(params: LogViewerParams): LogViewerAPI {
     const cachedTailOffset = meta ? Math.max(0, meta.size - state.sliceLength) : null;
     if (meta && cachedTailOffset !== null) {
       const cachedPayload = callbacks.getCachedSlice(targetFilePath, cachedTailOffset, state.sliceLength);
-      if (cachedPayload) { applySlicePayload(cachedPayload, { status: `已跳转到文件尾部，当前偏移 ${formatNumber(cachedPayload.actualOffset)}。`, activity: `已跳转文件尾部：${targetFilePath}。` }); warmNeighborSlices(targetFilePath, cachedPayload, state.sliceLength); return; }
+      if (cachedPayload) {
+        applySlicePayload(cachedPayload, { status: `已跳转到文件尾部，当前偏移 ${formatNumber(cachedPayload.actualOffset)}。`, activity: `已跳转文件尾部：${targetFilePath}。` });
+        warmNeighborSlices(targetFilePath, cachedPayload, state.sliceLength);
+        callbacks.scrollViewerToBottom();
+        window.setTimeout(callbacks.scrollViewerToBottom, 80);
+        window.setTimeout(callbacks.scrollViewerToBottom, 180);
+        return;
+      }
     }
     const requestId = refs.sliceRequestRef.current + 1;
     refs.sliceRequestRef.current = requestId;
@@ -688,6 +718,9 @@ export function useLogViewer(params: LogViewerParams): LogViewerAPI {
       callbacks.cacheSlicePayload(payload, nextOffset, state.sliceLength);
       warmNeighborSlices(targetFilePath, payload, state.sliceLength);
       applySlicePayload(payload, { status: `已跳转到文件尾部，当前偏移 ${formatNumber(payload.actualOffset)}。`, activity: `已跳转文件尾部：${targetFilePath}。` });
+      callbacks.scrollViewerToBottom();
+      window.setTimeout(callbacks.scrollViewerToBottom, 80);
+      window.setTimeout(callbacks.scrollViewerToBottom, 180);
     });
   }
 

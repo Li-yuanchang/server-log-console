@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useEscapeToClose } from "./useEscapeToClose.js";
 
 export interface ConfirmDialogState {
   title: string;
@@ -29,6 +30,8 @@ interface TextInputDialogProps {
 
 export function ConfirmDialog(props: ConfirmDialogProps) {
   const { dialog, onClose } = props;
+  useEscapeToClose(Boolean(dialog), onClose);
+
   if (!dialog) {
     return null;
   }
@@ -71,6 +74,7 @@ export function TextInputDialog(props: TextInputDialogProps) {
     onConfirm,
     onClose,
   } = props;
+  useEscapeToClose(open, onClose);
 
   if (!open) {
     return null;

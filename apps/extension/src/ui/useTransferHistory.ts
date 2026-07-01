@@ -27,7 +27,7 @@ export function useTransferHistory(deps: {
   showToast: (type: "success" | "error" | "loading", message: string) => string | number;
   setConfirmDialog: (dialog: { title: string; message: string; danger: boolean; onConfirm: () => void } | null) => void;
   setShowTransferHistory: (show: boolean) => void;
-  browseLogFiles: (path: string, options?: { manual?: boolean }) => Promise<void>;
+  browseLogFiles: (path: string, options?: { manual?: boolean; silent?: boolean }) => Promise<void>;
   isElectron: boolean;
 }): TransferHistoryAPI {
   const {

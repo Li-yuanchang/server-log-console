@@ -39,7 +39,7 @@ export function useToasts() {
     if (type !== "success" && type !== "error") {
       return;
     }
-    const delay = type === "success" ? 2500 : 4000;
+    const delay = type === "success" ? 1800 : 4800;
     const timer = window.setTimeout(() => {
       dismissToast(id);
     }, delay);
@@ -48,7 +48,7 @@ export function useToasts() {
 
   const showToast = useCallback((type: ToastState["type"], message: string) => {
     const id = `toast-${++toastIdRef.current}`;
-    setToasts((prev) => [...prev.slice(-4), { id, type, message }]);
+    setToasts((prev) => [...prev.slice(-1), { id, type, message }]);
     scheduleAutoDismiss(id, type);
     return id;
   }, [scheduleAutoDismiss]);

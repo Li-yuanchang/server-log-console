@@ -16,6 +16,7 @@ import {
   X 
 } from "lucide-react";
 import type { TransferHistoryEntry, TransferHistoryStatus } from "./storage.js";
+import { useEscapeToClose } from "./useEscapeToClose.js";
 import { getParentDirectoryPath } from "./utils.js";
 
 type Props = {
@@ -58,6 +59,7 @@ export function TransferHistoryDialog(props: Props) {
   const [directionFilter, setDirectionFilter] = useState<DirectionFilter>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [expandedEntryIds, setExpandedEntryIds] = useState<string[]>([]);
+  useEscapeToClose(props.open, props.onClose);
 
   const summary = useMemo(() => {
     let uploads = 0;

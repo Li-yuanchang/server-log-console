@@ -73,7 +73,7 @@ import { useServerConnection } from "./useServerConnection.js";
 import { useSliceCache } from "./useSliceCache.js";
 import { useImportSettings } from "./useImportSettings.js";
 import { useFileTransfer } from "./useFileTransfer.js";
-import { useFileOperations } from "./useFileOperations.js";
+import { isSpecialPreviewFile, useFileOperations } from "./useFileOperations.js";
 import { useServerManagement } from "./useServerManagement.js";
 import { useLogRecording } from "./useLogRecording.js";
 import { SidebarPanel } from "./SidebarPanel.js";
@@ -163,6 +163,8 @@ export function App() {
   const [fileEntries, setFileEntries] = useState<LogFileEntry[]>([]);
   const [isDirectoryLoading, setIsDirectoryLoading] = useState(false);
   const [directoryPath, setDirectoryPath] = useState(pipUrlParams.get("directoryPath") || defaultDirectoryPath);
+  const [directoryNavBackStack, setDirectoryNavBackStack] = useState<string[]>([]);
+  const [directoryNavForwardStack, setDirectoryNavForwardStack] = useState<string[]>([]);
   const [fileMeta, setFileMeta] = useState<LogFileMetaResponse | null>(null);
   const [sliceOffset, setSliceOffset] = useState(0);
   const [sliceLength, setSliceLength] = useState(64 * 1024);
@@ -258,6 +260,7 @@ export function App() {
   const virtualViewerRef = useRef<VirtualLogViewerHandle | null>(null);
   const viewerContentShellRef = useRef<HTMLDivElement | null>(null);
   const browserGridRef = useRef<HTMLDivElement | null>(null);
+  const directoryMouseNavRef = useRef<{ button: number; at: number } | null>(null);
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
   const workspaceTabMenuRef = useRef<HTMLDivElement | null>(null);
   
@@ -407,6 +410,8 @@ export function App() {
     setActiveViewerTabId(snapshot.activeViewerTabId);
     setDirectoryPath(snapshot.directoryPath);
     setDirectoryInput(snapshot.directoryPath || "/");
+    setDirectoryNavBackStack([]);
+    setDirectoryNavForwardStack([]);
     setFilePath(snapshot.filePath);
     setFileMeta(snapshot.fileMeta);
     setSliceOffset(snapshot.sliceOffset);
@@ -665,6 +670,8 @@ export function App() {
       setJumpAssetOptions([]);
       jumpAssetAutoSearchKeyRef.current = "";
       setDirectoryPath(defaultDirectoryPath);
+      setDirectoryNavBackStack([]);
+      setDirectoryNavForwardStack([]);
       setFilePath("");
       setFileEntries([]);
       setResults(null);
@@ -700,6 +707,8 @@ export function App() {
       jumpAssetAutoSearchKeyRef.current = "";
       if (!pipMode) {
         setDirectoryPath(defaultDirectoryPath);
+        setDirectoryNavBackStack([]);
+        setDirectoryNavForwardStack([]);
         setFilePath("");
         setFileEntries([]);
         setResults(null);
@@ -1097,18 +1106,21 @@ export function App() {
         virtualViewerRef.current?.scrollToTop();
       } else if (anchor === "bottom") {
         virtualViewerRef.current?.scrollToBottom();
+        window.setTimeout(() => virtualViewerRef.current?.scrollToBottom(), 80);
+        window.setTimeout(() => virtualViewerRef.current?.scrollToBottom(), 180);
       }
       wheelSliceLockRef.current = false;
     });
   }, [sliceData]);
 
   useEffect(() => {
-    if (!liveFollowEnabled || liveFollowPaused) return;
+    if (!liveFollowEnabled || liveFollowPaused || activeViewerTabId !== "file") return;
     requestAnimationFrame(() => {
       virtualViewerRef.current?.scrollToBottom();
+      window.setTimeout(() => virtualViewerRef.current?.scrollToBottom(), 80);
+      window.setTimeout(() => virtualViewerRef.current?.scrollToBottom(), 180);
     });
-  }, [liveFollowContent, liveFollowEnabled, liveFollowPaused]);
-
+  }, [activeViewerTabId, liveFollowContent, liveFollowEnabled, liveFollowPaused]);
 
   useEffect(() => {
     setActiveHighlightIndex(0);
@@ -1130,7 +1142,7 @@ export function App() {
     }
   }, [activeViewerTabId]);
 
-  // VirtualLogViewer handles scrollToHighlight internally via activeHighlightIndex prop
+  // Search match scrolling is explicit; content refresh should not steal the user's scroll position.
 
   const {
     fetchServers,
@@ -1225,21 +1237,6 @@ export function App() {
   function closeSettingsWorkspace() {
     setShowConnectionSettings(false);
   }
-
-  useEffect(() => {
-    if (!showConnectionSettings || isStandalonePipWindow) {
-      return;
-    }
-
-    function handleSettingsWorkspaceKeydown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        closeSettingsWorkspace();
-      }
-    }
-
-    window.addEventListener("keydown", handleSettingsWorkspaceKeydown);
-    return () => window.removeEventListener("keydown", handleSettingsWorkspaceKeydown);
-  }, [showConnectionSettings, isStandalonePipWindow]);
 
 
   const currentServerTransferHistory = useMemo(
@@ -1865,8 +1862,8 @@ export function App() {
     }
     return resultTabs[resultTabs.length - 1]?.id ?? "";
   }, [resultTabs]);
-  const showingSearchResults = activeLogView === "search";
-  const showingDocumentContent = activeLogView === "files";
+  const showingLogPreview = activeLogView === "search";
+  const showingFileDirectory = activeLogView === "files";
   const viewerTabs = useMemo(() => {
     const items: Array<{ id: string; label: string; kind: "file" | "result" }> = filePath
       ? [{ id: "file", label: selectedFileName || "当前文件", kind: "file" as const }]
@@ -1883,10 +1880,10 @@ export function App() {
     ? `文件预览${selectedFileName ? ` · ${selectedFileName}` : ""}`
     : activeResultTab
       ? `${activeResultTab.label} · ${activeResultTab.sourceLabel}`
-      : "搜索结果";
+      : "日志预览";
   const canSwitchToDocumentContent = Boolean(serverId);
 
-  function switchToSearchResultsView() {
+  function switchToLogPreviewView() {
     console.info("[toolbar-view-switch] click search", {
       serverId,
       hasSearchResults,
@@ -1897,10 +1894,10 @@ export function App() {
     });
     if (!serverId) return;
     if (activeLogView === "search") {
-      setActionStatus("已在搜索结果。");
+      setActionStatus("已在日志预览。");
       return;
     }
-    setActionStatus("正在切换到搜索结果...");
+    setActionStatus("正在切换到日志预览...");
     setActiveLogView("search");
     if (filePath.trim()) {
       setActiveViewerTabId("file");
@@ -1909,7 +1906,7 @@ export function App() {
     }
   }
 
-  function switchToDocumentContentView() {
+  function switchToFileDirectoryView() {
     console.info("[toolbar-view-switch] click files", {
       serverId,
       activeLogView,
@@ -1919,14 +1916,71 @@ export function App() {
     });
     if (!serverId) return;
     if (activeLogView === "files") {
-      setActionStatus("已在文档内容。");
+      setActionStatus("已在文件目录。");
       return;
     }
-    setActionStatus("正在切换到文档内容...");
+    setActionStatus("正在切换到文件目录...");
     setActiveLogView("files");
     if (!fileEntries.length && directoryPath.trim()) {
       void browseLogFiles(directoryPath);
     }
+  }
+
+  function normalizeDirectoryNavPath(path: string) {
+    const trimmed = (path || "/").trim();
+    if (!trimmed || trimmed === "/") return "/";
+    const absolute = trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
+    return absolute.replace(/\/+$/, "") || "/";
+  }
+
+  async function browseDirectoryWithNav(path: string, options?: { replace?: boolean; silent?: boolean }) {
+    const fromPath = normalizeDirectoryNavPath(directoryPath || "/");
+    const openedPath = await browseLogFiles(path, { manual: true, silent: options?.silent });
+    if (!openedPath) return;
+    const normalizedOpenedPath = normalizeDirectoryNavPath(openedPath);
+    if (options?.replace || normalizedOpenedPath === fromPath) return;
+    setDirectoryNavBackStack((stack) => {
+      const last = stack[stack.length - 1];
+      return last === fromPath ? stack : [...stack, fromPath].slice(-80);
+    });
+    setDirectoryNavForwardStack([]);
+  }
+
+  async function navigateDirectoryHistory(direction: "back" | "forward") {
+    if (!serverId || isBusy || isDirectoryLoading) return;
+    const currentPath = normalizeDirectoryNavPath(directoryPath || "/");
+    const sourceStack = direction === "back" ? directoryNavBackStack : directoryNavForwardStack;
+    const targetPath = sourceStack[sourceStack.length - 1];
+    if (!targetPath) return;
+    const openedPath = await browseLogFiles(targetPath, { manual: true, silent: true });
+    if (!openedPath) return;
+    const normalizedOpenedPath = normalizeDirectoryNavPath(openedPath);
+    if (direction === "back") {
+      setDirectoryNavBackStack((stack) => stack.slice(0, -1));
+      setDirectoryNavForwardStack((stack) => {
+        const last = stack[stack.length - 1];
+        return last === currentPath ? stack : [...stack, currentPath].slice(-80);
+      });
+      setActionStatus(`已返回目录：${normalizedOpenedPath}`);
+      return;
+    }
+    setDirectoryNavForwardStack((stack) => stack.slice(0, -1));
+    setDirectoryNavBackStack((stack) => {
+      const last = stack[stack.length - 1];
+      return last === currentPath ? stack : [...stack, currentPath].slice(-80);
+    });
+    setActionStatus(`已前进目录：${normalizedOpenedPath}`);
+  }
+
+  function handleFileBrowserMouseNavigation(event: ReactMouseEvent<HTMLDivElement>) {
+    if (event.button !== 3 && event.button !== 4) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const now = Date.now();
+    const previous = directoryMouseNavRef.current;
+    if (previous?.button === event.button && now - previous.at < 180) return;
+    directoryMouseNavRef.current = { button: event.button, at: now };
+    void navigateDirectoryHistory(event.button === 3 ? "back" : "forward");
   }
 
   function selectViewerTab(tab: { id: string; label: string; kind: "file" | "result" }) {
@@ -1939,7 +1993,7 @@ export function App() {
     });
     setActiveLogView("search");
     setActiveViewerTabId(tab.id);
-    setActionStatus(tab.kind === "file" ? `已切换到文件预览：${tab.label}` : `已切换到搜索结果：${tab.label}`);
+    setActionStatus(tab.kind === "file" ? `已切换到日志预览：${tab.label}` : `已切换到日志结果：${tab.label}`);
   }
 
   function handleTreeResizeStart(event: ReactPointerEvent<HTMLDivElement>) {
@@ -1984,7 +2038,7 @@ export function App() {
 
   useEffect(() => {
     if (pip.isPip) {
-      pip.setTitle(selectedFileName || activeResultTab?.label || "搜索结果");
+      pip.setTitle(selectedFileName || activeResultTab?.label || "日志预览");
     }
   }, [pip.isPip, selectedFileName, activeResultTab?.label]);
 
@@ -2150,7 +2204,7 @@ export function App() {
   const terminalConnectionLabel = selectedServer
     ? `${selectedServer.host || selectedServer.name || "--"} · ${directoryPath || selectedServer.basePath || "/"}`
     : (directoryPath || "/");
-  const compactViewerTitle = selectedFileName || activeResultTab?.label || "搜索结果";
+  const compactViewerTitle = selectedFileName || activeResultTab?.label || "日志预览";
   const compactReaderHint = activeViewerTabId === "file"
     ? (liveFollowEnabled
       ? `实时：${liveFollowConnected ? (liveFollowPaused ? "已暂停滚动" : "接收中") : (liveFollowRetryCount > 0 ? `重连中 ${liveFollowRetryCount}` : "连接中")}${liveFollowContent ? ` · ${formatNumber(liveFollowContent.split("\n").length)} 行` : ""}`
@@ -2263,6 +2317,7 @@ export function App() {
     mkdirRemoteDir,
     compressRemotePath,
     previewFile,
+    previewArchiveEntry,
     saveFileContent,
   } = useFileOperations({
     serverId,
@@ -2309,6 +2364,7 @@ export function App() {
             onAttach={() => undefined}
             onFit={() => terminalSession.fitTerminal()}
             selMenu={termSelMenu}
+            getSelectionText={() => terminalSession.getSelection()}
             clearSelection={() => terminalSession.clearSelection()}
             pasteToTerminal={(text) => terminalSession.pasteToTerminal(text)}
             onToggleTerminalOverlay={toggleTerminalOverlay}
@@ -2370,23 +2426,23 @@ export function App() {
               <div className="toolbar-view-switch" aria-label="内容视图切换">
                 <button
                   type="button"
-                  className={showingSearchResults ? "toolbar-view-switch-btn is-active" : "toolbar-view-switch-btn"}
-                  aria-pressed={showingSearchResults}
-                  onClick={switchToSearchResultsView}
+                  className={showingLogPreview ? "toolbar-view-switch-btn is-active" : "toolbar-view-switch-btn"}
+                  aria-pressed={showingLogPreview}
+                  onClick={switchToLogPreviewView}
                   disabled={!serverId}
-                  title={filePath.trim() ? "查看文件预览" : (hasSearchResults ? "查看搜索结果" : "暂无搜索结果")}
+                  title={filePath.trim() ? "查看日志预览" : (hasSearchResults ? "查看日志结果" : "暂无日志结果")}
                 >
-                  搜索结果
+                  日志预览
                 </button>
                 <button
                   type="button"
-                  className={showingDocumentContent ? "toolbar-view-switch-btn is-active" : "toolbar-view-switch-btn"}
-                  aria-pressed={showingDocumentContent}
-                  onClick={switchToDocumentContentView}
+                  className={showingFileDirectory ? "toolbar-view-switch-btn is-active" : "toolbar-view-switch-btn"}
+                  aria-pressed={showingFileDirectory}
+                  onClick={switchToFileDirectoryView}
                   disabled={!canSwitchToDocumentContent}
-                  title={canSwitchToDocumentContent ? "查看当前文档内容" : "先打开日志文件"}
+                  title={canSwitchToDocumentContent ? "查看文件目录" : "先选择服务器"}
                 >
-                  文档内容
+                  文件目录
                 </button>
               </div>
               <SearchToolbarActions
@@ -3009,7 +3065,7 @@ export function App() {
                     onEnterEditMode={enterPathbarEditMode}
                     onExitEditMode={exitPathbarEditMode}
                     onOpenFromInput={() => { void openDirectoryFromInput(); }}
-                    onCommitDirectoryPath={(path) => { void commitDirectoryPath(path); }}
+                    onCommitDirectoryPath={(path) => { void browseDirectoryWithNav(path); }}
                   />}
                   actions={<FileBrowserActions
                     uiTheme={uiTheme}
@@ -3018,7 +3074,7 @@ export function App() {
                     showPathHistory={showPathHistory}
                     showTransferHistory={showTransferHistory}
                     showDirectoryFilter={showDirectoryFilter}
-                    onBrowseParent={() => { void browseParentDirectory(); }}
+                    onBrowseParent={() => { void browseDirectoryWithNav(getParentDirectoryPath(directoryPath || directoryInput || "/")); }}
                     onTogglePathHistory={() => {
                       setShowTransferHistory(false);
                       setShowPathHistory((c) => !c);
@@ -3039,7 +3095,7 @@ export function App() {
                   historyDropdown={showPathHistory ? (
                     <FileBrowserHistoryDropdown
                       historyPaths={serverId ? readDirectoryHistory(serverId).filter((p) => p !== directoryPath) : []}
-                      onBrowsePath={(path: string) => { void browseLogFiles(path, { manual: true }); }}
+                      onBrowsePath={(path: string) => { void browseDirectoryWithNav(path); }}
                     />
                   ) : null}
                   transferDropdown={null}
@@ -3078,13 +3134,18 @@ export function App() {
                     </div>
                   </div>
                 ) : hasFileWorkspaceEntries ? (
-                  <FileBrowserGrid browserGridRef={browserGridRef} browserTreeWidth={browserTreeWidth}>
+                  <FileBrowserGrid
+                    browserGridRef={browserGridRef}
+                    browserTreeWidth={browserTreeWidth}
+                    onAuxClick={handleFileBrowserMouseNavigation}
+                    onMouseDown={handleFileBrowserMouseNavigation}
+                  >
                     <FileBrowserTreeColumn
                       title="目录树"
                       summary={`${formatNumber(directoryEntries.length)} 个目录`}
                       entries={treeEntries}
                       emptyLabel="当前层级没有子目录"
-                      onBrowse={browseLogFiles}
+                      onBrowse={(path) => { void browseDirectoryWithNav(path); }}
                       onOpenContextMenu={(entry, clientX, clientY) => {
                         openContextMenu({ path: entry.path, name: entry.label || entry.path.split("/").pop() || "/", kind: "directory" }, clientX, clientY);
                       }}
@@ -3170,7 +3231,17 @@ export function App() {
                           uiTheme={uiTheme}
                           formatBytes={formatBytes}
                           formatDateTime={formatDateTime}
-                          onOpenEntry={(entry) => { void openEntry(entry); }}
+                          onOpenEntry={(entry) => {
+                            if (entry.kind === "directory") {
+                              void browseDirectoryWithNav(entry.path);
+                              return;
+                            }
+                            if (isSpecialPreviewFile(entry.name || entry.path)) {
+                              void previewFile(entry);
+                              return;
+                            }
+                            void openEntry(entry);
+                          }}
                           onOpenContextMenu={(entry, clientX, clientY) => { openContextMenu(entry, clientX, clientY); }}
                           onToggleSelection={toggleFileSelection}
                           onDownload={(path) => { void downloadFile(path); }}
@@ -3181,12 +3252,17 @@ export function App() {
                     </FileBrowserContentColumn>
                   </FileBrowserGrid>
                 ) : (
-                  <FileBrowserGrid browserGridRef={browserGridRef} browserTreeWidth={browserTreeWidth}>
+                  <FileBrowserGrid
+                    browserGridRef={browserGridRef}
+                    browserTreeWidth={browserTreeWidth}
+                    onAuxClick={handleFileBrowserMouseNavigation}
+                    onMouseDown={handleFileBrowserMouseNavigation}
+                  >
                     <FileBrowserTreeColumn
                       title="目录"
                       summary={`${formatNumber(treeEntries.length)} 项`}
                       entries={treeEntries}
-                      onBrowse={browseLogFiles}
+                      onBrowse={(path) => { void browseDirectoryWithNav(path); }}
                       onOpenContextMenu={(entry, clientX, clientY) => {
                         openContextMenu({ path: entry.path, name: entry.label || entry.path.split("/").pop() || "/", kind: "directory" }, clientX, clientY);
                       }}
@@ -3289,6 +3365,7 @@ export function App() {
               onAttach={() => { void closeDetachedTerminalWindow(); }}
               onFit={() => terminalSession.fitTerminal()}
               selMenu={termSelMenu}
+              getSelectionText={() => terminalSession.getSelection()}
               clearSelection={() => terminalSession.clearSelection()}
               pasteToTerminal={(text) => terminalSession.pasteToTerminal(text)}
               onToggleTerminalOverlay={toggleTerminalOverlay}
@@ -3489,6 +3566,7 @@ export function App() {
           }
         }}
         onPreviewDialogSave={() => void saveFileContent()}
+        onPreviewArchiveEntry={(entryName) => { void previewArchiveEntry(entryName); }}
         onPreviewDialogToggleMaximize={() => setPreviewDialog((prev) => prev ? { ...prev, maximized: !prev.maximized } : null)}
         onPreviewDialogClose={() => {
           if (previewDialog && !previewDialog.readOnly && previewDialog.content !== previewDialog.originalContent) {

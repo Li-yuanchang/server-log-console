@@ -24,6 +24,48 @@ import type {
 const runtimeOrigin = globalThis.location?.origin ?? "";
 export const localServiceBase = !runtimeOrigin || !/:4040$/.test(runtimeOrigin) ? "http://localhost:4040" : runtimeOrigin;
 
+export type FilePreviewResponse = {
+  filePath: string;
+  content: string;
+  size: number;
+  readOnly?: boolean;
+  previewKind?: "text" | "archive" | "class" | "binary";
+  previewLabel?: string;
+  entryName?: string;
+  fileName?: string;
+  archiveEntries?: Array<{
+    name: string;
+    compressedSize: number;
+    uncompressedSize: number;
+    directory: boolean;
+    modifiedAt: string;
+    compressionMethod?: number;
+    localHeaderOffset?: number;
+  }>;
+  archiveInfo?: {
+    entryCount: number;
+    displayedCount: number;
+    truncated: boolean;
+    centralDirectorySize: number;
+    commentLength: number;
+  };
+  classInfo?: {
+    magic: string;
+    version: string;
+    javaVersion: string;
+    accessFlags: string;
+    className: string;
+    superClass: string;
+    interfaces: string[];
+    constantPoolCount: number;
+    fields: Array<{ access: string; name: string; descriptor: string; display: string }>;
+    methods: Array<{ access: string; name: string; descriptor: string; display: string }>;
+    decompiledSource?: string;
+    decompileStatus?: "success" | "fallback";
+    decompileMessage?: string;
+  };
+};
+
 async function readPayload<T>(response: Response, fallbackMessage: string): Promise<T> {
   const payload = (await response.json()) as T & { message?: string };
   if (!response.ok) {
@@ -341,7 +383,7 @@ export async function apiRenameFile(serverId: string, oldPath: string, newPath: 
 export async function apiPreviewFile(
   serverId: string,
   filePath: string
-): Promise<{ filePath: string; content: string; size: number; readOnly?: boolean }> {
+): Promise<FilePreviewResponse> {
   const response = await fetch(`${localServiceBase}/api/files/preview`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -351,7 +393,24 @@ export async function apiPreviewFile(
     const err = await response.json().catch(() => ({ message: "加载失败" })) as { message?: string };
     throw new Error(err.message || "加载失败");
   }
-  return response.json() as Promise<{ filePath: string; content: string; size: number; readOnly?: boolean }>;
+  return response.json() as Promise<FilePreviewResponse>;
+}
+
+export async function apiPreviewArchiveEntry(
+  serverId: string,
+  filePath: string,
+  entryName: string
+): Promise<FilePreviewResponse> {
+  const response = await fetch(`${localServiceBase}/api/files/archive-entry-preview`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ serverId, filePath, entryName })
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ message: "加载失败" })) as { message?: string };
+    throw new Error(err.message || "加载失败");
+  }
+  return response.json() as Promise<FilePreviewResponse>;
 }
 
 export async function apiSaveFile(serverId: string, filePath: string, content: string): Promise<void> {
@@ -366,16 +425,130 @@ export async function apiSaveFile(serverId: string, filePath: string, content: s
   }
 }
 
-export async function apiUploadSmall(serverId: string, filePath: string, file: File): Promise<void> {
+export interface UploadProgressEventPayload {
+  loaded: number;
+  total: number;
+}
+
+function uploadFormData(
+  url: string,
+  formData: FormData,
+  fallbackMessage: string,
+  onProgress?: (payload: UploadProgressEventPayload) => void,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", url);
+    xhr.upload.onprogress = (event) => {
+      if (!event.lengthComputable) return;
+      onProgress?.({ loaded: event.loaded, total: event.total });
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve();
+        return;
+      }
+      try {
+        const body = JSON.parse(xhr.responseText || "{}") as { message?: string };
+        reject(new Error(body.message || `${fallbackMessage} (${xhr.status})`));
+      } catch {
+        reject(new Error(`${fallbackMessage} (${xhr.status})`));
+      }
+    };
+    xhr.onerror = () => reject(new Error(`${fallbackMessage}：网络异常`));
+    xhr.onabort = () => reject(new Error(`${fallbackMessage}：请求已取消`));
+    xhr.send(formData);
+  });
+}
+
+export async function apiUploadSmall(
+  serverId: string,
+  filePath: string,
+  file: File,
+  onProgress?: (payload: UploadProgressEventPayload) => void,
+): Promise<void> {
   const formData = new FormData();
   formData.append("file", file);
   formData.append("serverId", serverId);
   formData.append("filePath", filePath);
-  const res = await fetch(`${localServiceBase}/api/files/upload`, { method: "POST", body: formData });
+  await uploadFormData(`${localServiceBase}/api/files/upload`, formData, "上传失败", onProgress);
+}
+
+export async function apiUploadLocalFile(
+  serverId: string,
+  filePath: string,
+  localPath: string,
+  onProgress?: (payload: { transferred: number; chunkBytes: number; totalBytes: number }) => void,
+): Promise<{ filePath: string; size: number }> {
+  if (!onProgress) {
+    const res = await fetch(`${localServiceBase}/api/files/upload/local`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ serverId, filePath, localPath })
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({})) as { message?: string };
+      throw new Error(body.message || `本地文件上传失败 (${res.status})`);
+    }
+    return res.json() as Promise<{ filePath: string; size: number }>;
+  }
+
+  const res = await fetch(`${localServiceBase}/api/files/upload/local/stream`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ serverId, filePath, localPath })
+  });
   if (!res.ok) {
     const body = await res.json().catch(() => ({})) as { message?: string };
-    throw new Error(body.message || `上传失败 (${res.status})`);
+    throw new Error(body.message || `本地文件上传失败 (${res.status})`);
   }
+
+  const reader = res.body?.getReader();
+  if (!reader) {
+    throw new Error("本地文件上传失败：无法读取进度流");
+  }
+
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let donePayload: { filePath: string; size: number } | null = null;
+
+  const consumeLine = (line: string) => {
+    const trimmed = line.trim();
+    if (!trimmed) return;
+    const payload = JSON.parse(trimmed) as
+      | { type: "progress"; transferred: number; chunkBytes: number; totalBytes: number }
+      | { type: "done"; filePath: string; size: number }
+      | { type: "error"; message?: string };
+    if (payload.type === "progress") {
+      onProgress({
+        transferred: payload.transferred,
+        chunkBytes: payload.chunkBytes,
+        totalBytes: payload.totalBytes,
+      });
+      return;
+    }
+    if (payload.type === "done") {
+      donePayload = { filePath: payload.filePath, size: payload.size };
+      return;
+    }
+    throw new Error(payload.message || "本地文件上传失败");
+  };
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split(/\r?\n/);
+    buffer = lines.pop() || "";
+    for (const line of lines) consumeLine(line);
+  }
+
+  buffer += decoder.decode();
+  if (buffer.trim()) consumeLine(buffer);
+  if (!donePayload) {
+    throw new Error("本地文件上传失败：未收到完成状态");
+  }
+  return donePayload;
 }
 
 export async function apiUploadStart(serverId: string, filePath: string): Promise<string> {
@@ -392,18 +565,15 @@ export async function apiUploadStart(serverId: string, filePath: string): Promis
   return uploadId;
 }
 
-export async function apiUploadChunk(uploadId: string, chunk: Blob): Promise<void> {
+export async function apiUploadChunk(
+  uploadId: string,
+  chunk: Blob,
+  onProgress?: (payload: UploadProgressEventPayload) => void,
+): Promise<void> {
   const formData = new FormData();
   formData.append("chunk", chunk);
   formData.append("uploadId", uploadId);
-  const res = await fetch(`${localServiceBase}/api/files/upload/chunk`, {
-    method: "POST",
-    body: formData
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({})) as { message?: string };
-    throw new Error(body.message || `分片上传失败 (${res.status})`);
-  }
+  await uploadFormData(`${localServiceBase}/api/files/upload/chunk`, formData, "分片上传失败", onProgress);
 }
 
 export async function apiUploadFinish(uploadId: string): Promise<void> {

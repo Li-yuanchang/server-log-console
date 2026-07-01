@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { DiffEditor, loader } from "@monaco-editor/react";
 import * as monaco from "monaco-editor";
 import { FolderOpen, File, RefreshCw, Home, ArrowLeft } from "lucide-react";
+import { useEscapeToClose } from "./useEscapeToClose.js";
 
 type LocalEntry = { name: string; isDirectory: boolean; size: number; modifiedTime: string };
 
@@ -27,6 +28,7 @@ export function DiffComparePanel({ visible, remoteContent, remoteLabel, onClose 
   const normalizedRemoteContent = normalizeForCompare(remoteContent);
   const normalizedLocalContent = localContent === null ? null : normalizeForCompare(localContent);
   const isSameContent = normalizedLocalContent !== null && normalizedLocalContent === normalizedRemoteContent;
+  useEscapeToClose(visible, onClose);
 
   const browse = useCallback(async (dir?: string) => {
     const api = electronAPI();
