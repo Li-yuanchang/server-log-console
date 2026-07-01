@@ -9,11 +9,75 @@ const VirtuosoScroller = React.forwardRef<HTMLDivElement, React.HTMLAttributes<H
   },
 );
 
+function findClosestLineIndex(node: Node | null): number | null {
+  const element = node instanceof Element ? node : node?.parentElement;
+  const lineElement = element?.closest<HTMLElement>("[data-line-index]");
+  if (!lineElement) return null;
+  const rawIndex = Number(lineElement.dataset.lineIndex);
+  return Number.isFinite(rawIndex) ? rawIndex : null;
+}
+
+type ViewerSelectionPoint = {
+  lineIndex: number;
+  charOffset: number;
+};
+
+function getLineElementFromPoint(clientX: number, clientY: number): HTMLElement | null {
+  const elements = document.elementsFromPoint(clientX, clientY);
+  for (const element of elements) {
+    const lineElement = element.closest?.<HTMLElement>("[data-line-index]");
+    if (lineElement) {
+      return lineElement;
+    }
+  }
+  return null;
+}
+
+function getSelectionPointFromEvent(event: MouseEvent | React.MouseEvent, lines: string[]): ViewerSelectionPoint | null {
+  const lineElement = getLineElementFromPoint(event.clientX, event.clientY);
+  if (!lineElement) {
+    return null;
+  }
+  const lineIndex = Number(lineElement.dataset.lineIndex);
+  if (!Number.isFinite(lineIndex) || lineIndex < 0 || lineIndex >= lines.length) {
+    return null;
+  }
+  const lineText = lines[lineIndex] ?? "";
+  const range = document.createRange();
+  range.selectNodeContents(lineElement);
+  const rects = Array.from(range.getClientRects()).filter((rect) => rect.width > 0 && rect.height > 0);
+  range.detach();
+
+  const lineRect = lineElement.getBoundingClientRect();
+  const targetRect = rects.find((rect) => event.clientY >= rect.top && event.clientY <= rect.bottom) || rects[rects.length - 1] || lineRect;
+  const relativeX = Math.max(0, Math.min(targetRect.width, event.clientX - targetRect.left));
+  const ratio = targetRect.width > 0 ? relativeX / targetRect.width : 0;
+  const charOffset = Math.max(0, Math.min(lineText.length, Math.round(lineText.length * ratio)));
+  return { lineIndex, charOffset };
+}
+
+function buildSelectionTextFromPoints(lines: string[], first: ViewerSelectionPoint, second: ViewerSelectionPoint): string {
+  const [start, end] = first.lineIndex < second.lineIndex || (first.lineIndex === second.lineIndex && first.charOffset <= second.charOffset)
+    ? [first, second]
+    : [second, first];
+  if (start.lineIndex === end.lineIndex) {
+    return (lines[start.lineIndex] ?? "").slice(start.charOffset, end.charOffset);
+  }
+  const selected: string[] = [];
+  selected.push((lines[start.lineIndex] ?? "").slice(start.charOffset));
+  for (let index = start.lineIndex + 1; index < end.lineIndex; index += 1) {
+    selected.push(lines[index] ?? "");
+  }
+  selected.push((lines[end.lineIndex] ?? "").slice(0, end.charOffset));
+  return selected.join("\n");
+}
+
 export interface VirtualLogViewerHandle {
   scrollToTop(): void;
   scrollToBottom(): void;
   scrollToLine(index: number, behavior?: "auto" | "smooth"): void;
   scrollToHighlight(index: number): void;
+  getSelectionText(selection: Selection): string;
   getScrollState(): { scrollTop: number; scrollHeight: number; clientHeight: number } | null;
   getScrollerElement(): HTMLElement | null;
 }
@@ -75,6 +139,8 @@ const VirtualLogViewerImpl = forwardRef<VirtualLogViewerHandle, Props>(
     const virtuosoRef = useRef<VirtuosoHandle>(null);
     const scrollerRef = useRef<HTMLElement | null>(null);
     const lastScrollStateEmitRef = useRef(0);
+    const selectionStartRef = useRef<ViewerSelectionPoint | null>(null);
+    const selectionEndRef = useRef<ViewerSelectionPoint | null>(null);
 
     const lines = useMemo(() => {
       if (!content) return [];
@@ -208,13 +274,6 @@ const VirtualLogViewerImpl = forwardRef<VirtualLogViewerHandle, Props>(
     );
 
     useEffect(() => {
-      if (focusLineIndex != null) return;
-      if (activeHighlightIndex < 0 || activeHighlightIndex >= totalMatches) return;
-      const targetLine = findLineForMatch(activeHighlightIndex);
-      virtuosoRef.current?.scrollToIndex({ index: targetLine, align: "center", behavior: "smooth" });
-    }, [activeHighlightIndex, totalMatches, findLineForMatch, focusLineIndex]);
-
-    useEffect(() => {
       if (focusLineIndex == null || focusLineIndex < 0 || focusLineIndex >= lines.length) return;
       virtuosoRef.current?.scrollToIndex({ index: focusLineIndex, align: "center", behavior: "smooth" });
     }, [focusLineIndex, lines.length]);
@@ -267,7 +326,7 @@ const VirtualLogViewerImpl = forwardRef<VirtualLogViewerHandle, Props>(
           : "";
 
         if (!displayHighlightRegex || !escaped) {
-          return <div className={baseClass} onClick={handleClick} onDoubleClick={handleDoubleClick} title={title} dangerouslySetInnerHTML={{ __html: bookmarkIcon + focusBadge + (escaped || "\u00A0") }} />;
+          return <div className={baseClass} data-line-index={index} onClick={handleClick} onDoubleClick={handleDoubleClick} title={title} dangerouslySetInnerHTML={{ __html: bookmarkIcon + focusBadge + (escaped || "\u00A0") }} />;
         }
 
         const startMatchIdx = cumulativeOffsets[index] ?? 0;
@@ -279,10 +338,44 @@ const VirtualLogViewerImpl = forwardRef<VirtualLogViewerHandle, Props>(
           return `<mark class="${cls}">${capture}</mark>`;
         });
 
-        return <div className={baseClass} onClick={handleClick} onDoubleClick={handleDoubleClick} title={title} dangerouslySetInnerHTML={{ __html: bookmarkIcon + focusBadge + highlighted }} />;
+        return <div className={baseClass} data-line-index={index} onClick={handleClick} onDoubleClick={handleDoubleClick} title={title} dangerouslySetInnerHTML={{ __html: bookmarkIcon + focusBadge + highlighted }} />;
       },
       [displayHighlightRegex, cumulativeOffsets, activeHighlightIndex, focusLineIndex, bookmarks, onLineClick, onBookmarkToggle],
     );
+
+    const handleMouseDown = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+      if (event.button !== 0) {
+        return;
+      }
+      const point = getSelectionPointFromEvent(event, lines);
+      selectionStartRef.current = point;
+      selectionEndRef.current = point;
+    }, [lines]);
+
+    const handleMouseUp = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+      const point = getSelectionPointFromEvent(event, lines);
+      if (point) {
+        selectionEndRef.current = point;
+      }
+    }, [lines]);
+
+    const forceScrollToBottom = useCallback(() => {
+      const el = scrollerRef.current;
+      if (!el) return;
+      el.scrollTop = el.scrollHeight;
+    }, []);
+
+    const scrollToBottomStable = useCallback(() => {
+      if (!lines.length) return;
+      const lastIndex = lines.length - 1;
+      virtuosoRef.current?.scrollToIndex({ index: lastIndex, align: "end", behavior: "auto" });
+      forceScrollToBottom();
+      window.requestAnimationFrame(() => {
+        virtuosoRef.current?.scrollToIndex({ index: lastIndex, align: "end", behavior: "auto" });
+        forceScrollToBottom();
+        window.requestAnimationFrame(forceScrollToBottom);
+      });
+    }, [forceScrollToBottom, lines.length]);
 
     useImperativeHandle(
       ref,
@@ -291,7 +384,7 @@ const VirtualLogViewerImpl = forwardRef<VirtualLogViewerHandle, Props>(
           virtuosoRef.current?.scrollToIndex({ index: 0, behavior: "auto" });
         },
         scrollToBottom() {
-          virtuosoRef.current?.scrollToIndex({ index: lines.length - 1, align: "end", behavior: "auto" });
+          scrollToBottomStable();
         },
         scrollToLine(index: number, behavior: "auto" | "smooth" = "smooth") {
           if (!lines.length) return;
@@ -302,6 +395,27 @@ const VirtualLogViewerImpl = forwardRef<VirtualLogViewerHandle, Props>(
           if (index < 0 || index >= totalMatches) return;
           const targetLine = findLineForMatch(index);
           virtuosoRef.current?.scrollToIndex({ index: targetLine, align: "center", behavior: "smooth" });
+        },
+        getSelectionText(selection: Selection) {
+          const anchorLine = findClosestLineIndex(selection.anchorNode);
+          const focusLine = findClosestLineIndex(selection.focusNode);
+          const domText = selection.toString();
+          const pointText = selectionStartRef.current && selectionEndRef.current
+            ? buildSelectionTextFromPoints(lines, selectionStartRef.current, selectionEndRef.current)
+            : "";
+          if (pointText.trim() && pointText.length >= domText.length) {
+            return pointText;
+          }
+          if (anchorLine == null || focusLine == null) {
+            return domText;
+          }
+          const startLine = Math.max(0, Math.min(anchorLine, focusLine));
+          const endLine = Math.min(lines.length - 1, Math.max(anchorLine, focusLine));
+          if (startLine === endLine) {
+            return domText;
+          }
+          const selectedLineText = lines.slice(startLine, endLine + 1).join("\n");
+          return selectedLineText || domText;
         },
         getScrollState() {
           const el = scrollerRef.current;
@@ -316,7 +430,7 @@ const VirtualLogViewerImpl = forwardRef<VirtualLogViewerHandle, Props>(
           return scrollerRef.current;
         },
       }),
-      [lines.length, totalMatches, findLineForMatch],
+      [lines, scrollToBottomStable, totalMatches, findLineForMatch],
     );
 
     if (!content) {
@@ -324,7 +438,7 @@ const VirtualLogViewerImpl = forwardRef<VirtualLogViewerHandle, Props>(
     }
 
     return (
-      <div className={className} onWheel={onWheel}>
+      <div className={className} onWheel={onWheel} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp}>
         <Virtuoso
           ref={virtuosoRef}
           data={lineItems}
@@ -334,7 +448,7 @@ const VirtualLogViewerImpl = forwardRef<VirtualLogViewerHandle, Props>(
           components={{ Scroller: VirtuosoScroller }}
           itemContent={renderLine}
           defaultItemHeight={17}
-          followOutput={followOutput ? "smooth" : false}
+          followOutput={followOutput ? "auto" : false}
           atBottomThreshold={200}
           atBottomStateChange={(atBottom) => onNearBottomChange?.(atBottom)}
           overscan={300}

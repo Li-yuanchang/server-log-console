@@ -1,4 +1,5 @@
 import { X } from "lucide-react";
+import { useEscapeToClose } from "./useEscapeToClose.js";
 
 export type SettingsModalOverlayProps = {
   open: boolean;
@@ -8,6 +9,7 @@ export type SettingsModalOverlayProps = {
 
 export function SettingsModalOverlay(props: SettingsModalOverlayProps) {
   const { open, onClose, children } = props;
+  useEscapeToClose(open, onClose);
 
   if (!open) return null;
 

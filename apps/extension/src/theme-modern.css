@@ -507,7 +507,7 @@
   font-weight: 500;
   font-size: 12px;
   cursor: pointer;
-  transition: background 120ms ease, transform 60ms ease;
+  transition: background 120ms ease, box-shadow 120ms ease, color 120ms ease, border-color 120ms ease;
   box-shadow: none;
 }
 
@@ -516,7 +516,7 @@
 }
 
 .theme-modern button:active:not(:disabled):not(.file-row) {
-  transform: scale(0.97);
+  transform: none;
 }
 
 .theme-modern button:disabled {
@@ -703,7 +703,7 @@
   background: var(--panel);
   color: var(--ink);
   gap: 5px;
-  transition: all 120ms ease;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease, box-shadow 120ms ease;
   box-shadow: none;
 }
 
@@ -739,7 +739,7 @@
   font-weight: 400;
   color: var(--ink-muted);
   box-shadow: none;
-  transition: all 120ms ease;
+  transition: background 120ms ease, color 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
 }
 
 .theme-modern .toolbar-tabs .ghost-button:hover:not(:disabled):not(.tab-active) {
@@ -821,13 +821,16 @@
 
 /* --- 11. 标签页 --- */
 .theme-modern .result-tab-chip {
-  border-radius: 6px;
-  transition: all 120ms ease;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--line) 82%, #ffffff 18%);
+  background: color-mix(in srgb, var(--panel) 88%, #ffffff 12%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
+  transition: background-color 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
 }
 
 .theme-modern .result-tab-chip-active {
   background: #171717;
-  border: none;
+  border-color: #171717;
   box-shadow: none;
 }
 
@@ -836,7 +839,10 @@
   font-size: 12px;
   font-weight: 500;
   color: var(--ink-muted);
-  border-radius: 6px;
+  border-radius: 8px;
+  cursor: pointer;
+  transform: none;
+  transition: none;
 }
 
 .theme-modern .result-tab-chip-active .result-tab-main {
@@ -851,12 +857,26 @@
 .theme-modern .result-tab-close {
   width: 22px;
   height: 22px;
-  border-radius: 4px;
+  border-radius: 6px;
   font-size: 11px;
+  cursor: pointer;
+  transform: none;
+  transition: none;
+}
+
+.theme-modern .result-tab-main:active:not(:disabled),
+.theme-modern .result-tab-close:active:not(:disabled) {
+  transform: none;
 }
 
 .theme-modern .result-tab-close:hover:not(:disabled) {
   background: rgba(0, 0, 0, 0.06);
+}
+
+.theme-modern .result-tab-chip:hover:not(.result-tab-chip-active) {
+  border-color: color-mix(in srgb, var(--accent) 26%, var(--line) 74%);
+  background: color-mix(in srgb, var(--accent-soft) 24%, var(--panel) 76%);
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 
 /* --- 12. 日志查看器 --- */
@@ -1662,7 +1682,7 @@
 }
 
 .theme-modern .file-row {
-  padding: 6px 16px;
+  padding: 6px 16px 6px 12px;
   border-radius: 0;
   border: none;
   border-bottom: 1px solid var(--line);
@@ -1682,6 +1702,10 @@
 
 .theme-modern .file-row-selected {
   background: rgba(59, 130, 246, 0.08);
+}
+
+.theme-modern .file-row-select-mode:hover:not(:disabled) {
+  background: rgba(0, 112, 243, 0.055);
 }
 
 .theme-modern .file-row-active {
@@ -1718,7 +1742,7 @@
 }
 
 .theme-modern .file-table-head {
-  padding: 8px 16px;
+  padding: 8px 16px 8px 12px;
   background: var(--panel);
   border-bottom: 1px solid var(--line);
   font-size: 12px;
@@ -1745,6 +1769,18 @@
 
 .theme-modern .file-select-checkbox {
   accent-color: var(--accent);
+}
+
+.theme-modern .file-select-cell {
+  border-radius: 8px;
+}
+
+.theme-modern .file-select-cell:hover {
+  background: rgba(0, 112, 243, 0.08);
+}
+
+.theme-modern .file-row-selected .file-select-cell {
+  background: rgba(0, 112, 243, 0.12);
 }
 
 .theme-modern .table-head-button {
@@ -2467,7 +2503,7 @@
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 120ms ease;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease, box-shadow 120ms ease;
   box-shadow: none;
   align-self: flex-end;
 }
@@ -2690,24 +2726,20 @@
 
 /* --- 34. Upload Progress --- */
 .theme-modern .upload-progress-bar {
-  background: var(--panel);
-  border-top: 1px solid var(--line);
   color: var(--ink);
   font-family: var(--font-ui);
 }
 
 .theme-modern .upload-progress-track {
-  background: var(--line);
-  border-radius: 3px;
+  background: rgba(17, 24, 39, 0.08);
 }
 
-.theme-modern .upload-progress-fill {
-  background: var(--accent);
-  border-radius: 3px;
+.theme-modern .upload-progress-fill:not(.download-progress-fill) {
+  background: linear-gradient(90deg, var(--accent), #4aa3ff);
 }
 
-.theme-modern .upload-progress-stats {
-  opacity: 0.6;
+.theme-modern .download-progress-fill {
+  background: linear-gradient(90deg, #0f9f6e, #34c99a);
 }
 
 /* --- 35. Confirm Dialog --- */
@@ -2875,6 +2907,150 @@
 
 .theme-modern .preview-dirty {
   color: var(--warning, #d97706);
+}
+
+.theme-modern .preview-dialog-archive {
+  background: #f7f9fc;
+  border-color: rgba(148, 163, 184, 0.3);
+}
+
+.theme-modern .preview-dialog-class {
+  background: #f7f9fc;
+  border-color: rgba(148, 163, 184, 0.3);
+}
+
+.theme-modern .preview-dialog-archive .preview-header,
+.theme-modern .preview-dialog-class .preview-header {
+  background: #ffffff;
+  border-bottom-color: #dce4ee;
+}
+
+.theme-modern .preview-dialog-archive .preview-title,
+.theme-modern .preview-dialog-class .preview-title {
+  color: #172033;
+}
+
+.theme-modern .preview-dialog-archive .preview-meta,
+.theme-modern .preview-dialog-class .preview-meta {
+  color: #64748b;
+}
+
+.theme-modern .preview-dialog-archive .preview-readonly-badge {
+  color: #0f766e;
+  background: rgba(20, 184, 166, 0.14);
+}
+
+.theme-modern .preview-dialog-class .preview-readonly-badge {
+  color: #315f8d;
+  background: rgba(49, 95, 141, 0.12);
+}
+
+.theme-modern .archive-manager-preview button,
+.theme-modern .archive-manager-preview .archive-tree-node,
+.theme-modern .archive-manager-preview .archive-nav-button {
+  background-image: none;
+  color: inherit;
+  box-shadow: none;
+}
+
+.theme-modern .archive-manager-preview .archive-nav-button {
+  border-color: #cfd8e3;
+  background: linear-gradient(180deg, #ffffff 0%, #eef3f8 100%);
+  color: #334155;
+}
+
+.theme-modern .archive-manager-preview .archive-nav-button:hover:not(:disabled) {
+  border-color: #a9b8c9;
+  background: #ffffff;
+  color: #1f2f46;
+}
+
+.theme-modern .archive-manager-preview .archive-nav-button:disabled {
+  background: #f8fafc;
+  color: #94a3b8;
+}
+
+.theme-modern .archive-manager-preview .archive-tree-node {
+  background: transparent;
+  color: #334155;
+}
+
+.theme-modern .archive-manager-preview .archive-tree-node:hover {
+  border-color: #d5e0ec;
+  background: #f4f8fc;
+  color: #1f2f46;
+}
+
+.theme-modern .archive-manager-preview .archive-tree-node-active {
+  border-color: #a9c4df;
+  background: #e9f2fb;
+  color: #173657;
+}
+
+.theme-modern .archive-manager-preview button.archive-preview-row {
+  background: #ffffff;
+  color: #334155;
+}
+
+.theme-modern .archive-manager-preview button.archive-preview-row:hover:not(:disabled) {
+  background: #f4f8fc;
+  color: #172033;
+}
+
+.theme-modern .archive-manager-preview .archive-preview-entry-active {
+  background: #eaf3fc !important;
+  color: #173657 !important;
+}
+
+.theme-modern .archive-manager-preview button:hover:not(:disabled),
+.theme-modern .archive-manager-preview button:active:not(:disabled):not(.file-row) {
+  transform: none;
+}
+
+.theme-modern .class-ide-preview button,
+.theme-modern .class-ide-tabs button,
+.theme-modern .class-outline-row {
+  background-image: none;
+  color: inherit;
+  box-shadow: none;
+  transform: none;
+}
+
+.theme-modern .class-ide-tabs button {
+  background: transparent;
+  color: #64748b;
+}
+
+.theme-modern .class-ide-tabs button:hover:not(:disabled) {
+  background: #ffffff;
+  color: #1f2f46;
+}
+
+.theme-modern .class-ide-tabs .class-ide-tab-active {
+  border-color: #c7d6e6;
+  background: #ffffff;
+  color: #315f8d;
+}
+
+.theme-modern .class-outline-row {
+  background: transparent;
+  color: #334155;
+}
+
+.theme-modern .class-outline-row:hover {
+  border-color: #d5e0ec;
+  background: #f4f8fc;
+}
+
+.theme-modern .class-outline-row-active {
+  border-color: #a9c4df;
+  background: #e9f2fb;
+}
+
+.theme-modern .class-ide-preview button:hover:not(:disabled),
+.theme-modern .class-ide-preview button:active:not(:disabled):not(.file-row) {
+  transform: none;
+  filter: none;
 }
 
 .theme-modern .settings-workspace {
@@ -3177,15 +3353,32 @@ body.extension-sidepanel .theme-modern .browser-resizer {
 }
 
 .theme-modern .workspace-session-tab-close {
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  min-height: 20px;
+  padding: 0;
+  margin-right: 4px;
+  border-radius: 5px;
   color: color-mix(in srgb, var(--ink-soft) 78%, white 22%);
+  background: transparent;
+  box-shadow: none;
+  filter: none;
+  transform: none;
 }
 
 .theme-modern .workspace-session-tab-close:hover {
-  background: rgba(15, 23, 42, 0.07);
+  background: rgba(15, 23, 42, 0.06);
   color: var(--ink);
+  box-shadow: none;
+  filter: none;
+  transform: none;
 }
 
 .theme-modern .workspace-session-tab-active .workspace-session-tab-close:hover {
-  background: rgba(239, 68, 68, 0.12);
+  background: rgba(239, 68, 68, 0.1);
   color: #b91c1c;
+  box-shadow: none;
+  filter: none;
+  transform: none;
 }

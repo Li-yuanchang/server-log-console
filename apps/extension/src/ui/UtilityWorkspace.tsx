@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { AppWindow, GitCompare, Plug, TerminalSquare, X } from "lucide-react";
+import { useEscapeToClose } from "./useEscapeToClose.js";
 
 export type UtilityPanelType = "compare" | "tunnels" | "batch";
 
@@ -36,6 +37,7 @@ const PANEL_META: Record<UtilityPanelType, { eyebrow: string; label: string; sub
 
 export function UtilityWorkspace({ activePanel, panels, onSelectPanel, onClose, onPopout, standalone = false, children }: UtilityWorkspaceProps) {
   const activeMeta = PANEL_META[activePanel];
+  useEscapeToClose(true, onClose);
 
   return (
     <section className={`utility-workspace${standalone ? " utility-workspace-standalone" : ""}`}>

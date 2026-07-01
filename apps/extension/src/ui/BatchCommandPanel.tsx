@@ -2,6 +2,7 @@ import { useCallback, useState } from "react";
 import { Play, X, ChevronDown, ChevronRight } from "lucide-react";
 import type { BatchCommandResult, ServerSummary } from "@server-log-console/shared";
 import { apiBatchExec } from "./api.js";
+import { useEscapeToClose } from "./useEscapeToClose.js";
 
 type Props = {
   visible: boolean;
@@ -16,6 +17,7 @@ export function BatchCommandPanel({ visible, servers, onClose, onStatus }: Props
   const [executing, setExecuting] = useState(false);
   const [results, setResults] = useState<BatchCommandResult[]>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  useEscapeToClose(visible, onClose);
 
   if (!visible) return null;
 

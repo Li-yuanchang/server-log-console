@@ -3,6 +3,7 @@ import { X, Copy, ClipboardPaste, RefreshCw, Plug } from "lucide-react";
 import type { ServerSummary } from "@server-log-console/shared";
 import { useTerminalSession } from "./useTerminalSession.js";
 import { localServiceBase } from "./api.js";
+import { copyText } from "./utils.js";
 
 export interface TerminalPaneConfig {
   paneId: string;
@@ -57,17 +58,20 @@ export function TerminalPane({
 
   const handleCopy = useCallback(async () => {
     if (!selMenu) return;
-    await navigator.clipboard.writeText(selMenu.text);
+    await copyText(session.getSelection() || selMenu.text);
     session.clearSelection();
     setSelMenu(null);
+    session.focusTerminalSoon();
   }, [selMenu, session]);
 
   const handleCopyAndPaste = useCallback(async () => {
     if (!selMenu) return;
-    await navigator.clipboard.writeText(selMenu.text);
-    session.pasteToTerminal(selMenu.text);
+    const text = session.getSelection() || selMenu.text;
+    await copyText(text);
+    session.pasteToTerminal(text);
     session.clearSelection();
     setSelMenu(null);
+    session.focusTerminalSoon();
   }, [selMenu, session]);
 
   useEffect(() => {
@@ -102,10 +106,10 @@ export function TerminalPane({
         <div ref={session.containerRef} className="xterm-container" />
         {selMenu && (
           <div className="terminal-sel-menu" style={{ left: selMenu.x, top: selMenu.y }}>
-            <button type="button" title="复制" onMouseDown={(e) => e.stopPropagation()} onClick={() => void handleCopy()}>
+            <button type="button" title="复制" onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }} onClick={() => void handleCopy()}>
               <Copy size={14} />
             </button>
-            <button type="button" title="复制并粘贴" onMouseDown={(e) => e.stopPropagation()} onClick={() => void handleCopyAndPaste()}>
+            <button type="button" title="复制并粘贴" onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }} onClick={() => void handleCopyAndPaste()}>
               <ClipboardPaste size={14} />
             </button>
           </div>

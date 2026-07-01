@@ -2,7 +2,7 @@ import { useRef, useEffect, useCallback } from "react";
 import { EditorState, type Extension } from "@codemirror/state";
 import { EditorView, keymap, lineNumbers, highlightActiveLineGutter, highlightActiveLine, drawSelection, rectangularSelection, highlightSpecialChars } from "@codemirror/view";
 import { defaultKeymap, indentWithTab, history, historyKeymap } from "@codemirror/commands";
-import { searchKeymap, highlightSelectionMatches } from "@codemirror/search";
+import { SearchQuery, openSearchPanel, search, searchKeymap, highlightSelectionMatches, setSearchQuery } from "@codemirror/search";
 import { closeBrackets, closeBracketsKeymap } from "@codemirror/autocomplete";
 import { indentOnInput, bracketMatching, foldGutter, foldKeymap, syntaxHighlighting, defaultHighlightStyle } from "@codemirror/language";
 import { oneDark } from "@codemirror/theme-one-dark";
@@ -12,6 +12,20 @@ function getLanguageKey(fileName: string) {
 }
 
 const languageExtensionCache = new Map<string, Promise<Extension>>();
+
+const searchPhrases = {
+  Find: "搜索源码",
+  Replace: "替换为",
+  next: "下一个",
+  previous: "上一个",
+  all: "全选匹配",
+  "match case": "区分大小写",
+  regexp: "正则",
+  "by word": "整词",
+  replace: "替换",
+  "replace all": "全部替换",
+  close: "关闭搜索"
+};
 
 async function loadLanguageExtension(ext: string): Promise<Extension> {
   try {
@@ -131,16 +145,34 @@ interface CodeEditorProps {
   fileName: string;
   theme?: "classic" | "modern";
   readOnly?: boolean;
+  focusLine?: number | null;
+  focusLineToken?: number;
+  openSearchToken?: number;
   onChange?: (v: string) => void;
   onSave?: () => void;
 }
 
-export function CodeEditor({ value, fileName, theme = "modern", readOnly, onChange, onSave }: CodeEditorProps) {
+export function CodeEditor({ value, fileName, theme = "modern", readOnly, focusLine, focusLineToken, openSearchToken, onChange, onSave }: CodeEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const initTokenRef = useRef(0);
   const cbRef = useRef({ onChange, onSave });
+  const focusRef = useRef<{ line?: number | null; searchToken?: number }>({});
   cbRef.current = { onChange, onSave };
+  focusRef.current = { line: focusLine, searchToken: openSearchToken };
+
+  const scrollToLine = useCallback((view: EditorView, lineNumber?: number | null) => {
+    if (!lineNumber || lineNumber < 1) {
+      return;
+    }
+    const safeLine = Math.min(lineNumber, view.state.doc.lines);
+    const line = view.state.doc.line(safeLine);
+    view.dispatch({
+      selection: { anchor: line.from },
+      effects: EditorView.scrollIntoView(line.from, { y: "center" })
+    });
+    view.focus();
+  }, []);
 
   const init = useCallback(async () => {
     if (!containerRef.current) return;
@@ -158,7 +190,8 @@ export function CodeEditor({ value, fileName, theme = "modern", readOnly, onChan
       lineNumbers(), highlightActiveLineGutter(), highlightSpecialChars(),
       history(), foldGutter(), drawSelection(), rectangularSelection(),
       indentOnInput(), bracketMatching(), closeBrackets(),
-      highlightActiveLine(), highlightSelectionMatches(),
+      highlightActiveLine(), search({ top: true }), highlightSelectionMatches(),
+      EditorState.phrases.of(searchPhrases),
       keymap.of([...closeBracketsKeymap, ...defaultKeymap, ...searchKeymap, ...historyKeymap, ...foldKeymap, indentWithTab]),
       languageExtension,
       isDark ? [oneDark, darkOverride] : [syntaxHighlighting(defaultHighlightStyle, { fallback: true }), lightTheme],
@@ -170,7 +203,12 @@ export function CodeEditor({ value, fileName, theme = "modern", readOnly, onChan
     ];
     const state = EditorState.create({ doc: value, extensions });
     viewRef.current = new EditorView({ state, parent: container });
-  }, [value, fileName, theme, readOnly]);
+    requestAnimationFrame(() => {
+      if (viewRef.current) {
+        scrollToLine(viewRef.current, focusRef.current.line);
+      }
+    });
+  }, [value, fileName, theme, readOnly, scrollToLine]);
 
   useEffect(() => {
     void init();
@@ -180,6 +218,25 @@ export function CodeEditor({ value, fileName, theme = "modern", readOnly, onChan
       viewRef.current = null;
     };
   }, [init]);
+
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view || !focusLine || focusLine < 1) {
+      return;
+    }
+    scrollToLine(view, focusLine);
+  }, [focusLine, focusLineToken, scrollToLine]);
+
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view || !openSearchToken) {
+      return;
+    }
+    view.dispatch({
+      effects: setSearchQuery.of(new SearchQuery({ search: "" }))
+    });
+    openSearchPanel(view);
+  }, [openSearchToken]);
 
   return <div ref={containerRef} className="code-editor-container" />;
 }

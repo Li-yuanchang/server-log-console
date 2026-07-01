@@ -10,6 +10,8 @@ const MIN_TERMINAL_FIT_WIDTH = 180;
 const MIN_TERMINAL_FIT_HEIGHT = 72;
 const MIN_TERMINAL_COLS = 24;
 const MIN_TERMINAL_ROWS = 6;
+const TERMINAL_INPUT_CHUNK_SIZE = 4096;
+const TERMINAL_INPUT_CHUNK_DELAY_MS = 8;
 
 interface UseTerminalSessionOptions {
   active: boolean;
@@ -26,6 +28,54 @@ interface UseTerminalSessionOptions {
   preserveSessionOnInactive?: boolean;
   preserveSessionOnDispose?: boolean;
   onSelectionMenu?: (menu: { x: number; y: number; text: string } | null) => void;
+}
+
+function rebuildSelectionFromBuffer(terminal: Terminal): string {
+  const selection = terminal.getSelectionPosition();
+  if (!selection) {
+    return "";
+  }
+
+  const buffer = terminal.buffer.active;
+  const startY = Math.max(0, Math.min(selection.start.y, selection.end.y) - 1);
+  const endY = Math.min(buffer.length - 1, Math.max(selection.start.y, selection.end.y) - 1);
+  if (endY < startY) {
+    return "";
+  }
+
+  const isForward =
+    selection.start.y < selection.end.y ||
+    (selection.start.y === selection.end.y && selection.start.x <= selection.end.x);
+  const rawStart = isForward ? selection.start : selection.end;
+  const rawEnd = isForward ? selection.end : selection.start;
+  const startX = Math.max(0, rawStart.x - 1);
+  const endX = Math.max(0, rawEnd.x - 1);
+  const selectedLines: string[] = [];
+
+  for (let row = startY; row <= endY; row += 1) {
+    const line = buffer.getLine(row);
+    if (!line) {
+      continue;
+    }
+    const from = row === startY ? startX : 0;
+    const to = row === endY ? Math.min(endX, line.length) : line.length;
+    selectedLines.push(line.translateToString(false, from, to));
+  }
+
+  return selectedLines
+    .map((line, index) => {
+      const absoluteRow = startY + index;
+      const bufferLine = buffer.getLine(absoluteRow);
+      return bufferLine?.isWrapped && index > 0 ? line : line.replace(/\s+$/u, "");
+    })
+    .reduce((text, line, index) => {
+      if (index === 0) {
+        return line;
+      }
+      const absoluteRow = startY + index;
+      const bufferLine = buffer.getLine(absoluteRow);
+      return bufferLine?.isWrapped ? text + line : `${text}\n${line}`;
+    }, "");
 }
 
 export function useTerminalSession(options: UseTerminalSessionOptions) {
@@ -47,6 +97,8 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
   const followOutputRef = useRef(true);
   const activeSessionIdRef = useRef("");
   const terminalReadyRef = useRef(false);
+  const pendingInputTimerRef = useRef<number | null>(null);
+  const pendingInputChunksRef = useRef<string[]>([]);
 
   const clampSelectionMenuPosition = useCallback((x: number, y: number) => {
     const container = containerRef.current;
@@ -98,6 +150,14 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
       window.clearTimeout(outputSettleTimerRef.current);
       outputSettleTimerRef.current = null;
     }
+  }, []);
+
+  const clearPendingInput = useCallback(() => {
+    if (pendingInputTimerRef.current !== null) {
+      window.clearTimeout(pendingInputTimerRef.current);
+      pendingInputTimerRef.current = null;
+    }
+    pendingInputChunksRef.current = [];
   }, []);
 
   const updateFollowOutputState = useCallback(() => {
@@ -180,7 +240,7 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
         brightCyan: "#56b6c2",
         brightWhite: "#ffffff",
       },
-      scrollback: 3000,
+      scrollback: 20000,
       convertEol: true,
     });
 
@@ -270,8 +330,9 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
       window.clearTimeout(timer);
       clearFitTimers();
       clearOutputSettleTimer();
+      clearPendingInput();
     };
-  }, [options.active, clearFitTimers, clearOutputSettleTimer, scheduleFit]);
+  }, [options.active, clearFitTimers, clearOutputSettleTimer, clearPendingInput, scheduleFit]);
 
   useEffect(() => {
     if (!options.active || !options.serverId) {
@@ -289,6 +350,7 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
   useEffect(() => () => {
     clearFitTimers();
     clearOutputSettleTimer();
+    clearPendingInput();
     stopTerminal({
       preserveSession: options.preserveSessionOnDispose,
       preserveSessionKey: options.preserveSessionOnDispose,
@@ -302,7 +364,7 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
     terminalRef.current?.dispose();
     terminalRef.current = null;
     fitAddonRef.current = null;
-  }, [clearFitTimers, clearOutputSettleTimer, options.preserveSessionOnDispose]);
+  }, [clearFitTimers, clearOutputSettleTimer, clearPendingInput, options.preserveSessionOnDispose]);
 
   function clearReconnectTimer() {
     if (reconnectTimerRef.current !== null) {
@@ -314,6 +376,7 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
   function scheduleReconnect() {
     if (!reconnectDesiredRef.current) return;
     clearReconnectTimer();
+    clearPendingInput();
     const next = retryCountRef.current + 1;
     retryCountRef.current = next;
     setRetryCount(next);
@@ -556,6 +619,12 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
     terminalRef.current?.focus();
   }
 
+  function focusTerminalSoon() {
+    window.requestAnimationFrame(() => {
+      terminalRef.current?.focus();
+    });
+  }
+
   function fitTerminal() {
     scheduleFit([0, 16, 64, 140, 260]);
     if (followOutputRef.current) {
@@ -564,7 +633,13 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
   }
 
   function getSelection(): string {
-    return terminalRef.current?.getSelection() || "";
+    const terminal = terminalRef.current;
+    if (!terminal) {
+      return "";
+    }
+    const selectedText = terminal.getSelection();
+    const rebuiltText = rebuildSelectionFromBuffer(terminal);
+    return rebuiltText.length > selectedText.length ? rebuiltText : selectedText;
   }
 
   function clearSelection() {
@@ -572,10 +647,40 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
   }
 
   function pasteToTerminal(text: string) {
+    clearPendingInput();
     const socket = socketRef.current;
-    if (socket?.readyState === WebSocket.OPEN) {
-      socket.send(JSON.stringify({ action: "input", data: text }));
+    if (socket?.readyState !== WebSocket.OPEN || !text) {
+      focusTerminalSoon();
+      return;
     }
+
+    const chunks: string[] = [];
+    for (let index = 0; index < text.length; index += TERMINAL_INPUT_CHUNK_SIZE) {
+      chunks.push(text.slice(index, index + TERMINAL_INPUT_CHUNK_SIZE));
+    }
+    pendingInputChunksRef.current = chunks;
+
+    const sendNextChunk = () => {
+      const activeSocket = socketRef.current;
+      if (activeSocket?.readyState !== WebSocket.OPEN) {
+        clearPendingInput();
+        return;
+      }
+      const next = pendingInputChunksRef.current.shift();
+      if (!next) {
+        pendingInputTimerRef.current = null;
+        return;
+      }
+      activeSocket.send(JSON.stringify({ action: "input", sessionId: activeSessionIdRef.current || undefined, data: next }));
+      if (pendingInputChunksRef.current.length > 0) {
+        pendingInputTimerRef.current = window.setTimeout(sendNextChunk, TERMINAL_INPUT_CHUNK_DELAY_MS);
+      } else {
+        pendingInputTimerRef.current = null;
+      }
+    };
+
+    sendNextChunk();
+    focusTerminalSoon();
   }
 
   return {
@@ -585,6 +690,7 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
     startTerminal,
     stopTerminal,
     focusTerminal,
+    focusTerminalSoon,
     fitTerminal,
     getSelection,
     clearSelection,

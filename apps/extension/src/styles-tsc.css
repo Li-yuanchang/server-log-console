@@ -173,7 +173,7 @@
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.04);
   cursor: pointer;
-  transition: border-color 120ms ease, box-shadow 120ms ease, transform 120ms ease, background 120ms ease;
+  transition: border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
 }
 
 .tsc-row:hover {
@@ -341,7 +341,7 @@
   border-radius: 14px !important;
   padding: 5px 10px !important;
   background: rgba(99,102,241,0.08);
-  transition: all 100ms;
+  transition: background 100ms ease, border-color 100ms ease, color 100ms ease, box-shadow 100ms ease;
   white-space: nowrap;
 }
 
@@ -650,7 +650,7 @@
   padding: 6px 8px !important;
   border: 1px solid rgba(129,140,248,0.14) !important;
   border-radius: 6px !important;
-  transition: all 80ms;
+  transition: background 80ms ease, border-color 80ms ease, color 80ms ease, box-shadow 80ms ease;
   text-align: left;
   background: rgba(255,255,255,0.04);
 }
@@ -905,7 +905,7 @@
   border-radius: 14px !important;
   padding: 5px 10px !important;
   background: rgba(59, 130, 246, 0.08);
-  transition: all 100ms;
+  transition: background 100ms ease, border-color 100ms ease, color 100ms ease, box-shadow 100ms ease;
   white-space: nowrap;
 }
 
@@ -1212,7 +1212,7 @@
   padding: 6px 8px !important;
   border: 1px solid rgba(59, 130, 246, 0.14) !important;
   border-radius: 6px !important;
-  transition: all 80ms;
+  transition: background 80ms ease, border-color 80ms ease, color 80ms ease, box-shadow 80ms ease;
   text-align: left;
   background: rgba(255, 255, 255, 0.04);
 }

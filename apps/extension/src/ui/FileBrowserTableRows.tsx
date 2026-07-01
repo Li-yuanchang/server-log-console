@@ -23,15 +23,23 @@ export function FileBrowserTableRows(props: Props) {
   if (!props.entries.length) {
     return <div className={`empty-box table-empty${props.emptyClassName ? ` ${props.emptyClassName}` : ""}`}>{props.emptyLabel || "当前目录为空"}</div>;
   }
+  const hasSelection = props.selectedFilePathSet.size > 0;
 
   return (
     <>
-      {props.entries.map((entry) => (
+      {props.entries.map((entry) => {
+        const selected = props.selectedFilePathSet.has(entry.path);
+        const toggleSelection = (checked = !selected) => {
+          if (!props.isBusy) {
+            props.onToggleSelection(entry.path, checked);
+          }
+        };
+        return (
         <div
           key={entry.path}
           role="button"
           tabIndex={0}
-          className={`file-row ${entry.path === props.activeFilePath ? "file-row-active" : ""} ${entry.kind === "directory" ? "file-row-dir" : ""} ${props.selectedFilePathSet.has(entry.path) ? "file-row-selected" : ""}`}
+          className={`file-row ${entry.path === props.activeFilePath ? "file-row-active" : ""} ${entry.kind === "directory" ? "file-row-dir" : ""} ${selected ? "file-row-selected" : ""} ${hasSelection ? "file-row-select-mode" : ""}`}
           onClick={(event) => {
             const target = event.target as HTMLElement;
             const selectCell = event.currentTarget.querySelector(".file-select-cell");
@@ -46,11 +54,20 @@ export function FileBrowserTableRows(props: Props) {
             if (clickedInsideSelectCell || target.closest(".file-select-cell") || target.closest(".file-row-actions")) {
               return;
             }
+            if (hasSelection) {
+              toggleSelection();
+              return;
+            }
             props.onOpenEntry(entry);
           }}
           onKeyDown={(event) => {
             if (event.target !== event.currentTarget) return;
-            if (event.key === "Enter" || event.key === " ") {
+            if (event.key === " ") {
+              event.preventDefault();
+              toggleSelection();
+              return;
+            }
+            if (event.key === "Enter") {
               event.preventDefault();
               props.onOpenEntry(entry);
             }
@@ -61,11 +78,24 @@ export function FileBrowserTableRows(props: Props) {
             props.onOpenContextMenu(entry, event.clientX, event.clientY);
           }}
         >
-          <span className="file-select-cell" onClick={(event) => event.stopPropagation()} onMouseDown={(event) => event.stopPropagation()}>
+          <span
+            className="file-select-cell"
+            role="checkbox"
+            aria-checked={selected}
+            tabIndex={-1}
+            onClick={(event) => {
+              event.stopPropagation();
+              if ((event.target as HTMLElement).closest("input")) {
+                return;
+              }
+              toggleSelection();
+            }}
+            onMouseDown={(event) => event.stopPropagation()}
+          >
             <input
               type="checkbox"
               className="file-select-checkbox"
-              checked={props.selectedFilePathSet.has(entry.path)}
+              checked={selected}
               disabled={props.isBusy}
               onClick={(event) => event.stopPropagation()}
               onPointerDown={(event) => event.stopPropagation()}
@@ -96,7 +126,8 @@ export function FileBrowserTableRows(props: Props) {
           <span>{props.formatDateTime(entry.modifiedTime)}</span>
           <span>{entry.kind === "directory" ? "目录" : "文件"}</span>
         </div>
-      ))}
+        );
+      })}
     </>
   );
 }

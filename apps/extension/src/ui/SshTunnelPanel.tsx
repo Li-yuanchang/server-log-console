@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Plug, X, RefreshCw, Plus } from "lucide-react";
 import type { SshTunnelInfo, SshTunnelRequest } from "@server-log-console/shared";
 import { apiCreateSshTunnel, apiCloseSshTunnel, apiListSshTunnels } from "./api.js";
+import { useEscapeToClose } from "./useEscapeToClose.js";
 
 type Props = {
   visible: boolean;
@@ -19,6 +20,7 @@ export function SshTunnelPanel({ visible, serverId, onClose, onStatus }: Props) 
   const [formLocalPort, setFormLocalPort] = useState("");
   const [formRemoteHost, setFormRemoteHost] = useState("127.0.0.1");
   const [formRemotePort, setFormRemotePort] = useState("");
+  useEscapeToClose(visible, onClose);
 
   const refresh = useCallback(async () => {
     setLoading(true);
