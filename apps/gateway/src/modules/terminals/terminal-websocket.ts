@@ -14,10 +14,6 @@ import {
   type TerminalSessionState,
 } from "./terminal-session-manager.js";
 
-function escapeShellSingleQuotes(value: string) {
-  return value.replace(/'/g, `'"'"'`);
-}
-
 interface TerminalMessagePayload {
   action?: "start" | "input" | "close" | "resize" | "detach";
   serverId?: string;

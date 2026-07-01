@@ -62,6 +62,17 @@ export class BastionSftpStrategy implements BastionSftpConnectionStrategy {
     }
   }
 
+  async uploadLocalFile(filePath: string, localPath: string, onProgress?: (transferred: number, chunkBytes: number, totalBytes: number) => void): Promise<void> {
+    const session = await this.sshExecutor.sftpOpenSession(this.serverId);
+    try {
+      const parentDir = filePath.substring(0, filePath.lastIndexOf("/")) || "/";
+      await session.ensureDir(parentDir);
+      await session.fastPut(localPath, filePath, onProgress);
+    } finally {
+      session.close();
+    }
+  }
+
   private async deleteDirectoryRecursive(session: SftpSession, directoryPath: string): Promise<void> {
     const entries = await session.listDirectory(directoryPath);
     for (const entry of entries) {
@@ -92,18 +103,33 @@ export class BastionSftpStrategy implements BastionSftpConnectionStrategy {
   }
 
   async startUpload(filePath: string): Promise<UploadHandle> {
-    const session = await this.sshExecutor.sftpOpenSession(this.serverId);
+    const MAX_WRITE_RETRIES = 2;
+    let session = await this.sshExecutor.sftpOpenSession(this.serverId);
     const parentDir = filePath.substring(0, filePath.lastIndexOf("/")) || "/";
     await session.ensureDir(parentDir);
-    const writeHandle = await session.openForWrite(filePath);
+    let writeHandle = await session.openForWrite(filePath);
     let offset = 0;
     let aborted = false;
 
     return {
       write: async (data: Buffer) => {
         if (aborted) throw new Error("上传已中止");
-        await writeHandle.writeChunk(data, offset);
-        offset += data.length;
+        for (let attempt = 0; attempt <= MAX_WRITE_RETRIES; attempt++) {
+          try {
+            await writeHandle.writeChunk(data, offset);
+            offset += data.length;
+            return;
+          } catch (error) {
+            if (attempt >= MAX_WRITE_RETRIES) {
+              throw error;
+            }
+            // JumpServer SFTP 长时间写入时偶发断开，重开会话并从当前 offset 重试本块。
+            await writeHandle.close().catch(() => {});
+            session.close();
+            session = await this.sshExecutor.sftpOpenSession(this.serverId);
+            writeHandle = await session.openForAppend(filePath);
+          }
+        }
       },
       finish: async () => {
         await writeHandle.close();

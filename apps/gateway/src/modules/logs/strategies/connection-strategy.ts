@@ -48,6 +48,9 @@ export interface ConnectionStrategy {
   /** 上传 Buffer 到远程文件 */
   uploadFile(filePath: string, content: Buffer): Promise<void>;
 
+  /** 从 gateway 所在机器本地路径上传到远程文件 */
+  uploadLocalFile(filePath: string, localPath: string, onProgress?: (transferred: number, chunkBytes: number, totalBytes: number) => void): Promise<void>;
+
   /** 开始分片上传，返回可复用的写入句柄 */
   startUpload(filePath: string): Promise<UploadHandle>;
 

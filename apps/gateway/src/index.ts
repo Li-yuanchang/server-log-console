@@ -533,6 +533,15 @@ app.post("/api/files/preview", async (req, res) => {
   }
 });
 
+app.post("/api/files/archive-entry-preview", async (req, res) => {
+  try {
+    const result = await fileTransferService.previewArchiveEntry(req.body);
+    res.json(result);
+  } catch (error) {
+    res.status(400).json({ message: error instanceof Error ? error.message : "Unknown error" });
+  }
+});
+
 app.post("/api/logs/recordings/start", async (req, res) => {
   try {
     const serverId = String(req.body?.serverId || "").trim();
