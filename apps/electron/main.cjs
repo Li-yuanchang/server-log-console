@@ -15,6 +15,7 @@ let mainWindow = null;
 let gatewayProcess = null;
 let tray = null;
 let isAlwaysOnTop = false;
+let isQuitting = false;
 let gatewayStartPromise = null;
 let viewerPipWindow = null;
 const terminalPipWindows = new Map();
@@ -62,6 +63,37 @@ function bindDevToolsShortcut(win) {
       toggleDevTools(win);
     }
   });
+}
+
+function showMainWindow() {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    if (process.platform === "darwin" && app.dock) {
+      void app.dock.show();
+    }
+    createWindow();
+    return;
+  }
+  if (process.platform === "darwin" && app.dock) {
+    void app.dock.show();
+  }
+  if (mainWindow.isMinimized()) {
+    mainWindow.restore();
+  }
+  mainWindow.show();
+  mainWindow.focus();
+  if (process.platform === "darwin") {
+    app.focus({ steal: true });
+  }
+}
+
+function hideMainWindowToTray() {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return;
+  }
+  mainWindow.hide();
+  if (process.platform === "darwin" && app.dock) {
+    app.dock.hide();
+  }
 }
 
 function probe(message) {
@@ -588,6 +620,15 @@ function createWindow() {
     }
   });
 
+  mainWindow.on("close", (event) => {
+    if (isQuitting || process.platform !== "darwin") {
+      return;
+    }
+    event.preventDefault();
+    probe("createWindow close intercepted hide");
+    hideMainWindowToTray();
+  });
+
   mainWindow.on("closed", () => {
     probe("createWindow window closed");
     mainWindow = null;
@@ -622,13 +663,13 @@ function createTray() {
   probe("createTray created");
   tray.setToolTip("日志控制台");
   const contextMenu = Menu.buildFromTemplate([
-    { label: "显示窗口", click: () => { if (mainWindow) { mainWindow.show(); mainWindow.focus(); } } },
+    { label: "显示窗口", click: () => showMainWindow() },
     { label: "开发者工具", click: () => toggleDevTools() },
     { type: "separator" },
     { label: "退出", click: () => app.quit() },
   ]);
   tray.setContextMenu(contextMenu);
-  tray.on("click", () => { if (mainWindow) { mainWindow.show(); mainWindow.focus(); } });
+  tray.on("click", () => showMainWindow());
 }
 
 app.whenReady().then(() => {
@@ -650,7 +691,9 @@ app.whenReady().then(() => {
     probe("app activate");
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
+      return;
     }
+    showMainWindow();
   });
 });
 
@@ -662,6 +705,7 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", () => {
+  isQuitting = true;
   probe("before-quit");
   if (gatewayProcess) {
     gatewayProcess.kill();

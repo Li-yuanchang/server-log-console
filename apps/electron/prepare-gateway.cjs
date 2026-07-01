@@ -43,6 +43,11 @@ fs.mkdirSync(path.join(BUILD_DIR, "node_modules", "@server-log-console"), { recu
 // Copy gateway dist
 copyDirSync(path.join(GATEWAY_DIR, "dist"), path.join(BUILD_DIR, "dist"));
 
+const gatewayResources = path.join(GATEWAY_DIR, "resources");
+if (fs.existsSync(gatewayResources)) {
+  copyDirSync(gatewayResources, path.join(BUILD_DIR, "resources"));
+}
+
 // Copy gateway package.json (strip devDependencies and local workspace dep)
 const gwPkg = JSON.parse(fs.readFileSync(path.join(GATEWAY_DIR, "package.json"), "utf8"));
 delete gwPkg.devDependencies;
