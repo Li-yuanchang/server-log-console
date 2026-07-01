@@ -13,7 +13,9 @@ export interface SftpSession {
   stat(filePath: string): Promise<{ size: number; mtime: number; readable: boolean }>;
   read(filePath: string, offset: number, length: number): Promise<Buffer>;
   write(filePath: string, data: Buffer): Promise<void>;
+  fastPut(localPath: string, remotePath: string, onProgress?: (transferred: number, chunkBytes: number, totalBytes: number) => void): Promise<void>;
   openForWrite(filePath: string): Promise<SftpWriteHandle>;
+  openForAppend(filePath: string): Promise<SftpWriteHandle>;
   unlink(filePath: string): Promise<void>;
   listDirectory(directoryPath: string): Promise<Array<{ name: string; path: string; kind: "file" | "directory" }>>;
   rmdir(directoryPath: string): Promise<void>;
@@ -85,6 +87,19 @@ const TARGET_SHELL_PROMPT_PATTERN = /(\[[^\]\n]+@[^\]\n]+[^\n]*[#$]\s*$)|([#$]\s
 
 function buildJumpServerCwdMarker() {
   return `__SLC_CWD_READY_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}__`;
+}
+
+function buildTerminalCwdCommand(cwd: string) {
+  const escapedCwd = escapeShellSingleQuotes(cwd);
+  return `cd -- '${escapedCwd}' >/dev/null 2>&1 && clear || printf '\\n[slc] 无法进入目录: %s\\n' '${escapedCwd}'`;
+}
+
+function applyTerminalCwd(stream: ClientChannel, cwd?: string) {
+  const targetCwd = cwd?.trim();
+  if (!targetCwd) {
+    return;
+  }
+  stream.write(`${buildTerminalCwdCommand(targetCwd)}\r`);
 }
 
 export class SshExecutorService {
@@ -662,6 +677,29 @@ export class SshExecutorService {
   async sftpOpenSession(serverId: string): Promise<SftpSession> {
     const sftp = await this.acquireSftp(serverId);
     const self = this;
+    function createWriteHandle(handle: Buffer): SftpWriteHandle {
+      return {
+        writeChunk(data: Buffer, offset: number): Promise<void> {
+          return new Promise<void>((res, rej) => {
+            const CHUNK = 32 * 1024;
+            let pos = 0;
+            function next() {
+              if (pos >= data.length) return res();
+              const end = Math.min(pos + CHUNK, data.length);
+              sftp.write(handle, data, pos, end - pos, offset + pos, (err) => {
+                if (err) { self.evictSftp(serverId); return rej(new Error(`SFTP write 失败 (offset=${offset + pos})：${err.message}`)); }
+                pos = end;
+                next();
+              });
+            }
+            next();
+          });
+        },
+        close(): Promise<void> {
+          return new Promise<void>((res) => sftp.close(handle, () => res()));
+        }
+      };
+    }
 
     return {
       stat(filePath: string) {
@@ -704,31 +742,35 @@ export class SshExecutorService {
           });
         });
       },
+      fastPut(localPath: string, remotePath: string, onProgress?: (transferred: number, chunkBytes: number, totalBytes: number) => void) {
+        return new Promise<void>((resolve, reject) => {
+          sftp.fastPut(localPath, remotePath, {
+            concurrency: 8,
+            chunkSize: 128 * 1024,
+            step: (total, chunkBytes, totalBytes) => onProgress?.(total, chunkBytes, totalBytes),
+          }, (error) => {
+            if (error) {
+              self.evictSftp(serverId);
+              reject(new Error(`SFTP fastPut 失败 (${remotePath})：${error.message}`));
+              return;
+            }
+            resolve();
+          });
+        });
+      },
       openForWrite(filePath: string): Promise<SftpWriteHandle> {
         return new Promise((resolve, reject) => {
           sftp.open(filePath, "w", (openErr, handle) => {
             if (openErr) { self.evictSftp(serverId); return reject(new Error(`SFTP open(write) 失败 (${filePath})：${openErr.message}`)); }
-            resolve({
-              writeChunk(data: Buffer, offset: number): Promise<void> {
-                return new Promise<void>((res, rej) => {
-                  const CHUNK = 32 * 1024;
-                  let pos = 0;
-                  function next() {
-                    if (pos >= data.length) return res();
-                    const end = Math.min(pos + CHUNK, data.length);
-                    sftp.write(handle, data, pos, end - pos, offset + pos, (err) => {
-                      if (err) { self.evictSftp(serverId); return rej(new Error(`SFTP write 失败 (offset=${offset + pos})：${err.message}`)); }
-                      pos = end;
-                      next();
-                    });
-                  }
-                  next();
-                });
-              },
-              close(): Promise<void> {
-                return new Promise<void>((res) => sftp.close(handle, () => res()));
-              }
-            });
+            resolve(createWriteHandle(handle));
+          });
+        });
+      },
+      openForAppend(filePath: string): Promise<SftpWriteHandle> {
+        return new Promise((resolve, reject) => {
+          sftp.open(filePath, "r+", (openErr, handle) => {
+            if (openErr) { self.evictSftp(serverId); return reject(new Error(`SFTP open(append) 失败 (${filePath})：${openErr.message}`)); }
+            resolve(createWriteHandle(handle));
           });
         });
       },
@@ -875,18 +917,20 @@ export class SshExecutorService {
     }
 
     if (connection.shellStream) {
+      applyTerminalCwd(connection.shellStream, cwd);
       return connection;
     }
 
     return new Promise<ManagedSshConnection>((resolve, reject) => {
       const shellOpts: Record<string, unknown> = { term: "xterm", cols: 160, rows: 48 };
-      if (cwd) { shellOpts.cwd = cwd; }
       connection.client.shell(shellOpts, (error, stream) => {
         if (error) {
           connection.cleanup();
           reject(error);
           return;
         }
+
+        applyTerminalCwd(stream, cwd);
 
         resolve({
           client: connection.client,

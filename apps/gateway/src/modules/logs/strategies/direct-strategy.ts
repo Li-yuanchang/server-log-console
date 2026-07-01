@@ -260,6 +260,17 @@ export class DirectStrategy implements DirectConnectionStrategy {
     await this.sshExecutor.execWithStdin(this.serverId, command, b64 + "\n", 120000);
   }
 
+  async uploadLocalFile(filePath: string, localPath: string, onProgress?: (transferred: number, chunkBytes: number, totalBytes: number) => void): Promise<void> {
+    const session = await this.sshExecutor.sftpOpenSession(this.serverId);
+    try {
+      const parentDir = filePath.substring(0, filePath.lastIndexOf("/")) || "/";
+      await session.ensureDir(parentDir);
+      await session.fastPut(localPath, filePath, onProgress);
+    } finally {
+      session.close();
+    }
+  }
+
   async startUpload(filePath: string): Promise<UploadHandle> {
     const fileArg = shellEscape(filePath);
     const dirArg = shellEscape(filePath.substring(0, filePath.lastIndexOf("/")) || "/");

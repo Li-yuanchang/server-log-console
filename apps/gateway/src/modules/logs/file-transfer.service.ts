@@ -1,6 +1,12 @@
 import { randomUUID } from "crypto";
-import { stat } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { existsSync } from "node:fs";
+import { mkdir, rm, stat, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { Readable } from "stream";
+import { promisify } from "node:util";
+import { inflateRawSync } from "node:zlib";
 import { z } from "zod";
 import type { StrategyResolver } from "./strategies/index.js";
 import type { UploadHandle } from "./strategies/connection-strategy.js";
@@ -21,12 +27,71 @@ const localUploadSchema = uploadSchema.extend({
   localPath: z.string().min(1)
 });
 
+const archiveEntryPreviewSchema = downloadSchema.extend({
+  entryName: z.string().min(1)
+});
+
+const execFileAsync = promisify(execFile);
+
 interface UploadSession {
   handle: UploadHandle;
   filePath: string;
   bytesWritten: number;
   timeout: ReturnType<typeof setTimeout>;
 }
+
+type ArchivePreviewEntry = {
+  name: string;
+  compressedSize: number;
+  uncompressedSize: number;
+  directory: boolean;
+  modifiedAt: string;
+  compressionMethod: number;
+  localHeaderOffset: number;
+};
+
+type ArchivePreviewInfo = {
+  entryCount: number;
+  displayedCount: number;
+  truncated: boolean;
+  centralDirectorySize: number;
+  commentLength: number;
+};
+
+type ClassMemberPreview = {
+  access: string;
+  name: string;
+  descriptor: string;
+  display: string;
+};
+
+type ClassPreviewInfo = {
+  magic: string;
+  version: string;
+  javaVersion: string;
+  accessFlags: string;
+  className: string;
+  superClass: string;
+  interfaces: string[];
+  constantPoolCount: number;
+  fields: ClassMemberPreview[];
+  methods: ClassMemberPreview[];
+  decompiledSource?: string;
+  decompileStatus?: "success" | "fallback";
+  decompileMessage?: string;
+};
+
+type ArchiveEntryPreview = {
+  filePath: string;
+  entryName: string;
+  fileName: string;
+  content: string;
+  size: number;
+  readOnly: true;
+  previewKind: "text" | "class" | "binary";
+  previewLabel: string;
+  classInfo?: ClassPreviewInfo;
+};
 
 const renameSchema = z.object({
   serverId: z.string(),
@@ -107,10 +172,48 @@ export class FileTransferService {
   async preview(rawRequest: unknown): Promise<{
     filePath: string; content: string; size: number;
     readOnly?: boolean; truncatedFrom?: number;
+    previewKind?: "text" | "archive" | "class";
+    previewLabel?: string;
+    archiveEntries?: ArchivePreviewEntry[];
+    archiveInfo?: ArchivePreviewInfo;
+    classInfo?: ClassPreviewInfo;
   }> {
     const request = downloadSchema.parse(rawRequest);
     const strategy = this.strategyResolver.resolve(request.serverId);
     const stat = await strategy.fileStat(request.filePath);
+    const lowerPath = request.filePath.toLowerCase();
+
+    if (isZipLikePath(lowerPath)) {
+      const archivePreview = await previewZipDirectory(request.filePath, stat.size, (offset, length) => strategy.fileRead(request.filePath, offset, length));
+      return {
+        filePath: request.filePath,
+        content: archivePreview.content,
+        size: stat.size,
+        readOnly: true,
+        previewKind: "archive",
+        previewLabel: "ZIP 目录预览",
+        archiveEntries: archivePreview.entries,
+        archiveInfo: archivePreview.info
+      };
+    }
+
+    if (lowerPath.endsWith(".class")) {
+      const maxClassPreviewSize = 10 * 1024 * 1024;
+      if (stat.size > maxClassPreviewSize) {
+        throw new Error(`Class 文件过大（${formatBytes(stat.size)}），结构预览上限 ${formatBytes(maxClassPreviewSize)}`);
+      }
+      const buffer = await strategy.downloadFile(request.filePath);
+      const classPreview = await previewJavaClass(request.filePath, buffer);
+      return {
+        filePath: request.filePath,
+        content: classPreview.content,
+        size: stat.size,
+        readOnly: true,
+        previewKind: "class",
+        previewLabel: "Class 结构预览",
+        classInfo: classPreview.info
+      };
+    }
 
     const maxEditSize = 10 * 1024 * 1024;
 
@@ -139,7 +242,72 @@ export class FileTransferService {
       content: raw,
       size: stat.size,
       readOnly: true,
+      previewKind: "text",
+      previewLabel: "尾部预览",
       truncatedFrom: offset
+    };
+  }
+
+  async previewArchiveEntry(rawRequest: unknown): Promise<ArchiveEntryPreview> {
+    const request = archiveEntryPreviewSchema.parse(rawRequest);
+    const strategy = this.strategyResolver.resolve(request.serverId);
+    const stat = await strategy.fileStat(request.filePath);
+    if (!isZipLikePath(request.filePath.toLowerCase())) {
+      throw new Error("当前文件不是可预览的 ZIP/JAR/WAR/EAR 归档");
+    }
+
+    const maxPreviewSize = 5 * 1024 * 1024;
+    const archivePreview = await previewZipDirectory(request.filePath, stat.size, (offset, length) => strategy.fileRead(request.filePath, offset, length));
+    const entry = archivePreview.entries.find((item) => item.name === request.entryName);
+    if (!entry) {
+      throw new Error(`归档内未找到条目：${request.entryName}`);
+    }
+    if (entry.directory) {
+      throw new Error("目录条目不能直接预览，请选择目录内文件");
+    }
+    if (entry.uncompressedSize > maxPreviewSize) {
+      throw new Error(`归档条目过大（${formatBytes(entry.uncompressedSize)}），预览上限 ${formatBytes(maxPreviewSize)}`);
+    }
+
+    const buffer = await readZipEntryBuffer(request.filePath, entry, (offset, length) => strategy.fileRead(request.filePath, offset, length));
+    const entryFileName = entry.name.split("/").pop() || entry.name;
+    if (entry.name.toLowerCase().endsWith(".class")) {
+      const classPreview = await previewJavaClass(`${request.filePath}!/${entry.name}`, buffer);
+      return {
+        filePath: request.filePath,
+        entryName: entry.name,
+        fileName: entryFileName,
+        content: classPreview.info.decompiledSource || classPreview.content,
+        size: entry.uncompressedSize,
+        readOnly: true,
+        previewKind: "class",
+        previewLabel: classPreview.info.decompileStatus === "success" ? "Class 反编译预览" : "Class 结构预览",
+        classInfo: classPreview.info
+      };
+    }
+
+    if (!isProbablyText(entry.name, buffer)) {
+      return {
+        filePath: request.filePath,
+        entryName: entry.name,
+        fileName: entryFileName,
+        content: `当前条目像是二进制文件，暂不直接展示内容。\n\n路径: ${entry.name}\n大小: ${formatBytes(entry.uncompressedSize)}\n压缩方法: ${entry.compressionMethod}`,
+        size: entry.uncompressedSize,
+        readOnly: true,
+        previewKind: "binary",
+        previewLabel: "二进制条目"
+      };
+    }
+
+    return {
+      filePath: request.filePath,
+      entryName: entry.name,
+      fileName: entryFileName,
+      content: buffer.toString("utf8"),
+      size: entry.uncompressedSize,
+      readOnly: true,
+      previewKind: "text",
+      previewLabel: "归档内文件预览"
     };
   }
 
@@ -334,4 +502,459 @@ function formatBytes(size: number) {
   let i = 0;
   while (value >= 1024 && i < units.length - 1) { value /= 1024; i++; }
   return `${value.toFixed(value >= 100 || i === 0 ? 0 : 1)} ${units[i]}`;
+}
+
+function isZipLikePath(lowerPath: string): boolean {
+  return lowerPath.endsWith(".zip") || lowerPath.endsWith(".jar") || lowerPath.endsWith(".war") || lowerPath.endsWith(".ear");
+}
+
+async function previewZipDirectory(
+  filePath: string,
+  fileSize: number,
+  readRange: (offset: number, length: number) => Promise<Buffer>
+): Promise<{ content: string; entries: ArchivePreviewEntry[]; info: ArchivePreviewInfo }> {
+  const maxTailSize = Math.min(fileSize, 66 * 1024);
+  const tailOffset = Math.max(0, fileSize - maxTailSize);
+  const tail = await readRange(tailOffset, maxTailSize);
+  const eocdOffsetInTail = findLastSignature(tail, 0x06054b50);
+  if (eocdOffsetInTail < 0) {
+    throw new Error("未找到 ZIP 中央目录，可能不是有效 zip/jar/war 文件");
+  }
+
+  const entryCount = tail.readUInt16LE(eocdOffsetInTail + 10);
+  const centralDirSize = tail.readUInt32LE(eocdOffsetInTail + 12);
+  const centralDirOffset = tail.readUInt32LE(eocdOffsetInTail + 16);
+  const commentLength = tail.readUInt16LE(eocdOffsetInTail + 20);
+  const maxPreviewEntries = 50000;
+  const maxCentralDirPreviewSize = 8 * 1024 * 1024;
+
+  if (centralDirSize > maxCentralDirPreviewSize) {
+    return {
+      content: [
+        `# ${filePath}`,
+        "",
+        "类型: ZIP/JAR 归档",
+        `大小: ${formatBytes(fileSize)}`,
+        `条目: ${entryCount}`,
+        `中央目录: ${formatBytes(centralDirSize)}`,
+        "",
+        `中央目录过大，当前只读预览上限 ${formatBytes(maxCentralDirPreviewSize)}。`,
+        "文件未解压，远程目录未被修改。"
+      ].join("\n"),
+      entries: [],
+      info: {
+        entryCount,
+        displayedCount: 0,
+        truncated: true,
+        centralDirectorySize: centralDirSize,
+        commentLength
+      }
+    };
+  }
+
+  const central = await readRange(centralDirOffset, centralDirSize);
+  const entries: ArchivePreviewEntry[] = [];
+  let offset = 0;
+  while (offset + 46 <= central.length && entries.length < maxPreviewEntries) {
+    if (central.readUInt32LE(offset) !== 0x02014b50) break;
+    const modifiedTime = central.readUInt16LE(offset + 12);
+    const modifiedDate = central.readUInt16LE(offset + 14);
+    const compressedSize = central.readUInt32LE(offset + 20);
+    const uncompressedSize = central.readUInt32LE(offset + 24);
+    const nameLength = central.readUInt16LE(offset + 28);
+    const extraLength = central.readUInt16LE(offset + 30);
+    const fileCommentLength = central.readUInt16LE(offset + 32);
+    const localHeaderOffset = central.readUInt32LE(offset + 42);
+    const compressionMethod = central.readUInt16LE(offset + 10);
+    const nameStart = offset + 46;
+    const nameEnd = nameStart + nameLength;
+    if (nameEnd > central.length) break;
+    const name = central.subarray(nameStart, nameEnd).toString("utf8");
+    entries.push({
+      name,
+      compressedSize,
+      uncompressedSize,
+      directory: name.endsWith("/"),
+      modifiedAt: formatZipDateTime(modifiedDate, modifiedTime),
+      compressionMethod,
+      localHeaderOffset
+    });
+    offset = nameEnd + extraLength + fileCommentLength;
+  }
+
+  const lines = [
+    `# ${filePath}`,
+    "",
+    "类型: ZIP/JAR 归档目录预览",
+    `大小: ${formatBytes(fileSize)}`,
+    `条目: ${entryCount}${entryCount > maxPreviewEntries ? `（仅索引前 ${maxPreviewEntries} 项）` : ""}`,
+    `中央目录: ${formatBytes(centralDirSize)}`,
+    commentLength ? `注释长度: ${commentLength} B` : "注释长度: 0 B",
+    "",
+    "说明: 当前只读取归档目录索引，不执行解压，不修改远程目录。",
+    "前端以文件管理器形式按目录浏览，不再展开全部路径。"
+  ];
+
+  return {
+    content: lines.join("\n"),
+    entries,
+    info: {
+      entryCount,
+      displayedCount: entries.length,
+      truncated: entryCount > entries.length,
+      centralDirectorySize: centralDirSize,
+      commentLength
+    }
+  };
+}
+
+async function readZipEntryBuffer(
+  archivePath: string,
+  entry: ArchivePreviewEntry,
+  readRange: (offset: number, length: number) => Promise<Buffer>
+): Promise<Buffer> {
+  const localHeader = await readRange(entry.localHeaderOffset, 30);
+  if (localHeader.length < 30 || localHeader.readUInt32LE(0) !== 0x04034b50) {
+    throw new Error(`归档条目本地头无效：${entry.name}`);
+  }
+  const nameLength = localHeader.readUInt16LE(26);
+  const extraLength = localHeader.readUInt16LE(28);
+  const dataOffset = entry.localHeaderOffset + 30 + nameLength + extraLength;
+  const compressed = await readRange(dataOffset, entry.compressedSize);
+  if (entry.compressionMethod === 0) {
+    return compressed;
+  }
+  if (entry.compressionMethod === 8) {
+    return inflateRawSync(compressed);
+  }
+  throw new Error(`暂不支持该压缩方法：${entry.compressionMethod}（${archivePath}!/${entry.name}）`);
+}
+
+function isProbablyText(fileName: string, buffer: Buffer): boolean {
+  const lower = fileName.toLowerCase();
+  const textExtensions = [
+    ".txt", ".log", ".md", ".json", ".xml", ".html", ".htm", ".css", ".js", ".jsx", ".ts", ".tsx",
+    ".java", ".properties", ".yml", ".yaml", ".csv", ".sql", ".sh", ".bat", ".conf", ".ini", ".mf"
+  ];
+  if (textExtensions.some((ext) => lower.endsWith(ext))) {
+    return true;
+  }
+  const sample = buffer.subarray(0, Math.min(buffer.length, 4096));
+  if (sample.includes(0)) {
+    return false;
+  }
+  let controlCount = 0;
+  for (const byte of sample) {
+    if (byte < 9 || (byte > 13 && byte < 32)) {
+      controlCount += 1;
+    }
+  }
+  return sample.length === 0 || controlCount / sample.length < 0.08;
+}
+
+function findLastSignature(buffer: Buffer, signature: number): number {
+  for (let i = buffer.length - 4; i >= 0; i--) {
+    if (buffer.readUInt32LE(i) === signature) return i;
+  }
+  return -1;
+}
+
+function formatZipDateTime(date: number, time: number): string {
+  if (!date) return "-";
+  const year = ((date >> 9) & 0x7f) + 1980;
+  const month = (date >> 5) & 0x0f;
+  const day = date & 0x1f;
+  const hour = (time >> 11) & 0x1f;
+  const minute = (time >> 5) & 0x3f;
+  const second = (time & 0x1f) * 2;
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${year}-${pad(month)}-${pad(day)} ${pad(hour)}:${pad(minute)}:${pad(second)}`;
+}
+
+async function previewJavaClass(filePath: string, buffer: Buffer): Promise<{ content: string; info: ClassPreviewInfo }> {
+  const reader = new ClassReader(buffer);
+  const magic = reader.u4();
+  if (magic !== 0xcafebabe) {
+    throw new Error("不是有效的 Java .class 文件（缺少 CAFEBABE 文件头）");
+  }
+
+  const minor = reader.u2();
+  const major = reader.u2();
+  const constantPool = parseConstantPool(reader);
+  const accessFlags = reader.u2();
+  const thisClass = resolveClassName(constantPool, reader.u2());
+  const superClassIndex = reader.u2();
+  const superClass = superClassIndex ? resolveClassName(constantPool, superClassIndex) : "";
+  const interfaceCount = reader.u2();
+  const interfaces: string[] = [];
+  for (let i = 0; i < interfaceCount; i++) {
+    interfaces.push(resolveClassName(constantPool, reader.u2()));
+  }
+  const fields = parseMemberTable(reader, constantPool, "field");
+  const methods = parseMemberTable(reader, constantPool, "method");
+  skipAttributes(reader);
+
+  const info: ClassPreviewInfo = {
+    magic: "CAFEBABE",
+    version: `${major}.${minor}`,
+    javaVersion: javaVersionLabel(major),
+    accessFlags: formatAccessFlags(accessFlags, "class"),
+    className: thisClass || "-",
+    superClass: superClass || "-",
+    interfaces,
+    constantPoolCount: constantPool.length - 1,
+    fields,
+    methods
+  };
+
+  const decompiled = await decompileJavaClass(filePath, buffer).catch((error) => ({
+    source: "",
+    message: error instanceof Error ? error.message : "反编译失败"
+  }));
+  if (decompiled.source.trim()) {
+    info.decompiledSource = decompiled.source;
+    info.decompileStatus = "success";
+    info.decompileMessage = "CFR 反编译成功";
+  } else {
+    info.decompileStatus = "fallback";
+    info.decompileMessage = decompiled.message;
+  }
+
+  const lines = [
+    `# ${filePath}`,
+    "",
+    info.decompiledSource ? "类型: Java Class 反编译预览" : "类型: Java Class 结构预览",
+    `文件头: ${info.magic}`,
+    `Class 版本: ${info.version} (${info.javaVersion})`,
+    `访问标志: ${info.accessFlags}`,
+    `类名: ${info.className}`,
+    `父类: ${info.superClass}`,
+    interfaces.length ? `接口: ${interfaces.join(", ")}` : "接口: -",
+    `常量池: ${info.constantPoolCount} 项`,
+    "",
+    `字段 (${fields.length})`
+  ];
+
+  lines.push(...(fields.length ? fields.map((field) => `  ${field.display}`) : ["  -"]));
+  lines.push("", `方法 (${methods.length})`);
+  lines.push(...(methods.length ? methods.map((method) => `  ${method.display}`) : ["  -"]));
+  lines.push("", `说明: ${info.decompileMessage || "当前为 class 元数据结构预览，不反编译方法源码。"}`);
+  return { content: info.decompiledSource || lines.join("\n"), info };
+}
+
+async function decompileJavaClass(filePath: string, buffer: Buffer): Promise<{ source: string; message: string }> {
+  const cfrResolve = resolveCfrJarPath();
+  const cfrJar = cfrResolve.path;
+  if (!cfrJar) {
+    return { source: "", message: `未找到 CFR 反编译器，已回退 class 元数据预览。查找路径：${cfrResolve.candidates.join(" | ")}` };
+  }
+
+  const tempDir = path.join(tmpdir(), `slc-class-${randomUUID()}`);
+  await mkdir(tempDir, { recursive: true });
+  const simpleName = sanitizeFileName(filePath.split(/[\\/!]/).pop() || "Preview.class").replace(/\.class$/i, "") || "Preview";
+  const classPath = path.join(tempDir, `${simpleName}.class`);
+  try {
+    await writeFile(classPath, buffer);
+    const { stdout, stderr } = await execFileAsync("java", ["-jar", cfrJar, classPath, "--silent", "true"], {
+      timeout: 20000,
+      maxBuffer: 10 * 1024 * 1024
+    });
+    const source = String(stdout || "").trim();
+    if (!source) {
+      return { source: "", message: String(stderr || "CFR 未输出源码，已回退 class 元数据预览").trim() };
+    }
+    return { source, message: "CFR 反编译成功" };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "CFR 反编译失败";
+    return { source: "", message: `${message}，已回退 class 元数据预览` };
+  } finally {
+    await rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
+  }
+}
+
+function resolveCfrJarPath(): { path: string | null; candidates: string[] } {
+  const moduleDir = __dirnameFromImportMeta();
+  const candidates = [
+    path.resolve(process.cwd(), "resources", "decompilers", "cfr.jar"),
+    path.resolve(process.cwd(), "apps", "gateway", "resources", "decompilers", "cfr.jar"),
+    path.resolve(moduleDir, "..", "..", "resources", "decompilers", "cfr.jar"),
+    path.resolve(moduleDir, "..", "..", "..", "resources", "decompilers", "cfr.jar")
+  ];
+  return { path: candidates.find((candidate) => existsSync(candidate)) || null, candidates };
+}
+
+function __dirnameFromImportMeta(): string {
+  return path.dirname(new URL(import.meta.url).pathname);
+}
+
+function sanitizeFileName(value: string): string {
+  return value.replace(/[^a-zA-Z0-9._-]/g, "_");
+}
+
+type Utf8ConstantPoolEntry = { tag: 1; value: string };
+type ClassConstantPoolEntry = { tag: 7; nameIndex: number };
+type OtherConstantPoolEntry = { tag: 3 | 4 | 5 | 6 | 8 | 9 | 10 | 11 | 12 | 15 | 16 | 17 | 18 | 19 | 20 };
+type ConstantPoolEntry = undefined | Utf8ConstantPoolEntry | ClassConstantPoolEntry | OtherConstantPoolEntry;
+
+class ClassReader {
+  private offset = 0;
+
+  constructor(private readonly buffer: Buffer) {}
+
+  u1(): number {
+    this.ensure(1);
+    return this.buffer.readUInt8(this.offset++);
+  }
+
+  u2(): number {
+    this.ensure(2);
+    const value = this.buffer.readUInt16BE(this.offset);
+    this.offset += 2;
+    return value;
+  }
+
+  u4(): number {
+    this.ensure(4);
+    const value = this.buffer.readUInt32BE(this.offset);
+    this.offset += 4;
+    return value;
+  }
+
+  bytes(length: number): Buffer {
+    this.ensure(length);
+    const value = this.buffer.subarray(this.offset, this.offset + length);
+    this.offset += length;
+    return value;
+  }
+
+  skip(length: number): void {
+    this.ensure(length);
+    this.offset += length;
+  }
+
+  private ensure(length: number): void {
+    if (this.offset + length > this.buffer.length) {
+      throw new Error("Class 文件结构不完整，无法继续解析");
+    }
+  }
+}
+
+function parseConstantPool(reader: ClassReader): ConstantPoolEntry[] {
+  const count = reader.u2();
+  const pool: ConstantPoolEntry[] = new Array(count);
+  for (let i = 1; i < count; i++) {
+    const tag = reader.u1();
+    switch (tag) {
+      case 1: {
+        const length = reader.u2();
+        pool[i] = { tag, value: reader.bytes(length).toString("utf8") };
+        break;
+      }
+      case 7:
+        pool[i] = { tag, nameIndex: reader.u2() };
+        break;
+      case 3:
+      case 4:
+        reader.skip(4);
+        pool[i] = { tag };
+        break;
+      case 5:
+      case 6:
+        reader.skip(8);
+        pool[i] = { tag };
+        i++;
+        break;
+      case 8:
+      case 16:
+      case 19:
+      case 20:
+        reader.skip(2);
+        pool[i] = { tag };
+        break;
+      case 9:
+      case 10:
+      case 11:
+      case 12:
+      case 17:
+      case 18:
+        reader.skip(4);
+        pool[i] = { tag };
+        break;
+      case 15:
+        reader.skip(3);
+        pool[i] = { tag };
+        break;
+      default:
+        throw new Error(`暂不支持的 class 常量池类型：${tag}`);
+    }
+  }
+  return pool;
+}
+
+function resolveUtf8(pool: ConstantPoolEntry[], index: number): string {
+  const entry = pool[index];
+  return entry && entry.tag === 1 ? entry.value : "";
+}
+
+function resolveClassName(pool: ConstantPoolEntry[], index: number): string {
+  const entry = pool[index];
+  if (!entry || entry.tag !== 7) return "";
+  return resolveUtf8(pool, entry.nameIndex).replace(/\//g, ".");
+}
+
+function parseMemberTable(reader: ClassReader, pool: ConstantPoolEntry[], kind: "field" | "method"): ClassMemberPreview[] {
+  const count = reader.u2();
+  const members: ClassMemberPreview[] = [];
+  for (let i = 0; i < count; i++) {
+    const access = reader.u2();
+    const name = resolveUtf8(pool, reader.u2());
+    const descriptor = resolveUtf8(pool, reader.u2());
+    const attributesCount = reader.u2();
+    for (let a = 0; a < attributesCount; a++) {
+      reader.u2();
+      reader.skip(reader.u4());
+    }
+    const accessText = formatAccessFlags(access, kind);
+    members.push({
+      access: accessText,
+      name,
+      descriptor,
+      display: `${accessText} ${name}${kind === "method" ? descriptor : `: ${descriptor}`}`.trim()
+    });
+  }
+  return members;
+}
+
+function skipAttributes(reader: ClassReader): void {
+  const count = reader.u2();
+  for (let i = 0; i < count; i++) {
+    reader.u2();
+    reader.skip(reader.u4());
+  }
+}
+
+function formatAccessFlags(flags: number, kind: "class" | "field" | "method"): string {
+  const values: Array<[number, string]> = [
+    [0x0001, "public"],
+    [0x0002, "private"],
+    [0x0004, "protected"],
+    [0x0008, "static"],
+    [0x0010, "final"],
+    [0x0200, "interface"],
+    [0x0400, "abstract"],
+    [0x1000, "synthetic"],
+    [0x2000, "annotation"],
+    [0x4000, "enum"]
+  ];
+  if (kind === "method") values.push([0x0020, "synchronized"], [0x0100, "native"], [0x0800, "strict"]);
+  if (kind === "field") values.push([0x0040, "volatile"], [0x0080, "transient"]);
+  const labels = values.filter(([bit]) => (flags & bit) !== 0).map(([, label]) => label);
+  return labels.length ? labels.join(" ") : "-";
+}
+
+function javaVersionLabel(major: number): string {
+  if (major === 45) return "Java 1.1";
+  if (major >= 46 && major <= 48) return `Java 1.${major - 44}`;
+  if (major >= 49) return `Java ${major - 44}`;
+  return "unknown";
 }
