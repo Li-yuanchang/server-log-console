@@ -12,6 +12,7 @@ import type {
   JumpServerAssetSearchRequest,
   JumpServerAssetSearchResponse,
   ServerRouteConfig,
+  ServerSystemProfileRequest,
   ServerConnectionTestRequest,
   ServerConnectionTestResponse
 } from "@server-log-console/shared";
@@ -30,9 +31,10 @@ import { MultiFileSearchService } from "./modules/logs/multi-file-search.service
 import { SshTunnelService } from "./modules/logs/ssh-tunnel.service.js";
 import { BatchCommandService } from "./modules/logs/batch-command.service.js";
 import { StrategyResolver } from "./modules/logs/strategies/index.js";
+import { ServerSystemProfileService } from "./modules/servers/server-system-profile.service.js";
 import multer from "multer";
 import { shellEscape } from "./modules/logs/remote-shell.js";
-import { buildJumpServerAssetKeyword, parseJumpServerSftpPath } from "./modules/logs/jumpserver-path.js";
+import { buildJumpServerAssetKeyword, parseJumpServerAssetRootPath, parseJumpServerSftpPath } from "./modules/logs/jumpserver-path.js";
 import { registerTerminalWebsocket } from "./modules/terminals/terminal-websocket.js";
 
 const bootStart = performance.now();
@@ -103,6 +105,7 @@ const fileTransferService = new FileTransferService(strategyResolver);
 const multiFileSearchService = new MultiFileSearchService(serverRegistryService, sshExecutorService);
 const sshTunnelService = new SshTunnelService(serverRegistryService, sshExecutorService, credentialResolverService);
 const batchCommandService = new BatchCommandService(serverRegistryService, sshExecutorService);
+const serverSystemProfileService = new ServerSystemProfileService(serverRegistryService, sshExecutorService);
 logPhase("Service layer", t);
 
 t = performance.now();
@@ -370,6 +373,42 @@ app.post("/api/servers/:serverId/jumpserver/assets", async (req, res) => {
     res.json(payload);
   } catch (error) {
     res.status(400).json({ message: error instanceof Error ? error.message : "Unknown error" });
+  }
+});
+
+app.post("/api/servers/:serverId/system-profile", async (req, res) => {
+  try {
+    const server = serverRegistryService.getServer(req.params.serverId);
+    const body = (req.body || {}) as ServerSystemProfileRequest;
+    const contextPath = body.contextPath?.trim() || "";
+    const isJumpServerEntry = sshExecutorService.isJumpServerBastion(server);
+    const parsedJumpPath = contextPath && isJumpServerEntry
+      ? (parseJumpServerSftpPath(contextPath) || parseJumpServerAssetRootPath(contextPath))
+      : null;
+
+    if (parsedJumpPath) {
+      const assetKeyword = buildJumpServerAssetKeyword(parsedJumpPath.assetKey);
+      const connection = await sshExecutorService.connectToJumpServerAsset(server.id, assetKeyword, body.timeoutMs || 45000);
+      try {
+        const profile = await serverSystemProfileService.collect(server.id, body.timeoutMs, {
+          connection,
+          hostOverride: assetKeyword
+        });
+        res.json(profile);
+      } finally {
+        connection.cleanup();
+      }
+      return;
+    }
+
+    if (isJumpServerEntry) {
+      throw new Error("堡垒机状态需要先进入具体目标资产目录或打开目标资产日志，当前没有可解析的目标资产上下文。");
+    }
+
+    const profile = await serverSystemProfileService.collect(server.id, body.timeoutMs);
+    res.json(profile);
+  } catch (error) {
+    res.status(400).json({ message: error instanceof Error ? error.message : "读取服务器状态失败" });
   }
 });
 

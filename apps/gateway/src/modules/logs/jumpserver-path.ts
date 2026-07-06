@@ -37,6 +37,22 @@ export function parseJumpServerSftpPath(virtualPath: string): JumpServerSftpPath
   return null;
 }
 
+export function parseJumpServerAssetRootPath(virtualPath: string): JumpServerSftpPath | null {
+  const parts = virtualPath.split("/").filter(Boolean);
+  const assetKey = parts[parts.length - 1] || "";
+  if (parts.length < 2 || !looksLikeJumpServerAssetKey(assetKey)) {
+    return null;
+  }
+  return {
+    assetKey,
+    realPath: "/"
+  };
+}
+
+export function looksLikeJumpServerAssetKey(value: string): boolean {
+  return /\d{1,3}(?:\.\d{1,3}){1,3}/.test(value) || /^[^/\s]+_[^/]+$/.test(value);
+}
+
 export function buildJumpServerAssetKeyword(assetKey: string) {
   return assetKey.replace(/[_\s].*/g, "");
 }

@@ -259,6 +259,52 @@ export function buildSearchCommand(server: ServerSummary, request: LogSearchRequ
   return `bash -lc ${shellEscape(script)}`;
 }
 
+export function buildPreviewSearchCommand(server: ServerSummary, request: LogSearchRequest, limit = 200): string | null {
+  const filePath = request.filePath || `${server.basePath}/catalina.out`;
+  const { rangeStart, rangeEnd } = toIsoRange(request);
+  const keywordTerms = (request.keywordTerms?.filter((item) => item.trim()) ?? []).map((item) => item.trim());
+  const normalizedTerms = keywordTerms.length ? keywordTerms : request.keyword?.trim() ? [request.keyword.trim()] : [];
+  const keywordMode = request.keywordMode || "phrase";
+
+  if (!normalizedTerms.length || rangeStart || rangeEnd || keywordMode === "all" || normalizedTerms.length > 1) {
+    return null;
+  }
+
+  const term = normalizedTerms[0];
+  const grepMode = request.useRegex ? "regex" : "fixed";
+  const maxMatches = Math.max(20, Math.min(1000, limit));
+  const script = [
+    `file=${shellEscape(filePath)}`,
+    `term=${shellEscape(term)}`,
+    `limit=${shellEscape(String(maxMatches))}`,
+    `mode=${shellEscape(grepMode)}`,
+    'runner=""',
+    'if command -v timeout >/dev/null 2>&1; then runner="timeout 4s"; fi',
+    'if command -v rg >/dev/null 2>&1; then',
+    '  if [ "$mode" = "fixed" ]; then',
+    '    LC_ALL=C $runner rg --no-heading --color never -n -F -m "$limit" -- "$term" "$file" 2>/dev/null',
+    '  else',
+    '    LC_ALL=C $runner rg --no-heading --color never -n -m "$limit" -- "$term" "$file" 2>/dev/null',
+    '  fi',
+    'else',
+    '  if [ "$mode" = "fixed" ]; then',
+    '    LC_ALL=C $runner grep -nF -m "$limit" -- "$term" "$file" 2>/dev/null',
+    '  else',
+    '    LC_ALL=C $runner grep -nE -m "$limit" -- "$term" "$file" 2>/dev/null',
+    '  fi',
+    'fi | awk -F ":" \'',
+    '  /^[0-9]+:/ {',
+    '    line_no = $1;',
+    '    sub(/^[0-9]+:/, "", $0);',
+    '    printf "__MATCH__\\t%s\\t%s\\n", line_no, $0;',
+    '  }',
+    "'",
+    'exit 0'
+  ].join("\n");
+
+  return `bash -lc ${shellEscape(script)}`;
+}
+
 export function buildStreamingSearchCommand(server: ServerSummary, request: LogSearchRequest, totalBytes = 0, options?: { tailBytes?: number }): string {
   const context = Number.isFinite(request.contextLines) ? Math.max(0, request.contextLines ?? 0) : 0;
   const filePath = request.filePath || `${server.basePath}/catalina.out`;

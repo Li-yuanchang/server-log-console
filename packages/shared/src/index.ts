@@ -66,7 +66,7 @@ export interface LogSearchTaskResponse {
   scopeLabel?: string;
   commandPreview?: string;
   errorMessage?: string;
-  progressPhase?: "queued" | "quick_tail" | "full_scan" | "completed";
+  progressPhase?: "queued" | "preview_scan" | "quick_tail" | "full_scan" | "completed";
   progressPhaseLabel?: string;
   progressPhaseIndex?: number;
   progressPhaseCount?: number;
@@ -248,6 +248,66 @@ export interface JumpServerAssetSearchResponse {
   bastionId: string;
   keyword: string;
   assets: JumpServerAssetOption[];
+}
+
+export interface ServerSystemProfileRequest {
+  timeoutMs?: number;
+  contextPath?: string;
+}
+
+export interface ServerSystemMetric {
+  total: number;
+  used: number;
+  free: number;
+  percent: number;
+}
+
+export interface ServerSystemDisk {
+  filesystem: string;
+  mount: string;
+  total: number;
+  used: number;
+  available: number;
+  percent: number;
+}
+
+export interface ServerSystemProcess {
+  pid: number;
+  cpuPercent: number;
+  memoryPercent: number;
+  rssKb: number;
+  command: string;
+}
+
+export interface ServerSystemNetworkInterface {
+  name: string;
+  rxBytes: number;
+  txBytes: number;
+}
+
+export interface ServerSystemProfileResponse {
+  serverId: string;
+  serverName: string;
+  host: string;
+  connectionKind?: ServerConnectionKind;
+  collectedAt: string;
+  source: "direct" | "bastion" | "jumpserver";
+  hostname: string;
+  os: string;
+  kernel: string;
+  uptimeText: string;
+  uptimeSeconds: number;
+  loadAverage: [number, number, number];
+  cpu: {
+    cores: number;
+    model: string;
+  };
+  memory: ServerSystemMetric;
+  swap: ServerSystemMetric;
+  disks: ServerSystemDisk[];
+  processes: ServerSystemProcess[];
+  network: ServerSystemNetworkInterface[];
+  warnings: string[];
 }
 
 export interface ManualServerUpsertRequest {

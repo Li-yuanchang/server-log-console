@@ -8,14 +8,16 @@ import type {
 } from "@server-log-console/shared";
 import { Client } from "ssh2";
 import { z } from "zod";
-import { buildStreamingSearchCommand, toIsoRange } from "./command-builder.js";
+import { buildPreviewSearchCommand, buildStreamingSearchCommand, toIsoRange } from "./command-builder.js";
 import { ServerRegistryService } from "../servers/server-registry.service.js";
 import { LogSliceService } from "./log-slice.service.js";
 import { type StrategyResolver, isDirectStrategy, isBastionSftpStrategy } from "./strategies/index.js";
 
+const PREVIEW_MATCH_LIMIT = 200;
+const PREVIEW_PHASE_BYTES = 512 * 1024;
 const QUICK_TAIL_BYTES = 5 * 1024 * 1024;
 
-type SearchProgressPhase = "queued" | "quick_tail" | "full_scan" | "completed";
+type SearchProgressPhase = "queued" | "preview_scan" | "quick_tail" | "full_scan" | "completed";
 
 const searchSchema = z.object({
   serverId: z.string(),
@@ -54,6 +56,8 @@ interface SearchTaskState {
   phaseScannedBytes: number;
   phaseTotalBytes: number;
   quickPhaseBytes: number;
+  previewPhaseBytes: number;
+  previewCommand?: string | null;
   commandPreview: string;
   strategyLabel: string;
   scopeLabel: string;
@@ -61,7 +65,7 @@ interface SearchTaskState {
   allLines: Array<{ lineNumber: number; preview: string; isMatch: boolean }>;
   client?: Client;
   errorMessage?: string;
-  /** Phase 1 quick search (tail portion) */
+  /** Immediate results from preview/tail quick phases */
   quickMatches: LogSearchMatch[];
   quickAllLines: Array<{ lineNumber: number; preview: string; isMatch: boolean }>;
   quickDone: boolean;
@@ -84,11 +88,16 @@ export class LogSearchTaskService {
     const filePath = request.filePath || `${server.basePath}/catalina.out`;
     const meta = await this.logSliceService.getMeta({ serverId: request.serverId, filePath });
     const taskId = randomUUID();
+    const previewCommand = strategy.kind === "direct"
+      ? buildPreviewSearchCommand(server, { ...request, filePath }, PREVIEW_MATCH_LIMIT)
+      : null;
+    const previewPhaseBytes = previewCommand ? Math.min(meta.size, PREVIEW_PHASE_BYTES) : 0;
     const quickPhaseBytes = meta.size > QUICK_TAIL_BYTES ? QUICK_TAIL_BYTES : 0;
+    const progressPhaseCount = 1 + (previewPhaseBytes > 0 ? 1 : 0) + (quickPhaseBytes > 0 ? 1 : 0);
     const commandPreview = strategy.kind === "bastion-sftp"
       ? `[SFTP 网关搜索] ${filePath}`
       : buildStreamingSearchCommand(server, { ...request, filePath }, meta.size);
-    const strategyLabel = strategy.kind === "bastion-sftp" ? "SFTP 分块读取 · 网关搜索" : describeSearchStrategy(request);
+    const strategyLabel = strategy.kind === "bastion-sftp" ? "SFTP 分块读取 · 网关搜索" : describeSearchStrategy(request, Boolean(previewCommand));
     const scopeLabel = describeSearchScope(request, server, filePath);
     const task: SearchTaskState = {
       id: taskId,
@@ -101,14 +110,20 @@ export class LogSearchTaskService {
       scannedBytes: 0,
       scannedLines: 0,
       matchCount: 0,
-      chunkLabel: quickPhaseBytes > 0 ? `准备尾部快搜 · 0 B / ${formatBytes(quickPhaseBytes)}` : `准备全文扫描 · 0 B / ${formatBytes(meta.size)}`,
+      chunkLabel: previewPhaseBytes > 0
+        ? `准备首批快搜 · 0 B / ${formatBytes(previewPhaseBytes)}`
+        : quickPhaseBytes > 0
+          ? `准备尾部快搜 · 0 B / ${formatBytes(quickPhaseBytes)}`
+          : `准备全文扫描 · 0 B / ${formatBytes(meta.size)}`,
       progressPhase: "queued",
-      progressPhaseLabel: quickPhaseBytes > 0 ? "准备尾部快搜" : "准备全文扫描",
+      progressPhaseLabel: previewPhaseBytes > 0 ? "准备首批快搜" : quickPhaseBytes > 0 ? "准备尾部快搜" : "准备全文扫描",
       progressPhaseIndex: 1,
-      progressPhaseCount: quickPhaseBytes > 0 ? 2 : 1,
+      progressPhaseCount,
       phaseScannedBytes: 0,
-      phaseTotalBytes: quickPhaseBytes > 0 ? quickPhaseBytes : meta.size,
+      phaseTotalBytes: previewPhaseBytes > 0 ? previewPhaseBytes : quickPhaseBytes > 0 ? quickPhaseBytes : meta.size,
       quickPhaseBytes,
+      previewPhaseBytes,
+      previewCommand,
       commandPreview,
       strategyLabel,
       scopeLabel,
@@ -142,18 +157,23 @@ export class LogSearchTaskService {
   private setProgressPhase(task: SearchTaskState, phase: SearchProgressPhase) {
     task.progressPhase = phase;
     if (phase === "queued") {
-      task.progressPhaseLabel = task.quickPhaseBytes > 0 ? "准备尾部快搜" : "准备全文扫描";
+      task.progressPhaseLabel = task.previewPhaseBytes > 0 ? "准备首批快搜" : task.quickPhaseBytes > 0 ? "准备尾部快搜" : "准备全文扫描";
       task.progressPhaseIndex = 1;
-      task.phaseTotalBytes = task.quickPhaseBytes > 0 ? task.quickPhaseBytes : task.totalBytes;
+      task.phaseTotalBytes = task.previewPhaseBytes > 0 ? task.previewPhaseBytes : task.quickPhaseBytes > 0 ? task.quickPhaseBytes : task.totalBytes;
+      task.phaseScannedBytes = 0;
+    } else if (phase === "preview_scan") {
+      task.progressPhaseLabel = "首批快搜";
+      task.progressPhaseIndex = 1;
+      task.phaseTotalBytes = task.previewPhaseBytes;
       task.phaseScannedBytes = 0;
     } else if (phase === "quick_tail") {
       task.progressPhaseLabel = "尾部快搜";
-      task.progressPhaseIndex = 1;
+      task.progressPhaseIndex = task.previewPhaseBytes > 0 ? 2 : 1;
       task.phaseTotalBytes = task.quickPhaseBytes;
       task.phaseScannedBytes = 0;
     } else if (phase === "full_scan") {
       task.progressPhaseLabel = "全文扫描";
-      task.progressPhaseIndex = task.quickPhaseBytes > 0 ? 2 : 1;
+      task.progressPhaseIndex = 1 + (task.previewPhaseBytes > 0 ? 1 : 0) + (task.quickPhaseBytes > 0 ? 1 : 0);
       task.phaseTotalBytes = task.totalBytes;
       task.phaseScannedBytes = 0;
     } else {
@@ -183,14 +203,14 @@ export class LogSearchTaskService {
   }
 
   private getOverallProgressBytes(task: SearchTaskState) {
-    const completedBeforePhase = task.progressPhase === "full_scan" || task.progressPhase === "completed"
-      ? task.quickPhaseBytes
-      : 0;
+    const completedBeforePhase =
+      (task.progressPhase === "quick_tail" || task.progressPhase === "full_scan" || task.progressPhase === "completed" ? task.previewPhaseBytes : 0) +
+      (task.progressPhase === "full_scan" || task.progressPhase === "completed" ? task.quickPhaseBytes : 0);
     return Math.min(this.getOverallProgressTotalBytes(task), completedBeforePhase + Math.min(task.phaseScannedBytes, task.phaseTotalBytes));
   }
 
   private getOverallProgressTotalBytes(task: SearchTaskState) {
-    return task.totalBytes + task.quickPhaseBytes;
+    return task.totalBytes + task.previewPhaseBytes + task.quickPhaseBytes;
   }
 
   private async runTaskDirect(task: SearchTaskState, strategy: import("./strategies/index.js").DirectConnectionStrategy) {
@@ -264,6 +284,14 @@ export class LogSearchTaskService {
     };
 
     try {
+      if (task.previewCommand) {
+        this.setProgressPhase(task, "preview_scan");
+        await runStreamingPhase(task.previewCommand, task.quickMatches, task.quickAllLines);
+        this.updatePhaseProgress(task, task.previewPhaseBytes, task.quickMatches.length);
+        task.quickDone = true;
+        console.log(`[search-preview] First ${PREVIEW_MATCH_LIMIT} matches done: ${task.quickMatches.length} matches`);
+      }
+
       if (needsQuickPhase) {
         this.setProgressPhase(task, "quick_tail");
         const quickCommand = buildStreamingSearchCommand(task.server, task.request, task.totalBytes, { tailBytes: QUICK_TAIL_BYTES });
@@ -544,10 +572,14 @@ export class LogSearchTaskService {
   }
 }
 
-function describeSearchStrategy(request: LogSearchRequest) {
+function describeSearchStrategy(request: LogSearchRequest, hasPreviewFastPath = false) {
   const singleDay = Boolean(request.startDate && request.endDate && request.startDate === request.endDate);
   const singleKeyword = (request.keywordTerms?.filter((item) => item.trim()).length ?? 0) <= 1 && Boolean(request.keyword?.trim() || request.keywordTerms?.[0]?.trim());
   const hasTimeRange = Boolean(request.startTime?.trim() || request.endTime?.trim());
+
+  if (hasPreviewFastPath) {
+    return "首批快搜 · rg/grep + 全文校验";
+  }
 
   if (!request.useRegex && (request.keywordMode || "phrase") === "phrase" && singleKeyword && singleDay && !hasTimeRange) {
     return "分片扫描 · 单日快筛";
