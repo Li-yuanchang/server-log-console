@@ -27,7 +27,7 @@ if (fs.existsSync(destinationApp)) {
 }
 
 execFileSync("ditto", [sourceApp, destinationApp], { stdio: "inherit" });
-execFileSync("open", ["-a", destinationApp], { stdio: "inherit", env: launchEnv });
+execFileSync("open", [destinationApp], { stdio: "inherit", env: launchEnv });
 
 console.log(`[install-mac-app] installed ${sourceApp} -> ${destinationApp}`);
 console.log(`[install-mac-app] launched ${destinationApp}`);
