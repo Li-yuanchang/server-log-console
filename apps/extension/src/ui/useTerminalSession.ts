@@ -28,6 +28,7 @@ interface UseTerminalSessionOptions {
   preserveSessionOnInactive?: boolean;
   preserveSessionOnDispose?: boolean;
   onSelectionMenu?: (menu: { x: number; y: number; text: string } | null) => void;
+  terminalFontSize?: number;
 }
 
 function rebuildSelectionFromBuffer(terminal: Terminal): string {
@@ -216,7 +217,7 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
 
     const terminal = new Terminal({
       cursorBlink: true,
-      fontSize: 12,
+      fontSize: options.terminalFontSize || 12,
       fontFamily: "'SFMono-Regular', 'Consolas', monospace",
       theme: {
         background: shellBg,
@@ -251,7 +252,16 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
     fitAddonRef.current = fitAddon;
     terminalRef.current = terminal;
     return terminal;
-  }, []);
+  }, [options.terminalFontSize]);
+
+  useEffect(() => {
+    const terminal = terminalRef.current;
+    if (!terminal) {
+      return;
+    }
+    terminal.options.fontSize = options.terminalFontSize || 12;
+    scheduleFit([0, 24, 96]);
+  }, [options.terminalFontSize, scheduleFit]);
 
   useEffect(() => {
     if (!options.active || !containerRef.current) {

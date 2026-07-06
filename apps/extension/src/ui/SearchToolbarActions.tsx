@@ -1,4 +1,4 @@
-import { Circle, Pin, PinOff } from "lucide-react";
+import { Activity, Circle, Pin, PinOff } from "lucide-react";
 import { ToolIcon } from "./ToolIcon.js";
 
 type Props = {
@@ -11,6 +11,8 @@ type Props = {
   terminalPanelOpen: boolean;
   onToggleTerminal: () => void;
   hasServer: boolean;
+  serverStatusOpen: boolean;
+  onOpenServerStatus: () => void;
   isRecording: boolean;
   canToggleRecording: boolean;
   onToggleRecording: () => void;
@@ -39,6 +41,15 @@ export function SearchToolbarActions(props: Props) {
           <span>{terminalLabel}</span>
         </button>
       ) : null}
+      <button
+        className={`ghost-button toolbar-action-button${props.serverStatusOpen ? " tab-active" : ""}`}
+        onClick={props.onOpenServerStatus}
+        disabled={!props.hasServer}
+        title="查看服务器状态"
+      >
+        <Activity size={14} strokeWidth={1.8} />
+        <span>状态</span>
+      </button>
       <button className={`ghost-button toolbar-action-button${props.isRecording ? " btn-recording-active" : ""}`} onClick={props.onToggleRecording} disabled={!props.canToggleRecording}>
         <Circle size={14} strokeWidth={1.8} fill="currentColor" />
         <span>{props.isRecording ? "结束录制" : "开始录制"}</span>

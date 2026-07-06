@@ -148,7 +148,7 @@ export function useFileTransfer(deps: {
   updateToast: (id: string, type: "success" | "error" | "loading", message: string) => void;
   dismissToast: (id: string) => void;
   appendTransferHistory: (entry: Omit<TransferHistoryEntry, "id" | "serverId" | "serverLabel" | "createdAt">) => void;
-  browseLogFiles: (path: string, options?: { manual?: boolean; silent?: boolean }) => Promise<void>;
+  browseLogFiles: (path: string, options?: { manual?: boolean; silent?: boolean }) => Promise<unknown>;
   setIsDragOver: (v: boolean) => void;
 }): FileTransferAPI {
   const {

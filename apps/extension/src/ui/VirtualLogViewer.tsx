@@ -72,12 +72,69 @@ function buildSelectionTextFromPoints(lines: string[], first: ViewerSelectionPoi
   return selected.join("\n");
 }
 
+function isBlockTimestampLine(line: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}(?:[.,]\d{3})?/.test(line.trim());
+}
+
+function isHardBlockBoundary(line: string): boolean {
+  const text = line.trim();
+  return text === "--" || text === "---";
+}
+
+function trimEmptyRangeEdges(lines: string[], start: number, end: number) {
+  let nextStart = start;
+  let nextEnd = end;
+  while (nextStart <= nextEnd && !(lines[nextStart] ?? "").trim()) nextStart += 1;
+  while (nextEnd >= nextStart && !(lines[nextEnd] ?? "").trim()) nextEnd -= 1;
+  return { start: nextStart, end: nextEnd };
+}
+
+function getLogBlockRange(lines: string[], lineIndex: number) {
+  if (!lines.length) return null;
+  const target = Math.max(0, Math.min(lines.length - 1, lineIndex));
+  let start = target;
+  let foundTimestamp = false;
+
+  for (let index = target; index >= 0; index -= 1) {
+    const line = lines[index] ?? "";
+    if (isHardBlockBoundary(line)) {
+      start = index + 1;
+      break;
+    }
+    if (isBlockTimestampLine(line)) {
+      start = index;
+      foundTimestamp = true;
+      break;
+    }
+  }
+
+  if (!foundTimestamp && start === target) {
+    while (start > 0 && (lines[start - 1] ?? "").trim() && !isHardBlockBoundary(lines[start - 1] ?? "")) {
+      start -= 1;
+    }
+  }
+
+  let end = target;
+  for (let index = target + 1; index < lines.length; index += 1) {
+    const line = lines[index] ?? "";
+    if (isHardBlockBoundary(line) || isBlockTimestampLine(line)) {
+      end = index - 1;
+      break;
+    }
+    end = index;
+  }
+
+  const trimmed = trimEmptyRangeEdges(lines, start, end);
+  return trimmed.start <= trimmed.end ? trimmed : { start: target, end: target };
+}
+
 export interface VirtualLogViewerHandle {
   scrollToTop(): void;
   scrollToBottom(): void;
   scrollToLine(index: number, behavior?: "auto" | "smooth"): void;
   scrollToHighlight(index: number): void;
   getLineRangeText(startLine: number, endLine: number): string;
+  getLogBlockText(lineIndex: number): { text: string; start: number; end: number } | null;
   getSelectionText(selection: Selection): string;
   getScrollState(): { scrollTop: number; scrollHeight: number; clientHeight: number } | null;
   getScrollerElement(): HTMLElement | null;
@@ -107,6 +164,8 @@ interface Props {
   onWheel?: (event: React.WheelEvent<HTMLDivElement>) => void;
   onNearBottomChange?: (nearBottom: boolean) => void;
   onScrollStateChange?: (state: VirtualLogViewerScrollState) => void;
+  onSelectedLineRangeChange?: (range: { start: number; end: number }) => void;
+  onCopyLineRange?: () => void;
   errorHighlightEnabled?: boolean;
   followOutput?: boolean;
   className?: string;
@@ -136,6 +195,8 @@ const VirtualLogViewerImpl = forwardRef<VirtualLogViewerHandle, Props>(
       onWheel,
       onNearBottomChange,
       onScrollStateChange,
+      onSelectedLineRangeChange,
+      onCopyLineRange,
       errorHighlightEnabled,
       followOutput,
       className,
@@ -280,7 +341,10 @@ const VirtualLogViewerImpl = forwardRef<VirtualLogViewerHandle, Props>(
 
     useEffect(() => {
       if (focusLineIndex == null || focusLineIndex < 0 || focusLineIndex >= lines.length) return;
-      virtuosoRef.current?.scrollToIndex({ index: focusLineIndex, align: "center", behavior: "smooth" });
+      virtuosoRef.current?.scrollToIndex({ index: focusLineIndex, align: "center", behavior: "auto" });
+      window.requestAnimationFrame(() => {
+        virtuosoRef.current?.scrollToIndex({ index: focusLineIndex, align: "center", behavior: "auto" });
+      });
     }, [focusLineIndex, lines.length]);
 
     useEffect(() => {
@@ -306,7 +370,7 @@ const VirtualLogViewerImpl = forwardRef<VirtualLogViewerHandle, Props>(
         const errorKind = item.errorKind;
         const baseClass = `log-line${isFocused ? " log-line-focus" : ""}${clickable ? " log-line-clickable" : ""}${isRangeSelected ? " log-line-range-selected" : ""}${isRangeSelected && index === rangeStart ? " log-line-range-start" : ""}${isRangeSelected && index === rangeEnd ? " log-line-range-end" : ""}${errorKind ? ` log-line-level-${errorKind}` : ""}${isBookmarked ? " log-line-bookmarked" : ""}`;
         const handleClick = clickable ? (event: React.MouseEvent<HTMLDivElement>) => {
-          if (!(event.metaKey || event.ctrlKey)) {
+          if (!(event.metaKey || event.ctrlKey || event.shiftKey)) {
             return;
           }
           const selection = globalThis.getSelection?.();
@@ -355,6 +419,7 @@ const VirtualLogViewerImpl = forwardRef<VirtualLogViewerHandle, Props>(
       if (event.button !== 0) {
         return;
       }
+      event.currentTarget.focus({ preventScroll: true });
       const point = getSelectionPointFromEvent(event, lines);
       selectionStartRef.current = point;
       selectionEndRef.current = point;
@@ -366,6 +431,43 @@ const VirtualLogViewerImpl = forwardRef<VirtualLogViewerHandle, Props>(
         selectionEndRef.current = point;
       }
     }, [lines]);
+
+    const handleKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+      if (!selectedLineRange || !lines.length) {
+        return;
+      }
+
+      const copyRequested = (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "c";
+      if (copyRequested) {
+        event.preventDefault();
+        onCopyLineRange?.();
+        return;
+      }
+
+      if (!event.shiftKey || !onSelectedLineRangeChange) {
+        return;
+      }
+
+      const currentStart = Math.max(0, Math.min(selectedLineRange.start, selectedLineRange.end));
+      const currentEnd = Math.min(lines.length - 1, Math.max(selectedLineRange.start, selectedLineRange.end));
+      let nextRange: { start: number; end: number } | null = null;
+
+      if (event.key === "ArrowDown") {
+        nextRange = { start: currentStart, end: Math.min(lines.length - 1, currentEnd + 1) };
+      } else if (event.key === "ArrowUp") {
+        nextRange = { start: Math.max(0, currentStart - 1), end: currentEnd };
+      } else if (event.key === "End") {
+        nextRange = { start: currentStart, end: lines.length - 1 };
+      } else if (event.key === "Home") {
+        nextRange = { start: 0, end: currentEnd };
+      }
+
+      if (!nextRange) {
+        return;
+      }
+      event.preventDefault();
+      onSelectedLineRangeChange(nextRange);
+    }, [lines.length, onCopyLineRange, onSelectedLineRangeChange, selectedLineRange]);
 
     const forceScrollToBottom = useCallback(() => {
       const el = scrollerRef.current;
@@ -410,6 +512,14 @@ const VirtualLogViewerImpl = forwardRef<VirtualLogViewerHandle, Props>(
           const end = Math.min(lines.length - 1, Math.max(startLine, endLine));
           return lines.slice(start, end + 1).join("\n");
         },
+        getLogBlockText(lineIndex: number) {
+          const range = getLogBlockRange(lines, lineIndex);
+          if (!range) return null;
+          return {
+            ...range,
+            text: lines.slice(range.start, range.end + 1).join("\n"),
+          };
+        },
         getSelectionText(selection: Selection) {
           const anchorLine = findClosestLineIndex(selection.anchorNode);
           const focusLine = findClosestLineIndex(selection.focusNode);
@@ -452,7 +562,14 @@ const VirtualLogViewerImpl = forwardRef<VirtualLogViewerHandle, Props>(
     }
 
     return (
-      <div className={className} onWheel={onWheel} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp}>
+      <div
+        className={className}
+        tabIndex={0}
+        onKeyDown={handleKeyDown}
+        onWheel={onWheel}
+        onMouseDown={handleMouseDown}
+        onMouseUp={handleMouseUp}
+      >
         <Virtuoso
           ref={virtuosoRef}
           data={lineItems}

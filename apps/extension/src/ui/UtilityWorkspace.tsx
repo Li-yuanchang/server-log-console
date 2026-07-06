@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
-import { AppWindow, GitCompare, Plug, TerminalSquare, X } from "lucide-react";
+import { Activity, AppWindow, GitCompare, Plug, TerminalSquare, X } from "lucide-react";
 import { useEscapeToClose } from "./useEscapeToClose.js";
 
-export type UtilityPanelType = "compare" | "tunnels" | "batch";
+export type UtilityPanelType = "compare" | "tunnels" | "batch" | "status";
 
 interface UtilityWorkspaceProps {
   activePanel: UtilityPanelType;
@@ -33,6 +33,12 @@ const PANEL_META: Record<UtilityPanelType, { eyebrow: string; label: string; sub
     subtitle: "对多台服务器并行下发命令并汇总结果",
     icon: TerminalSquare,
   },
+  status: {
+    eyebrow: "STATUS",
+    label: "服务器状态",
+    subtitle: "按需读取目标主机 CPU、内存、磁盘与进程快照",
+    icon: Activity,
+  },
 };
 
 export function UtilityWorkspace({ activePanel, panels, onSelectPanel, onClose, onPopout, standalone = false, children }: UtilityWorkspaceProps) {
@@ -59,23 +65,25 @@ export function UtilityWorkspace({ activePanel, panels, onSelectPanel, onClose, 
         </div>
       </div>
 
-      <div className="utility-workspace-tabs" style={{ gridTemplateColumns: `repeat(${Math.max(1, panels.length)}, minmax(0, 1fr))` }}>
-        {panels.map((panel) => {
-          const meta = PANEL_META[panel];
-          const Icon = meta.icon;
-          return (
-            <button
-              key={panel}
-              type="button"
-              className={panel === activePanel ? "utility-workspace-tab utility-workspace-tab-active" : "utility-workspace-tab"}
-              onClick={() => onSelectPanel(panel)}
-            >
-              <Icon size={13} />
-              <span>{meta.label}</span>
-            </button>
-          );
-        })}
-      </div>
+      {panels.length > 1 ? (
+        <div className="utility-workspace-tabs" style={{ gridTemplateColumns: `repeat(${Math.max(1, panels.length)}, minmax(0, 1fr))` }}>
+          {panels.map((panel) => {
+            const meta = PANEL_META[panel];
+            const Icon = meta.icon;
+            return (
+              <button
+                key={panel}
+                type="button"
+                className={panel === activePanel ? "utility-workspace-tab utility-workspace-tab-active" : "utility-workspace-tab"}
+                onClick={() => onSelectPanel(panel)}
+              >
+                <Icon size={13} />
+                <span>{meta.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
 
       <div className="utility-workspace-body">
         {children}

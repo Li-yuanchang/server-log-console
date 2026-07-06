@@ -54,6 +54,7 @@ export function useLiveFollow(opts: UseLiveFollowOptions): UseLiveFollowReturn {
   const liveFollowTargetRef = useRef<{ filePath: string; fileName: string; keyword?: string } | null>(null);
   const liveFollowExpectedCloseRef = useRef(false);
   const liveFollowRetryCountRef = useRef(0);
+  const forceBottomUntilRef = useRef(0);
 
   function clearLiveFollowReconnectTimer() {
     if (liveFollowReconnectTimerRef.current !== null) {
@@ -189,6 +190,9 @@ export function useLiveFollow(opts: UseLiveFollowOptions): UseLiveFollowReturn {
   }
 
   function handleViewerNearBottomChange(nearBottom: boolean) {
+    if (!nearBottom && Date.now() < forceBottomUntilRef.current) {
+      return;
+    }
     setViewerNotAtBottom(!nearBottom);
     if (liveFollowEnabled) {
       setLiveFollowPaused(!nearBottom);
@@ -196,12 +200,16 @@ export function useLiveFollow(opts: UseLiveFollowOptions): UseLiveFollowReturn {
   }
 
   function scrollViewerToBottom() {
+    forceBottomUntilRef.current = Date.now() + 900;
     setViewerNotAtBottom(false);
     if (liveFollowEnabled) {
       setLiveFollowPaused(false);
     }
     window.requestAnimationFrame(() => {
       viewerRef.current?.scrollToBottom();
+      window.setTimeout(() => viewerRef.current?.scrollToBottom(), 80);
+      window.setTimeout(() => viewerRef.current?.scrollToBottom(), 180);
+      window.setTimeout(() => viewerRef.current?.scrollToBottom(), 320);
     });
   }
 

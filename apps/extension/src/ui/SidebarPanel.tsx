@@ -62,7 +62,7 @@ export function SidebarPanel(props: SidebarPanelProps) {
           <div className="sidebar-head-buttons">
             <button
               className="ghost-button icon-button"
-              title={showConnectionSettings ? "关闭设置" : "打开设置"}
+              title={showConnectionSettings ? "关闭设置中心" : "打开设置中心"}
               onClick={() => {
                 if (showConnectionSettings) {
                   onCloseSettingsWorkspace();

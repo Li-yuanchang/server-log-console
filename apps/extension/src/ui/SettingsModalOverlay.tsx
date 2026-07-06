@@ -19,13 +19,13 @@ export function SettingsModalOverlay(props: SettingsModalOverlayProps) {
         className="settings-modal-shell"
         role="dialog"
         aria-modal="true"
-        aria-label="连接设置"
+        aria-label="设置中心"
         onClick={(event) => event.stopPropagation()}
       >
         <button
           className="ghost-button icon-button settings-modal-close"
           type="button"
-          aria-label="关闭设置"
+          aria-label="关闭设置中心"
           onClick={onClose}
         >
           <X size={16} strokeWidth={1.75} />

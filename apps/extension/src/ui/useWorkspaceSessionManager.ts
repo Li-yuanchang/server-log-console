@@ -48,6 +48,7 @@ export type WorkspaceSessionSetters = {
   setDirectoryPath: (v: string) => void;
   setDirectoryInput: (v: string) => void;
   setFilePath: (v: string) => void;
+  setStatusContextPath: (v: string) => void;
   setFileEntries: (v: LogFileEntry[]) => void;
   // File reader
   setFileMeta: (v: WorkspaceSessionState["fileMeta"]) => void;
@@ -94,6 +95,7 @@ export type WorkspaceSessionManagerParams = {
   activeWorkspaceSessionId: string | null;
   filePath: string;
   directoryPath: string;
+  statusContextPath: string;
   keywordInput: string;
   keywordMode: "phrase" | "any" | "all";
   excludeInput: string;
@@ -185,6 +187,7 @@ export function useWorkspaceSessionManager(params: WorkspaceSessionManagerParams
     activeWorkspaceSessionId,
     filePath,
     directoryPath,
+    statusContextPath,
     keywordInput,
     keywordMode,
     excludeInput,
@@ -261,6 +264,7 @@ export function useWorkspaceSessionManager(params: WorkspaceSessionManagerParams
       serverId: nextServerId,
       filePath,
       directoryPath,
+      statusContextPath,
       keywordInput,
       keywordMode,
       excludeInput,
@@ -370,6 +374,7 @@ export function useWorkspaceSessionManager(params: WorkspaceSessionManagerParams
     setters.setDirectoryPath(nextState.directoryPath);
     setters.setDirectoryInput(nextState.directoryPath || "/");
     setters.setFilePath(nextState.filePath);
+    setters.setStatusContextPath(nextState.statusContextPath || "");
     setters.setFileEntries(nextState.fileEntries);
     setters.setFileMeta(nextState.fileMeta);
     setters.setSliceOffset(nextState.sliceOffset);

@@ -250,7 +250,18 @@ export function useLogViewer(params: LogViewerParams): LogViewerAPI {
     if (parsed) {
       const lineNumber = Number(parsed[1]);
       if (Number.isFinite(lineNumber) && lineNumber > 0) {
-        return { source: activeViewerMatches[0]?.source || activeResultTab?.sourceLabel || state.filePath, lineNumber, preview: parsed[2] || rawLine.trim() };
+        const preview = (parsed[2] || rawLine.trim()).trim();
+        const matchedByLineAndPreview = activeViewerMatches.find((match) => {
+          if (match.lineNumber !== lineNumber) return false;
+          const matchPreview = (match.preview || "").trim();
+          return !preview || !matchPreview || preview.includes(matchPreview) || matchPreview.includes(preview);
+        });
+        const matchedByLine = matchedByLineAndPreview || activeViewerMatches.find((match) => match.lineNumber === lineNumber);
+        if (matchedByLine) {
+          return { ...matchedByLine, preview: matchedByLine.preview || preview };
+        }
+        const fallbackSource = activeViewerMatches[0]?.source || state.filePath;
+        return fallbackSource ? { source: fallbackSource, lineNumber, preview } : null;
       }
       return null;
     }
@@ -510,16 +521,22 @@ export function useLogViewer(params: LogViewerParams): LogViewerAPI {
       callbacks.pushActivity(`搜索任务已启动：${taskPayload.strategyLabel || "分片扫描"} / ${taskPayload.scopeLabel || state.filePath}`);
       let currentTask = taskPayload;
       let quickResultShown = false;
+      let quickResultMatchCount = -1;
       while (currentTask.status === "queued" || currentTask.status === "running") {
         await new Promise((resolve) => window.setTimeout(resolve, 450));
         currentTask = await apiPollSearchTask(currentTask.taskId);
         setters.setSearchTask(currentTask);
-        if (currentTask.quickResult && !quickResultShown) {
-          quickResultShown = true;
+        if (currentTask.quickResult && currentTask.quickResult.matches.length !== quickResultMatchCount) {
+          quickResultMatchCount = currentTask.quickResult.matches.length;
           setters.setResults(currentTask.quickResult);
-          appendResultTab(currentTask.quickResult, selectedFileName || state.filePath || "当前文件");
-          callbacks.setActionStatus(`尾部快搜命中 ${currentTask.quickResult.matches.length} 行，全文扫描继续中...`);
-          callbacks.pushActivity(`尾部快搜完成：命中 ${currentTask.quickResult.matches.length} 行，全文扫描继续中...`);
+          if (quickResultShown) {
+            replaceLastResultTab(currentTask.quickResult);
+          } else {
+            quickResultShown = true;
+            appendResultTab(currentTask.quickResult, selectedFileName || state.filePath || "当前文件");
+          }
+          callbacks.setActionStatus(`已先返回 ${currentTask.quickResult.matches.length} 条命中，全文扫描继续中...`);
+          callbacks.pushActivity(`搜索首批结果：命中 ${currentTask.quickResult.matches.length} 行，全文扫描继续中...`);
         }
       }
       if (currentTask.status === "failed") throw new Error(currentTask.errorMessage || "搜索任务失败");
@@ -746,7 +763,21 @@ export function useLogViewer(params: LogViewerParams): LogViewerAPI {
   async function handleBackToBottom() {
     const shouldResumeLiveFollow = state.liveFollowEnabled && state.liveFollowPaused;
     if (state.activeViewerTabId === "file") {
-      await loadTailSlice({ forceRefresh: true });
+      const scrollToTail = () => {
+        callbacks.scrollViewerToBottom();
+        window.setTimeout(callbacks.scrollViewerToBottom, 40);
+        window.setTimeout(callbacks.scrollViewerToBottom, 120);
+      };
+      const tailOffset = activeFileMeta ? Math.max(0, activeFileMeta.size - state.sliceLength) : null;
+      const alreadyTailSlice = Boolean(activeSliceData?.isEnd || (tailOffset !== null && state.sliceOffset >= Math.max(0, tailOffset - 8)));
+      refs.sliceScrollAnchorRef.current = "bottom";
+      if (alreadyTailSlice) {
+        scrollToTail();
+        callbacks.setActionStatus("已回到底部。");
+      } else {
+        await loadTailSlice({ forceRefresh: true });
+        scrollToTail();
+      }
     }
     if (shouldResumeLiveFollow) {
       setters.setLiveFollowPaused(false);

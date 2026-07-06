@@ -30,6 +30,7 @@ export type WorkspaceSessionState = {
   serverId: string;
   filePath: string;
   directoryPath: string;
+  statusContextPath: string;
   keywordInput: string;
   keywordMode: "phrase" | "any" | "all";
   excludeInput: string;

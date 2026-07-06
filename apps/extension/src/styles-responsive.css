@@ -24,34 +24,75 @@
 }
 
 .search-progress-panel {
-  display: grid;
-  gap: 4px;
-  padding: 6px 10px;
-  border: 1px solid rgba(15, 23, 42, 0.075);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.82);
-  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.045);
+  display: block;
+  justify-self: start;
+  width: fit-content;
+  max-width: 100%;
+  margin: 2px 0 3px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: none;
+  color: #1f2937;
 }
 
-.search-progress-head,
+.search-progress-summary,
 .search-progress-meta {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 6px;
   flex-wrap: wrap;
 }
 
-.search-progress-head strong {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--ink-soft);
+.search-progress-summary {
+  width: fit-content;
+  max-width: 100%;
+  min-height: 28px;
+  padding: 0 11px;
+  border: 1px solid rgba(49, 95, 141, 0.34);
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(244, 248, 252, 0.94));
+  color: #243447;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
 }
 
-.search-progress-head span,
+.search-progress-summary::-webkit-details-marker {
+  display: none;
+}
+
+.search-progress-summary::marker {
+  content: "";
+}
+
+.search-progress-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #2f80c0;
+  box-shadow: 0 0 0 3px rgba(49, 95, 141, 0.12);
+}
+
+.search-progress-summary strong {
+  font-size: 11px;
+  font-weight: 700;
+  color: #203245;
+}
+
+.search-progress-summary span,
 .search-progress-meta span {
-  font-size: 10px;
-  color: var(--ink-muted);
+  font-size: 11px;
+  color: #475569;
+}
+
+.search-progress-summary-hint {
+  color: #315f8d !important;
+  font-weight: 600;
+  opacity: 1;
 }
 
 .search-progress-meta .search-progress-meta-primary {
@@ -65,10 +106,13 @@
 
 .search-progress-track {
   position: relative;
+  display: none;
+  width: min(360px, calc(100vw - 48px));
   height: 4px;
+  margin-top: 6px;
   overflow: hidden;
   border-radius: 999px;
-  background: rgba(15, 23, 42, 0.055);
+  background: rgba(49, 95, 141, 0.12);
 }
 
 .search-progress-indicator {
@@ -78,8 +122,34 @@
   left: -34%;
   width: 34%;
   border-radius: 999px;
-  background: linear-gradient(90deg, transparent, rgba(100, 116, 139, 0.14), rgba(100, 116, 139, 0.36), rgba(100, 116, 139, 0.14), transparent);
+  background: linear-gradient(90deg, transparent, rgba(49, 95, 141, 0.28), rgba(49, 95, 141, 0.62), rgba(49, 95, 141, 0.28), transparent);
   animation: search-progress-slide 2.5s ease-in-out infinite;
+}
+
+.search-progress-meta {
+  display: none;
+  width: min(360px, calc(100vw - 48px));
+  margin-top: 5px;
+  padding-left: 4px;
+}
+
+.search-progress-panel[open] {
+  width: min(380px, 100%);
+  padding: 7px 9px;
+  border: 1px solid rgba(49, 95, 141, 0.22);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
+}
+
+.search-progress-panel[open] .search-progress-summary {
+  border-color: rgba(49, 95, 141, 0.38);
+  background: #ffffff;
+}
+
+.search-progress-panel[open] .search-progress-track,
+.search-progress-panel[open] .search-progress-meta {
+  display: flex;
 }
 
 @keyframes search-progress-slide {
@@ -334,6 +404,7 @@
 .settings-workspace-grid-overview,
 .settings-workspace-grid-inventory,
 .settings-workspace-grid-server,
+.settings-workspace-grid-preferences,
 .settings-form-grid-single {
   grid-template-columns: minmax(0, 1fr);
 }
@@ -351,6 +422,89 @@
   border: 1px solid var(--line);
   border-radius: 12px;
   background: var(--panel-strong);
+}
+
+.settings-preference-hero {
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--accent-soft) 38%, transparent), transparent 58%),
+    var(--panel-strong);
+}
+
+.settings-preference-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.settings-preference-item,
+.settings-preference-toggle {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--panel-muted) 80%, white 20%);
+  color: var(--ink);
+}
+
+.settings-preference-toggle {
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.settings-preference-toggle:hover:not(:disabled) {
+  border-color: rgba(49, 95, 141, 0.28);
+  background: color-mix(in srgb, var(--accent-soft) 28%, var(--panel-strong) 72%);
+  box-shadow: inset 0 0 0 1px rgba(49, 95, 141, 0.08);
+}
+
+.settings-preference-toggle:active:not(:disabled) {
+  transform: none;
+}
+
+.settings-preference-item > span,
+.settings-preference-toggle > span {
+  color: var(--ink-soft);
+  font-size: 12px;
+}
+
+.settings-preference-item > strong,
+.settings-preference-toggle > strong {
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.settings-preference-item select {
+  width: 100%;
+  min-height: 30px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--panel-strong);
+  color: var(--ink);
+}
+
+.settings-preference-reset {
+  border-style: dashed;
+}
+
+.settings-roadmap-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.settings-roadmap-grid span {
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-muted);
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .settings-card-scroll,
@@ -705,5 +859,12 @@
 
   .settings-modal-shell .settings-workspace-head {
     padding-right: 40px;
+  }
+
+  .settings-preference-grid,
+  .settings-roadmap-grid,
+  .settings-form-grid-two,
+  .settings-meta-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

@@ -1,8 +1,9 @@
 import { useState, type CSSProperties } from "react";
 import type { JumpServerAssetOption, LogProfile, ServerConnectionKind, ServerCredentialStatus, ServerSummary } from "@server-log-console/shared";
 import { looksLikeJumpServer } from "./terminal-utils.js";
+import type { UiDensity, UiMotionMode, UiSurface } from "./useUiTheme.js";
 
-export type SettingsWorkspaceView = "overview" | "inventory" | "server";
+export type SettingsWorkspaceView = "preferences" | "overview" | "inventory" | "server";
 
 export interface ManualServerDraft {
   id: string;
@@ -24,6 +25,35 @@ interface Props {
   isBusy: boolean;
   localServiceState: "checking" | "online" | "offline";
   localServiceStatusText: string;
+  preferenceSection: {
+    uiTheme: "classic" | "modern";
+    uiDensity: UiDensity;
+    uiSurface: UiSurface;
+    logFontSize: number;
+    terminalFontSize: number;
+    motionMode: UiMotionMode;
+    errorHighlightEnabled: boolean;
+    showPathHistory: boolean;
+    showTransferHistory: boolean;
+    sliceLengthMode: "auto" | "manual";
+    sliceLength: number;
+    serverStatusAutoRefresh: boolean;
+    serverStatusRefreshIntervalMs: number;
+    activityPanelHeight: number;
+    onUiThemeChange: (theme: "classic" | "modern") => void;
+    onUiDensityChange: (density: UiDensity) => void;
+    onUiSurfaceChange: (surface: UiSurface) => void;
+    onLogFontSizeChange: (size: number) => void;
+    onTerminalFontSizeChange: (size: number) => void;
+    onMotionModeChange: (mode: UiMotionMode) => void;
+    onResetUiPreferences: () => void;
+    onToggleErrorHighlight: () => void;
+    onTogglePathHistory: () => void;
+    onToggleTransferHistory: () => void;
+    onSliceLengthModeChange: (mode: "auto" | "manual") => void;
+    onSliceLengthChange: (bytes: number) => void;
+    onToggleServerStatusAutoRefresh: () => void;
+  };
   importSection: {
     selectedTool: "finalshell" | "xshell";
     importStatus: string;
@@ -83,7 +113,7 @@ interface Props {
 }
 
 function sourceLabel(source?: ServerSummary["source"]) {
-  if (source === "manual") return "手动维护";
+  if (source === "manual") return "手动连接";
   if (source === "finalshell") return "FinalShell";
   if (source === "xshell") return "Xshell";
   return "内置";
@@ -105,6 +135,26 @@ function serviceTone(state: Props["localServiceState"]) {
   if (state === "online") return "success";
   if (state === "offline") return "danger";
   return "neutral";
+}
+
+function formatSettingBytes(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) return "自动";
+  if (value >= 1024 * 1024) return `${Math.round(value / 1024 / 1024)} MB`;
+  return `${Math.round(value / 1024)} KB`;
+}
+
+function densityLabel(value: UiDensity): string {
+  return value === "comfortable" ? "舒展" : "紧凑";
+}
+
+function surfaceLabel(value: UiSurface): string {
+  if (value === "mist") return "雾面";
+  if (value === "paper") return "纸感";
+  return "默认";
+}
+
+function motionModeLabel(value: UiMotionMode): string {
+  return value === "reduced" ? "减少动效" : "标准";
 }
 
 export function ConnectionSettingsWorkspace(props: Props) {
@@ -142,21 +192,221 @@ export function ConnectionSettingsWorkspace(props: Props) {
     <section className="settings-workspace">
       <header className="settings-workspace-head">
         <div>
-          <p className="settings-workspace-eyebrow">设置工作区</p>
-          <h2 className="settings-workspace-title">连接设置</h2>
-          <p className="settings-workspace-subtitle">把导入、手动维护和当前连接拆开处理。</p>
+          <p className="settings-workspace-eyebrow">设置中心</p>
+          <h2 className="settings-workspace-title">偏好设置与连接管理</h2>
+          <p className="settings-workspace-subtitle">软件体验和服务器连接分开维护，避免设置项混在一起。</p>
         </div>
         <div className="settings-workspace-pills">
           <span className={`settings-pill settings-pill-${serviceTone(props.localServiceState)}`}>{props.localServiceStatusText}</span>
-          <span className="settings-pill">{props.inventorySection.managedServers.length} 台已维护</span>
-          <span className="settings-pill">{props.inventorySection.manualServers.length} 台手动维护</span>
+          <span className="settings-pill">{props.inventorySection.managedServers.length} 台连接</span>
+          <span className="settings-pill">{props.inventorySection.manualServers.length} 台手动</span>
         </div>
       </header>
       <nav className="settings-workspace-nav">
-        <button type="button" className={props.activeView === "overview" ? "settings-nav-btn settings-nav-btn-active" : "settings-nav-btn"} onClick={() => props.onViewChange("overview")}>导入与概览</button>
-        <button type="button" className={props.activeView === "inventory" ? "settings-nav-btn settings-nav-btn-active" : "settings-nav-btn"} onClick={() => props.onViewChange("inventory")}>服务器台账</button>
-        <button type="button" className={props.activeView === "server" ? "settings-nav-btn settings-nav-btn-active" : "settings-nav-btn"} onClick={() => props.onViewChange("server")}>当前连接</button>
+        <button type="button" className={props.activeView === "preferences" ? "settings-nav-btn settings-nav-btn-active" : "settings-nav-btn"} onClick={() => props.onViewChange("preferences")}>偏好设置</button>
+        <button type="button" className={props.activeView === "overview" ? "settings-nav-btn settings-nav-btn-active" : "settings-nav-btn"} onClick={() => props.onViewChange("overview")}>导入来源</button>
+        <button type="button" className={props.activeView === "inventory" ? "settings-nav-btn settings-nav-btn-active" : "settings-nav-btn"} onClick={() => props.onViewChange("inventory")}>连接清单</button>
+        <button type="button" className={props.activeView === "server" ? "settings-nav-btn settings-nav-btn-active" : "settings-nav-btn"} onClick={() => props.onViewChange("server")}>当前服务器</button>
       </nav>
+
+      {props.activeView === "preferences" ? (
+        <div className="settings-workspace-grid settings-workspace-grid-preferences">
+          <section className="settings-card settings-preference-hero">
+            <div className="settings-card-head">
+              <div>
+                <span className="settings-card-kicker">应用体验</span>
+                <strong>偏好设置</strong>
+                <p className="settings-card-note">
+                  这里只放影响软件体验的选项；服务器导入、凭证和 JumpServer 路由放到连接管理里。
+                </p>
+              </div>
+            </div>
+            <div className="settings-preference-grid">
+              <div className="settings-preference-item">
+                <span>主题</span>
+                <strong>{props.preferenceSection.uiTheme === "modern" ? "现代浅色" : "经典紧凑"}</strong>
+                <div className="settings-tool-switcher">
+                  <button
+                    type="button"
+                    className={props.preferenceSection.uiTheme === "modern" ? "settings-tool-chip settings-tool-chip-active" : "settings-tool-chip"}
+                    onClick={() => props.preferenceSection.onUiThemeChange("modern")}
+                  >
+                    现代
+                  </button>
+                  <button
+                    type="button"
+                    className={props.preferenceSection.uiTheme === "classic" ? "settings-tool-chip settings-tool-chip-active" : "settings-tool-chip"}
+                    onClick={() => props.preferenceSection.onUiThemeChange("classic")}
+                  >
+                    经典
+                  </button>
+                </div>
+              </div>
+              <div className="settings-preference-item">
+                <span>背景</span>
+                <strong>{surfaceLabel(props.preferenceSection.uiSurface)}</strong>
+                <select
+                  value={props.preferenceSection.uiSurface}
+                  onChange={(event) => props.preferenceSection.onUiSurfaceChange(event.target.value as UiSurface)}
+                >
+                  <option value="plain">默认</option>
+                  <option value="mist">雾面</option>
+                  <option value="paper">纸感</option>
+                </select>
+              </div>
+              <div className="settings-preference-item">
+                <span>界面密度</span>
+                <strong>{densityLabel(props.preferenceSection.uiDensity)}</strong>
+                <div className="settings-tool-switcher">
+                  <button
+                    type="button"
+                    className={props.preferenceSection.uiDensity === "compact" ? "settings-tool-chip settings-tool-chip-active" : "settings-tool-chip"}
+                    onClick={() => props.preferenceSection.onUiDensityChange("compact")}
+                  >
+                    紧凑
+                  </button>
+                  <button
+                    type="button"
+                    className={props.preferenceSection.uiDensity === "comfortable" ? "settings-tool-chip settings-tool-chip-active" : "settings-tool-chip"}
+                    onClick={() => props.preferenceSection.onUiDensityChange("comfortable")}
+                  >
+                    舒展
+                  </button>
+                </div>
+              </div>
+              <div className="settings-preference-item">
+                <span>日志切片</span>
+                <strong>{props.preferenceSection.sliceLengthMode === "auto" ? "自动" : formatSettingBytes(props.preferenceSection.sliceLength)}</strong>
+                <div className="settings-inline-actions">
+                  <select
+                    value={props.preferenceSection.sliceLengthMode === "auto" ? "auto" : String(props.preferenceSection.sliceLength)}
+                    onChange={(event) => {
+                      if (event.target.value === "auto") {
+                        props.preferenceSection.onSliceLengthModeChange("auto");
+                        return;
+                      }
+                      props.preferenceSection.onSliceLengthModeChange("manual");
+                      props.preferenceSection.onSliceLengthChange(Number(event.target.value));
+                    }}
+                  >
+                    <option value="auto">自动</option>
+                    <option value={32768}>32 KB</option>
+                    <option value={65536}>64 KB</option>
+                    <option value={131072}>128 KB</option>
+                    <option value={262144}>256 KB</option>
+                  </select>
+                </div>
+              </div>
+              <div className="settings-preference-item">
+                <span>日志字号</span>
+                <strong>{props.preferenceSection.logFontSize}px</strong>
+                <select
+                  value={String(props.preferenceSection.logFontSize)}
+                  onChange={(event) => props.preferenceSection.onLogFontSizeChange(Number(event.target.value))}
+                >
+                  <option value="11">11px</option>
+                  <option value="12">12px</option>
+                  <option value="13">13px</option>
+                  <option value="14">14px</option>
+                  <option value="16">16px</option>
+                </select>
+              </div>
+              <div className="settings-preference-item">
+                <span>终端字号</span>
+                <strong>{props.preferenceSection.terminalFontSize}px</strong>
+                <select
+                  value={String(props.preferenceSection.terminalFontSize)}
+                  onChange={(event) => props.preferenceSection.onTerminalFontSizeChange(Number(event.target.value))}
+                >
+                  <option value="11">11px</option>
+                  <option value="12">12px</option>
+                  <option value="13">13px</option>
+                  <option value="14">14px</option>
+                  <option value="16">16px</option>
+                  <option value="18">18px</option>
+                </select>
+              </div>
+              <div className="settings-preference-item">
+                <span>动效策略</span>
+                <strong>{motionModeLabel(props.preferenceSection.motionMode)}</strong>
+                <div className="settings-tool-switcher">
+                  <button
+                    type="button"
+                    className={props.preferenceSection.motionMode === "normal" ? "settings-tool-chip settings-tool-chip-active" : "settings-tool-chip"}
+                    onClick={() => props.preferenceSection.onMotionModeChange("normal")}
+                  >
+                    标准
+                  </button>
+                  <button
+                    type="button"
+                    className={props.preferenceSection.motionMode === "reduced" ? "settings-tool-chip settings-tool-chip-active" : "settings-tool-chip"}
+                    onClick={() => props.preferenceSection.onMotionModeChange("reduced")}
+                  >
+                    减少
+                  </button>
+                </div>
+              </div>
+              <button type="button" className="settings-preference-toggle" onClick={props.preferenceSection.onToggleErrorHighlight}>
+                <span>异常高亮</span>
+                <strong>{props.preferenceSection.errorHighlightEnabled ? "开启" : "关闭"}</strong>
+              </button>
+              <button type="button" className="settings-preference-toggle" onClick={props.preferenceSection.onToggleServerStatusAutoRefresh}>
+                <span>服务器状态自动刷新</span>
+                <strong>{props.preferenceSection.serverStatusAutoRefresh ? `${Math.round(props.preferenceSection.serverStatusRefreshIntervalMs / 1000)}s` : "关闭"}</strong>
+              </button>
+              <button type="button" className="settings-preference-toggle" onClick={props.preferenceSection.onTogglePathHistory}>
+                <span>路径历史浮层</span>
+                <strong>{props.preferenceSection.showPathHistory ? "显示中" : "关闭"}</strong>
+              </button>
+              <button type="button" className="settings-preference-toggle" onClick={props.preferenceSection.onToggleTransferHistory}>
+                <span>传输记录浮层</span>
+                <strong>{props.preferenceSection.showTransferHistory ? "显示中" : "关闭"}</strong>
+              </button>
+              <button type="button" className="settings-preference-toggle settings-preference-reset" onClick={props.preferenceSection.onResetUiPreferences}>
+                <span>恢复默认显示</span>
+                <strong>重置</strong>
+              </button>
+            </div>
+          </section>
+
+          <section className="settings-card">
+            <div className="settings-card-head">
+              <div>
+                <span className="settings-card-kicker">实时生效</span>
+                <strong>当前显示偏好</strong>
+                <p className="settings-card-note">
+                  这些选项会写入本地偏好并立即作用到主界面、日志预览和终端；不是只记录配置。
+                </p>
+              </div>
+            </div>
+            <div className="settings-roadmap-grid">
+              <span>背景：{surfaceLabel(props.preferenceSection.uiSurface)}</span>
+              <span>密度：{densityLabel(props.preferenceSection.uiDensity)}</span>
+              <span>日志字号：{props.preferenceSection.logFontSize}px</span>
+              <span>终端字号：{props.preferenceSection.terminalFontSize}px</span>
+              <span>动效：{motionModeLabel(props.preferenceSection.motionMode)}</span>
+              <span>主题：{props.preferenceSection.uiTheme === "modern" ? "现代浅色" : "经典紧凑"}</span>
+            </div>
+          </section>
+
+          <section className="settings-card">
+            <div className="settings-card-head">
+              <div>
+                <span className="settings-card-kicker">当前布局状态</span>
+                <strong>面板与阅读行为</strong>
+              </div>
+            </div>
+            <div className="settings-meta-grid">
+              <span>操作记录高度：{props.preferenceSection.activityPanelHeight}px</span>
+              <span>状态刷新：{props.preferenceSection.serverStatusAutoRefresh ? "自动刷新" : "手动刷新"}</span>
+              <span>路径历史：{props.preferenceSection.showPathHistory ? "显示中" : "关闭"}</span>
+              <span>传输记录：{props.preferenceSection.showTransferHistory ? "显示中" : "关闭"}</span>
+              <span>界面密度：{densityLabel(props.preferenceSection.uiDensity)}</span>
+              <span>背景方案：{surfaceLabel(props.preferenceSection.uiSurface)}</span>
+            </div>
+          </section>
+        </div>
+      ) : null}
 
       {props.activeView === "overview" ? (
         <div className="settings-workspace-grid settings-workspace-grid-overview">
@@ -206,16 +456,16 @@ export function ConnectionSettingsWorkspace(props: Props) {
           <section className="settings-card">
             <div className="settings-card-head">
               <div>
-                <span className="settings-card-kicker">手动维护</span>
-                <strong>服务器台账</strong>
+                <span className="settings-card-kicker">连接管理</span>
+                <strong>连接清单</strong>
               </div>
               <div className="settings-inline-actions">
-                <button className="ghost-button" type="button" onClick={() => props.onViewChange("inventory")}>打开台账</button>
-                <button className="ghost-button" type="button" onClick={props.inventorySection.onStartCreate}>新建服务器</button>
+                <button className="ghost-button" type="button" onClick={() => props.onViewChange("inventory")}>打开清单</button>
+                <button className="ghost-button" type="button" onClick={props.inventorySection.onStartCreate}>新建连接</button>
               </div>
             </div>
             <div className="settings-meta-grid">
-              <span>手动维护：{props.inventorySection.manualServers.length} 台</span>
+              <span>手动连接：{props.inventorySection.manualServers.length} 台</span>
               <span>自动导入：{props.inventorySection.importedServers.length} 台</span>
               <span>当前选中：{selectedServer?.name || "--"}</span>
             </div>
@@ -228,7 +478,7 @@ export function ConnectionSettingsWorkspace(props: Props) {
                 <strong>{selectedServer?.name || "尚未选择服务器"}</strong>
               </div>
               <div className="settings-inline-actions">
-                <button className="ghost-button" type="button" onClick={() => props.onViewChange("server")} disabled={!selectedServer}>进入连接设置</button>
+                <button className="ghost-button" type="button" onClick={() => props.onViewChange("server")} disabled={!selectedServer}>查看当前服务器</button>
                 <button className="ghost-button" type="button" onClick={props.currentServerSection.onOpenTerminal} disabled={!selectedServer || props.isBusy}>打开终端</button>
               </div>
             </div>
@@ -246,10 +496,10 @@ export function ConnectionSettingsWorkspace(props: Props) {
           <section className="settings-card settings-card-scroll">
             <div className="settings-card-head">
               <div>
-                <span className="settings-card-kicker">服务器台账</span>
-                <strong>已维护的服务器</strong>
+                <span className="settings-card-kicker">连接清单</span>
+                <strong>已保存的连接</strong>
               </div>
-              <button className="ghost-button" type="button" onClick={props.inventorySection.onStartCreate}>新建</button>
+              <button className="ghost-button" type="button" onClick={props.inventorySection.onStartCreate}>新建连接</button>
             </div>
             <div className="settings-server-list">
               {props.inventorySection.managedServers.length ? props.inventorySection.managedServers.map((server) => (
@@ -267,19 +517,19 @@ export function ConnectionSettingsWorkspace(props: Props) {
                     {server.source ? <button className="ghost-button danger-button" type="button" onClick={() => props.inventorySection.onDeleteServer(server)}>删除</button> : null}
                   </div>
                 </div>
-              )) : <div className="settings-workspace-empty"><strong>还没有可维护的服务器</strong><span>先导入一批，或者直接手动新增。</span></div>}
+              )) : <div className="settings-workspace-empty"><strong>还没有可管理的连接</strong><span>先导入一批，或者直接手动新增。</span></div>}
             </div>
           </section>
 
           <section className="settings-card">
             <div className="settings-card-head">
               <div>
-                <span className="settings-card-kicker">手动维护</span>
-                <strong>{props.inventorySection.draft.id ? "编辑手动服务器" : "新建手动服务器"}</strong>
+                <span className="settings-card-kicker">手动连接</span>
+                <strong>{props.inventorySection.draft.id ? "编辑连接" : "新建连接"}</strong>
               </div>
               <div className="settings-inline-actions">
                 <button className="ghost-button" type="button" onClick={props.inventorySection.onResetDraft}>清空</button>
-                <button className="ghost-button" type="button" onClick={props.inventorySection.onSaveDraft} disabled={!props.inventorySection.canSaveDraft || props.isBusy}>保存服务器</button>
+                <button className="ghost-button settings-primary-action" type="button" onClick={props.inventorySection.onSaveDraft} disabled={!props.inventorySection.canSaveDraft || props.isBusy}>保存连接</button>
               </div>
             </div>
             <div className="settings-form-grid settings-form-grid-two">
@@ -493,7 +743,7 @@ export function ConnectionSettingsWorkspace(props: Props) {
               ) : (
                 <div className="settings-note-box">
                   <strong>当前服务器按直连处理</strong>
-                  <span>如果你希望它走堡垒机，请回到“服务器台账”把连接方式改成“经堡垒机目标机”。</span>
+                  <span>如果你希望它走堡垒机，请回到“连接清单”把连接方式改成“经堡垒机目标机”。</span>
                 </div>
               )}
             </section>
@@ -501,7 +751,7 @@ export function ConnectionSettingsWorkspace(props: Props) {
         ) : (
           <div className="settings-workspace-empty">
             <strong>还没有选中的服务器</strong>
-            <span>先在左侧选择服务器，或者到“服务器台账”里新增一台。</span>
+            <span>先在左侧选择服务器，或者到“连接清单”里新增一台。</span>
           </div>
         )
       ) : null}

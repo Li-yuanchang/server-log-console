@@ -57,7 +57,7 @@ export function useServerConnection(deps: {
   fetchServers: () => Promise<ServerSummary[]>;
   fetchDirectoryListing: (path: string) => Promise<any>;
   rememberDirectoryIfUseful: (serverId: string, path: string, count: number) => void;
-  openSettingsWorkspace: (view?: "overview" | "server" | "inventory") => void;
+  openSettingsWorkspace: (view?: "preferences" | "overview" | "server" | "inventory") => void;
 }): ServerConnectionAPI {
   const {
     serverId,
@@ -255,7 +255,7 @@ export function useServerConnection(deps: {
       setConnectionTestStatus(payload);
       const connectionMessage =
         !payload.connected && ((availableBastions.length && selectedServer?.connectionKind !== "bastion") || looksLikeJumpServer(selectedServer))
-          ? `${payload.message} 可在连接设置里切换跳转入口后重试。`
+          ? `${payload.message} 可在设置中心的“当前服务器”里切换跳转入口后重试。`
           : payload.message;
       setActionStatus(connectionMessage);
 
