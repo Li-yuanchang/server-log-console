@@ -39,7 +39,20 @@
   -webkit-app-region: no-drag;
 }
 
-.electron-immersive .toolbar-commandbar,
+.electron-immersive .toolbar-commandbar {
+  -webkit-app-region: drag;
+}
+
+.electron-immersive .toolbar-search-actions {
+  -webkit-app-region: drag;
+}
+
+.electron-immersive .toolbar-commandbar button,
+.electron-immersive .toolbar-commandbar input,
+.electron-immersive .toolbar-commandbar select,
+.electron-immersive .toolbar-commandbar textarea,
+.electron-immersive .toolbar-commandbar a,
+.electron-immersive .toolbar-commandbar [role="button"],
 .electron-immersive .toolbar-view-switch,
 .electron-immersive .toolbar-view-switch *,
 .electron-immersive .toolbar-view-switch-btn {

@@ -22,9 +22,10 @@ import { SearchToolbarActions } from "./SearchToolbarActions.js";
 import { BatchCommandPanel } from "./BatchCommandPanel.js";
 import { UtilityWorkspace } from "./UtilityWorkspace.js";
 import { DiffComparePanel } from "./DiffComparePanel.js";
+import { ServerStatusPanel } from "./ServerStatusPanel.js";
 import type { UtilityPanelType } from "./UtilityWorkspace.js";
 import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, WheelEvent as ReactWheelEvent } from "react";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import type {
   JumpServerAssetOption,
   LogFileEntry,
@@ -35,9 +36,10 @@ import type {
   ServerConnectionTestResponse,
   ServerRouteConfig,
   ServerCredentialStatus,
+  ServerSystemProfileResponse,
   ServerSummary
 } from "@server-log-console/shared";
-import { ArrowLeft, Radio, Wrench, Download, Copy, PictureInPicture2, Bug, Bookmark, X } from "lucide-react";
+import { ArrowDown, ArrowLeft, Radio, Wrench, Download, Copy, PictureInPicture2, Bug, Bookmark, X } from "lucide-react";
 import { TerminalPanel } from "./TerminalWorkspace.js";
 import { ToolIcon } from "./ToolIcon.js";
 
@@ -90,6 +92,7 @@ import {
   localServiceBase,
   apiGetLogMeta,
   apiGetLogSlice,
+  apiGetServerSystemProfile,
 } from "./api.js";
 import {
   buildConnectionSummary,
@@ -132,6 +135,41 @@ const isStandaloneViewerWindow = pipMode === "viewer";
 const isStandaloneTerminalWindow = pipMode === "terminal";
 const isStandaloneUtilityWindow = pipMode === "utility";
 const isStandalonePipWindow = isStandaloneViewerWindow || isStandaloneTerminalWindow || isStandaloneUtilityWindow;
+const SERVER_STATUS_REFRESH_INTERVAL_MS = 10000;
+const JUMP_STATUS_REMOTE_ROOTS = new Set([
+  "home", "var", "opt", "tmp", "root", "etc", "usr", "srv", "data", "mnt", "media", "run", "log", "logs", "app", "apps", "www"
+]);
+
+type ServerStatusContextSource = "directory" | "file" | "saved" | "none";
+
+function isJumpServerStatusContextCandidate(value: string): boolean {
+  const parts = value.split("/").filter(Boolean);
+  return parts.some((part, index) => index > 0 && JUMP_STATUS_REMOTE_ROOTS.has(part.toLowerCase()))
+    || isJumpServerAssetRootPath(value);
+}
+
+function isJumpServerAssetRootPath(value: string): boolean {
+  const parts = value.split("/").filter(Boolean);
+  const assetKey = parts[parts.length - 1] || "";
+  return parts.length >= 2 && looksLikeJumpServerAssetKey(assetKey);
+}
+
+function looksLikeJumpServerAssetKey(value: string): boolean {
+  return /\d{1,3}(?:\.\d{1,3}){1,3}/.test(value) || /^[^/\s]+_[^/]+$/.test(value);
+}
+
+function getJumpServerStatusContextLabel(value: string): string {
+  const parts = value.split("/").filter(Boolean);
+  for (let index = 0; index < parts.length; index += 1) {
+    if (index > 0 && JUMP_STATUS_REMOTE_ROOTS.has(parts[index].toLowerCase())) {
+      return parts[index - 1];
+    }
+  }
+  if (isJumpServerAssetRootPath(value)) {
+    return parts[parts.length - 1] || value;
+  }
+  return value || "未确定目标";
+}
 
 export function App() {
   const [servers, setServers] = useState<ServerSummary[]>([]);
@@ -163,6 +201,7 @@ export function App() {
   const [fileEntries, setFileEntries] = useState<LogFileEntry[]>([]);
   const [isDirectoryLoading, setIsDirectoryLoading] = useState(false);
   const [directoryPath, setDirectoryPath] = useState(pipUrlParams.get("directoryPath") || defaultDirectoryPath);
+  const [statusContextPath, setStatusContextPath] = useState("");
   const [directoryNavBackStack, setDirectoryNavBackStack] = useState<string[]>([]);
   const [directoryNavForwardStack, setDirectoryNavForwardStack] = useState<string[]>([]);
   const [fileMeta, setFileMeta] = useState<LogFileMetaResponse | null>(null);
@@ -202,9 +241,23 @@ export function App() {
   const isWorkspaceSwitchLocked = isBusy || searchTask?.status === "queued" || searchTask?.status === "running";
   const [fileLoadingName, setFileLoadingName] = useState("");
   const [isDragOver, setIsDragOver] = useState(false);
-  const { uiTheme } = useUiTheme();
+  const {
+    uiTheme,
+    setUiTheme,
+    uiDensity,
+    setUiDensity,
+    uiSurface,
+    setUiSurface,
+    logFontSize,
+    setLogFontSize,
+    terminalFontSize,
+    setTerminalFontSize,
+    motionMode,
+    setMotionMode,
+    resetUiPreferences,
+  } = useUiTheme();
   const [showConnectionSettings, setShowConnectionSettings] = useState(false);
-  const [settingsWorkspaceView, setSettingsWorkspaceView] = useState<SettingsWorkspaceView>("overview");
+  const [settingsWorkspaceView, setSettingsWorkspaceView] = useState<SettingsWorkspaceView>("preferences");
   const [manualServerDraft, setManualServerDraft] = useState<ManualServerDraft>(() => createManualServerDraft());
   const [showQueryAdvanced, setShowQueryAdvanced] = useState(false);
   const [credentialStatus, setCredentialStatus] = useState<ServerCredentialStatus | null>(null);
@@ -253,6 +306,10 @@ export function App() {
   const [showBookmarkPanel, setShowBookmarkPanel] = useState(false);
   const [showUtilityWorkspace, setShowUtilityWorkspace] = useState(false);
   const [activeUtilityPanel, setActiveUtilityPanel] = useState<UtilityPanelType>("compare");
+  const [serverSystemProfile, setServerSystemProfile] = useState<ServerSystemProfileResponse | null>(null);
+  const [serverSystemProfileLoading, setServerSystemProfileLoading] = useState(false);
+  const [serverSystemProfileError, setServerSystemProfileError] = useState("");
+  const [serverSystemProfileAutoRefresh, setServerSystemProfileAutoRefresh] = useState(true);
   const [multiFileMode, setMultiFileMode] = useState(false);
   const [filePattern, setFilePattern] = useState("*.log");
   const [terminalSplitMode, setTerminalSplitMode] = useState(false);
@@ -278,6 +335,8 @@ export function App() {
   const readerPreviewRequestRef = useRef(0);
   const jumpToMatchRequestRef = useRef(0);
   const openFileRequestRef = useRef(0);
+  const serverSystemProfileRequestRef = useRef(0);
+  const serverSystemProfileLoadingRef = useRef(false);
   const sliceRequestRef = useRef(0);
   const lastSearchResultsRef = useRef<LogSearchResponse | null>(null);
   const jumpAssetAutoSearchKeyRef = useRef("");
@@ -412,6 +471,9 @@ export function App() {
     setActiveViewerTabId(snapshot.activeViewerTabId);
     setDirectoryPath(snapshot.directoryPath);
     setDirectoryInput(snapshot.directoryPath || "/");
+    setStatusContextPath(
+      [snapshot.filePath?.trim() || "", snapshot.directoryPath?.trim() || ""].find(isJumpServerStatusContextCandidate) || ""
+    );
     setDirectoryNavBackStack([]);
     setDirectoryNavForwardStack([]);
     setFilePath(snapshot.filePath);
@@ -481,6 +543,7 @@ export function App() {
     setDirectoryPath,
     setDirectoryInput,
     setFilePath,
+    setStatusContextPath,
     setFileEntries,
     setFileMeta,
     setSliceOffset,
@@ -526,6 +589,7 @@ export function App() {
     activeWorkspaceSessionId,
     filePath,
     directoryPath,
+    statusContextPath,
     keywordInput,
     keywordMode,
     excludeInput,
@@ -672,6 +736,7 @@ export function App() {
       setJumpAssetOptions([]);
       jumpAssetAutoSearchKeyRef.current = "";
       setDirectoryPath(defaultDirectoryPath);
+      setStatusContextPath("");
       setDirectoryNavBackStack([]);
       setDirectoryNavForwardStack([]);
       setFilePath("");
@@ -706,9 +771,10 @@ export function App() {
       setJumpSearchKeyword("");
       setJumpAssetId("");
       setJumpAssetOptions([]);
-      jumpAssetAutoSearchKeyRef.current = "";
+        jumpAssetAutoSearchKeyRef.current = "";
       if (!pipMode) {
         setDirectoryPath(defaultDirectoryPath);
+        setStatusContextPath("");
         setDirectoryNavBackStack([]);
         setDirectoryNavForwardStack([]);
         setFilePath("");
@@ -759,6 +825,43 @@ export function App() {
     }
     setDirectoryInput(directoryPath || "/");
   }, [directoryPath, pathbarMode]);
+
+  const currentStatusContext = useMemo((): { path: string; source: ServerStatusContextSource } => {
+    const candidates: Array<{ path: string; source: ServerStatusContextSource }> = [
+      { path: directoryPath.trim(), source: "directory" },
+      { path: filePath.trim(), source: "file" }
+    ];
+    return candidates.find((candidate) => isJumpServerStatusContextCandidate(candidate.path)) || { path: "", source: "none" };
+  }, [directoryPath, filePath]);
+
+  const effectiveServerStatusContext = useMemo((): { path: string; source: ServerStatusContextSource } => {
+    if (currentStatusContext.path) {
+      return currentStatusContext;
+    }
+    const savedPath = statusContextPath.trim();
+    if (isJumpServerStatusContextCandidate(savedPath)) {
+      return { path: savedPath, source: "saved" };
+    }
+    return { path: "", source: "none" };
+  }, [currentStatusContext, statusContextPath]);
+
+  const serverStatusContextLabel = useMemo(() => {
+    if (!effectiveServerStatusContext.path) {
+      return "";
+    }
+    const prefix = effectiveServerStatusContext.source === "directory"
+      ? "跟随目录"
+      : effectiveServerStatusContext.source === "file"
+        ? "跟随日志"
+        : "沿用资产";
+    return `${prefix}: ${getJumpServerStatusContextLabel(effectiveServerStatusContext.path)}`;
+  }, [effectiveServerStatusContext]);
+
+  useEffect(() => {
+    if (currentStatusContext.path) {
+      setStatusContextPath(currentStatusContext.path);
+    }
+  }, [currentStatusContext]);
 
   useEffect(() => {
     if (skipServerSelectionResetRef.current) {
@@ -1135,6 +1238,16 @@ export function App() {
   }, [serverId]);
 
   useEffect(() => {
+    setServerSystemProfile(null);
+    setServerSystemProfileError("");
+    setServerSystemProfileLoading(false);
+  }, [serverId]);
+
+  useEffect(() => {
+    serverSystemProfileLoadingRef.current = serverSystemProfileLoading;
+  }, [serverSystemProfileLoading]);
+
+  useEffect(() => {
     if (results && (results.matches.length > 0 || results.rawOutput || results.contextOutput)) {
       lastSearchResultsRef.current = results;
     }
@@ -1234,7 +1347,7 @@ export function App() {
   }
 
   function openSettingsWorkspace(view?: SettingsWorkspaceView) {
-    setSettingsWorkspaceView(view || (selectedServer ? "server" : "overview"));
+    setSettingsWorkspaceView(view || "preferences");
     setShowConnectionSettings(true);
   }
 
@@ -1411,6 +1524,7 @@ export function App() {
     preserveSessionOnInactive: terminalDetached || preserveTerminalOnInactive,
     preserveSessionOnDispose: isStandaloneTerminalWindow,
     onSelectionMenu: setTermSelMenu,
+    terminalFontSize,
   });
 
   useEffect(() => {
@@ -2097,14 +2211,11 @@ export function App() {
     if (canOpenComparePanel) {
       panels.push("compare");
     }
-    if (serverId && activeLogView === "search") {
-      panels.push("tunnels");
-    }
-    if (servers.length > 0 && activeLogView === "search") {
-      panels.push("batch");
+    if (serverId) {
+      panels.push("status");
     }
     return panels;
-  }, [activeLogView, canOpenComparePanel, serverId, servers.length]);
+  }, [canOpenComparePanel, serverId]);
   const canShowEmbeddedUtilityWorkspace = availableUtilityPanels.length > 0 && !showCompactViewerChrome;
   const canToggleResultContext = Boolean(activeViewerTabId !== "file" && activeResultTab?.fullContent && activeResultTab.strategyLabel !== "本地文件");
 
@@ -2118,6 +2229,79 @@ export function App() {
     }
     setActiveUtilityPanel(availableUtilityPanels[0]);
   }, [activeUtilityPanel, availableUtilityPanels]);
+
+  const refreshServerSystemProfile = useCallback(async () => {
+    if (!serverId) {
+      setServerSystemProfile(null);
+      setServerSystemProfileError("请先选择服务器。");
+      return;
+    }
+    const requestId = ++serverSystemProfileRequestRef.current;
+    setServerSystemProfileLoading(true);
+    setServerSystemProfileError("");
+    try {
+      const profile = await apiGetServerSystemProfile(serverId, 30000, effectiveServerStatusContext.path || undefined);
+      if (serverSystemProfileRequestRef.current !== requestId) {
+        return;
+      }
+      setServerSystemProfile(profile);
+    } catch (error) {
+      if (serverSystemProfileRequestRef.current !== requestId) {
+        return;
+      }
+      setServerSystemProfileError(error instanceof Error ? error.message : "读取服务器状态失败");
+    } finally {
+      if (serverSystemProfileRequestRef.current === requestId) {
+        setServerSystemProfileLoading(false);
+      }
+    }
+  }, [effectiveServerStatusContext.path, serverId]);
+
+  const openServerStatusPanel = useCallback(() => {
+    if (!serverId) {
+      setActionStatus("请先选择服务器。");
+      return;
+    }
+    setActiveUtilityPanel("status");
+    setShowUtilityWorkspace(true);
+    setActionStatus("正在打开服务器状态...");
+    if (!serverSystemProfile || serverSystemProfile.serverId !== serverId) {
+      void refreshServerSystemProfile();
+    }
+  }, [refreshServerSystemProfile, serverId, serverSystemProfile, setActionStatus]);
+
+  useEffect(() => {
+    if (!showUtilityWorkspace || activeUtilityPanel !== "status" || !serverId) {
+      return;
+    }
+    if (serverSystemProfileLoading || serverSystemProfileError) {
+      return;
+    }
+    if (!serverSystemProfile || serverSystemProfile.serverId !== serverId) {
+      void refreshServerSystemProfile();
+    }
+  }, [
+    activeUtilityPanel,
+    refreshServerSystemProfile,
+    serverId,
+    serverSystemProfile,
+    serverSystemProfileError,
+    serverSystemProfileLoading,
+    showUtilityWorkspace
+  ]);
+
+  useEffect(() => {
+    if (!showUtilityWorkspace || activeUtilityPanel !== "status" || !serverId || !serverSystemProfileAutoRefresh) {
+      return;
+    }
+    const timer = window.setInterval(() => {
+      if (serverSystemProfileLoadingRef.current) {
+        return;
+      }
+      void refreshServerSystemProfile();
+    }, SERVER_STATUS_REFRESH_INTERVAL_MS);
+    return () => window.clearInterval(timer);
+  }, [activeUtilityPanel, refreshServerSystemProfile, serverId, serverSystemProfileAutoRefresh, showUtilityWorkspace]);
 
   const toggleErrorHighlight = useCallback(() => {
     if (!canToggleErrorHighlight) {
@@ -2216,21 +2400,6 @@ export function App() {
         ? `定位到 ${formatNumber(lineContextState.lineNumber)} 行`
         : (highlightCount ? `命中 ${highlightCount} 处` : "滚轮到边缘可翻页"))
     : `结果 ${formatNumber(activeViewerMatchCount)} 条`;
-  const viewerContextModeLabel = activeViewerTabId === "file"
-    ? (lineContextState ? "定位片段" : (liveFollowEnabled ? "实时日志" : "文件片段"))
-    : (activeResultTab ? "搜索结果" : "日志结果");
-  const viewerContextTitle = activeViewerTabId === "file"
-    ? (selectedFileName || "当前文件")
-    : (activeResultTab?.label || "当前结果");
-  const viewerContextSource = activeViewerTabId === "file"
-    ? (filePath || selectedFileName || "--")
-    : (activeResultTab?.sourceLabel || selectedFileName || "--");
-  const viewerContextPosition = activeViewerTabId === "file"
-    ? (lineContextState ? `第 ${formatNumber(lineContextState.lineNumber)} 行附近` : formatSliceProgressLabel(sliceProgress))
-    : `共 ${formatNumber(activeViewerMatchCount)} 条`;
-  const viewerContextState = searchStartedAt
-    ? `检索中${searchElapsedLabel ? ` · ${searchElapsedLabel}` : ""}`
-    : compactReaderHint;
   const viewerWheelHandlerRef = useRef<(event: ReactWheelEvent<HTMLDivElement>) => void>(() => {});
   const viewerNearBottomHandlerRef = useRef<(nearBottom: boolean) => void>(() => {});
   const viewerLineClickHandlerRef = useRef<((lineIndex: number, event: ReactMouseEvent<HTMLDivElement>) => void) | undefined>(undefined);
@@ -2275,13 +2444,37 @@ export function App() {
   }, []);
 
   const handleViewerLineClick = useCallback((lineIndex: number, event: ReactMouseEvent<HTMLDivElement>) => {
+    if (!(event.metaKey || event.ctrlKey)) {
+      return;
+    }
     viewerLineClickHandlerRef.current?.(lineIndex, event);
   }, []);
 
   const handleViewerFileLineClick = useCallback((lineIndex: number, event: ReactMouseEvent<HTMLDivElement>) => {
-    if (!(event.metaKey || event.ctrlKey)) {
+    if (event.metaKey || event.ctrlKey) {
+      event.preventDefault();
+      setViewerSelMenu(null);
+      setViewerLineCopyRange(null);
+      const block = virtualViewerRef.current?.getLogBlockText(lineIndex);
+      const text = block?.text || virtualViewerRef.current?.getLineRangeText(lineIndex, lineIndex) || "";
+      if (!text.trim()) {
+        return;
+      }
+      void copyText(text).then(() => {
+        const lineCount = block ? block.end - block.start + 1 : 1;
+        setActionStatus(`已复制当前日志块：${formatNumber(lineCount)} 行。`);
+        showToast("success", `已复制 ${formatNumber(lineCount)} 行日志`);
+      }).catch((error) => {
+        const detail = error instanceof Error ? error.message : "未知错误";
+        setActionStatus(`复制失败：${detail}`);
+        showToast("error", `复制失败：${detail}`);
+      });
       return;
     }
+    if (!event.shiftKey) {
+      return;
+    }
+    event.preventDefault();
     setViewerSelMenu(null);
     setViewerLineCopyRange((current) => {
       if (!current || current.start !== current.end) {
@@ -2292,7 +2485,7 @@ export function App() {
       setActionStatus(`已选择复制范围：第 ${formatNumber(next.start + 1)} - ${formatNumber(next.end + 1)} 行。`);
       return next;
     });
-  }, [setActionStatus]);
+  }, [setActionStatus, showToast]);
 
   const handleCopyViewerLineRange = useCallback(async () => {
     if (!viewerLineCopyRange) return;
@@ -2311,14 +2504,27 @@ export function App() {
     }
   }, [showToast, viewerLineCopyRange]);
 
+  const handleViewerLineRangeChange = useCallback((range: { start: number; end: number }) => {
+    setViewerSelMenu(null);
+    const normalized = {
+      start: Math.min(range.start, range.end),
+      end: Math.max(range.start, range.end),
+    };
+    setViewerLineCopyRange(normalized);
+    setActionStatus(`已选择复制范围：第 ${formatNumber(normalized.start + 1)} - ${formatNumber(normalized.end + 1)} 行。`);
+  }, [setActionStatus]);
+
   const returnToJumpSource = useCallback(() => {
     const source = lineContextState?.jumpSource;
     if (!source) return;
     setActiveLogView("search");
     setActiveViewerTabId(source.tabId);
     setActionStatus(`已返回${source.tabLabel}，原命中第 ${formatNumber(source.lineNumber)} 行。`);
+    const scrollBack = () => virtualViewerRef.current?.scrollToLine(source.resultLineIndex, "auto");
     requestAnimationFrame(() => {
-      virtualViewerRef.current?.scrollToLine(source.resultLineIndex, "auto");
+      scrollBack();
+      window.setTimeout(scrollBack, 60);
+      window.setTimeout(scrollBack, 160);
     });
   }, [lineContextState?.jumpSource]);
 
@@ -2418,9 +2624,15 @@ export function App() {
     browseLogFiles,
   });
 
+  const appShellClassName = `app-shell${uiTheme === "modern" ? " theme-modern" : ""} ui-density-${uiDensity} ui-surface-${uiSurface} ui-motion-${motionMode}${isElectron ? " electron-immersive" : ""}${isElectron && isMacOS ? " electron-macos-immersive" : ""}`;
+  const appShellStyle = {
+    "--log-font-size": `${logFontSize}px`,
+    "--terminal-font-size": `${terminalFontSize}px`,
+  } as CSSProperties;
+
   if (isStandaloneTerminalWindow) {
     return (
-      <main className={`app-shell${uiTheme === "modern" ? " theme-modern" : ""}${isElectron ? " electron-immersive" : ""}${isElectron && isMacOS ? " electron-macos-immersive" : ""} pip-standalone pip-terminal-standalone`}>
+      <main className={`${appShellClassName} pip-standalone pip-terminal-standalone`} style={appShellStyle}>
         <section className="main-panel-terminal-standalone">
           <TerminalPanel
             popupMode="standalone"
@@ -2452,8 +2664,57 @@ export function App() {
     );
   }
 
+  const utilityWorkspaceNode = showUtilityWorkspace && canShowEmbeddedUtilityWorkspace ? (
+    <UtilityWorkspace
+      activePanel={activeUtilityPanel}
+      panels={availableUtilityPanels}
+      onSelectPanel={setActiveUtilityPanel}
+      onClose={() => setShowUtilityWorkspace(false)}
+    >
+      {activeUtilityPanel === "compare" ? (
+        <DiffComparePanel
+          visible
+          remoteContent={currentLogContent}
+          remoteLabel={activeCompareLabel}
+          onClose={() => setShowUtilityWorkspace(false)}
+        />
+      ) : null}
+      {activeUtilityPanel === "status" ? (
+        <ServerStatusPanel
+          visible
+          server={selectedServer}
+          profile={serverSystemProfile}
+          loading={serverSystemProfileLoading}
+          error={serverSystemProfileError}
+          autoRefresh={serverSystemProfileAutoRefresh}
+          refreshIntervalMs={SERVER_STATUS_REFRESH_INTERVAL_MS}
+          contextLabel={serverStatusContextLabel}
+          onToggleAutoRefresh={() => setServerSystemProfileAutoRefresh((current) => !current)}
+          onRefresh={() => { void refreshServerSystemProfile(); }}
+          onClose={() => setShowUtilityWorkspace(false)}
+        />
+      ) : null}
+      {activeUtilityPanel === "tunnels" && serverId ? (
+        <SshTunnelPanel
+          visible
+          serverId={serverId}
+          onClose={() => setShowUtilityWorkspace(false)}
+          onStatus={(msg) => setActionStatus(msg)}
+        />
+      ) : null}
+      {activeUtilityPanel === "batch" && servers.length > 0 ? (
+        <BatchCommandPanel
+          visible
+          servers={servers}
+          onClose={() => setShowUtilityWorkspace(false)}
+          onStatus={(msg) => setActionStatus(msg)}
+        />
+      ) : null}
+    </UtilityWorkspace>
+  ) : null;
+
   return (
-    <main className={`app-shell${uiTheme === "modern" ? " theme-modern" : ""}${isElectron ? " electron-immersive" : ""}${isElectron && isMacOS ? " electron-macos-immersive" : ""}${isStandalonePipWindow ? " pip-standalone" : ""}`}>
+    <main className={`${appShellClassName}${isStandalonePipWindow ? " pip-standalone" : ""}`} style={appShellStyle}>
       <section className="shell-layout">
         <SidebarPanel
           uiTheme={uiTheme}
@@ -2535,6 +2796,8 @@ export function App() {
                 terminalPanelOpen={terminalPanelOpen}
                 onToggleTerminal={toggleTerminalPanel}
                 hasServer={!!serverId}
+                serverStatusOpen={showUtilityWorkspace && activeUtilityPanel === "status"}
+                onOpenServerStatus={openServerStatusPanel}
                 isRecording={!!recordingSession}
                 canToggleRecording={canToggleRecording}
                 onToggleRecording={() => {
@@ -2893,19 +3156,6 @@ export function App() {
 
                 {!showViewerEmptyState ? (
                   <>
-                    {!(showFileTools && filePath && activeLogView === "search" && activeViewerTabId === "file") && !showCompactViewerChrome && !(fileLoadingName && !currentLogContent) ? (
-                      <div className="viewer-context-bar">
-                        <div className="viewer-context-main">
-                          <span className="viewer-context-mode">{viewerContextModeLabel}</span>
-                          <strong>{viewerContextTitle}</strong>
-                          <span title={viewerContextSource}>{viewerContextSource}</span>
-                        </div>
-                        <div className="viewer-context-meta">
-                          <span>{viewerContextPosition}</span>
-                          <span>{viewerContextState}</span>
-                        </div>
-                      </div>
-                    ) : null}
                     {lineContextState?.jumpSource && activeLogView === "search" && activeViewerTabId === "file" && !showCompactViewerChrome ? (
                       <div className="viewer-jump-context-bar">
                         <div className="viewer-jump-context-main">
@@ -2925,7 +3175,7 @@ export function App() {
                         <div className="viewer-line-copy-main">
                           <span className="viewer-line-copy-kicker">按行复制</span>
                           <strong>第 {formatNumber(viewerLineCopyRange.start + 1)} - {formatNumber(viewerLineCopyRange.end + 1)} 行</strong>
-                          <span>Cmd/Ctrl 点击另一行可调整范围</span>
+                          <span>Shift 点击另一行可调整范围</span>
                         </div>
                         <div className="viewer-line-copy-actions">
                           <button type="button" className="ghost-button slim-button" onClick={() => setViewerLineCopyRange(null)}>取消</button>
@@ -2966,7 +3216,9 @@ export function App() {
                         focusLineIndex={lineContextState && activeViewerTabId === "file" ? lineContextState.lineNumber - lineContextState.startLine : undefined}
                         selectedLineRange={activeViewerTabId === "file" ? viewerLineCopyRange : null}
                         onLineClick={viewerLineClickEnabled ? handleViewerLineClick : (activeViewerTabId === "file" ? handleViewerFileLineClick : undefined)}
-                        lineActionTitle={viewerLineClickEnabled ? "按住 Ctrl 或 Cmd 点击可跳转到原日志" : "按住 Ctrl 或 Cmd 点击选择复制行范围"}
+                        lineActionTitle={viewerLineClickEnabled ? "按住 Ctrl 或 Cmd 点击可跳转到原日志" : "Cmd/Ctrl 点击复制日志块，Shift 点击选择范围"}
+                        onSelectedLineRangeChange={activeViewerTabId === "file" ? handleViewerLineRangeChange : undefined}
+                        onCopyLineRange={activeViewerTabId === "file" ? handleCopyViewerLineRange : undefined}
                         bookmarks={activeResultTab ? (activeResultTab.bookmarks || {}) : undefined}
                         onBookmarkToggle={activeResultTab ? handleBookmarkToggle : undefined}
                         onHighlightCountChange={setHighlightCount}
@@ -3024,8 +3276,8 @@ export function App() {
                         </div>
                       ) : null}
                       {viewerNotAtBottom && activeViewerTabId === "file" ? (
-                        <button className="live-back-to-bottom" onClick={() => void handleBackToBottom()}>
-                          回到底部
+                        <button className="live-back-to-bottom" type="button" aria-label="回到底部" title="回到底部" onClick={() => void handleBackToBottom()}>
+                          <ArrowDown size={18} strokeWidth={1.9} />
                         </button>
                       ) : null}
                       {showReaderRail && !showCompactViewerChrome ? (
@@ -3118,7 +3370,7 @@ export function App() {
                         去选文件
                       </button>
                       {filePath ? (
-                        <button className="ghost-button" onClick={loadTailSlice} disabled={isBusy}>
+                        <button className="ghost-button" onClick={() => { void loadTailSlice(); }} disabled={isBusy}>
                           读取尾部
                         </button>
                       ) : null}
@@ -3128,45 +3380,14 @@ export function App() {
                 </div>
                 </div>
                 )}
-                {showUtilityWorkspace && canShowEmbeddedUtilityWorkspace ? (
-                  <UtilityWorkspace
-                    activePanel={activeUtilityPanel}
-                    panels={availableUtilityPanels}
-                    onSelectPanel={setActiveUtilityPanel}
-                    onClose={() => setShowUtilityWorkspace(false)}
-                  >
-                    {activeUtilityPanel === "compare" ? (
-                      <DiffComparePanel
-                        visible
-                        remoteContent={currentLogContent}
-                        remoteLabel={activeCompareLabel}
-                        onClose={() => setShowUtilityWorkspace(false)}
-                      />
-                    ) : null}
-                    {activeUtilityPanel === "tunnels" && serverId ? (
-                      <SshTunnelPanel
-                        visible
-                        serverId={serverId}
-                        onClose={() => setShowUtilityWorkspace(false)}
-                        onStatus={(msg) => setActionStatus(msg)}
-                      />
-                    ) : null}
-                    {activeUtilityPanel === "batch" && servers.length > 0 ? (
-                      <BatchCommandPanel
-                        visible
-                        servers={servers}
-                        onClose={() => setShowUtilityWorkspace(false)}
-                        onStatus={(msg) => setActionStatus(msg)}
-                      />
-                    ) : null}
-                  </UtilityWorkspace>
-                ) : null}
+                {utilityWorkspaceNode}
                 </div>
                 </div>
                 </>
                 ) : null}
                 {isFileMode ? (
-              <>
+              <div className={`viewer-workbench file-browser-workbench${showUtilityWorkspace && canShowEmbeddedUtilityWorkspace ? " viewer-workbench-with-utility" : ""}`}>
+                <div className="file-browser-workbench-main">
                 <FileBrowserStrip
                   pathbar={<FileBrowserPathbar
                     mode={pathbarMode}
@@ -3244,7 +3465,7 @@ export function App() {
                         重新连接
                       </button>
                       <button className="ghost-button" onClick={() => openSettingsWorkspace("server")}>
-                        连接设置
+                        当前服务器
                       </button>
                     </div>
                   </div>
@@ -3409,7 +3630,9 @@ export function App() {
                     </FileBrowserContentColumn>
                   </FileBrowserGrid>
                 )}
-              </>
+                </div>
+                {utilityWorkspaceNode}
+              </div>
               ) : null}
             </>
             )}
@@ -3502,6 +3725,41 @@ export function App() {
               isBusy={isBusy}
               localServiceState={localServiceState}
               localServiceStatusText={localServiceStatusText}
+              preferenceSection={{
+                uiTheme,
+                uiDensity,
+                uiSurface,
+                logFontSize,
+                terminalFontSize,
+                motionMode,
+                errorHighlightEnabled,
+                showPathHistory,
+                showTransferHistory,
+                sliceLengthMode,
+                sliceLength,
+                serverStatusAutoRefresh: serverSystemProfileAutoRefresh,
+                serverStatusRefreshIntervalMs: SERVER_STATUS_REFRESH_INTERVAL_MS,
+                activityPanelHeight,
+                onUiThemeChange: setUiTheme,
+                onUiDensityChange: setUiDensity,
+                onUiSurfaceChange: setUiSurface,
+                onLogFontSizeChange: setLogFontSize,
+                onTerminalFontSizeChange: setTerminalFontSize,
+                onMotionModeChange: setMotionMode,
+                onResetUiPreferences: resetUiPreferences,
+                onToggleErrorHighlight: () => setErrorHighlightEnabled((current) => !current),
+                onTogglePathHistory: () => {
+                  setShowTransferHistory(false);
+                  setShowPathHistory((current) => !current);
+                },
+                onToggleTransferHistory: () => {
+                  setShowPathHistory(false);
+                  setShowTransferHistory((current) => !current);
+                },
+                onSliceLengthModeChange: setSliceLengthMode,
+                onSliceLengthChange: setSliceLength,
+                onToggleServerStatusAutoRefresh: () => setServerSystemProfileAutoRefresh((current) => !current),
+              }}
               importSection={{
                 selectedTool: selectedImportTool,
                 importStatus,

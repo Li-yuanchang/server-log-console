@@ -3,10 +3,29 @@
   height: 100vh;
   padding: 4px;
   overflow: hidden;
+  background: var(--bg);
 }
 
 .app-shell.pip-standalone {
   padding: 0;
+}
+
+.app-shell.ui-surface-mist {
+  background:
+    radial-gradient(circle at 18% 8%, rgba(49, 95, 141, 0.13), transparent 34%),
+    radial-gradient(circle at 88% 18%, rgba(45, 106, 79, 0.1), transparent 30%),
+    linear-gradient(135deg, #eef3f7 0%, #f7f8f6 100%);
+}
+
+.app-shell.ui-surface-paper {
+  background:
+    linear-gradient(135deg, rgba(49, 95, 141, 0.045) 25%, transparent 25%) 0 0 / 18px 18px,
+    linear-gradient(315deg, rgba(49, 95, 141, 0.035) 25%, transparent 25%) 0 0 / 18px 18px,
+    #f6f3ec;
+}
+
+.app-shell.ui-density-comfortable {
+  padding: 6px;
 }
 
 .app-shell.pip-terminal-standalone {
@@ -31,6 +50,12 @@ button, input, select, textarea, a,
   min-height: 0;
 }
 
+.app-shell.ui-density-comfortable .shell-layout {
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 6px;
+  height: calc(100vh - 12px);
+}
+
 .sidebar-panel,
 .toolbar-panel,
 .workspace-panel,
@@ -48,6 +73,34 @@ button, input, select, textarea, a,
   gap: 2px;
   min-height: 0;
   overflow: hidden;
+}
+
+.app-shell.ui-density-comfortable .sidebar-panel,
+.app-shell.ui-density-comfortable .toolbar-panel,
+.app-shell.ui-density-comfortable .workspace-panel,
+.app-shell.ui-density-comfortable .advanced-panel {
+  border-radius: 10px;
+}
+
+.app-shell.ui-density-comfortable .sidebar-panel {
+  padding: 10px 8px 8px;
+  gap: 5px;
+}
+
+.app-shell.ui-density-comfortable .toolbar-panel,
+.app-shell.ui-density-comfortable .workspace-panel,
+.app-shell.ui-density-comfortable .advanced-panel {
+  padding: 8px;
+  gap: 6px;
+}
+
+.app-shell.ui-motion-reduced *,
+.app-shell.ui-motion-reduced *::before,
+.app-shell.ui-motion-reduced *::after {
+  animation-duration: 1ms !important;
+  animation-iteration-count: 1 !important;
+  scroll-behavior: auto !important;
+  transition-duration: 1ms !important;
 }
 
 .server-groups {
@@ -89,4 +142,3 @@ button, input, select, textarea, a,
   overflow: auto;
   align-content: start;
 }
-

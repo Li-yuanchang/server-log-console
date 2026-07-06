@@ -18,6 +18,7 @@ import type {
   ServerConnectionTestResponse,
   ServerCredentialStatus,
   ServerRouteConfig,
+  ServerSystemProfileResponse,
   ServerSummary
 } from "@server-log-console/shared";
 
@@ -67,9 +68,27 @@ export type FilePreviewResponse = {
 };
 
 async function readPayload<T>(response: Response, fallbackMessage: string): Promise<T> {
-  const payload = (await response.json()) as T & { message?: string };
+  const contentType = response.headers.get("content-type") || "";
+  const isJson = contentType.includes("application/json");
+  let payload: (T & { message?: string }) | null = null;
+  try {
+    if (isJson) {
+      payload = (await response.json()) as T & { message?: string };
+    } else {
+      const text = await response.text();
+      payload = { message: text.trim() ? fallbackMessage : "" } as T & { message?: string };
+    }
+  } catch {
+    payload = { message: "" } as T & { message?: string };
+  }
   if (!response.ok) {
-    throw new Error(payload.message || fallbackMessage);
+    throw new Error(payload?.message || fallbackMessage);
+  }
+  if (!isJson) {
+    throw new Error(fallbackMessage);
+  }
+  if (!payload) {
+    throw new Error(fallbackMessage);
   }
   return payload;
 }
@@ -251,6 +270,16 @@ export async function apiSearchJumpServerAssets(
     body: JSON.stringify({ bastionId, keyword })
   });
   return readPayload<JumpServerAssetSearchResponse>(response, "读取 JumpServer 资产列表失败");
+}
+
+export async function apiGetServerSystemProfile(serverId: string, timeoutMs = 30000, contextPath?: string): Promise<ServerSystemProfileResponse> {
+  const response = await fetch(`${localServiceBase}/api/servers/${encodeURIComponent(serverId)}/system-profile`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ timeoutMs, contextPath }),
+    cache: "no-store"
+  });
+  return readPayload<ServerSystemProfileResponse>(response, "读取服务器状态失败");
 }
 
 export async function apiTestConnection(

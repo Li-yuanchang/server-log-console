@@ -10,11 +10,14 @@ type Props = {
 
 export function SearchProgressPanel(props: Props) {
   return (
-    <div className="search-progress-panel">
-      <div className="search-progress-head">
+    <details className="search-progress-panel search-progress-panel-compact">
+      <summary className="search-progress-summary">
+        <span className="search-progress-dot" aria-hidden="true" />
         <strong>{props.phaseLabel}</strong>
-        <span>已用 {props.elapsedLabel}</span>
-      </div>
+        <span>{props.matchCountLabel}</span>
+        <span>{props.elapsedLabel ? `已用 ${props.elapsedLabel}` : ""}</span>
+        <span className="search-progress-summary-hint">展开</span>
+      </summary>
       <div className="search-progress-track">
         <span
           className="search-progress-indicator"
@@ -25,8 +28,7 @@ export function SearchProgressPanel(props: Props) {
         <span>{props.strategyLabel}</span>
         <span className="search-progress-meta-primary">{props.overallProgressLabel}</span>
         <span className="search-progress-meta-secondary">{props.phaseProgressLabel}</span>
-        <span>{props.matchCountLabel}</span>
       </div>
-    </div>
+    </details>
   );
 }

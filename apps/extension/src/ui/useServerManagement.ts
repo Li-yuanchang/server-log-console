@@ -75,7 +75,7 @@ export function useServerManagement(deps: {
       await checkLocalServiceHealth({ silentFailure: true, background: true });
       setServers(data);
       setActionStatus(data.length ? `已载入 ${data.length} 台服务器，请在左侧选择一台。` : "当前还没有服务器，请导入 FinalShell 或手动新增。");
-      pushActivity(data.length ? `已读取本地服务器清单，共 ${data.length} 台。` : "当前没有服务器，请先导入 FinalShell 或手动维护服务器。");
+      pushActivity(data.length ? `已读取本地连接清单，共 ${data.length} 台。` : "当前没有服务器，请先导入 FinalShell 或手动新增连接。");
       return data;
     } catch (error) {
       const detail = error instanceof Error ? error.message : "未知错误";
@@ -203,7 +203,7 @@ export function useServerManagement(deps: {
       selectServerById(savedServer.id);
       setManualServerDraft(createManualServerDraft(savedServer));
       setSettingsWorkspaceView(savedServer.connectionKind === "bastion-target" ? "server" : "inventory");
-      setActionStatus(`已保存服务器：${savedServer.name}`);
+      setActionStatus(`已保存连接：${savedServer.name}`);
       pushActivity(`已保存手动服务器：${savedServer.name}（${savedServer.host}:${savedServer.port}）`);
       showToast("success", `已保存 ${savedServer.name}`);
     });

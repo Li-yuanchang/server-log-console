@@ -922,11 +922,11 @@
 }
 
 .theme-modern .log-line-range-start {
-  box-shadow: inset 3px 0 0 rgba(96, 165, 250, 0.72);
+  box-shadow: inset 0 1px 0 rgba(96, 165, 250, 0.24);
 }
 
 .theme-modern .log-line-range-end {
-  box-shadow: inset 3px 0 0 rgba(96, 165, 250, 0.72), inset 0 -1px 0 rgba(96, 165, 250, 0.24);
+  box-shadow: inset 0 -1px 0 rgba(96, 165, 250, 0.24);
 }
 
 .theme-modern .log-focus-badge {
@@ -1053,35 +1053,65 @@
 
 /* --- 14. 搜索进度 --- */
 .theme-modern .search-progress-panel {
-  border: 1px solid rgba(23, 23, 23, 0.07);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.86);
-  padding: 8px 12px;
-  gap: 6px;
-  box-shadow: 0 10px 26px rgba(23, 23, 23, 0.055), inset 0 1px 0 rgba(255, 255, 255, 0.72);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  padding: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
-.theme-modern .search-progress-head strong {
-  font-size: 12px;
-  color: var(--ink);
+.theme-modern .search-progress-summary {
+  border-color: rgba(49, 95, 141, 0.38);
+  background: linear-gradient(180deg, #ffffff, #f3f7fb);
+  color: #26384d;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.1);
 }
 
-.theme-modern .search-progress-head span,
+.theme-modern .search-progress-summary:hover {
+  border-color: rgba(49, 95, 141, 0.5);
+  background: #ffffff;
+  color: #1e3148;
+}
+
+.theme-modern .search-progress-summary strong {
+  font-size: 11px;
+  color: #1f2f46;
+}
+
+.theme-modern .search-progress-summary span,
 .theme-modern .search-progress-meta span {
   font-size: 11px;
+  color: #475569;
 }
 
 .theme-modern .search-progress-track {
   height: 4px;
   border-radius: 999px;
-  background: rgba(23, 23, 23, 0.055);
+  background: rgba(49, 95, 141, 0.12);
 }
 
 .theme-modern .search-progress-indicator {
-  background: linear-gradient(90deg, transparent, rgba(82, 96, 112, 0.14), rgba(82, 96, 112, 0.34), rgba(82, 96, 112, 0.14), transparent);
+  background: linear-gradient(90deg, transparent, rgba(49, 95, 141, 0.28), rgba(49, 95, 141, 0.62), rgba(49, 95, 141, 0.28), transparent);
   border-radius: 999px;
+}
+
+.theme-modern .search-progress-dot {
+  background: #2f80c0;
+  box-shadow: 0 0 0 3px rgba(49, 95, 141, 0.12);
+}
+
+.theme-modern .search-progress-panel[open] {
+  border: 1px solid rgba(49, 95, 141, 0.22);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.09);
+}
+
+.theme-modern .search-progress-panel[open] .search-progress-summary {
+  border-color: rgba(49, 95, 141, 0.38);
+  background: #ffffff;
 }
 
 /* --- 15. 状态栏 & Meta --- */
@@ -1128,23 +1158,6 @@
   font-size: 12px;
   padding: 8px 16px;
   border-bottom: 1px solid var(--line);
-}
-
-.theme-modern .viewer-context-bar {
-  border-bottom-color: rgba(126, 200, 227, 0.12);
-  background: linear-gradient(180deg, rgba(13, 18, 28, 0.92), rgba(10, 14, 22, 0.86));
-  color: var(--ink-muted);
-}
-
-.theme-modern .viewer-context-main strong {
-  color: var(--ink);
-}
-
-.theme-modern .viewer-context-mode,
-.theme-modern .viewer-context-meta span {
-  border-color: rgba(126, 200, 227, 0.14);
-  background: rgba(126, 200, 227, 0.06);
-  color: rgba(218, 232, 242, 0.76);
 }
 
 .theme-modern .viewer-jump-context-bar {
@@ -2281,23 +2294,31 @@
 /* --- 22. 返回底部 --- */
 .theme-modern .live-back-to-bottom,
 .theme-modern .live-back-to-bottom.ghost-button {
-  background: #171717;
-  border: none;
-  color: #fff;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(23, 23, 23, 0.12);
+  color: #171717;
   border-radius: 999px;
-  font-size: 12px;
-  font-weight: 500;
-  padding: 6px 16px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 2px 10px rgba(23, 23, 23, 0.14);
   z-index: 20;
   pointer-events: auto;
 }
 
 .theme-modern .live-back-to-bottom:hover,
 .theme-modern .live-back-to-bottom.ghost-button:hover {
-  background: #000000;
-  border: none;
-  color: #fff;
+  background: #ffffff;
+  border-color: rgba(23, 23, 23, 0.22);
+  color: #000000;
+  box-shadow: 0 3px 12px rgba(23, 23, 23, 0.16);
+}
+
+.theme-modern .live-back-to-bottom:active:not(:disabled),
+.theme-modern .live-back-to-bottom.ghost-button:active:not(:disabled),
+.theme-modern .live-back-to-bottom:focus-visible,
+.theme-modern .live-back-to-bottom.ghost-button:focus-visible {
+  transform: translateX(-50%);
 }
 
 /* --- 23. 搜索匹配列表 --- */
@@ -2689,6 +2710,27 @@
 
 .theme-modern .utility-workspace-tab {
   border-radius: 8px;
+  background: rgba(255, 255, 255, 0.96);
+  color: var(--ink-soft);
+  border: 1px solid var(--line);
+  box-shadow: none;
+  font-weight: 600;
+  filter: none;
+}
+
+.theme-modern .utility-workspace-tab:hover:not(:disabled) {
+  background: rgba(248, 250, 252, 0.98);
+  color: var(--accent);
+  border-color: var(--line-strong);
+  filter: none;
+}
+
+.theme-modern .utility-workspace-tab-active,
+.theme-modern .utility-workspace-tab-active:hover:not(:disabled) {
+  background: #eef6ff;
+  color: #1d4ed8;
+  border-color: rgba(37, 99, 235, 0.22);
+  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.05);
 }
 
 .theme-modern .utility-workspace-body {
@@ -3188,6 +3230,38 @@
   background: var(--accent-soft);
   color: var(--accent);
   border-color: rgba(49, 95, 141, 0.35);
+}
+
+.theme-modern .settings-preference-hero {
+  border-color: rgba(49, 95, 141, 0.14);
+  background:
+    radial-gradient(circle at 16% 12%, rgba(49, 95, 141, 0.12), transparent 34%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(248, 249, 250, 0.72));
+}
+
+.theme-modern .settings-preference-item,
+.theme-modern .settings-preference-toggle,
+.theme-modern .settings-roadmap-grid span {
+  border-color: rgba(23, 23, 23, 0.08);
+  background: rgba(255, 255, 255, 0.62);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+}
+
+.theme-modern .settings-preference-item select {
+  border-color: rgba(23, 23, 23, 0.1);
+  background: rgba(255, 255, 255, 0.84);
+  color: var(--ink);
+}
+
+.theme-modern .settings-preference-toggle:hover:not(:disabled) {
+  border-color: rgba(49, 95, 141, 0.24);
+  background: rgba(239, 246, 255, 0.78);
+  box-shadow: inset 0 0 0 1px rgba(49, 95, 141, 0.08);
+  filter: none;
+}
+
+.theme-modern .settings-preference-toggle:active:not(:disabled) {
+  transform: none;
 }
 
 .theme-modern .settings-primary-action {

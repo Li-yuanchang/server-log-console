@@ -70,7 +70,7 @@ export function useFileOperations(deps: {
   showToast: (type: "success" | "error" | "loading", message: string) => string | number;
   updateToast: (id: string, type: "success" | "error" | "loading", message: string) => void;
   withBusy: <T>(message: string, task: () => Promise<T>, successMessage?: string) => Promise<T | null>;
-  browseLogFiles: (path: string, options?: { manual?: boolean; silent?: boolean }) => Promise<void>;
+  browseLogFiles: (path: string, options?: { manual?: boolean; silent?: boolean }) => Promise<unknown>;
 }): FileOperationsAPI {
   const {
     serverId,

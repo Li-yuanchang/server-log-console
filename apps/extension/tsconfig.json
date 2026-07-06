@@ -4,6 +4,7 @@
     "module": "ES2022",
     "jsx": "react-jsx",
     "moduleResolution": "Bundler",
+    "skipLibCheck": true,
     "strict": true,
     "baseUrl": "./src"
   },

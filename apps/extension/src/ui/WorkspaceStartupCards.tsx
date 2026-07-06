@@ -33,7 +33,7 @@ export function WorkspaceStartupCards(props: WorkspaceStartupCardsProps) {
             检查服务
           </button>
           <button className="ghost-button" type="button" onClick={() => onOpenSettings("overview")}>
-            连接设置
+            导入连接
           </button>
         </div>
       </div>
@@ -49,7 +49,7 @@ export function WorkspaceStartupCards(props: WorkspaceStartupCardsProps) {
         </div>
         <div className="toolbar-inline">
           <button className="ghost-button" type="button" onClick={() => onOpenSettings("overview")}>
-            连接设置
+            导入连接
           </button>
           <button className="ghost-button" type="button" onClick={onImportFinalShell}>
             立即导入

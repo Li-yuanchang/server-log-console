@@ -78,11 +78,32 @@ export function createTerminalSessionId(targetServerId: string) {
   return `terminal-${targetServerId}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+const JUMP_STATUS_REMOTE_ROOTS = new Set([
+  "home", "var", "opt", "tmp", "root", "etc", "usr", "srv", "data", "mnt", "media", "run", "log", "logs", "app", "apps", "www"
+]);
+
+function isJumpServerStatusContextCandidate(value: string): boolean {
+  const parts = value.split("/").filter(Boolean);
+  return parts.some((part, index) => index > 0 && JUMP_STATUS_REMOTE_ROOTS.has(part.toLowerCase()))
+    || isJumpServerAssetRootPath(value);
+}
+
+function isJumpServerAssetRootPath(value: string): boolean {
+  const parts = value.split("/").filter(Boolean);
+  const assetKey = parts[parts.length - 1] || "";
+  return parts.length >= 2 && looksLikeJumpServerAssetKey(assetKey);
+}
+
+function looksLikeJumpServerAssetKey(value: string): boolean {
+  return /\d{1,3}(?:\.\d{1,3}){1,3}/.test(value) || /^[^/\s]+_[^/]+$/.test(value);
+}
+
 export function createDefaultWorkspaceSessionState(nextServerId: string, savedDirectory: string, isStandaloneViewerWindow: boolean, isStandaloneTerminalWindow: boolean) {
   return {
     serverId: nextServerId,
     filePath: "",
     directoryPath: savedDirectory,
+    statusContextPath: isJumpServerStatusContextCandidate(savedDirectory) ? savedDirectory : "",
     keywordInput: "",
     keywordMode: "phrase" as const,
     excludeInput: "",
