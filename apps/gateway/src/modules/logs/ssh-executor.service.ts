@@ -24,7 +24,7 @@ export interface SftpSession {
   close(): void;
 }
 
-interface ManagedSshConnection {
+export interface ManagedSshConnection {
   client: Client;
   cleanup: () => void;
   mode: "direct" | "bastion" | "jumpserver-shell";
@@ -448,6 +448,10 @@ export class SshExecutorService {
           keepaliveCountMax: 30
         });
     });
+  }
+
+  async execWithManagedConnection(connection: ManagedSshConnection, command: string, timeoutMs = 45000): Promise<string> {
+    return this.execWithConnection(connection, command, timeoutMs);
   }
 
   async execJson<T>(serverId: string, command: string, timeoutMs = 45000): Promise<T> {
