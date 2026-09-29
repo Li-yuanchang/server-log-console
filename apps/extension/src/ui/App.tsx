@@ -83,6 +83,7 @@ import { WorkspaceTabContextMenu, type WorkspaceTabMenuState } from "./Workspace
 import { WorkspaceSessionTabs } from "./WorkspaceSessionTabs.js";
 import { SettingsModalOverlay } from "./SettingsModalOverlay.js";
 import { WorkspaceStartupCards } from "./WorkspaceStartupCards.js";
+import { CommandPalette } from "./CommandPalette.js";
 import { ImmediateTooltip } from "./ImmediateTooltip.js";
 import { DialogOverlays } from "./DialogOverlays.js";
 import { useTerminalWindowManager } from "./useTerminalWindowManager.js";
@@ -299,6 +300,7 @@ export function App() {
   // 深链：?settings=connections|preferences 直接打开设置中心（web 端验证与分享用）
   const [showConnectionSettings, setShowConnectionSettings] = useState(() => new URLSearchParams(window.location.search).has("settings"));
   const [showTransferHistory, setShowTransferHistory] = useState(() => new URLSearchParams(window.location.search).has("transfer"));
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const [settingsWorkspaceView, setSettingsWorkspaceView] = useState<SettingsWorkspaceView>(() => {
     const param = new URLSearchParams(window.location.search).get("settings");
     return param === "connections" || param === "preferences" ? param : "preferences";
@@ -2455,7 +2457,7 @@ export function App() {
   const activeHighlightSummary = highlightCount ? `${Math.min(activeHighlightIndex + 1, highlightCount)}/${highlightCount}` : "";
   const toolbarSummaryLabel = activeViewerTabId === "file"
     ? (activeHighlightSummary ? `${activeHighlightSummary} 当前片段命中` : (selectedFileName || "--"))
-    : (activeHighlightSummary ? `${activeHighlightSummary} 命中` : `结果 ${formatNumber(activeSearchResultCount)} 条`);
+    : (activeHighlightSummary ? `${activeHighlightSummary} 命中` : (activeSearchResultCount ? `${formatNumber(activeSearchResultCount)} 条命中` : ""));
   const searchDoneSummary = (() => {
     const task = searchTask;
     if (!task || searchStartedAt) return "";
@@ -2477,6 +2479,56 @@ export function App() {
     ? `${selectedServer.host || selectedServer.name || "--"} · ${directoryPath || selectedServer.basePath || "/"}`
     : (directoryPath || "/");
   const compactViewerTitle = selectedFileName || activeResultTab?.label || "日志预览";
+  const canToolbarLive = Boolean(serverId && filePath.trim() && activeLogView === "search");
+  const toggleToolbarLive = useCallback(() => {
+    if (liveFollowEnabled) {
+      stopLiveFollow();
+      return;
+    }
+    if (filePath.trim()) {
+      startLiveFollow(filePath, selectedFileName || filePath);
+    }
+  }, [liveFollowEnabled, filePath, selectedFileName, startLiveFollow, stopLiveFollow]);
+  const toggleTerminalPanelToolbar = useCallback(() => {
+    if (terminalPanelOpen || terminalDetached) {
+      setTerminalPanelOpen(false);
+      setTerminalDetached(false);
+      closeTerminalOverlay();
+      return;
+    }
+    openTerminalView();
+  }, [terminalPanelOpen, terminalDetached, openTerminalView]);
+  const paletteCommands = useMemo(() => {
+    const close = () => setPaletteOpen(false);
+    return [
+      ...servers.map((server) => ({
+        id: `srv-${server.id}`,
+        group: "服务器",
+        icon: "folder" as const,
+        title: server.name,
+        sub: `${server.username}@${server.host}:${server.port}`,
+        hint: "⏎ 连接",
+        run: () => { selectServerById(server.id); close(); },
+      })),
+      { id: "cmd-settings", group: "命令", icon: "gear" as const, title: "打开设置中心", hint: "⌘,", run: () => { openSettingsWorkspace("connections"); close(); } },
+      { id: "cmd-pref", group: "命令", icon: "gear" as const, title: "偏好设置", run: () => { openSettingsWorkspace("preferences"); close(); } },
+      { id: "cmd-transfer", group: "命令", icon: "file" as const, title: "传输记录", run: () => { setShowTransferHistory(true); close(); } },
+      { id: "cmd-tools", group: "命令", icon: "plug" as const, title: "工具抽屉（隧道 / 批量 / 监控 / 对比）", run: () => { openServerStatusPanel(); close(); } },
+      { id: "cmd-terminal", group: "命令", icon: "term" as const, title: "打开终端", run: () => { openTerminalView(); close(); } },
+      { id: "cmd-live", group: "命令", icon: "zap" as const, title: liveFollowEnabled ? "断开实时追踪" : "开启实时追踪", hint: filePath ? undefined : "先选择日志文件", run: () => { toggleToolbarLive(); close(); } },
+    ];
+  }, [servers, selectServerById, openSettingsWorkspace, openServerStatusPanel, openTerminalView, liveFollowEnabled, filePath, toggleToolbarLive]);
+
+  useEffect(() => {
+    const onPaletteKey = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setPaletteOpen((v) => !v);
+      }
+    };
+    window.addEventListener("keydown", onPaletteKey);
+    return () => window.removeEventListener("keydown", onPaletteKey);
+  }, []);
   const compactReaderHint = activeViewerTabId === "file"
     ? (liveFollowEnabled
       ? `实时：${liveFollowConnected ? (liveFollowPaused ? "已暂停滚动" : "接收中") : (liveFollowRetryCount > 0 ? `重连中 ${liveFollowRetryCount}` : "连接中")}${liveFollowContent ? ` · ${formatNumber(liveFollowContent.split("\n").length)} 行` : ""}`
@@ -2842,6 +2894,7 @@ export function App() {
           sidebarActivityLines={sidebarActivityLines}
           onDeleteServer={requestDeleteServer}
           onOpenSettingsWorkspace={openSettingsWorkspace}
+          onOpenPalette={() => setPaletteOpen(true)}
           onCloseSettingsWorkspace={closeSettingsWorkspace}
           onActivityPanelResizeStart={handleActivityPanelResizeStart}
         />
@@ -2888,10 +2941,26 @@ export function App() {
                 >
                   文件目录
                 </button>
+                {canOpenTerminal ? (
+                  <button
+                    type="button"
+                    className={`toolbar-view-switch-btn${terminalPanelOpen || terminalDetached ? " is-active" : ""}`}
+                    aria-pressed={terminalPanelOpen || terminalDetached}
+                    onClick={toggleTerminalPanelToolbar}
+                    disabled={!serverId}
+                    title={terminalPanelOpen || terminalDetached ? "收起终端" : "打开终端"}
+                  >
+                    终端
+                  </button>
+                ) : null}
               </div>
               <SearchToolbarActions
                 uiTheme={uiTheme}
                 isElectron={isElectron}
+                liveFollowEnabled={liveFollowEnabled}
+                canToggleLive={canToolbarLive}
+                onToggleLive={toggleToolbarLive}
+                onOpenPalette={() => setPaletteOpen(true)}
                 isPinned={isPinned}
                 onTogglePin={async () => {
                   const p = await (window as any).electronAPI.togglePin();
@@ -2914,7 +2983,6 @@ export function App() {
                   setShowQueryAdvanced((current) => !current);
                 }}
               />
-            </div>
 
             <SearchQueryPanel
               showKeywordBar={showKeywordBar}
@@ -2973,6 +3041,7 @@ export function App() {
               canDownloadResults={Boolean(activeResultTab || results)}
               onDownloadResults={exportCurrentResults}
             />
+            </div>
 
             {/* connection info in sidebar */}
 
@@ -4072,6 +4141,7 @@ export function App() {
         onTransferHistoryClose={() => setShowTransferHistory(false)}
       />
       {toolDrawerNode}
+      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} commands={paletteCommands} />
       <ImmediateTooltip />
     </main>
   );

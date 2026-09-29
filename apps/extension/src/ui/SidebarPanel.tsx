@@ -1,5 +1,7 @@
+import { useState } from "react";
 import type { ServerSummary, ServerConnectionTestResponse } from "@server-log-console/shared";
 import type { SettingsWorkspaceView } from "./ConnectionSettingsWorkspace.js";
+import { Command as CommandIcon } from "lucide-react";
 import { ToolIcon } from "./ToolIcon.js";
 
 export type SidebarPanelProps = {
@@ -24,11 +26,13 @@ export type SidebarPanelProps = {
   sidebarActivityLines: string[];
   onDeleteServer: (server: ServerSummary) => void;
   onOpenSettingsWorkspace: (view?: SettingsWorkspaceView) => void;
+  onOpenPalette: () => void;
   onCloseSettingsWorkspace: () => void;
   onActivityPanelResizeStart: (event: React.PointerEvent<HTMLDivElement>) => void;
 };
 
 export function SidebarPanel(props: SidebarPanelProps) {
+  const [statusExpanded, setStatusExpanded] = useState(false);
   const {
     uiTheme,
     isElectron,
@@ -52,6 +56,7 @@ export function SidebarPanel(props: SidebarPanelProps) {
     onDeleteServer,
     onOpenSettingsWorkspace,
     onCloseSettingsWorkspace,
+    onOpenPalette,
     onActivityPanelResizeStart,
   } = props;
 
@@ -64,6 +69,14 @@ export function SidebarPanel(props: SidebarPanelProps) {
             <h1 className="topbar-title">日志控制台</h1>
           </div>
           <div className="sidebar-head-buttons">
+            <button
+              className="ghost-button icon-button"
+              title="命令面板 (Cmd+K)"
+              aria-label="命令面板"
+              onClick={onOpenPalette}
+            >
+              <CommandIcon size={14} strokeWidth={1.8} />
+            </button>
             <button
               className="ghost-button icon-button"
               title={showConnectionSettings ? "关闭设置中心" : "打开设置中心"}
@@ -155,12 +168,31 @@ export function SidebarPanel(props: SidebarPanelProps) {
         )}
       </div>
 
-      <div className="status-card status-grid pane-section compact-connection-card">
-        <div className="pane-title">连接概览</div>
-        <div className="status-row"><span>本地服务</span><strong>{localServiceStatusText}</strong></div>
-        <div className="status-row"><span>服务器</span><strong>{connectionStateText}</strong></div>
-        <div className="status-row"><span>主机</span><strong>{selectedServer ? `${selectedServer.username}@${selectedServer.host}` : "--"}</strong></div>
-        <div className="status-row status-row-path"><span>路径</span><strong>{directoryPath || "/"}</strong></div>
+      <div
+        className={`status-card status-grid pane-section compact-connection-card sidebar-status${statusExpanded ? " sidebar-status-open" : ""}`}
+        onClick={() => setStatusExpanded((v) => !v)}
+        title={statusExpanded ? "收起连接概览" : "展开连接概览"}
+      >
+        {statusExpanded ? (
+          <>
+            <div className="pane-title">
+              连接概览
+              <span className="sidebar-status-collapse">收起</span>
+            </div>
+            <div className="status-row"><span>本地服务</span><strong>{localServiceStatusText}</strong></div>
+            <div className="status-row"><span>服务器</span><strong>{connectionStateText}</strong></div>
+            <div className="status-row"><span>主机</span><strong>{selectedServer ? `${selectedServer.username}@${selectedServer.host}` : "--"}</strong></div>
+            <div className="status-row status-row-path"><span>路径</span><strong>{directoryPath || "/"}</strong></div>
+          </>
+        ) : (
+          <div className="sidebar-status-summary">
+            <span className={`sidebar-status-dot${selectedServer ? " on" : ""}`} />
+            <span className="sidebar-status-sum">
+              {selectedServer ? `${selectedServer.name} · ${selectedServer.username} · ${directoryPath || "/"}` : connectionStateText || "未连接"}
+            </span>
+            <span className="sidebar-status-toggle">详情</span>
+          </div>
+        )}
       </div>
 
       {activityPanelVisible ? (

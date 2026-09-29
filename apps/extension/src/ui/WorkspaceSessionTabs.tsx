@@ -90,6 +90,7 @@ export function WorkspaceSessionTabs(props: WorkspaceSessionTabsProps) {
             );
           })}
         </div>
+        <span className="workspace-session-hint"><span className="kbd">⌘1-9</span> 切换会话</span>
       </div>
     </div>
   );

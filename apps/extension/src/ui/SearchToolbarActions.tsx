@@ -1,4 +1,4 @@
-import { Activity, Circle, Pin, PinOff } from "lucide-react";
+import { Activity, Circle, Command as CommandIcon, Pin, PinOff, Radio } from "lucide-react";
 import { ToolIcon } from "./ToolIcon.js";
 
 type Props = {
@@ -18,6 +18,10 @@ type Props = {
   onToggleRecording: () => void;
   showQueryAdvanced: boolean;
   onToggleQueryAdvanced: () => void;
+  liveFollowEnabled: boolean;
+  canToggleLive: boolean;
+  onToggleLive: () => void;
+  onOpenPalette: () => void;
 };
 
 export function SearchToolbarActions(props: Props) {
@@ -25,6 +29,15 @@ export function SearchToolbarActions(props: Props) {
 
   return (
     <div className="toolbar-inline toolbar-search-actions">
+      <button
+        className={`ghost-button toolbar-action-button toolbar-live-button${props.liveFollowEnabled ? " toolbar-live-on" : ""}`}
+        onClick={props.onToggleLive}
+        disabled={!props.canToggleLive}
+        title={props.liveFollowEnabled ? "断开实时追踪" : "开启实时追踪 (tail -F)"}
+      >
+        <Radio size={14} strokeWidth={1.8} className={props.liveFollowEnabled ? "live-pulse" : undefined} />
+        <span>LIVE</span>
+      </button>
       {props.isElectron ? (
         <button
           className={`ghost-button toolbar-action-button${props.isPinned ? " tab-active" : ""}`}
@@ -33,12 +46,6 @@ export function SearchToolbarActions(props: Props) {
         >
           {props.isPinned ? <PinOff size={14} /> : <Pin size={14} />}
           <span>{props.isPinned ? "已置顶" : "置顶"}</span>
-        </button>
-      ) : null}
-      {props.canOpenTerminal ? (
-        <button className={`ghost-button toolbar-action-button${props.terminalDetached ? " tab-active" : ""}`} onClick={props.onToggleTerminal} disabled={!props.hasServer}>
-          <ToolIcon theme={props.uiTheme} kind="terminal" />
-          <span>{terminalLabel}</span>
         </button>
       ) : null}
       <button
@@ -52,11 +59,26 @@ export function SearchToolbarActions(props: Props) {
       </button>
       <button className={`ghost-button toolbar-action-button${props.isRecording ? " btn-recording-active" : ""}`} onClick={props.onToggleRecording} disabled={!props.canToggleRecording}>
         <Circle size={14} strokeWidth={1.8} fill="currentColor" />
-        <span>{props.isRecording ? "结束录制" : "开始录制"}</span>
+        <span>{props.isRecording ? "结束录制" : "录制"}</span>
       </button>
-      <button className="ghost-button toolbar-action-button" onClick={props.onToggleQueryAdvanced} disabled={!props.hasServer}>
+      <button
+        className={`ghost-button icon-button toolbar-action-button${props.showQueryAdvanced ? " tab-active" : ""}`}
+        onClick={props.onToggleQueryAdvanced}
+        disabled={!props.hasServer}
+        title={props.showQueryAdvanced ? "收起条件" : "更多条件"}
+        aria-label={props.showQueryAdvanced ? "收起条件" : "更多条件"}
+      >
         <ToolIcon theme={props.uiTheme} kind="more" />
-        <span>{props.showQueryAdvanced ? "收起条件" : "更多条件"}</span>
+      </button>
+      <button
+        type="button"
+        className="ghost-button toolbar-action-button toolbar-palette-button"
+        onClick={props.onOpenPalette}
+        title="命令面板 (Cmd+K)"
+        aria-label="命令面板"
+      >
+        <CommandIcon size={14} strokeWidth={1.8} />
+        <span className="kbd">⌘K</span>
       </button>
     </div>
   );
