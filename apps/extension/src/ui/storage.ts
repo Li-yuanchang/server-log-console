@@ -394,3 +394,26 @@ export function getShortcutCommandsForServer(serverId: string): ShortcutCommand[
     (entry) => entry.serverId === serverId || entry.serverId === ""
   );
 }
+
+const searchHistoryKey = "search-history";
+const SEARCH_HISTORY_MAX = 20;
+
+export function readSearchHistory(): string[] {
+  try {
+    const raw = globalThis.localStorage?.getItem(searchHistoryKey);
+    const parsed = raw ? (JSON.parse(raw) as unknown) : [];
+    return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+export function pushSearchHistory(keyword: string) {
+  const value = keyword.trim();
+  if (!value) return;
+  try {
+    const current = readSearchHistory();
+    const next = [value, ...current.filter((item) => item.toLowerCase() !== value.toLowerCase())].slice(0, SEARCH_HISTORY_MAX);
+    globalThis.localStorage?.setItem(searchHistoryKey, JSON.stringify(next));
+  } catch { /* ignore */ }
+}

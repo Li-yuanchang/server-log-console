@@ -7,6 +7,7 @@ import type {
   ServerSummary,
 } from "@server-log-console/shared";
 import type { ViewerResultTab, LineContextState, LineContextJumpSource } from "./utils.js";
+import { pushSearchHistory } from "./storage.js";
 import type { WorkspaceSessionSetters } from "./useWorkspaceSessionManager.js";
 import {
   apiGetDirectoryListing,
@@ -498,6 +499,7 @@ export function useLogViewer(params: LogViewerParams): LogViewerAPI {
         setters.setResults(searchResponse);
         appendResultTab(searchResponse, `${state.directoryPath} (${multiResult.scannedFiles} 文件)`);
         setters.setActiveLogView("search");
+        pushSearchHistory(normalizedInput);
         callbacks.setActionStatus(`跨文件检索完成，${multiResult.matchedFiles} 个文件命中 ${multiResult.matches.length} 行。`);
         callbacks.pushActivity(`多文件搜索完成：${multiResult.matchedFiles} 文件 / ${multiResult.matches.length} 行`);
       } catch (error) {
@@ -543,6 +545,7 @@ export function useLogViewer(params: LogViewerParams): LogViewerAPI {
       const finalResult = currentTask.result || null;
       setters.setResults(finalResult);
       if (finalResult) { quickResultShown ? replaceLastResultTab(finalResult) : appendResultTab(finalResult, selectedFileName || state.filePath || "当前文件"); }
+      pushSearchHistory(normalizedInput);
       callbacks.setActionStatus(`检索完成，命中 ${finalResult?.matches.length ?? 0} 行。`);
       callbacks.pushActivity(`检索完成：${selectedServer?.name || state.serverId} / ${state.filePath} / 命中 ${finalResult?.matches.length ?? 0} 行。`);
     } catch (error) {

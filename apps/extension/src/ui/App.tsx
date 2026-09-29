@@ -2429,11 +2429,20 @@ export function App() {
   const toolbarSummaryLabel = activeViewerTabId === "file"
     ? (activeHighlightSummary ? `${activeHighlightSummary} 当前片段命中` : (selectedFileName || "--"))
     : (activeHighlightSummary ? `${activeHighlightSummary} 命中` : `结果 ${formatNumber(activeSearchResultCount)} 条`);
+  const searchDoneSummary = (() => {
+    const task = searchTask;
+    if (!task || searchStartedAt) return "";
+    const parts: string[] = [];
+    if (typeof task.elapsedMs === "number" && task.elapsedMs > 0) parts.push(`${(task.elapsedMs / 1000).toFixed(1)} 秒`);
+    if (typeof task.phaseScannedBytes === "number" && task.phaseScannedBytes > 0) parts.push(`扫描 ${formatBytes(task.phaseScannedBytes)}`);
+    if (task.strategyLabel) parts.push(task.strategyLabel);
+    return parts.join(" · ");
+  })();
   const toolbarMetaLabel = searchStartedAt
     ? `检索中${searchElapsedLabel ? ` · ${searchElapsedLabel}` : ""}`
     : activeViewerTabId === "file"
       ? (activeSearchResultCount ? `搜索结果 ${formatNumber(activeSearchResultCount)} 条` : (liveFollowEnabled ? (liveFollowConnected ? "实时中" : "实时连接中") : ""))
-      : `共 ${formatNumber(activeSearchResultCount)} 条结果`;
+      : `共 ${formatNumber(activeSearchResultCount)} 条结果${searchDoneSummary ? ` · ${searchDoneSummary}` : ""}`;
   const showSearchSummary = !showQueryAdvanced && isSearchView && Boolean(highlightCount || activeSearchResultCount || liveFollowEnabled || searchStartedAt);
   const canRecordLog = Boolean(serverId && filePath.trim() && isSearchView);
   const canToggleRecording = recordingSession ? Boolean(serverId) : canRecordLog;
@@ -2915,6 +2924,15 @@ export function App() {
               onToggleMultiFileMode={() => setMultiFileMode(!multiFileMode)}
               filePattern={filePattern}
               onFilePatternChange={setFilePattern}
+              searching={Boolean(searchStartedAt)}
+              highlightSummary={activeHighlightSummary}
+              onHighlightPrev={() => focusHighlight("prev")}
+              onHighlightNext={() => focusHighlight("next")}
+              resultContextMode={resultContextMode}
+              canToggleResultContext={canToggleResultContext}
+              onToggleResultContext={() => setResultContextMode((current) => !current)}
+              canDownloadResults={Boolean(activeResultTab || results)}
+              onDownloadResults={exportCurrentResults}
             />
 
             {/* connection info in sidebar */}
