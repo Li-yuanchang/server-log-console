@@ -20,10 +20,10 @@ import { SshTunnelPanel } from "./SshTunnelPanel.js";
 import { TerminalSplitView } from "./TerminalSplitView.js";
 import { SearchToolbarActions } from "./SearchToolbarActions.js";
 import { BatchCommandPanel } from "./BatchCommandPanel.js";
-import { UtilityWorkspace } from "./UtilityWorkspace.js";
+import { ToolDrawer } from "./ToolDrawer.js";
 import { DiffComparePanel } from "./DiffComparePanel.js";
 import { ServerStatusPanel } from "./ServerStatusPanel.js";
-import type { UtilityPanelType } from "./UtilityWorkspace.js";
+import type { UtilityPanelType } from "./ToolDrawer.js";
 import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, WheelEvent as ReactWheelEvent } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import type {
@@ -2276,14 +2276,20 @@ export function App() {
   const activeCompareLabel = activeResultTab?.label || selectedFileName || "当前内容";
   const availableUtilityPanels = useMemo(() => {
     const panels: UtilityPanelType[] = [];
-    if (canOpenComparePanel) {
-      panels.push("compare");
+    if (serverId) {
+      panels.push("tunnels");
+    }
+    if (servers.length > 0) {
+      panels.push("batch");
     }
     if (serverId) {
       panels.push("status");
     }
+    if (canOpenComparePanel) {
+      panels.push("compare");
+    }
     return panels;
-  }, [canOpenComparePanel, serverId]);
+  }, [canOpenComparePanel, serverId, servers.length]);
   const canShowEmbeddedUtilityWorkspace = availableUtilityPanels.length > 0 && !showCompactViewerChrome;
   const canToggleResultContext = Boolean(activeViewerTabId !== "file" && activeResultTab?.fullContent && activeResultTab.strategyLabel !== "本地文件");
 
@@ -2750,24 +2756,34 @@ export function App() {
     );
   }
 
-  const utilityWorkspaceNode = showUtilityWorkspace && canShowEmbeddedUtilityWorkspace ? (
-    <UtilityWorkspace
+  // 工具抽屉：四个面板常挂载、以 visible 切换显示，保持各自内部状态与监控采样缓冲
+  const toolDrawerNode = showUtilityWorkspace && canShowEmbeddedUtilityWorkspace ? (
+    <ToolDrawer
+      open
       activePanel={activeUtilityPanel}
       panels={availableUtilityPanels}
       onSelectPanel={setActiveUtilityPanel}
       onClose={() => setShowUtilityWorkspace(false)}
     >
-      {activeUtilityPanel === "compare" ? (
-        <DiffComparePanel
-          visible
-          remoteContent={currentLogContent}
-          remoteLabel={activeCompareLabel}
+      {serverId ? (
+        <SshTunnelPanel
+          visible={activeUtilityPanel === "tunnels"}
+          serverId={serverId}
           onClose={() => setShowUtilityWorkspace(false)}
+          onStatus={(msg) => setActionStatus(msg)}
         />
       ) : null}
-      {activeUtilityPanel === "status" ? (
+      {servers.length > 0 ? (
+        <BatchCommandPanel
+          visible={activeUtilityPanel === "batch"}
+          servers={servers}
+          onClose={() => setShowUtilityWorkspace(false)}
+          onStatus={(msg) => setActionStatus(msg)}
+        />
+      ) : null}
+      {serverId ? (
         <ServerStatusPanel
-          visible
+          visible={activeUtilityPanel === "status"}
           server={selectedServer}
           profile={serverSystemProfile}
           loading={serverSystemProfileLoading}
@@ -2780,23 +2796,13 @@ export function App() {
           onClose={() => setShowUtilityWorkspace(false)}
         />
       ) : null}
-      {activeUtilityPanel === "tunnels" && serverId ? (
-        <SshTunnelPanel
-          visible
-          serverId={serverId}
-          onClose={() => setShowUtilityWorkspace(false)}
-          onStatus={(msg) => setActionStatus(msg)}
-        />
-      ) : null}
-      {activeUtilityPanel === "batch" && servers.length > 0 ? (
-        <BatchCommandPanel
-          visible
-          servers={servers}
-          onClose={() => setShowUtilityWorkspace(false)}
-          onStatus={(msg) => setActionStatus(msg)}
-        />
-      ) : null}
-    </UtilityWorkspace>
+      <DiffComparePanel
+        visible={activeUtilityPanel === "compare"}
+        remoteContent={currentLogContent}
+        remoteLabel={activeCompareLabel}
+        onClose={() => setShowUtilityWorkspace(false)}
+      />
+    </ToolDrawer>
   ) : null;
 
   return (
@@ -2986,7 +2992,7 @@ export function App() {
                 {(!isFileMode || pip.isPip) ? (
                 <>
                 <div
-                  className={`viewer-workbench${showUtilityWorkspace ? " viewer-workbench-with-utility" : ""}`}
+                  className="viewer-workbench"
                   style={isFileMode ? { display: "none" } : undefined}
                 >
                 <div style={isFileMode ? { display: "none" } : { display: "contents" }}>
@@ -3453,13 +3459,12 @@ export function App() {
                 </div>
                 </div>
                 )}
-                {utilityWorkspaceNode}
                 </div>
                 </div>
                 </>
                 ) : null}
                 {isFileMode ? (
-              <div className={`viewer-workbench file-browser-workbench${showUtilityWorkspace && canShowEmbeddedUtilityWorkspace ? " viewer-workbench-with-utility" : ""}`}>
+              <div className="viewer-workbench file-browser-workbench">
                 <div className="file-browser-workbench-main">
                 <FileBrowserStrip
                   pathbar={<FileBrowserPathbar
@@ -3704,7 +3709,6 @@ export function App() {
                   </FileBrowserGrid>
                 )}
                 </div>
-                {utilityWorkspaceNode}
               </div>
               ) : null}
             </>
@@ -4062,6 +4066,7 @@ export function App() {
         onTransferHistoryClear={requestClearTransferHistory}
         onTransferHistoryClose={() => setShowTransferHistory(false)}
       />
+      {toolDrawerNode}
       <ImmediateTooltip />
     </main>
   );
