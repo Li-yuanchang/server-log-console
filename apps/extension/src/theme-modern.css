@@ -4746,8 +4746,9 @@ body.is-electron .settings-exclusive-head input {
 .summary-seg button + button { border-left: 1px solid var(--line); }
 .summary-seg button.on { background: var(--ink); color: #fff; font-weight: 600; }
 
-/* ============================================================
-   检索第二批 · S4 切片条一行式（.slicebar）
+/*
+
+检索第二批 · S4 切片条一行式（.slicebar）
    结构：字节区间(mono) + 可拖拽进度槽(5px/拇指9x13) + 百分比 + 跳到尾部 + 状态 chip
    ============================================================ */
 .slicebar {
@@ -4826,4 +4827,179 @@ body.is-electron .settings-exclusive-head input {
   background: var(--panel);
   font-size: 10.5px;
   color: var(--ink-soft);
+=======
+/* === 工具抽屉 === */
+.tool-drawer-seg {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  max-width: 62%;
+  border: 1px solid var(--line);
+  border-radius: var(--r-s, 6px);
+  overflow: hidden;
+  background: var(--panel);
+}
+.tool-drawer-seg button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 9px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--ink-soft);
+  background: var(--panel);
+  border: none;
+  border-right: 1px solid var(--line);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.tool-drawer-seg button:last-child { border-right: none; }
+.tool-drawer-seg button svg { flex: none; }
+.tool-drawer-seg button:hover:not(.on):not(:disabled) {
+  color: var(--accent);
+  background: var(--panel-muted);
+}
+.tool-drawer-seg button.on {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+.tool-drawer-seg button:disabled {
+  color: var(--ink-muted);
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.tool-drawer-popout { flex: none; }
+.tool-drawer-body {
+  flex: 1 1 0%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.tool-drawer-body > * {
+  flex: 1 1 0%;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* --- 工具抽屉 · 监控趋势（ServerStatusPanel） --- */
+.server-status-trend {
+  flex: none;
+  border: 1px solid var(--line);
+  border-radius: var(--r-m, 8px);
+  background: var(--panel);
+  overflow: hidden;
+}
+.server-status-trend-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.server-status-trend-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+}
+.server-status-trend-note {
+  flex: 1 1 0%;
+  min-width: 0;
+  font-size: 10.5px;
+  color: var(--ink-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.server-status-trend-range {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  border: 1px solid var(--line);
+  border-radius: var(--r-s, 6px);
+  overflow: hidden;
+}
+.server-status-trend-range button {
+  height: 20px;
+  padding: 0 8px;
+  font: inherit;
+  font-size: 10.5px;
+  color: var(--ink-soft);
+  background: var(--panel);
+  border: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.server-status-trend-range button + button { border-left: 1px solid var(--line); }
+.server-status-trend-range button:hover:not(.on):not(:disabled) {
+  color: var(--accent);
+  background: var(--panel-muted);
+}
+.server-status-trend-range button.on {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+.server-status-trend-range button:disabled {
+  color: var(--ink-muted);
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.server-status-trend-cards {
+  display: flex;
+  gap: 10px;
+  padding: 10px 12px;
+}
+.server-status-trend-card {
+  flex: 1 1 0%;
+  min-width: 0;
+  padding: 8px 10px 7px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-m, 8px);
+  background: var(--panel);
+}
+.server-status-trend-card-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.server-status-trend-card-label {
+  font-size: 10.5px;
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+.server-status-trend-card-win {
+  margin-left: auto;
+  font-family: var(--mono-font-family, "Geist Mono", "SFMono-Regular", monospace);
+  font-size: 9.5px;
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+.server-status-trend-card-value {
+  margin: 1px 0 4px;
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--ink);
+}
+.server-status-trend-spark {
+  display: block;
+  width: 100%;
+  height: 26px;
+}
+.server-status-trend-spark-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 26px;
+  font-size: 10px;
+  color: var(--ink-muted);
+  white-space: nowrap;
 }
