@@ -43,10 +43,29 @@ function getSelectionPointFromEvent(event: MouseEvent | React.MouseEvent, lines:
     return null;
   }
   const lineText = lines[lineIndex] ?? "";
+  const timePrefixLength = getLogLineTimePrefixLength(lineText);
   const range = document.createRange();
   range.selectNodeContents(lineElement);
   const rects = Array.from(range.getClientRects()).filter((rect) => rect.width > 0 && rect.height > 0);
   range.detach();
+
+  // 时间列行：rects[0] 为时间戳文本框，其余为内容列文本框，按列分别映射字符偏移，保持选择文本完整
+  if (timePrefixLength > 0 && rects.length >= 2) {
+    const timeRect = rects[0];
+    const bodyRects = rects.slice(1);
+    const bodyTargetRect = bodyRects.find((rect) => event.clientY >= rect.top && event.clientY <= rect.bottom) || bodyRects[bodyRects.length - 1] || lineElement.getBoundingClientRect();
+    if (event.clientY >= timeRect.top && event.clientY <= timeRect.bottom && event.clientX < bodyTargetRect.left) {
+      const relativeX = Math.max(0, Math.min(timeRect.width, event.clientX - timeRect.left));
+      const ratio = timeRect.width > 0 ? relativeX / timeRect.width : 0;
+      const charOffset = Math.max(0, Math.min(timePrefixLength, Math.round(timePrefixLength * ratio)));
+      return { lineIndex, charOffset };
+    }
+    const bodyTextLength = Math.max(0, lineText.length - timePrefixLength);
+    const relativeX = Math.max(0, Math.min(bodyTargetRect.width, event.clientX - bodyTargetRect.left));
+    const ratio = bodyTargetRect.width > 0 ? relativeX / bodyTargetRect.width : 0;
+    const charOffset = Math.max(0, Math.min(lineText.length, timePrefixLength + Math.round(bodyTextLength * ratio)));
+    return { lineIndex, charOffset };
+  }
 
   const lineRect = lineElement.getBoundingClientRect();
   const targetRect = rects.find((rect) => event.clientY >= rect.top && event.clientY <= rect.bottom) || rects[rects.length - 1] || lineRect;
@@ -70,6 +89,20 @@ function buildSelectionTextFromPoints(lines: string[], first: ViewerSelectionPoi
   }
   selected.push((lines[end.lineIndex] ?? "").slice(0, end.charOffset));
   return selected.join("\n");
+}
+
+/**
+ * 日志行时间戳前缀（行首单次匹配，O(行长)）：
+ * - 完整日期时间：YYYY-MM-DD（或 YYYY/MM/DD）+ 空格/T + HH:MM:SS，兼容 .mmm/.mmm 毫秒与可选时区（Z / ±HH:MM / ±HHMM）
+ * - 仅时间：HH:MM:SS，兼容毫秒
+ * 匹配后必须紧跟空白或行尾；其后空白一并归入时间列，保证内容列起点恒为固定列宽。
+ * 注意：非 global，exec 不改变 lastIndex，可安全地在渲染与鼠标事件中复用。
+ */
+const LOG_LINE_TIME_RE = /^(\d{4}[-/]\d{2}[-/]\d{2}[ T]\d{2}:\d{2}:\d{2}(?:[.,]\d{1,3})?(?:\s*(?:Z|[+-]\d{2}:?\d{2}))?|\d{1,2}:\d{2}:\d{2}(?:[.,]\d{1,3})?)(?:\s+|$)/;
+
+function getLogLineTimePrefixLength(line: string): number {
+  const match = LOG_LINE_TIME_RE.exec(line);
+  return match ? match[0].length : 0;
 }
 
 function isBlockTimestampLine(line: string): boolean {
@@ -358,7 +391,11 @@ const VirtualLogViewerImpl = forwardRef<VirtualLogViewerHandle, Props>(
 
     const renderLine = useCallback(
       (index: number, item: VirtualLogViewerLineItem) => {
-        const escaped = escapeHtml(item.text);
+        // 行首时间戳解析：单次锚定正则，O(行长)；渲染期间无副作用（非 global 正则）
+        const timeMatch = LOG_LINE_TIME_RE.exec(item.text);
+        const hasTimeColumn = Boolean(timeMatch);
+        const timeText = timeMatch ? timeMatch[0] : "";
+        const bodyText = timeMatch ? item.text.slice(timeText.length) : item.text;
 
         const isFocused = index === focusLineIndex;
         const rangeStart = selectedLineRange ? Math.min(selectedLineRange.start, selectedLineRange.end) : -1;
@@ -368,7 +405,8 @@ const VirtualLogViewerImpl = forwardRef<VirtualLogViewerHandle, Props>(
         const isBookmarked = showBookmarkControls ? index in bookmarks! : false;
         const clickable = Boolean(onLineClick);
         const errorKind = item.errorKind;
-        const baseClass = `log-line${isFocused ? " log-line-focus" : ""}${clickable ? " log-line-clickable" : ""}${isRangeSelected ? " log-line-range-selected" : ""}${isRangeSelected && index === rangeStart ? " log-line-range-start" : ""}${isRangeSelected && index === rangeEnd ? " log-line-range-end" : ""}${errorKind ? ` log-line-level-${errorKind}` : ""}${isBookmarked ? " log-line-bookmarked" : ""}`;
+        const isHitLine = (lineMatchCounts[index] || 0) > 0;
+        const baseClass = `log-line${hasTimeColumn ? " log-line-ts" : " log-line-no-time"}${isFocused ? " log-line-focus" : ""}${clickable ? " log-line-clickable" : ""}${isRangeSelected ? " log-line-range-selected" : ""}${isRangeSelected && index === rangeStart ? " log-line-range-start" : ""}${isRangeSelected && index === rangeEnd ? " log-line-range-end" : ""}${errorKind ? ` log-line-level-${errorKind}` : ""}${isHitLine ? " log-line-hit" : ""}${isBookmarked ? " log-line-bookmarked" : ""}`;
         const handleClick = clickable ? (event: React.MouseEvent<HTMLDivElement>) => {
           if (!(event.metaKey || event.ctrlKey || event.shiftKey)) {
             return;
@@ -396,23 +434,58 @@ const VirtualLogViewerImpl = forwardRef<VirtualLogViewerHandle, Props>(
         const focusBadge = isFocused
           ? `<span class="log-focus-badge" title="当前跳转定位">定位</span>`
           : "";
+        const lineProps = {
+          className: baseClass,
+          "data-line-index": index,
+          onClick: handleClick,
+          onDoubleClick: handleDoubleClick,
+          title,
+        };
 
-        if (!displayHighlightRegex || !escaped) {
-          return <div className={baseClass} data-line-index={index} onClick={handleClick} onDoubleClick={handleDoubleClick} title={title} dangerouslySetInnerHTML={{ __html: bookmarkIcon + focusBadge + (escaped || "\u00A0") }} />;
+        if (!displayHighlightRegex) {
+          if (hasTimeColumn) {
+            return (
+              <div {...lineProps}>
+                <span className="log-line-time" dangerouslySetInnerHTML={{ __html: escapeHtml(timeText) }} />
+                <span className="log-line-body" dangerouslySetInnerHTML={{ __html: bookmarkIcon + focusBadge + (escapeHtml(bodyText) || "\u00A0") }} />
+              </div>
+            );
+          }
+          const escaped = escapeHtml(item.text);
+          return <div {...lineProps} dangerouslySetInnerHTML={{ __html: bookmarkIcon + focusBadge + (escaped || "\u00A0") }} />;
         }
 
         const startMatchIdx = cumulativeOffsets[index] ?? 0;
         let matchIdx = startMatchIdx;
-        const highlighted = escaped.replace(displayHighlightRegex, (_match, capture: string) => {
+        const highlightReplace = (capture: string) => {
           const cls =
             matchIdx === activeHighlightIndex ? "log-highlight log-highlight-active" : "log-highlight";
           matchIdx++;
           return `<mark class="${cls}">${capture}</mark>`;
-        });
+        };
 
-        return <div className={baseClass} data-line-index={index} onClick={handleClick} onDoubleClick={handleDoubleClick} title={title} dangerouslySetInnerHTML={{ __html: bookmarkIcon + focusBadge + highlighted }} />;
+        if (hasTimeColumn) {
+          // 时间列与内容列各自高亮，matchIdx 顺序累加，保持与整行匹配序号一致（命中导航不受拆列影响）
+          const timeHtml = escapeHtml(timeText).replace(displayHighlightRegex, highlightReplace);
+          const bodyHtml = escapeHtml(bodyText).replace(displayHighlightRegex, highlightReplace) || "\u00A0";
+          return (
+            <div {...lineProps}>
+              <span className="log-line-time" dangerouslySetInnerHTML={{ __html: timeHtml }} />
+              <span className="log-line-body" dangerouslySetInnerHTML={{ __html: bookmarkIcon + focusBadge + bodyHtml }} />
+            </div>
+          );
+        }
+
+        const escaped = escapeHtml(item.text);
+        if (!escaped) {
+          return <div {...lineProps} dangerouslySetInnerHTML={{ __html: bookmarkIcon + focusBadge + "\u00A0" }} />;
+        }
+
+        const highlighted = escaped.replace(displayHighlightRegex, highlightReplace);
+
+        return <div {...lineProps} dangerouslySetInnerHTML={{ __html: bookmarkIcon + focusBadge + highlighted }} />;
       },
-      [displayHighlightRegex, cumulativeOffsets, activeHighlightIndex, focusLineIndex, selectedLineRange, bookmarks, onLineClick, lineActionTitle, onBookmarkToggle],
+      [displayHighlightRegex, cumulativeOffsets, activeHighlightIndex, focusLineIndex, selectedLineRange, bookmarks, onLineClick, lineActionTitle, onBookmarkToggle, lineMatchCounts],
     );
 
     const handleMouseDown = useCallback((event: React.MouseEvent<HTMLDivElement>) => {

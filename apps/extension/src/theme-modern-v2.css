@@ -715,3 +715,62 @@
   font-size: 10px;
   color: var(--ink-muted);
 }
+
+/* === 日志行时间戳列 === */
+/* 对齐 prototype .ll：时间戳 muted 灰列 148px（flex）+ 内容列；命中行左 2px 蓝条；mark 无背景下划线 */
+.theme-modern .log-line {
+  --log-time-col-w: 148px;
+}
+/* 有时间戳的行：时间列（muted 等宽、固定 148px）+ 内容列，基线对齐 */
+.theme-modern .log-line-ts {
+  display: flex;
+  align-items: baseline;
+}
+.theme-modern .log-line .log-line-time {
+  flex: 0 0 var(--log-time-col-w);
+  width: var(--log-time-col-w);
+  color: var(--shell-mut, #5c6b7a);
+  font-size: calc(var(--log-font-size, 12px) - 1px);
+  letter-spacing: -0.2px;
+  white-space: pre;
+  user-select: text;
+}
+.theme-modern .log-line .log-line-body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+/* 无时间戳行（堆栈 at ...、空行）：不拆列，整行缩进挂在内容列下（行内边距 10px + 148px 列宽） */
+.theme-modern .log-line-no-time {
+  padding-left: calc(var(--log-time-col-w) + 10px);
+}
+/* 聚焦/书签行带 3px 左边框，缩进回吐 3px 保持内容列对齐 */
+.theme-modern .log-line-no-time.log-line-focus,
+.theme-modern .log-line-no-time.log-line-bookmarked {
+  padding-left: calc(var(--log-time-col-w) + 7px);
+}
+/* 命中行：左侧 2px 蓝条（prototype .ll.hit） */
+.theme-modern .log-line-hit {
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+/* 命中词：无背景色 + accent 文字 + 下划线（prototype .ll mark） */
+.theme-modern .viewer-console-markup .log-highlight {
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--accent, #0070f3);
+  font-weight: 650;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  box-shadow: none;
+}
+/* 当前命中：accent-soft 底保持可辨识（prototype .ll.cur 的行级处理收拢到词级） */
+.theme-modern .viewer-console-markup .log-highlight-active {
+  padding: 0 2px;
+  border-radius: 2px;
+  background: var(--accent-soft);
+  color: var(--accent, #0070f3);
+  font-weight: 650;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  box-shadow: none;
+}
