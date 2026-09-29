@@ -1,4 +1,4 @@
-import { Activity, CircleDot, Command as CommandIcon, Ellipsis, Pin, PinOff, Radio } from "lucide-react";
+import { Command as CommandIcon, Ellipsis, Pin, PinOff } from "lucide-react";
 import { ToolIcon } from "./ToolIcon.js";
 
 type Props = {
@@ -35,7 +35,11 @@ export function SearchToolbarActions(props: Props) {
         disabled={!props.canToggleLive}
         title={props.liveFollowEnabled ? "断开实时追踪" : "开启实时追踪 (tail -F)"}
       >
-        <Radio size={14} strokeWidth={1.8} className={props.liveFollowEnabled ? "live-pulse" : undefined} />
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" className={props.liveFollowEnabled ? "live-pulse" : undefined} aria-hidden="true">
+          <circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none" />
+          <path d="M8.5 15.5a5 5 0 0 1 0-7" />
+          <path d="M15.5 8.5a5 5 0 0 1 0 7" />
+        </svg>
         <span>LIVE</span>
       </button>
       {props.isElectron ? (
@@ -48,17 +52,11 @@ export function SearchToolbarActions(props: Props) {
           <span>{props.isPinned ? "已置顶" : "置顶"}</span>
         </button>
       ) : null}
-      <button
-        className={`ghost-button toolbar-action-button${props.serverStatusOpen ? " tab-active" : ""}`}
-        onClick={props.onOpenServerStatus}
-        disabled={!props.hasServer}
-        title="查看服务器状态"
-      >
-        <Activity size={14} strokeWidth={1.8} />
-        <span>状态</span>
-      </button>
       <button className={`ghost-button toolbar-action-button${props.isRecording ? " btn-recording-active" : ""}`} onClick={props.onToggleRecording} disabled={!props.canToggleRecording}>
-        <CircleDot size={14} strokeWidth={1.8} />
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+          <circle cx="12" cy="12" r="8.5" />
+          <circle cx="12" cy="12" r="3.2" fill="currentColor" stroke="none" />
+        </svg>
         <span>{props.isRecording ? "结束录制" : "录制"}</span>
       </button>
       <button

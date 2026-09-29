@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { ServerSummary, ServerConnectionTestResponse } from "@server-log-console/shared";
 import type { SettingsWorkspaceView } from "./ConnectionSettingsWorkspace.js";
-import { Command as CommandIcon, Ellipsis, Pencil, Play, Trash2 } from "lucide-react";
+import { Command as CommandIcon, Copy, Ellipsis, Pencil, Trash2 } from "lucide-react";
 import { ToolIcon } from "./ToolIcon.js";
 
 export type SidebarPanelProps = {
@@ -33,6 +33,7 @@ export type SidebarPanelProps = {
 
 export function SidebarPanel(props: SidebarPanelProps) {
   const [statusExpanded, setStatusExpanded] = useState(false);
+  const [serverMenuId, setServerMenuId] = useState("");
   const {
     uiTheme,
     isElectron,
@@ -136,15 +137,6 @@ export function SidebarPanel(props: SidebarPanelProps) {
                         <button
                           type="button"
                           className="server-item-mini-action"
-                          title="连接"
-                          aria-label={`连接 ${server.name}`}
-                          onClick={() => selectServerById(server.id)}
-                        >
-                          <Play size={12} strokeWidth={1.8} />
-                        </button>
-                        <button
-                          type="button"
-                          className="server-item-mini-action"
                           title="编辑（设置中心）"
                           aria-label={`编辑 ${server.name}`}
                           onClick={() => onOpenSettingsWorkspace("connections")}
@@ -153,23 +145,41 @@ export function SidebarPanel(props: SidebarPanelProps) {
                         </button>
                         <button
                           type="button"
-                          className="server-item-mini-action"
-                          title="更多"
+                          className={`server-item-mini-action${serverMenuId === server.id ? " is-open" : ""}`}
+                          title="更多操作"
                           aria-label={`${server.name} 更多操作`}
-                          onClick={() => onOpenSettingsWorkspace("connections")}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setServerMenuId((current) => current === server.id ? "" : server.id);
+                          }}
                         >
                           <Ellipsis size={12} strokeWidth={1.8} />
                         </button>
-                        {server.source ? (
-                          <button
-                            type="button"
-                            className="server-item-mini-action server-item-mini-danger"
-                            title="删除连接"
-                            aria-label={`删除 ${server.name}`}
-                            onClick={() => onDeleteServer(server)}
-                          >
-                            <Trash2 size={12} strokeWidth={1.8} />
-                          </button>
+                        {serverMenuId === server.id ? (
+                          <div className="server-item-menu" onClick={(event) => event.stopPropagation()}>
+                            <button
+                              type="button"
+                              className="server-item-menu-item"
+                              onClick={() => {
+                                void navigator.clipboard?.writeText(`${server.username}@${server.host}:${server.port}`).catch(() => {});
+                                setServerMenuId("");
+                              }}
+                            >
+                              <Copy size={12} strokeWidth={1.8} /> 复制连接信息
+                            </button>
+                            {server.source ? (
+                              <button
+                                type="button"
+                                className="server-item-menu-item server-item-menu-danger"
+                                onClick={() => {
+                                  setServerMenuId("");
+                                  onDeleteServer(server);
+                                }}
+                              >
+                                <Trash2 size={12} strokeWidth={1.8} /> 删除
+                              </button>
+                            ) : null}
+                          </div>
                         ) : null}
                       </div>
                     </div>
