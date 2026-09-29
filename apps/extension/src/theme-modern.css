@@ -5104,3 +5104,320 @@ body.is-electron .settings-exclusive-head input {
   margin: 4px 8px;
   background: var(--line);
 }
+
+/* ================= S1 主框架还原：一行式工具栏 / 下划线页签 / 侧栏摘要 ================= */
+/* 流式原则：flex+wrap+min-width:0，控件 nowrap；窄屏整组换行，永不内部换行 */
+.theme-modern .toolbar-commandbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  min-width: 0;
+}
+
+/* 视图切换 = segmented（原型 .seg） */
+.theme-modern .toolbar-view-switch {
+  order: 0;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--panel);
+  flex: none;
+}
+.theme-modern .toolbar-view-switch-btn {
+  height: 30px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 0;
+  background: var(--panel);
+  color: var(--ink-soft);
+  font-size: 12.5px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.theme-modern .toolbar-view-switch-btn + .toolbar-view-switch-btn {
+  border-left: 1px solid var(--line);
+}
+.theme-modern .toolbar-view-switch-btn:hover:not(.is-active) {
+  background: var(--panel-muted);
+  color: var(--ink);
+  box-shadow: none;
+}
+.theme-modern .toolbar-view-switch-btn.is-active {
+  background: var(--ink);
+  color: #ffffff;
+  font-weight: 600;
+}
+
+/* 搜索行 = flex 子项（覆盖 grid 基样式） */
+.theme-modern .toolbar-commandbar .toolbar-search-row {
+  order: 1;
+  display: flex;
+  flex: 1 1 300px;
+  min-width: 230px;
+  gap: 6px;
+}
+.theme-modern .toolbar-commandbar .keyword-shell {
+  flex: 1;
+  min-width: 0;
+}
+.theme-modern .toolbar-commandbar .command-input-keyword {
+  width: 100%;
+  height: 30px;
+}
+
+/* 右侧动作组 */
+.theme-modern .toolbar-commandbar .toolbar-search-actions {
+  order: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  margin-left: auto;
+}
+.theme-modern .toolbar-action-button {
+  white-space: nowrap;
+  height: 30px;
+}
+
+/* 摘要行 = rtools（完整占一行） */
+.theme-modern .toolbar-commandbar .toolbar-summary {
+  order: 3;
+  flex-basis: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: nowrap;
+  min-width: 0;
+  padding: 6px 2px 0;
+  font-size: 11.5px;
+  color: var(--ink-soft);
+}
+.theme-modern .toolbar-summary > span:first-child {
+  color: var(--ink-soft);
+}
+.theme-modern .toolbar-summary .summary-nav-count { font-size: 11px; }
+
+/* 高级条件条完整换行 */
+.theme-modern .toolbar-commandbar .advanced-strip {
+  order: 4;
+  flex-basis: 100%;
+}
+
+/* 窄屏：动作组换行到第二行右对齐（流式收缩顺序） */
+@media (max-width: 1180px) {
+  .theme-modern .toolbar-commandbar .toolbar-search-actions {
+    order: 3;
+    flex-basis: 100%;
+    margin-left: 0;
+    justify-content: flex-end;
+  }
+  .theme-modern .toolbar-commandbar .toolbar-summary { order: 4; }
+  .theme-modern .toolbar-commandbar .advanced-strip { order: 5; }
+}
+
+/* 工作区页签 = 下划线式（隐藏“工作区/共N个”标签） */
+.theme-modern .workspace-session-strip-head { display: none; }
+.theme-modern .workspace-session-tabs { gap: 2px; }
+.theme-modern .workspace-session-tab {
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.theme-modern .workspace-session-tab:hover {
+  background: transparent;
+  border-color: transparent;
+  border-bottom-color: var(--line-strong);
+  box-shadow: none;
+}
+.theme-modern .workspace-session-tab-active {
+  background: transparent;
+  border-color: transparent;
+  border-bottom-color: var(--ink);
+  box-shadow: none;
+}
+.theme-modern .workspace-session-tab-active .workspace-session-tab-trigger {
+  color: var(--ink);
+  font-weight: 600;
+}
+.theme-modern .workspace-session-tab-trigger { color: var(--ink-soft); }
+
+/* 侧栏底部状态摘要行（点击展开概览） */
+.sidebar-status { cursor: pointer; }
+.sidebar-status .status-row { cursor: default; }
+.sidebar-status-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 2px 0;
+}
+.sidebar-status-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #c8ccd2;
+}
+.sidebar-status-dot.on {
+  background: var(--green-dot, #22c55e);
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.15);
+}
+.sidebar-status-sum {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sidebar-status-sum b, .sidebar-status-toggle {
+  font-weight: 550;
+}
+.sidebar-status-toggle {
+  flex: none;
+  font-size: 10px;
+  color: var(--ink-muted);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+.sidebar-status:hover .sidebar-status-toggle { color: var(--ink); border-color: var(--line-strong); }
+.sidebar-status .sidebar-status-collapse {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--ink-muted);
+  font-weight: 400;
+}
+
+/* ================= S1 细节补齐：命令面板 / 搜索框图标 / LIVE / 页签提示 ================= */
+.keyword-shell { position: relative; }
+.keyword-input-icon {
+  position: absolute;
+  left: 9px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--ink-muted);
+  display: inline-flex;
+  pointer-events: none;
+  z-index: 1;
+}
+.theme-modern .toolbar-commandbar .command-input-keyword { padding-left: 28px; padding-right: 50px; }
+.keyword-input-kbd {
+  position: absolute;
+  right: 26px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+.kbd {
+  font-family: var(--mono-font-family, "Geist Mono", "SFMono-Regular", monospace);
+  font-size: 9.5px;
+  color: var(--ink-soft);
+  border: 1px solid var(--line-strong);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  padding: 0 4px;
+  line-height: 14px;
+}
+.theme-modern .toolbar-live-button { white-space: nowrap; }
+.theme-modern .toolbar-live-button.toolbar-live-on {
+  color: var(--red, #d41313);
+  border-color: color-mix(in srgb, var(--red, #d41313) 32%, transparent);
+  background: color-mix(in srgb, var(--red, #d41313) 6%, transparent);
+  font-weight: 650;
+}
+.live-pulse { animation: slc-live-pulse 1.4s ease-in-out infinite; }
+@keyframes slc-live-pulse { 50% { opacity: 0.35; } }
+.theme-modern .toolbar-palette-button { white-space: nowrap; }
+
+.workspace-session-hint {
+  margin-left: auto;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10.5px;
+  color: var(--ink-muted);
+  padding-right: 6px;
+  white-space: nowrap;
+}
+
+/* 命令面板（原型 .palette） */
+.palette-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9500;
+  background: rgba(23, 23, 23, 0.28);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 110px;
+}
+.palette-box {
+  width: min(560px, calc(100vw - 48px));
+  max-height: 420px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.22);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.palette-input-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin: 12px;
+  color: var(--ink-muted);
+}
+.palette-input-row svg { position: absolute; left: 11px; pointer-events: none; }
+.palette-input-row input {
+  flex: 1;
+  height: 38px;
+  padding: 0 12px 0 34px;
+  font: inherit;
+  font-size: 13.5px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--ink);
+  outline: none;
+}
+.palette-input-row input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.palette-list { overflow-y: auto; padding: 0 8px 8px; min-height: 0; }
+.palette-cap {
+  padding: 8px 10px 2px;
+  font-size: 10px;
+  font-weight: 650;
+  color: var(--ink-muted);
+  letter-spacing: 0.06em;
+}
+.palette-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  background: none;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+}
+.palette-item-sel { background: var(--accent-soft); }
+.palette-item-title { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.palette-item-sub { color: var(--ink-muted); font-size: 11.5px; }
+.palette-item-hint { flex: none; font-family: var(--mono-font-family, "Geist Mono", "SFMono-Regular", monospace); font-size: 9.5px; color: var(--ink-muted); }
+.palette-empty { padding: 28px 12px; text-align: center; color: var(--ink-muted); font-size: 12px; }

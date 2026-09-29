@@ -1,5 +1,5 @@
 import { useRef, useState, type RefObject } from "react";
-import { ChevronDown, Download } from "lucide-react";
+import { ChevronDown, Download, Search } from "lucide-react";
 import type { SearchSettingsState } from "./utils.js";
 import { readSearchHistory } from "./storage.js";
 
@@ -62,6 +62,7 @@ export function SearchQueryPanel(props: Props) {
           <div className="keyword-shell" onBlur={(event) => {
             if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setHistoryOpen(false);
           }}>
+            <span className="keyword-input-icon" aria-hidden="true"><Search size={13} strokeWidth={1.8} /></span>
             <input
               ref={props.keywordInputRef}
               className="command-input command-input-keyword"
@@ -90,6 +91,7 @@ export function SearchQueryPanel(props: Props) {
             >
               <ChevronDown size={13} strokeWidth={1.8} />
             </button>
+            <span className="keyword-input-kbd kbd">/</span>
             {historyOpen && historyItems.length ? (
               <div className="search-history-panel" role="listbox">
                 <div className="search-history-cap">最近检索</div>
