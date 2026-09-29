@@ -4745,3 +4745,85 @@ body.is-electron .settings-exclusive-head input {
 }
 .summary-seg button + button { border-left: 1px solid var(--line); }
 .summary-seg button.on { background: var(--ink); color: #fff; font-weight: 600; }
+
+/* ============================================================
+   检索第二批 · S4 切片条一行式（.slicebar）
+   结构：字节区间(mono) + 可拖拽进度槽(5px/拇指9x13) + 百分比 + 跳到尾部 + 状态 chip
+   ============================================================ */
+.slicebar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 14px;
+  border-bottom: 1px solid var(--line);
+  flex: none;
+  min-width: 0;
+  white-space: nowrap;
+}
+.slicebar-range {
+  flex: none;
+  font-family: var(--mono-font-family, "Geist Mono", "SFMono-Regular", monospace);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.slicebar-range b {
+  color: var(--ink);
+  font-weight: 600;
+}
+.slicebar-strack {
+  position: relative;
+  flex: 1;
+  min-width: 120px;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--panel-muted);
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+}
+.slicebar-strack:active { cursor: grabbing; }
+.slicebar-strack-disabled { cursor: default; }
+.slicebar-strack-disabled:active { cursor: default; }
+.slicebar-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--accent) 25%, transparent);
+}
+.slicebar-thumb {
+  position: absolute;
+  top: -4px;
+  width: 9px;
+  height: 13px;
+  border-radius: 3px;
+  background: var(--accent);
+  box-shadow: 0 1px 4px color-mix(in srgb, var(--accent) 40%, transparent);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+.slicebar-thumb-dragging {
+  box-shadow: 0 1px 6px color-mix(in srgb, var(--accent) 60%, transparent);
+}
+.slicebar-percent {
+  flex: none;
+  min-width: 36px;
+  text-align: right;
+  font-family: var(--mono-font-family, "Geist Mono", "SFMono-Regular", monospace);
+  font-size: 11px;
+  color: var(--ink);
+}
+.slicebar-tail { flex: none; }
+.slicebar-chip {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  font-size: 10.5px;
+  color: var(--ink-soft);
+}

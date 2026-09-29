@@ -368,6 +368,7 @@ export function App() {
   
   const viewerDebugRef = useRef<HTMLDivElement | null>(null);
   const readerRailRef = useRef<HTMLDivElement | null>(null);
+  const sliceTrackRef = useRef<HTMLDivElement | null>(null);
   const viewerOverviewRailRef = useRef<HTMLDivElement | null>(null);
   const initializedRef = useRef(false);
   const autoConnectServerRef = useRef("");
@@ -1694,8 +1695,7 @@ export function App() {
     ? `${formatPercent(readerPositionDragging ? readerPositionDraft : (sliceProgress?.start ?? 0))}`
     : readerPositionLabel;
   const readerRailIndicatorTop = Math.max(2, Math.min(98, readerPositionDragging ? readerPositionDraft : (sliceProgress?.start ?? 0)));
-  const readerRailSliceTop = clampPercent(sliceProgress?.start ?? 0);
-  const readerRailSliceHeight = Math.max(1.2, (sliceProgress?.end ?? 0) - (sliceProgress?.start ?? 0));
+  // S4: 文件预览的切片定位条渲染条件（原竖向定位条复用此条件，现用于一行式切片条）
   const showReaderRail = activeLogView === "search" && activeViewerTabId === "file" && Boolean(filePath);
 
   useEffect(() => {
@@ -1839,18 +1839,19 @@ export function App() {
       return;
     }
 
-    function resolvePercent(clientY: number) {
-      const rail = readerRailRef.current;
-      if (!rail) {
+    // S4: 切片条进度槽为水平方向，按 clientX / rect.width 换算百分比
+    function resolvePercent(clientX: number) {
+      const track = sliceTrackRef.current;
+      if (!track) {
         return null;
       }
 
-      const rect = rail.getBoundingClientRect();
-      if (!rect.height) {
+      const rect = track.getBoundingClientRect();
+      if (!rect.width) {
         return null;
       }
 
-      return ((clientY - rect.top) / rect.height) * 100;
+      return ((clientX - rect.left) / rect.width) * 100;
     }
 
     function scheduleDraft(nextPercent: number) {
@@ -1866,7 +1867,7 @@ export function App() {
     }
 
     function handlePointerMove(event: PointerEvent) {
-      const nextPercent = resolvePercent(event.clientY);
+      const nextPercent = resolvePercent(event.clientX);
       if (nextPercent === null) {
         return;
       }
@@ -1874,7 +1875,7 @@ export function App() {
     }
 
     function handlePointerEnd(event: PointerEvent) {
-      const nextPercent = resolvePercent(event.clientY);
+      const nextPercent = resolvePercent(event.clientX);
       window.removeEventListener("pointermove", handlePointerMove);
       window.removeEventListener("pointerup", handlePointerEnd);
       window.removeEventListener("pointercancel", handlePointerEnd);
@@ -1891,6 +1892,25 @@ export function App() {
       window.removeEventListener("pointercancel", handlePointerEnd);
     };
   }, [readerPositionDragging]);
+
+  // S4: 切片条进度槽按下开始拖拽，与原竖向定位条共用 readerPosition 草稿/提交状态机
+  function startSlicebarDrag(event: React.PointerEvent<HTMLDivElement>) {
+    if (!canDragReaderPosition || isBusy) {
+      return;
+    }
+    const track = sliceTrackRef.current;
+    if (!track) {
+      return;
+    }
+    const rect = track.getBoundingClientRect();
+    if (!rect.width) {
+      return;
+    }
+    event.preventDefault();
+    setReaderPositionDragging(true);
+    setReaderPreviewLoading(false);
+    setReaderPositionDraft(clampPercent(((event.clientX - rect.left) / rect.width) * 100));
+  }
 
   useEffect(() => {
     if (!viewerOverviewDragging) {
@@ -2372,7 +2392,8 @@ export function App() {
     });
   }, [canToggleResultContext]);
   const showSearchResultsOverviewRail = activeLogView === "search" && activeViewerTabId !== "file" && !showCompactViewerChrome && Boolean(currentLogContent);
-  const showViewerRail = !showCompactViewerChrome && (showReaderRail || showSearchResultsOverviewRail);
+  // S4: 文件预览的竖向定位条已由一行式切片条取代，rail 占位只剩结果总览
+  const showViewerRail = !showCompactViewerChrome && showSearchResultsOverviewRail;
   const viewerOverviewTotalLines = viewerScrollState?.totalLines ?? 0;
   const viewerOverviewMarkerPositions = useMemo(() => {
     if (viewerOverviewTotalLines <= 1 || !viewerMatchLineIndices.length) {
@@ -3165,15 +3186,38 @@ export function App() {
                   </div>
                 ) : <div />}
 
+                {showReaderRail && !showCompactViewerChrome ? (
+                  <div className="slicebar" aria-label="大文件切片定位">
+                    <span className="slicebar-range">
+                      <b>{formatBytes(activeSliceData?.actualOffset)}</b> / {formatBytes(activeFileMeta?.size)}
+                    </span>
+                    <div
+                      ref={sliceTrackRef}
+                      className={`slicebar-strack${canDragReaderPosition ? "" : " slicebar-strack-disabled"}`}
+                      onPointerDown={startSlicebarDrag}
+                    >
+                      <span className="slicebar-fill" style={{ width: `${readerRailIndicatorTop}%` }} />
+                      <span
+                        className={`slicebar-thumb${readerPositionDragging ? " slicebar-thumb-dragging" : ""}`}
+                        style={{ left: `${readerRailIndicatorTop}%` }}
+                      />
+                    </div>
+                    <span className="slicebar-percent">{formatPercent(readerPositionDragging ? readerPositionDraft : (sliceProgress?.start ?? 0))}</span>
+                    <button
+                      type="button"
+                      className="ghost-button slim-button slicebar-tail"
+                      onClick={() => { void loadTailSlice(); }}
+                      disabled={isBusy || !filePath.trim()}
+                      title="跳到文件末尾"
+                    >
+                      跳到尾部
+                    </button>
+                    <span className="slicebar-chip">{canDragReaderPosition ? "整行裁切 · 邻页已预热" : "已整片加载 · 拖拽定位关闭"}</span>
+                  </div>
+                ) : null}
+
                 {!showCompactViewerChrome && showFileTools && filePath && activeLogView === "search" && activeViewerTabId === "file" ? (
                   <div className="meta-list file-tools-panel">
-                    <div className="reader-position-card">
-                      <div className="reader-position-head">
-                        <strong>阅读位置</strong>
-                        <span>{readerPositionLabel}</span>
-                      </div>
-                      {!canDragReaderPosition ? <span className="reader-position-note">当前文件已整片加载，拖拽定位已关闭。</span> : null}
-                    </div>
                     <label>
                       切片大小
                       <select
@@ -3356,53 +3400,6 @@ export function App() {
                           <ArrowDown size={18} strokeWidth={1.9} />
                         </button>
                       ) : null}
-                      {showReaderRail && !showCompactViewerChrome ? (
-                        <aside className={`reader-rail ${canDragReaderPosition ? "" : "reader-rail-disabled"}`}>
-                          <div className="reader-rail-head">
-                            <span>定位</span>
-                            <strong>{readerPreviewLabel}</strong>
-                          </div>
-                          <div
-                            ref={readerRailRef}
-                            className="reader-rail-track"
-                            onPointerDown={(event) => {
-                              event.preventDefault();
-                              startReaderRailDrag(event.clientY);
-                            }}
-                            onWheel={(event) => {
-                              const scroller = virtualViewerRef.current?.getScrollerElement();
-                              if (scroller) {
-                                scroller.scrollTop += event.deltaY;
-                              }
-                              handleViewerWheel(event);
-                            }}
-                          >
-                            <span
-                              className="reader-rail-slice"
-                              style={{
-                                top: `${readerRailSliceTop}%`,
-                                height: `${readerRailSliceHeight}%`
-                              }}
-                            />
-                            <span
-                              className={`reader-rail-thumb ${readerPositionDragging ? "reader-rail-thumb-dragging" : ""}`}
-                              style={{ top: `${readerRailIndicatorTop}%` }}
-                            />
-                            <span className="reader-rail-badge" style={{ top: `${readerRailIndicatorTop}%` }}>
-                              {readerPreviewLabel}
-                            </span>
-                            {readerPositionDragging ? (
-                              <div className="reader-preview-card reader-preview-floating" style={{ top: `${readerRailIndicatorTop}%` }}>
-                                <div className="reader-preview-head">
-                                  <strong>定位预览</strong>
-                                  <span>{readerPreviewLoading ? "正在更新" : (readerPreviewOffset !== null ? `偏移 ${formatNumber(readerPreviewOffset)}` : "准备中")}</span>
-                                </div>
-                                <pre className="reader-preview-body">{readerPreviewContent || "正在读取这一段..."}</pre>
-                              </div>
-                            ) : null}
-                          </div>
-                        </aside>
-                      ) : null}
                       {showSearchResultsOverviewRail ? (
                         <aside className="reader-rail reader-rail-overview">
                           <div
@@ -3472,7 +3469,6 @@ export function App() {
                     breadcrumbItems={directoryBreadcrumbItems}
                     inputRef={directoryInputRef}
                     hasServer={!!serverId}
-                    isBusy={isBusy}
                     onSetDirectoryInput={setDirectoryInput}
                     onEnterEditMode={enterPathbarEditMode}
                     onExitEditMode={exitPathbarEditMode}
