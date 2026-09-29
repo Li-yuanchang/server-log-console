@@ -24,6 +24,7 @@ export type WorkspaceSession = {
   serverId: string;
   serverName: string;
   serverHost: string;
+  serverGroup?: string;
 };
 
 export type WorkspaceSessionState = {

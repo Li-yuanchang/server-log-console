@@ -11,6 +11,7 @@ export type WorkspaceSessionTabsProps = {
   workspaceTabDragJustMovedRef: React.MutableRefObject<boolean>;
   onActivateSession: (session: WorkspaceSession) => void;
   onCloseSession: (sessionId: string) => void;
+  onOpenPalette: () => void;
   onContextMenu: (state: WorkspaceTabMenuState) => void;
   dragAPI: Pick<WorkspaceTabDragAPI, "handleWorkspaceTabDragStart" | "handleWorkspaceTabDragOver" | "handleWorkspaceTabDrop" | "handleWorkspaceTabDragEnd">;
 };
@@ -24,6 +25,7 @@ export function WorkspaceSessionTabs(props: WorkspaceSessionTabsProps) {
     workspaceTabDragJustMovedRef,
     onActivateSession,
     onCloseSession,
+    onOpenPalette,
     onContextMenu,
     dragAPI,
   } = props;
@@ -75,6 +77,7 @@ export function WorkspaceSessionTabs(props: WorkspaceSessionTabsProps) {
                   }}
                 >
                   <span className="workspace-session-tab-label">{session.serverName}</span>
+                  {session.serverGroup ? <span className="chip workspace-session-tab-group">{session.serverGroup}</span> : null}
                 </button>
                 <button
                   className="ghost-button icon-button workspace-session-tab-close"
@@ -90,6 +93,15 @@ export function WorkspaceSessionTabs(props: WorkspaceSessionTabsProps) {
             );
           })}
         </div>
+        <button
+          type="button"
+          className="workspace-session-add"
+          title="打开服务器（⌘K）"
+          aria-label="新建会话"
+          onClick={onOpenPalette}
+        >
+          ＋
+        </button>
         <span className="workspace-session-hint"><span className="kbd">⌘1-9</span> 切换会话</span>
       </div>
     </div>

@@ -2909,6 +2909,7 @@ export function App() {
               workspaceTabDragJustMovedRef={workspaceTabDragJustMovedRef}
               onActivateSession={activateWorkspaceSession}
               onCloseSession={closeWorkspaceSession}
+              onOpenPalette={() => setPaletteOpen(true)}
               onContextMenu={setWorkspaceTabMenu}
               dragAPI={{
                 handleWorkspaceTabDragStart,

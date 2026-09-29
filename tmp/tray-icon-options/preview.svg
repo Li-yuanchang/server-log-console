@@ -1,0 +1,105 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="360" viewBox="0 0 900 360">
+  <defs>
+    <style>
+      .label{font:600 18px -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;fill:#1f2937}
+      .sub{font:400 13px -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;fill:#64748b}
+      .icon path,.icon rect{stroke:#111827}
+      .icon-small path,.icon-small rect{stroke:#111827}
+      .card{fill:#fff;stroke:#e5e7eb;stroke-width:1}
+      .menubar{fill:#6f6ccf}
+      .slot{fill:rgba(255,255,255,.12)}
+    </style>
+  </defs>
+  <rect width="900" height="360" fill="#f8fafc"/>
+  <text x="34" y="36" class="label">macOS 状态栏图标 5 个候选</text>
+  <text x="34" y="58" class="sub">上方为 22px 实际尺寸模拟，下方为 4x 放大预览。均为单色 template icon，可适配深浅色菜单栏。</text>
+  <rect x="34" y="80" width="832" height="42" rx="10" class="menubar"/>
+  <g transform="translate(82 90)">
+    <rect x="-9" y="-5" width="40" height="30" rx="7" class="slot"/>
+    <svg class="icon-small" x="0" y="0" width="22" height="22" viewBox="0 0 22 22">
+      <path d="M5.4 6.8 9.7 11 5.4 15.2" fill="none" stroke="#fff" stroke-width="2.15" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M12.1 14.6h5.1" fill="none" stroke="#fff" stroke-width="2.15" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+  </g>
+  <g transform="translate(242 90)">
+    <rect x="-9" y="-5" width="40" height="30" rx="7" class="slot"/>
+    <svg x="0" y="0" width="22" height="22" viewBox="0 0 22 22">
+      <rect x="3.7" y="5" width="14.6" height="12" rx="2.2" fill="none" stroke="#fff" stroke-width="1.65"/>
+      <path d="M6.3 8.5 8.9 11 6.3 13.5" fill="none" stroke="#fff" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M10.8 13.4h4.2" fill="none" stroke="#fff" stroke-width="1.75" stroke-linecap="round"/>
+    </svg>
+  </g>
+  <g transform="translate(402 90)">
+    <rect x="-9" y="-5" width="40" height="30" rx="7" class="slot"/>
+    <svg x="0" y="0" width="22" height="22" viewBox="0 0 22 22">
+      <path d="M4.4 6.2h13.2M4.4 11h7.2M4.4 15.8h4.2" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round"/>
+      <path d="M13 11.2 15.5 13.4 13 15.6M16.6 15.7h1.8" fill="none" stroke="#fff" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+  </g>
+  <g transform="translate(562 90)">
+    <rect x="-9" y="-5" width="40" height="30" rx="7" class="slot"/>
+    <svg x="0" y="0" width="22" height="22" viewBox="0 0 22 22">
+      <path d="M7.9 6.3H6.2c-1.1 0-2 .8-2 1.8 0 .9.7 1.5 1.7 1.8l1.2.3c1 .3 1.7.9 1.7 1.9 0 1.1-.9 1.9-2.1 1.9H4.5" fill="none" stroke="#fff" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M11 6.3v7.7h3.6" fill="none" stroke="#fff" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M18.2 7.1c-.5-.6-1.2-.9-2-.9-1.7 0-3 1.7-3 3.9s1.3 3.9 3 3.9c.9 0 1.6-.4 2.1-1" fill="none" stroke="#fff" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+  </g>
+  <g transform="translate(722 90)">
+    <rect x="-9" y="-5" width="40" height="30" rx="7" class="slot"/>
+    <svg x="0" y="0" width="22" height="22" viewBox="0 0 22 22">
+      <rect x="4.2" y="5.2" width="12.8" height="9.4" rx="1.7" fill="none" stroke="#fff" stroke-width="1.6"/>
+      <path d="M7.2 8.3 9.2 10.2 7.2 12.1M10.8 12.1h3M8.1 17h6.8M10.8 14.7v2.2" fill="none" stroke="#fff" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+  </g>
+  <g transform="translate(46 150)">
+    <rect width="135" height="170" rx="16" class="card"/>
+    <text x="67.5" y="26" text-anchor="middle" class="label">方案 1</text>
+    <text x="67.5" y="46" text-anchor="middle" class="sub">平衡命令符</text>
+    <svg x="23.5" y="64" width="88" height="88" viewBox="0 0 22 22">
+      <path d="M5.4 6.8 9.7 11 5.4 15.2" fill="none" stroke="#111827" stroke-width="2.15" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M12.1 14.6h5.1" fill="none" stroke="#111827" stroke-width="2.15" stroke-linecap="round"/>
+    </svg>
+    <text x="67.5" y="158" text-anchor="middle" class="sub">最接近当前</text>
+  </g>
+  <g transform="translate(206 150)">
+    <rect width="135" height="170" rx="16" class="card"/>
+    <text x="67.5" y="26" text-anchor="middle" class="label">方案 2</text>
+    <text x="67.5" y="46" text-anchor="middle" class="sub">终端窗口</text>
+    <svg x="23.5" y="64" width="88" height="88" viewBox="0 0 22 22">
+      <rect x="3.7" y="5" width="14.6" height="12" rx="2.2" fill="none" stroke="#111827" stroke-width="1.65"/>
+      <path d="M6.3 8.5 8.9 11 6.3 13.5M10.8 13.4h4.2" fill="none" stroke="#111827" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <text x="67.5" y="158" text-anchor="middle" class="sub">更完整稳重</text>
+  </g>
+  <g transform="translate(366 150)">
+    <rect width="135" height="170" rx="16" class="card"/>
+    <text x="67.5" y="26" text-anchor="middle" class="label">方案 3</text>
+    <text x="67.5" y="46" text-anchor="middle" class="sub">日志控制台</text>
+    <svg x="23.5" y="64" width="88" height="88" viewBox="0 0 22 22">
+      <path d="M4.4 6.2h13.2M4.4 11h7.2M4.4 15.8h4.2" fill="none" stroke="#111827" stroke-width="1.7" stroke-linecap="round"/>
+      <path d="M13 11.2 15.5 13.4 13 15.6M16.6 15.7h1.8" fill="none" stroke="#111827" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <text x="67.5" y="158" text-anchor="middle" class="sub">业务识别强</text>
+  </g>
+  <g transform="translate(526 150)">
+    <rect width="135" height="170" rx="16" class="card"/>
+    <text x="67.5" y="26" text-anchor="middle" class="label">方案 4</text>
+    <text x="67.5" y="46" text-anchor="middle" class="sub">SLC 字标</text>
+    <svg x="23.5" y="64" width="88" height="88" viewBox="0 0 22 22">
+      <path d="M7.9 6.3H6.2c-1.1 0-2 .8-2 1.8 0 .9.7 1.5 1.7 1.8l1.2.3c1 .3 1.7.9 1.7 1.9 0 1.1-.9 1.9-2.1 1.9H4.5" fill="none" stroke="#111827" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M11 6.3v7.7h3.6" fill="none" stroke="#111827" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M18.2 7.1c-.5-.6-1.2-.9-2-.9-1.7 0-3 1.7-3 3.9s1.3 3.9 3 3.9c.9 0 1.6-.4 2.1-1" fill="none" stroke="#111827" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <text x="67.5" y="158" text-anchor="middle" class="sub">品牌感更强</text>
+  </g>
+  <g transform="translate(686 150)">
+    <rect width="135" height="170" rx="16" class="card"/>
+    <text x="67.5" y="26" text-anchor="middle" class="label">方案 5</text>
+    <text x="67.5" y="46" text-anchor="middle" class="sub">屏幕堆栈</text>
+    <svg x="23.5" y="64" width="88" height="88" viewBox="0 0 22 22">
+      <rect x="4.2" y="5.2" width="12.8" height="9.4" rx="1.7" fill="none" stroke="#111827" stroke-width="1.6"/>
+      <path d="M7.2 8.3 9.2 10.2 7.2 12.1M10.8 12.1h3M8.1 17h6.8M10.8 14.7v2.2" fill="none" stroke="#111827" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <text x="67.5" y="158" text-anchor="middle" class="sub">接近终端应用</text>
+  </g>
+</svg>
