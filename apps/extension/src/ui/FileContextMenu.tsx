@@ -11,6 +11,7 @@ interface FileContextMenuProps {
   menu: FileContextMenuState | null;
   menuRef: RefObject<HTMLDivElement | null>;
   onClose: () => void;
+  onOpen: (entry: LogFileEntry) => void;
   onPreview: (entry: LogFileEntry) => void;
   onDownload: (path: string) => void;
   onRename: (entry: LogFileEntry) => void;
@@ -33,6 +34,7 @@ export function FileContextMenu(props: FileContextMenuProps) {
     menu,
     menuRef,
     onClose,
+    onOpen,
     onPreview,
     onDownload,
     onRename,
@@ -50,6 +52,8 @@ export function FileContextMenu(props: FileContextMenuProps) {
     return null;
   }
 
+  const isFile = menu.entry.kind === "file";
+
   return (
     <div className="context-menu-backdrop">
       <div
@@ -62,21 +66,35 @@ export function FileContextMenu(props: FileContextMenuProps) {
           event.stopPropagation();
         }}
       >
-        {menu.entry.kind === "file" ? (
-          <>
-            <div role="button" className="context-menu-item" onClick={() => { onClose(); onPreview(menu.entry); }}>
-              编辑
-            </div>
-            <div role="button" className="context-menu-item" onClick={() => { onClose(); onDownload(menu.entry.path); }}>
-              下载
-            </div>
-          </>
-        ) : null}
-        <div role="button" className="context-menu-item" onClick={() => { onClose(); onRename(menu.entry); }}>
-          重命名
+        {/* 组①：打开 / 预览 · 下载 */}
+        <div role="button" className="context-menu-item" onClick={() => { onClose(); onOpen(menu.entry); }}>
+          {isFile ? "打开 / 预览" : "打开"}
         </div>
+        {isFile ? (
+          <div role="button" className="context-menu-item" onClick={() => { onClose(); onDownload(menu.entry.path); }}>
+            下载
+            <span className="context-menu-key">⌘D</span>
+          </div>
+        ) : null}
+        <div className="context-menu-separator" role="separator" />
+        {/* 组②：编辑 · 移动 · 重命名 · 复制 · 压缩 */}
+        {isFile ? (
+          <div role="button" className="context-menu-item" onClick={() => { onClose(); onPreview(menu.entry); }}>
+            编辑
+          </div>
+        ) : null}
         <div role="button" className="context-menu-item" onClick={() => { onClose(); onMove(menu.entry); }}>
           移动到
+        </div>
+        <div role="button" className="context-menu-item" onClick={() => { onClose(); onRename(menu.entry); }}>
+          重命名
+          <span className="context-menu-key">F2</span>
+        </div>
+        <div role="button" className="context-menu-item" onClick={() => { onClose(); onCopyPath(menu.entry); }}>
+          复制远程路径
+        </div>
+        <div role="button" className="context-menu-item" onClick={() => { onClose(); onCopyName(menu.entry); }}>
+          复制文件名
         </div>
         {isArchiveFile(menu.entry) ? (
           <>
@@ -88,22 +106,19 @@ export function FileContextMenu(props: FileContextMenuProps) {
             </div>
           </>
         ) : null}
-        <div role="button" className="context-menu-item" onClick={() => { onClose(); onCompress(menu.entry); }}>
-          压缩
+        <div role="button" className="context-menu-item" title="打包为 zip 归档" onClick={() => { onClose(); onCompress(menu.entry); }}>
+          压缩为 zip
         </div>
-        {menu.entry.kind === "directory" ? (
+        {!isFile ? (
           <div role="button" className="context-menu-item" onClick={() => { onClose(); onMkdir(menu.entry.path); }}>
             新建子目录
           </div>
         ) : null}
+        <div className="context-menu-separator" role="separator" />
+        {/* 组③：删除 */}
         <div role="button" className="context-menu-item context-menu-danger" onClick={() => { onClose(); onDelete(menu.entry); }}>
           删除
-        </div>
-        <div role="button" className="context-menu-item" onClick={() => { onClose(); onCopyPath(menu.entry); }}>
-          复制路径
-        </div>
-        <div role="button" className="context-menu-item" onClick={() => { onClose(); onCopyName(menu.entry); }}>
-          复制文件名
+          <span className="context-menu-key">⌫</span>
         </div>
       </div>
     </div>

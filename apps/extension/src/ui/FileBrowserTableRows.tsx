@@ -1,5 +1,11 @@
 import type { LogFileEntry } from "@server-log-console/shared";
+import type { DownloadProgressState, UploadProgressState } from "./FeedbackOverlays.js";
 import { ToolIcon } from "./ToolIcon.js";
+
+type RowTransferProgress = {
+  percent: number;
+  label: string;
+};
 
 type Props = {
   entries: LogFileEntry[];
@@ -11,14 +17,39 @@ type Props = {
   emptyClassName?: string;
   formatBytes: (size: number) => string;
   formatDateTime: (value: LogFileEntry["modifiedTime"]) => string;
+  uploadProgress?: UploadProgressState | null;
+  downloadProgress?: DownloadProgressState | null;
   onOpenEntry: (entry: LogFileEntry) => void;
   onOpenContextMenu: (entry: LogFileEntry, clientX: number, clientY: number) => void;
   onToggleSelection: (path: string, checked: boolean) => void;
   onDownload: (path: string) => void;
-  onEdit: (entry: LogFileEntry) => void;
+  onMove: (entry: LogFileEntry) => void;
   onRename: (entry: LogFileEntry) => void;
-  onDelete: (path: string) => void;
 };
+
+function formatTransferMeta(percent: number, speed: number, formatBytes: (size: number) => string): string {
+  return speed > 0 ? `${percent}% · ${formatBytes(speed)}/s` : `${percent}%`;
+}
+
+function resolveRowTransferProgress(
+  entry: LogFileEntry,
+  uploadProgress: UploadProgressState | null | undefined,
+  downloadProgress: DownloadProgressState | null | undefined,
+  formatBytes: (size: number) => string,
+): RowTransferProgress | null {
+  if (entry.kind !== "file") {
+    return null;
+  }
+  if (uploadProgress && uploadProgress.fileName === entry.name) {
+    const percent = Math.min(100, Math.max(0, uploadProgress.current));
+    return { percent, label: formatTransferMeta(percent, uploadProgress.speed, formatBytes) };
+  }
+  if (downloadProgress && downloadProgress.fileName === entry.name) {
+    const percent = Math.min(100, Math.max(0, downloadProgress.percent));
+    return { percent, label: formatTransferMeta(percent, downloadProgress.speed, formatBytes) };
+  }
+  return null;
+}
 
 export function FileBrowserTableRows(props: Props) {
   if (!props.entries.length) {
@@ -35,6 +66,10 @@ export function FileBrowserTableRows(props: Props) {
             props.onToggleSelection(entry.path, checked);
           }
         };
+        const rowTransfer = props.uiTheme === "modern"
+          ? resolveRowTransferProgress(entry, props.uploadProgress, props.downloadProgress, props.formatBytes)
+          : null;
+        const openLabel = entry.kind === "directory" ? "打开" : "预览";
         return (
         <div
           key={entry.path}
@@ -108,26 +143,78 @@ export function FileBrowserTableRows(props: Props) {
             <span className={`entry-icon ${entry.kind === "directory" ? "entry-icon-dir" : "entry-icon-file"}`} aria-hidden="true" />
             <strong>{entry.name}</strong>
             <span className="file-row-actions" onClick={(event) => event.stopPropagation()} onMouseDown={(event) => event.stopPropagation()}>
+              <button
+                type="button"
+                className="file-action-icon"
+                title={openLabel}
+                aria-label={`${openLabel} ${entry.name}`}
+                onClick={(event) => { event.stopPropagation(); props.onOpenEntry(entry); }}
+              >
+                <ToolIcon theme={props.uiTheme} kind={entry.kind === "directory" ? "open" : "search"} />
+              </button>
               {entry.kind === "file" ? (
-                <button type="button" className="file-action-icon" title="下载" aria-label={`下载 ${entry.name}`} onClick={(event) => { event.stopPropagation(); props.onDownload(entry.path); }}>
+                <button
+                  type="button"
+                  className="file-action-icon"
+                  title="下载"
+                  aria-label={`下载 ${entry.name}`}
+                  onClick={(event) => { event.stopPropagation(); props.onDownload(entry.path); }}
+                >
                   <ToolIcon theme={props.uiTheme} kind="download" />
                 </button>
               ) : null}
-              {entry.kind === "file" ? (
-                <button type="button" className="file-action-icon" title="编辑" aria-label={`编辑 ${entry.name}`} onClick={(event) => { event.stopPropagation(); props.onEdit(entry); }}>
-                  <ToolIcon theme={props.uiTheme} kind="edit" />
-                </button>
-              ) : null}
-              <button type="button" className="file-action-icon" title="重命名" aria-label={`重命名 ${entry.name}`} onClick={(event) => { event.stopPropagation(); props.onRename(entry); }}>
-                <ToolIcon theme={props.uiTheme} kind="rename" />
+              <button
+                type="button"
+                className="file-action-icon"
+                title="重命名"
+                aria-label={`重命名 ${entry.name}`}
+                onClick={(event) => { event.stopPropagation(); props.onRename(entry); }}
+              >
+                <ToolIcon theme={props.uiTheme} kind="edit" />
               </button>
-              {entry.kind === "file" ? (
-                <button type="button" className="file-action-icon file-action-danger" title="删除" aria-label={`删除 ${entry.name}`} onClick={(event) => { event.stopPropagation(); props.onDelete(entry.path); }}>
-                  <ToolIcon theme={props.uiTheme} kind="delete" />
-                </button>
-              ) : null}
+              <button
+                type="button"
+                className="file-action-icon"
+                title="移动"
+                aria-label={`移动 ${entry.name}`}
+                onClick={(event) => { event.stopPropagation(); props.onMove(entry); }}
+              >
+                <ToolIcon theme={props.uiTheme} kind="folder-move" />
+              </button>
+              <button
+                type="button"
+                className="file-action-icon"
+                title="更多操作"
+                aria-label={`更多操作 ${entry.name}`}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  const rect = event.currentTarget.getBoundingClientRect();
+                  props.onOpenContextMenu(entry, rect.right + 4, rect.bottom + 4);
+                }}
+              >
+                <ToolIcon theme={props.uiTheme} kind="more" />
+              </button>
             </span>
           </span>
+          {props.uiTheme === "modern" ? (
+            <span className="file-transfer-cell">
+              {rowTransfer ? (
+                <>
+                  <span
+                    className="file-transfer-track"
+                    role="progressbar"
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={rowTransfer.percent}
+                    aria-label={`${entry.name} 传输进度`}
+                  >
+                    <span className="file-transfer-fill" style={{ transform: `scaleX(${rowTransfer.percent / 100})` }} />
+                  </span>
+                  <span className="file-transfer-meta">{rowTransfer.label}</span>
+                </>
+              ) : null}
+            </span>
+          ) : null}
           <span>{entry.kind === "file" && typeof entry.size === "number" ? props.formatBytes(entry.size) : "--"}</span>
           <span>{props.formatDateTime(entry.modifiedTime)}</span>
           <span>{entry.kind === "directory" ? "目录" : "文件"}</span>
