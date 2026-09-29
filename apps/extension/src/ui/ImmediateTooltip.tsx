@@ -22,12 +22,14 @@ export function ImmediateTooltip({ ownerDocument }: { ownerDocument?: Document }
     };
     const find = (n: EventTarget | null) => n instanceof Element ? n.closest("[title], [data-instant-tip]") as HTMLElement | null : null;
     const show = (el: HTMLElement) => {
-      const t = el.title.trim();
+      const t = (el.title || el.dataset.instantTip || "").trim();
       if (!t) return clear();
-      if (active !== el) putBack(active);
-      active = el;
-      el.dataset.instantTip = t;
-      el.removeAttribute("title");
+      if (active !== el) {
+        putBack(active);
+        active = el;
+        el.dataset.instantTip = t;
+        el.removeAttribute("title");
+      }
       const r = el.getBoundingClientRect();
       const b = r.top < 44;
       setTip({ t, x: r.left + r.width / 2, y: b ? r.bottom + 8 : r.top - 8, b });

@@ -20,7 +20,9 @@ export type SidebarPanelProps = {
   selectedServer: ServerSummary | null;
   directoryPath: string;
   activityPanelHeight: number;
+  activityPanelVisible: boolean;
   sidebarActivityLines: string[];
+  onDeleteServer: (server: ServerSummary) => void;
   onOpenSettingsWorkspace: (view?: SettingsWorkspaceView) => void;
   onCloseSettingsWorkspace: () => void;
   onActivityPanelResizeStart: (event: React.PointerEvent<HTMLDivElement>) => void;
@@ -45,7 +47,9 @@ export function SidebarPanel(props: SidebarPanelProps) {
     selectedServer,
     directoryPath,
     activityPanelHeight,
+    activityPanelVisible,
     sidebarActivityLines,
+    onDeleteServer,
     onOpenSettingsWorkspace,
     onCloseSettingsWorkspace,
     onActivityPanelResizeStart,
@@ -100,21 +104,45 @@ export function SidebarPanel(props: SidebarPanelProps) {
               <div className="server-list">
                 {groupServers
                   .map((server) => (
-                    <button
-                      key={server.id}
-                      type="button"
-                      className={`server-item ${server.id === serverId ? "server-item-active" : ""}`}
-                      onClick={() => {
-                        selectServerById(server.id);
-                      }}
-                    >
-                      <span className={`server-status-dot ${server.id === serverId ? (connectionTestStatus?.connected ? "dot-connected" : "dot-pending") : "dot-idle"}`} />
-                      <span className="server-item-main">
-                        <strong>{server.name}</strong>
-                        <span>{server.host}</span>
-                      </span>
-                      <span className="server-item-meta">{server.port}</span>
-                    </button>
+                    <div key={server.id} className={`server-item-wrap ${server.id === serverId ? "server-item-wrap-active" : ""}`}>
+                      <button
+                        type="button"
+                        className={`server-item ${server.id === serverId ? "server-item-active" : ""}`}
+                        onClick={() => {
+                          selectServerById(server.id);
+                        }}
+                      >
+                        <span className={`server-status-dot ${server.id === serverId ? (connectionTestStatus?.connected ? "dot-connected" : "dot-pending") : "dot-idle"}`} />
+                        <span className="server-item-main">
+                          <strong>{server.name}</strong>
+                          <span>{server.host}</span>
+                        </span>
+                        <span className="server-item-meta">{server.port}</span>
+                      </button>
+                      <div className="server-item-quick-actions" aria-label={`${server.name} 管理操作`}>
+                        <button
+                          type="button"
+                          className="server-item-mini-action"
+                          title="管理连接"
+                          onClick={() => {
+                            selectServerById(server.id);
+                            onOpenSettingsWorkspace("connections");
+                          }}
+                        >
+                          管理
+                        </button>
+                        {server.source ? (
+                          <button
+                            type="button"
+                            className="server-item-mini-action server-item-mini-danger"
+                            title="删除连接"
+                            onClick={() => onDeleteServer(server)}
+                          >
+                            删除
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
                   ))}
               </div>
             </section>
@@ -135,29 +163,31 @@ export function SidebarPanel(props: SidebarPanelProps) {
         <div className="status-row status-row-path"><span>路径</span><strong>{directoryPath || "/"}</strong></div>
       </div>
 
+      {activityPanelVisible ? (
       <section className="activity-panel pane-section compact-activity-panel" style={{ height: activityPanelHeight }}>
-        <div
-          className="activity-panel-resizer"
-          onPointerDown={onActivityPanelResizeStart}
-          role="separator"
-          aria-orientation="horizontal"
-          aria-label="调整操作记录高度"
-        />
-        <div className="browser-column-head pane-title-row">
-          <strong className="pane-title">操作记录</strong>
-          <span>{sidebarActivityLines.length} 条</span>
-        </div>
-        <div className="activity-log-list compact-activity-log-list">
-          {sidebarActivityLines.map((line, index) => {
-            const text = line.replace(/^\[[^\]]+\]\s*/, "");
-            return (
-              <div key={index} className="activity-log-line">
-                <span className="activity-log-msg">{text}</span>
-              </div>
-            );
-          })}
-        </div>
-      </section>
+          <div
+            className="activity-panel-resizer"
+            onPointerDown={onActivityPanelResizeStart}
+            role="separator"
+            aria-orientation="horizontal"
+            aria-label="调整操作记录高度"
+          />
+          <div className="browser-column-head pane-title-row">
+            <strong className="pane-title">操作记录</strong>
+            <span>{sidebarActivityLines.length} 条</span>
+          </div>
+          <div className="activity-log-list compact-activity-log-list">
+            {sidebarActivityLines.map((line, index) => {
+              const text = line.replace(/^\[[^\]]+\]\s*/, "");
+              return (
+                <div key={index} className="activity-log-line">
+                  <span className="activity-log-msg">{text}</span>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
     </aside>
   );
 }

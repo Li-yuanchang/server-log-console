@@ -13,6 +13,7 @@ export type ServerManagementAPI = {
   closeWorkspaceSession: (sessionId: string) => void;
   startCreateManualServer: () => void;
   startEditManualServer: (server: ServerSummary) => void;
+  editManualServerDraft: (server: ServerSummary) => void;
   saveManualServer: () => Promise<void>;
   deleteServerRecord: (targetServer: ServerSummary) => Promise<void>;
   requestDeleteServer: (targetServer: ServerSummary) => void;
@@ -75,7 +76,7 @@ export function useServerManagement(deps: {
       await checkLocalServiceHealth({ silentFailure: true, background: true });
       setServers(data);
       setActionStatus(data.length ? `已载入 ${data.length} 台服务器，请在左侧选择一台。` : "当前还没有服务器，请导入 FinalShell 或手动新增。");
-      pushActivity(data.length ? `已读取本地连接清单，共 ${data.length} 台。` : "当前没有服务器，请先导入 FinalShell 或手动新增连接。");
+      pushActivity(data.length ? `已读取本地连接列表，共 ${data.length} 台。` : "当前没有服务器，请先导入 FinalShell 或手动新增连接。");
       return data;
     } catch (error) {
       const detail = error instanceof Error ? error.message : "未知错误";
@@ -152,14 +153,18 @@ export function useServerManagement(deps: {
 
   const startCreateManualServer = useCallback(() => {
     setManualServerDraft(createManualServerDraft());
-    openSettingsWorkspace("inventory");
+    openSettingsWorkspace("connections");
   }, [setManualServerDraft, openSettingsWorkspace]);
 
   const startEditManualServer = useCallback((server: ServerSummary) => {
     setManualServerDraft(createManualServerDraft(server));
     selectServerById(server.id);
-    openSettingsWorkspace("inventory");
+    openSettingsWorkspace("connections");
   }, [setManualServerDraft, selectServerById, openSettingsWorkspace]);
+
+  const editManualServerDraft = useCallback((server: ServerSummary) => {
+    setManualServerDraft(createManualServerDraft(server));
+  }, [setManualServerDraft]);
 
   const saveManualServer = useCallback(async () => {
     const name = manualServerDraft.name.trim();
@@ -169,13 +174,13 @@ export function useServerManagement(deps: {
 
     if (!name || !host) {
       setActionStatus("请先填写服务器名称和主机地址。");
-      openSettingsWorkspace("inventory");
+      openSettingsWorkspace("connections");
       return;
     }
 
     if (!Number.isInteger(port) || port <= 0 || port > 65535) {
       setActionStatus("端口必须是 1-65535 之间的整数。");
-      openSettingsWorkspace("inventory");
+      openSettingsWorkspace("connections");
       return;
     }
 
@@ -202,7 +207,7 @@ export function useServerManagement(deps: {
       const savedServer = refreshedServers.find((server) => server.id === payload.server.id) || payload.server;
       selectServerById(savedServer.id);
       setManualServerDraft(createManualServerDraft(savedServer));
-      setSettingsWorkspaceView(savedServer.connectionKind === "bastion-target" ? "server" : "inventory");
+      setSettingsWorkspaceView("connections");
       setActionStatus(`已保存连接：${savedServer.name}`);
       pushActivity(`已保存手动服务器：${savedServer.name}（${savedServer.host}:${savedServer.port}）`);
       showToast("success", `已保存 ${savedServer.name}`);
@@ -218,7 +223,7 @@ export function useServerManagement(deps: {
         selectServerById(fallbackServerId);
       }
       setManualServerDraft((current) => current.id === targetServer.id ? createManualServerDraft() : current);
-      setSettingsWorkspaceView(refreshedServers.length ? "inventory" : "overview");
+      setSettingsWorkspaceView("connections");
       setActionStatus(`已删除服务器：${targetServer.name}`);
       pushActivity(`已删除服务器：${targetServer.name}（${targetServer.host}:${targetServer.port}）`);
       showToast("success", `已删除 ${targetServer.name}`);
@@ -243,6 +248,7 @@ export function useServerManagement(deps: {
     closeWorkspaceSession,
     startCreateManualServer,
     startEditManualServer,
+    editManualServerDraft,
     saveManualServer,
     deleteServerRecord,
     requestDeleteServer,

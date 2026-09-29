@@ -116,7 +116,7 @@
 
 .sidebar-head-row {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 8px;
 }
@@ -503,6 +503,12 @@ button:disabled {
   gap: 2px;
 }
 
+.server-item-wrap {
+  position: relative;
+  display: block;
+  min-width: 0;
+}
+
 .server-item,
 .file-entry {
   width: 100%;
@@ -522,6 +528,44 @@ button:disabled {
   min-height: 34px;
   padding-left: 14px;
   position: relative;
+}
+
+.server-item-quick-actions {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(4px, -50%);
+  transition: opacity 120ms ease;
+}
+
+.server-item-wrap:hover .server-item-quick-actions,
+.server-item-wrap:focus-within .server-item-quick-actions,
+.server-item-wrap-active .server-item-quick-actions {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translate(0, -50%);
+}
+
+.server-item-mini-action {
+  min-height: 24px;
+  padding: 0 6px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--panel-strong);
+  color: var(--ink-soft);
+  font-size: 10px;
+  line-height: 1;
+  box-shadow: none;
+}
+
+.server-item-mini-danger {
+  color: #b91c1c;
 }
 
 .server-item-main,

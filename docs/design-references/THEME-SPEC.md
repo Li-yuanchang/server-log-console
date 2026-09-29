@@ -74,8 +74,32 @@ const [uiTheme, setUiTheme] = useState<"classic" | "modern">("classic");
 | `--shell` | `#0a0a0a` | 终端背景 | Near Black |
 | `--shell-soft` | `#1a1a1a` | 终端次级 | — |
 | `--shell-ink` | `#ededed` | 终端文字 | — |
+| `--log-viewer-background` | `linear-gradient(180deg, var(--shell), var(--shell-soft))` | 日志预览与搜索结果背景 | 默认跟随终端深色底 |
+| `--terminal-background` | `var(--shell)` | xterm 与终端面板背景 | 可与日志背景分开 |
+| `--terminal-background-soft` | `var(--shell-soft)` | 终端标题栏渐变次级背景 | — |
 | `--sidebar-bg` | `#ffffff` | 侧边栏背景 | — |
 | `--sidebar-line` | `#eaeaea` | 侧边栏分割线 | — |
+
+### 自定义主题 (`.theme-modern.ui-surface-custom`)
+
+自定义主题仍基于现代主题变量体系，不新增独立主题文件。设置中心写入 `localStorage` 后，由 `App.tsx` 注入根节点 CSS 变量，`theme-modern.css` 负责把变量映射到框架、弹窗和卡片。
+
+| 变量 | 来源设置 | 用途 |
+|------|----------|------|
+| `--app-font-family` | 字体类型 | 覆盖 `.theme-modern` 的 UI 字体族 |
+| `--custom-background-color` | 纯色背景 | 纯色模式背景基色 |
+| `--custom-gradient-start` | 渐变起点 | 渐变模式起点，也作为图片模式兜底 |
+| `--custom-gradient-end` | 渐变终点 | 渐变模式终点，也作为图片模式兜底 |
+| `--custom-background-image` | 图片地址/图片选择器 | 图片模式背景，支持本地选择、`file://`、`https://`、`data:image` |
+| `--custom-text-color` | 字体颜色 | 映射到 `--ink`，并派生 `--ink-soft`、`--ink-muted` |
+| `--custom-log-background-color` | 日志/搜索背景 | 映射到 `--log-viewer-background`，控制日志预览与搜索结果阅读区 |
+| `--custom-terminal-background-color` | 终端背景 | 映射到 `--terminal-background`，同步给 xterm 主题 |
+
+背景模式 class：
+
+- `ui-custom-background-solid`：纯色背景，带轻量径向高光。
+- `ui-custom-background-gradient`：双端渐变背景，面板保持半透明。
+- `ui-custom-background-image`：图片背景，叠加浅色蒙层和磨砂面板，避免文字直接压在图片上。
 
 ---
 
@@ -89,7 +113,7 @@ font-family: "SF Pro SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", 
 ### 现代主题
 ```css
 /* UI 文字 */
-font-family: "Geist", "Inter", -apple-system, "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+font-family: var(--app-font-family, "Geist", "Inter", -apple-system, "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif);
 letter-spacing: -0.01em;
 
 /* 代码/终端 */
@@ -123,6 +147,7 @@ font-family: "Geist Mono", "SFMono-Regular", "Consolas", monospace;
 | 阴影 | `0 8px 32px rgba(0,0,0,0.2)` / 现代 `0 12px 40px rgba(0,0,0,0.22)` |
 | 遮罩行为 | `pointer-events: none`（不可点击关闭） |
 | 最大化 | 100vw × 100vh, border-radius: 0 |
+| macOS 最大化避让 | Electron `.electron-macos-immersive` 下，最大化弹框统一使用 `.dialog-shell-maximized .dialog-titlebar`，标题栏左侧预留 `--dialog-traffic-light-safearea: 88px`，避免红绿灯遮挡标题 |
 | 拖拽调整 | 右下角 resize handle, min 400×300 |
 
 ### 4.3 输入框

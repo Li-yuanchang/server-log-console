@@ -52,7 +52,7 @@
   height: 100%;
   padding: 0;
   border-radius: 8px;
-  background: linear-gradient(180deg, var(--shell), var(--shell-soft));
+  background: linear-gradient(180deg, var(--terminal-background, var(--shell)), var(--terminal-background-soft, var(--shell-soft)));
   border: 1px solid #15202b;
   overflow: hidden;
 }
@@ -633,41 +633,68 @@
   align-items: center;
   justify-content: flex-end;
   gap: 2px;
-  padding: 0 0 0 6px;
+  padding: 0 2px 0 8px;
   background: transparent;
-  border-radius: 3px;
+  border-radius: 6px;
   flex: 0 0 auto;
   pointer-events: none;
 }
 
-.file-row:hover .file-row-actions {
-  background: linear-gradient(90deg, transparent 0%, #f0f5fa 16%, #f0f5fa 100%);
+.file-row:hover .file-row-actions,
+.file-row-active .file-row-actions,
+.file-row:focus-within .file-row-actions {
+  background: linear-gradient(90deg, transparent 0%, rgba(240, 245, 250, 0.74) 18%, rgba(240, 245, 250, 0.92) 100%);
   pointer-events: auto;
 }
 
 .file-action-icon {
+  appearance: none;
+  -webkit-appearance: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 26px;
   height: 26px;
+  min-width: 26px;
+  margin: 0;
+  padding: 0;
   border-radius: 4px;
   cursor: pointer;
   color: #5a7a9a;
+  font: inherit;
+  line-height: 1;
   background: none !important;
   background-image: none !important;
   border: none !important;
   opacity: 0;
-  transition: opacity 0.12s, background 0.12s;
+  visibility: visible;
+  box-shadow: none !important;
+  transition: opacity 0.12s, background 0.12s, color 0.12s;
 }
 
-.file-row:hover .file-action-icon {
+.file-action-icon svg {
+  display: block;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  color: inherit;
+  stroke: currentColor;
+  fill: none;
+  opacity: 1;
+  visibility: visible;
+  pointer-events: none;
+}
+
+.file-row:hover .file-action-icon,
+.file-row-active .file-action-icon,
+.file-row:focus-within .file-action-icon {
   opacity: 1;
 }
 
 .file-action-icon:hover {
   background: rgba(0, 0, 0, 0.06) !important;
   color: #3b5068;
+  filter: none;
 }
 
 .file-action-danger:hover {

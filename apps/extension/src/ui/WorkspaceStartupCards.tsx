@@ -32,7 +32,7 @@ export function WorkspaceStartupCards(props: WorkspaceStartupCardsProps) {
           <button className="ghost-button" type="button" onClick={() => void onCheckService()}>
             检查服务
           </button>
-          <button className="ghost-button" type="button" onClick={() => onOpenSettings("overview")}>
+          <button className="ghost-button" type="button" onClick={() => onOpenSettings("connections")}>
             导入连接
           </button>
         </div>
@@ -48,7 +48,7 @@ export function WorkspaceStartupCards(props: WorkspaceStartupCardsProps) {
           <span>导入 FinalShell 连接后，左侧会自动出现服务器列表。</span>
         </div>
         <div className="toolbar-inline">
-          <button className="ghost-button" type="button" onClick={() => onOpenSettings("overview")}>
+          <button className="ghost-button" type="button" onClick={() => onOpenSettings("connections")}>
             导入连接
           </button>
           <button className="ghost-button" type="button" onClick={onImportFinalShell}>

@@ -473,6 +473,27 @@ section.terminal-bottom-panel
 - 这不是单个组件的偶发 bug，而是当前主题体系的高频风险点
 - 以后新增弹层、终端侧栏、弹窗工具按钮时，默认按“局部 class + `.theme-modern` 同级覆写 + SVG 显式继承颜色”三件套处理
 
+### 5.1.2 文件行悬浮按钮的专项规则
+
+文件目录行的悬浮动作按钮使用 `.file-row-actions > .file-action-icon`，它不是 `.ghost-button.icon-button`，所以不能依赖通用 `.theme-modern .icon-button svg` 兜底。
+
+已复现问题：
+
+- 文件行 hover / active 后，按钮方块、边框和点击区域都在
+- 下载、编辑、重命名、删除图标不可见，看起来像空按钮
+
+处理口径：
+
+1. 底层文件浏览样式必须在 `.file-action-icon svg` 显式写：
+   - `display: block`
+   - `width/height`
+   - `stroke: currentColor`
+   - `fill: none`
+   - `opacity: 1`
+   - `visibility: visible`
+2. 现代主题必须再补 `.theme-modern .file-action-icon svg`，避免被 `.theme-modern button`、`.theme-modern .icon-button svg` 或其他区域按钮规则间接覆盖。
+3. 以后如果看到文件行动作按钮“框在图标没了”，优先查 `styles-file-reader.css` 和 `theme-modern.css` 的这两组规则，不要只改组件 JSX。
+
 ## 5.2 面板底色
 
 典型链路：

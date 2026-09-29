@@ -1,7 +1,8 @@
 import type { LogFileEntry } from "@server-log-console/shared";
 import { TextInputDialog, ConfirmDialog, type ConfirmDialogState } from "./ModalDialogs.js";
 import { FilePreviewDialog, type PreviewDialogState } from "./FilePreviewDialog.js";
-import { TransferHistoryDialog } from "./TransferHistoryDialog.js";
+import { TransferHistoryDrawer } from "./TransferHistoryDrawer.js";
+import type { DownloadProgressState, UploadProgressState } from "./FeedbackOverlays.js";
 import type { TransferHistoryEntry } from "./storage.js";
 
 export type DialogOverlaysProps = {
@@ -16,6 +17,8 @@ export type DialogOverlaysProps = {
   confirmDialog: ConfirmDialogState | null;
   showTransferHistory: boolean;
   transferHistoryEntries: TransferHistoryEntry[];
+  uploadProgress: UploadProgressState | null;
+  downloadProgress: DownloadProgressState | null;
   isElectron: boolean;
   formatBytes: (bytes: number) => string;
   formatDateTime: (value?: string) => string;
@@ -64,6 +67,8 @@ export function DialogOverlays(props: DialogOverlaysProps) {
     previewDialog,
     confirmDialog,
     showTransferHistory,
+    uploadProgress,
+    downloadProgress,
     transferHistoryEntries,
     isElectron,
     formatBytes,
@@ -196,15 +201,16 @@ export function DialogOverlays(props: DialogOverlaysProps) {
         onClose={onPreviewDialogClose}
       />
 
-      <TransferHistoryDialog
+      <TransferHistoryDrawer
         open={showTransferHistory}
         entries={transferHistoryEntries}
+        uploadProgress={uploadProgress}
+        downloadProgress={downloadProgress}
         isElectron={isElectron}
         formatBytes={formatBytes}
         formatDateTime={formatDateTime}
         onBrowsePath={onTransferHistoryBrowsePath}
         onCopyRemotePath={onTransferHistoryCopyRemotePath}
-        onCopyLocalPath={onTransferHistoryCopyLocalPath}
         onRevealLocalPath={onTransferHistoryRevealLocalPath}
         onClear={onTransferHistoryClear}
         onClose={onTransferHistoryClose}

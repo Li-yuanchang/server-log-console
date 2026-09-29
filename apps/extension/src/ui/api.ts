@@ -16,6 +16,7 @@ import type {
   BatchCommandRequest,
   BatchCommandResponse,
   ServerConnectionTestResponse,
+  ServerCredentialSecret,
   ServerCredentialStatus,
   ServerRouteConfig,
   ServerSystemProfileResponse,
@@ -230,6 +231,11 @@ export async function apiGetCredentialStatus(serverId: string): Promise<ServerCr
   return readPayload<ServerCredentialStatus>(response, "读取凭证状态失败");
 }
 
+export async function apiGetCredentialSecret(serverId: string): Promise<ServerCredentialSecret> {
+  const response = await fetch(`${localServiceBase}/api/servers/${encodeURIComponent(serverId)}/credential/secret`, { cache: "no-store" });
+  return readPayload<ServerCredentialSecret>(response, "读取已保存凭证失败");
+}
+
 export async function apiSaveCredential(
   serverId: string,
   creds: { username?: string; password?: string; privateKey?: string }
@@ -240,6 +246,13 @@ export async function apiSaveCredential(
     body: JSON.stringify(creds)
   });
   return readPayload<ServerCredentialStatus>(response, "保存凭证失败");
+}
+
+export async function apiClearCredential(serverId: string): Promise<ServerCredentialStatus> {
+  const response = await fetch(`${localServiceBase}/api/servers/${encodeURIComponent(serverId)}/credential`, {
+    method: "DELETE"
+  });
+  return readPayload<ServerCredentialStatus>(response, "清除凭证失败");
 }
 
 export async function apiGetServerRoute(serverId: string): Promise<ServerRouteConfig> {

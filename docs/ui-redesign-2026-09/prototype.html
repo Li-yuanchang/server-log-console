@@ -1,0 +1,1266 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>Server Log Console — UI 重设计 · 高保真原型</title>
+<style>
+:root {
+  --panel:#ffffff; --panel-muted:#f5f5f5; --bg:#fafafa;
+  --ink:#171717; --ink-soft:#666666; --ink-muted:#8f8f8f;
+  --line:#eaeaea; --line-strong:#d4d4d4;
+  --accent:#0070f3; --accent-h:#0060df; --accent-soft:rgba(0,112,243,.08);
+  --green:#0a7b3e; --green-dot:#22c55e; --red:#d41313; --red-soft:rgba(212,19,19,.07);
+  --amber:#b45309; --amber-soft:rgba(180,83,9,.09);
+  --shell:#0a0a0a; --shell-ink:#d7dde5; --shell-mut:#5c6b7a;
+  --r-s:6px; --r-m:8px; --r-l:10px;
+  --mono:"Geist Mono","SFMono-Regular","Menlo","Consolas",monospace;
+  --font:"Geist","Inter",-apple-system,"SF Pro Text","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  --shadow-pop:0 12px 40px rgba(0,0,0,.14),0 2px 8px rgba(0,0,0,.06);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%}
+body{font-family:var(--font);letter-spacing:-.01em;font-size:12.5px;color:var(--ink);background:var(--bg);display:flex;overflow:hidden}
+svg{display:block;flex:none}
+button{font:inherit;letter-spacing:inherit;color:inherit;background:none;border:none;cursor:pointer}
+input,select,textarea{font:inherit;letter-spacing:inherit}
+
+/* ---------- 屏索引 ---------- */
+#index{flex:0 0 178px;border-right:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;padding:10px 8px;gap:1px;overflow-y:auto}
+#index h1{font-size:12px;font-weight:700;padding:6px 8px 10px}
+#index button{display:flex;align-items:center;gap:8px;padding:6px 9px;font-size:12px;color:var(--ink-soft);text-align:left;border-radius:var(--r-s)}
+#index button:hover{background:var(--panel-muted);color:var(--ink)}
+#index button.on{background:var(--ink);color:#fff;font-weight:600}
+#index .sid{font-family:var(--mono);font-size:9.5px;opacity:.6;width:18px}
+#index .foot{margin-top:auto;padding:10px 8px;font-size:10px;color:var(--ink-muted);line-height:1.7;border-top:1px dashed var(--line)}
+#index .foot b{color:var(--ink-soft)}
+
+/* ---------- 舞台 ---------- */
+#stage{flex:1;display:flex;flex-direction:column;min-width:0}
+#desc{flex:none;display:flex;align-items:baseline;gap:12px;padding:10px 20px;border-bottom:1px solid var(--line);background:var(--panel)}
+#desc .n{font-weight:700;font-size:13.5px}
+#desc .d{font-size:11.5px;color:var(--ink-muted)}
+#viewport{flex:1;position:relative;overflow:hidden;background:var(--panel)}
+.screen{display:none;position:absolute;inset:0}
+.screen.on{display:flex}
+
+/* ---------- 设计系统 ---------- */
+.btn{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 11px;font-size:12px;border:1px solid var(--line);border-radius:var(--r-s);background:var(--panel);color:var(--ink);transition:background .12s,border-color .12s;white-space:nowrap}
+.btn:hover{background:var(--panel-muted)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:550}
+.btn.pri:hover{background:var(--accent-h)}
+.btn.danger{color:var(--red)}
+.btn.icon{width:28px;padding:0;justify-content:center}
+.btn.sm{height:24px;padding:0 8px;font-size:11px;border-radius:5px}
+.btn[disabled]{opacity:.45;cursor:default}
+.btn .spinner{width:11px;height:11px;border:1.5px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.input{height:28px;padding:0 10px;font-size:12.5px;border:1px solid var(--line);border-radius:var(--r-s);background:var(--panel);color:var(--ink);outline:none;transition:border-color .12s,box-shadow .12s}
+.input:focus{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
+.input::placeholder{color:var(--ink-muted)}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:var(--r-s);overflow:hidden;background:var(--panel)}
+.seg>button{display:inline-flex;align-items:center;justify-content:center;gap:5px;height:28px;padding:0 11px;font-size:12px;color:var(--ink-soft);border-right:1px solid var(--line);white-space:nowrap}
+.seg>button:last-child{border-right:none}
+.seg>button.on{background:var(--ink);color:#fff;font-weight:600}
+.seg.lite>button.on{background:var(--accent-soft);color:var(--accent);font-weight:600}
+.chip{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;color:var(--ink-muted);border:1px solid var(--line);border-radius:999px;padding:1px 8px}
+.chip.grn{color:var(--green);border-color:color-mix(in srgb,var(--green) 32%,transparent);background:color-mix(in srgb,var(--green) 6%,transparent)}
+.chip.red{color:var(--red);border-color:color-mix(in srgb,var(--red) 30%,transparent)}
+.chip.amb{color:var(--amber);border-color:color-mix(in srgb,var(--amber) 30%,transparent)}
+.pill{display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 11px;font-size:11.5px;border:1px solid var(--line);border-radius:999px;background:var(--panel);color:var(--ink);white-space:nowrap}
+.pill.on{border-color:var(--accent);color:var(--accent);background:var(--accent-soft);font-weight:550}
+.fchip{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 11px;font-size:11.5px;border:1px solid var(--line);border-radius:999px;color:var(--ink-soft);cursor:pointer;white-space:nowrap}
+.fchip:hover{border-color:var(--line-strong);color:var(--ink)}
+.fchip.on{border-color:var(--accent);color:var(--accent);background:var(--accent-soft);font-weight:550}
+.fchip .n{font-weight:650}
+.fchip.red .n{color:var(--red)}
+.dot{width:7px;height:7px;border-radius:50%;flex:none}
+.dot.on{background:var(--green-dot);box-shadow:0 0 0 3px rgba(34,197,94,.15)}
+.dot.off{background:#c8ccd2;box-shadow:0 0 0 3px rgba(0,0,0,.05)}
+.marq{overflow:hidden;white-space:nowrap;display:flex;min-width:0}
+.marq>span{display:inline-block;padding-right:28px;animation:marq 9s linear infinite}
+@keyframes marq{0%,10%{transform:translateX(0)}90%,100%{transform:translateX(-50%)}}
+.kbd{font-family:var(--mono);font-size:9.5px;color:var(--ink-soft);border:1px solid var(--line-strong);border-bottom-width:2px;border-radius:4px;padding:0 4px;line-height:14px}
+.mut{color:var(--ink-muted)}.soft{color:var(--ink-soft)}
+.mono{font-family:var(--mono)}
+.hr{height:1px;background:var(--line)}
+
+/* ---------- 应用框架 ---------- */
+.app{display:flex;height:100%;width:100%}
+.sidebar{flex:0 0 240px;border-right:1px solid var(--line);display:flex;flex-direction:column;background:var(--panel);min-height:0}
+.workspace{flex:1;display:flex;flex-direction:column;min-width:0;min-height:0}
+.wtabs{display:flex;align-items:center;gap:2px;padding:0 10px;border-bottom:1px solid var(--line);flex:none}
+.wtab{display:flex;align-items:center;gap:6px;height:34px;padding:0 13px;font-size:12px;color:var(--ink-soft);border-bottom:2px solid transparent}
+.wtab.on{color:var(--ink);font-weight:600;border-bottom-color:var(--ink)}
+.tbar{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--line);flex:none}
+.content{flex:1;min-height:0;position:relative;overflow:auto}
+
+/* 侧栏行 */
+.srow{display:flex;align-items:center;gap:8px;height:40px;padding:0 12px 0 14px;cursor:pointer}
+.srow:hover{background:color-mix(in srgb,var(--ink) 3.5%,transparent)}
+.srow.cur{background:var(--accent-soft);box-shadow:inset 2px 0 0 var(--accent)}
+.srow .meta{flex:1;min-width:0}
+.srow .nm{display:flex;align-items:center;gap:6px;font-weight:550;font-size:12.5px;white-space:nowrap;overflow:hidden}
+.srow .nm .x{color:var(--ink-muted);font-weight:500}
+.srow .host{font-family:var(--mono);font-size:10px;color:var(--ink-muted)}
+.srow .port{font-family:var(--mono);font-size:11px;color:var(--ink-soft)}
+.srow .qa{display:none;gap:2px}
+.srow.hov .qa{display:flex}
+.srow.hov .port{display:none}
+.grp{display:flex;align-items:center;gap:6px;padding:12px 14px 4px;font-size:10.5px;font-weight:600;color:var(--ink-muted)}
+.grp .c{color:var(--line-strong);font-weight:500}
+.qa .btn{border-color:transparent;background:transparent;color:var(--ink-muted)}
+.qa .btn:hover{border-color:var(--line);background:var(--panel);color:var(--ink)}
+.side-foot{border-top:1px solid var(--line);padding:7px 14px;display:flex;align-items:center;gap:8px;font-size:11px;color:var(--ink-soft);cursor:pointer}
+.side-foot:hover{background:var(--panel-muted)}
+.side-foot .sum{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.side-foot .mono{font-size:10px}
+
+/* 日志 */
+.ll{display:flex;padding:1px 14px;font-family:var(--mono);font-size:11px;line-height:1.65;color:var(--ink-soft);white-space:nowrap}
+.ll .t{color:var(--ink-muted);flex:0 0 148px}
+.ll.e .lv{color:var(--red);font-weight:650}
+.ll.w .lv{color:var(--amber);font-weight:600}
+.ll.hit{background:var(--accent-soft);box-shadow:inset 2px 0 0 var(--accent)}
+.ll.cur{background:color-mix(in srgb,var(--accent) 15%,transparent);box-shadow:inset 2px 0 0 var(--accent)}
+.ll mark{background:transparent;color:var(--accent);font-weight:650;text-decoration:underline;text-underline-offset:2px}
+.rtools{display:flex;align-items:center;gap:10px;padding:6px 12px;border-bottom:1px solid var(--line);font-size:11.5px;color:var(--ink-soft);flex:none;background:var(--panel)}
+.rtools .stat b{color:var(--ink);font-weight:650}
+.liveb{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:700;color:var(--red);border:1px solid color-mix(in srgb,var(--red) 32%,transparent);border-radius:999px;padding:1px 9px}
+.liveb i{width:6px;height:6px;border-radius:50%;background:var(--red);animation:pl 1.4s infinite}
+.liveb.retry{color:var(--amber);border-color:color-mix(in srgb,var(--amber) 35%,transparent)}
+.liveb.retry i{background:var(--amber);animation:spin 1s linear infinite}
+@keyframes pl{50%{opacity:.3}}
+
+/* 切片条 */
+.slicebar{display:flex;align-items:center;gap:12px;padding:8px 14px;border-bottom:1px solid var(--line);flex:none}
+.strack{flex:1;height:5px;border-radius:3px;background:var(--panel-muted);position:relative}
+.strack .fill{position:absolute;left:0;top:0;bottom:0;width:62%;background:color-mix(in srgb,var(--accent) 25%,transparent);border-radius:3px}
+.strack .thumb{position:absolute;top:-4px;left:62%;width:9px;height:13px;background:var(--accent);border-radius:3px;box-shadow:0 1px 4px rgba(0,112,243,.4)}
+
+/* 抽屉 */
+.drawer{position:absolute;top:0;right:0;bottom:0;width:420px;background:var(--panel);border-left:1px solid var(--line);display:flex;flex-direction:column;z-index:20;animation:din .18s ease}
+@keyframes din{from{transform:translateX(24px);opacity:0}}
+.dhead{display:flex;align-items:center;gap:8px;padding:11px 14px;border-bottom:1px solid var(--line);flex:none;min-width:0}
+.dhead .t{overflow:hidden;text-overflow:ellipsis}
+.dhead .seg{flex:none;max-width:60%}
+.dhead .seg>button{padding:0 9px}
+.dhead .t{font-weight:700;font-size:13px;flex:1}
+.dbody{flex:1;overflow-y:auto;min-height:0}
+.dfoot{display:flex;align-items:center;gap:8px;padding:9px 16px;border-top:1px solid var(--line);flex:none}
+
+/* 表格 */
+table.tbl{width:100%;border-collapse:collapse;font-size:12px}
+.tbl th{position:sticky;top:0;text-align:left;font-size:11px;font-weight:600;color:var(--ink-soft);padding:6px 12px;background:var(--panel-muted);border-bottom:1px solid var(--line);white-space:nowrap}
+.tbl td{padding:4px 12px;height:30px;border-bottom:1px solid var(--line);white-space:nowrap}
+.tbl tr.sel td{background:var(--accent-soft)}
+.tbl tr:hover td{background:color-mix(in srgb,var(--ink) 3%,transparent)}
+.tbl tr.sel:hover td{background:var(--accent-soft)}
+.batchbar{display:flex;align-items:center;gap:8px;padding:6px 12px;background:var(--accent-soft);border-bottom:1px solid color-mix(in srgb,var(--accent) 22%,transparent);font-size:12px}
+
+/* 终端 */
+.term{flex:1;background:var(--shell);color:var(--shell-ink);font-family:var(--mono);font-size:11px;line-height:1.8;padding:12px 16px;overflow:hidden;min-width:0}
+.term .p{color:#7ec8e3}.term .ok{color:#98c379}.term .dim{color:var(--shell-mut)}
+.cursor{display:inline-block;width:7px;height:14px;background:#ededed;vertical-align:-2px;animation:pl 1s steps(1) infinite}
+
+/* 菜单 */
+.menu{background:var(--panel);border:1px solid var(--line);border-radius:var(--r-m);box-shadow:var(--shadow-pop);padding:5px;min-width:180px;font-size:12.5px}
+.menu .mi{display:flex;align-items:center;gap:9px;padding:6px 10px;border-radius:5px}
+.menu .mi:hover{background:var(--panel-muted)}
+.menu .mi .k{margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--ink-muted)}
+.menu .sep{height:1px;background:var(--line);margin:4px 6px}
+.menu .danger{color:var(--red)}
+
+/* 命令面板 */
+.palette{position:absolute;inset:0;z-index:40;background:rgba(23,23,23,.28);display:flex;justify-content:center;padding-top:110px}
+.palette .box{width:560px;height:fit-content;background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:0 24px 70px rgba(0,0,0,.22);overflow:hidden}
+.palette .pi{display:flex;align-items:center;gap:8px;margin:12px;position:relative}
+.palette .pi input{flex:1;height:38px;padding-left:34px;font-size:13.5px;border-radius:8px}
+.palette .pi svg{position:absolute;left:11px;color:var(--ink-muted)}
+.palette .list{max-height:320px;overflow:auto;padding:0 8px 8px}
+.palette .it{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;font-size:12.5px}
+.palette .it.sel{background:var(--accent-soft)}
+.palette .it .k{margin-left:auto;font-family:var(--mono);font-size:9.5px;color:var(--ink-muted)}
+.palette .cap{padding:8px 10px 2px;font-size:10px;font-weight:650;color:var(--ink-muted);letter-spacing:.06em}
+
+/* 决策条 */
+.decision{position:absolute;left:0;right:0;bottom:0;z-index:30;border-top:1px dashed var(--line-strong);background:rgba(255,255,255,.97);padding:8px 18px;font-size:11px;line-height:1.75;color:var(--ink-soft)}
+.decision b{color:var(--accent);font-weight:650}
+.decision .w{color:var(--ink);font-weight:600}
+
+
+/* 文件名单元格：单行不换行 */
+.tbl .f{display:inline-flex;align-items:center;gap:7px;max-width:100%;white-space:nowrap;min-width:0}
+.tbl .f .fnm{overflow:hidden;text-overflow:ellipsis}
+.tbl .f svg{color:var(--ink-muted)}
+.tbl tr:hover .rops{display:flex}
+.rops{display:none;gap:2px}
+/* 完整目录树 */
+.tree{padding:6px 4px}
+.tree .trow{display:flex;align-items:center;gap:5px;height:27px;padding-right:8px;cursor:pointer;border-radius:6px;white-space:nowrap}
+.tree .trow:hover{background:color-mix(in srgb,var(--ink) 4%,transparent)}
+.tree .trow.on{background:var(--accent-soft);box-shadow:inset 2px 0 0 var(--accent)}
+.tree .tw{width:13px;color:var(--ink-muted);flex:none;display:flex}
+.tree .tn{font-size:11.5px;overflow:hidden;text-overflow:ellipsis}
+.tree .tc{font-size:10px;color:var(--ink-muted);margin-left:auto;font-family:var(--mono)}
+
+/* 传输 */
+.xfer{display:flex;align-items:center;gap:10px;padding:8px 16px;border-bottom:1px solid var(--line)}
+.xfer .ic{width:26px;height:26px;border-radius:6px;display:flex;align-items:center;justify-content:center;flex:none}
+.xfer .ic.up{background:var(--accent-soft);color:var(--accent)}
+.xfer .ic.dn{background:color-mix(in srgb,var(--green) 8%,transparent);color:var(--green)}
+.xfer .ic.err{background:var(--red-soft);color:var(--red)}
+.xfer .meta{flex:1;min-width:0}
+.xfer .fn{font-weight:550;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.xfer .sub{font-family:var(--mono);font-size:10px;color:var(--ink-muted);margin-top:2px;display:flex;gap:8px;align-items:center}
+.prog{height:4px;border-radius:2px;background:var(--panel-muted);overflow:hidden;margin:5px 0 3px}
+.prog i{display:block;height:100%;width:64%;background:var(--accent);border-radius:2px}
+.xfer .ops{display:none;gap:2px}
+.xfer:hover .ops{display:flex}
+.xfer:hover .when{display:none}
+
+/* 空态/横幅 */
+.empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;text-align:center}
+.empty .ic{width:44px;height:44px;border:1px solid var(--line);border-radius:12px;display:flex;align-items:center;justify-content:center;color:var(--ink-muted);margin-bottom:6px}
+.empty .big{font-weight:650;font-size:14px}
+.empty .sub{font-size:11.5px;color:var(--ink-muted);margin-bottom:10px}
+.banner{display:flex;align-items:center;gap:12px;padding:9px 16px;background:var(--red-soft);border-bottom:1px solid color-mix(in srgb,var(--red) 25%,transparent);font-size:12px;color:var(--red)}
+.banner .msg{flex:1;line-height:1.55}
+.banner .msg b{font-weight:650}
+
+/* PiP / 桌面 */
+.pip{width:440px;border:1px solid var(--line);border-radius:var(--r-l);overflow:hidden;background:var(--panel);box-shadow:var(--shadow-pop)}
+.pip .ph{display:flex;align-items:center;gap:8px;padding:7px 12px;background:var(--panel-muted);border-bottom:1px solid var(--line);font-size:11px;font-weight:600}
+.menubar{display:flex;align-items:center;gap:10px;height:26px;background:var(--shell);color:#d7dde5;font-size:11px;padding:0 12px;border-radius:6px;width:fit-content}
+.traymenu{width:210px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r-m);box-shadow:var(--shadow-pop);padding:5px;font-size:12.5px}
+.traymenu .mi{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:5px}
+.traymenu .mi:hover{background:var(--panel-muted)}
+.traymenu .sep{height:1px;background:var(--line);margin:4px 6px}
+.traymenu .live{margin-left:auto;color:var(--accent);font-size:10.5px;font-weight:600;display:inline-flex;align-items:center;gap:4px}
+.traymenu .live i{width:5px;height:5px;border-radius:50%;background:var(--accent);animation:pl 1.4s infinite}
+
+.note-pad{padding:8px 0 40px}
+</style>
+</head>
+<body>
+
+<nav id="index">
+  <h1>重设计原型 v2</h1>
+  <button data-s="s1" class="on"><span class="sid">S1</span>主框架 · ⌘K</button>
+  <button data-s="s2"><span class="sid">S2</span>服务器侧栏</button>
+  <button data-s="s3"><span class="sid">S3</span>日志检索</button>
+  <button data-s="s4"><span class="sid">S4</span>切片 + 实时</button>
+  <button data-s="s5"><span class="sid">S5</span>终端工作台</button>
+  <button data-s="s6"><span class="sid">S6</span>文件浏览</button>
+  <button data-s="s7"><span class="sid">S7</span>文件预览</button>
+  <button data-s="s8"><span class="sid">S8</span>传输记录抽屉</button>
+  <button data-s="s9"><span class="sid">S9</span>工具抽屉</button>
+  <button data-s="s10"><span class="sid">S10</span>设置中心</button>
+  <button data-s="s11"><span class="sid">S11</span>桌面能力</button>
+  <button data-s="s12"><span class="sid">S12</span>空态与错误</button>
+  <button data-s="s13"><span class="sid">S13</span>核心排障动线</button>
+  <button data-s="s14"><span class="sid">S14</span>外观 · 主题 · 水印</button>
+  <button data-s="s15"><span class="sid">S15</span>窗口与断点</button>
+  <div class="foot">
+    对标：<b>Linear</b> 抽屉体系 · <b>Raycast</b> ⌘K 面板 · <b>Warp</b> 内联进度 · <b>VS Code</b> 面包屑/页签<br/><br/>
+    皮肤延续已确认方向：全白通栏 · 细线分隔 · 紧凑密度。<br/>每屏底部蓝字为决策点。
+  </div>
+</nav>
+
+<div id="stage">
+  <div id="desc"><span class="n" id="d-n"></span><span class="d" id="d-d"></span></div>
+  <div id="viewport"></div>
+</div>
+
+<script>
+/* ============ 图标（lucide 路径） ============ */
+const I = {
+  search:'<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+  folder:'<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>',
+  file:'<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/>',
+  term:'<polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/>',
+  gear:'<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
+  down:'<path d="m6 9 6 6 6-6"/>',
+  right:'<path d="m9 18 6-6-6-6"/>',
+  left:'<path d="m12 19-7-7 7-7"/><path d="M19 12H5"/>',
+  x:'<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+  plus:'<path d="M5 12h14"/><path d="M12 5v14"/>',
+  upload:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/>',
+  download:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/>',
+  refresh:'<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>',
+  history:'<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+  filter:'<polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>',
+  trash:'<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/>',
+  pencil:'<path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/>',
+  sliders:'<line x1="21" x2="14" y1="4" y2="4"/><line x1="10" x2="3" y1="4" y2="4"/><line x1="21" x2="12" y1="12" y2="12"/><line x1="8" x2="3" y1="12" y2="12"/><line x1="21" x2="16" y1="20" y2="20"/><line x1="12" x2="3" y1="20" y2="20"/><line x1="14" x2="14" y1="2" y2="6"/><line x1="8" x2="8" y1="10" y2="14"/><line x1="16" x2="16" y1="18" y2="22"/>',
+  play:'<polygon points="6 3 20 12 6 21 6 3"/>',
+  pause:'<rect x="14" y="4" width="4" height="16" rx="1"/><rect x="6" y="4" width="4" height="16" rx="1"/>',
+  zap:'<path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/>',
+  compare:'<circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><path d="M11 18H8a2 2 0 0 1-2-2V9"/>',
+  plug:'<path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z"/>',
+  cpu:'<rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/>',
+  copy:'<rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
+  check:'<path d="M20 6 9 17l-5-5"/>',
+  warn:'<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+  more:'<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>',
+  tail:'<path d="M12 17V3"/><path d="m6 11 6 6 6-6"/><path d="M19 21H5"/>',
+  cmd:'<path d="M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3"/>',
+  live:'<circle cx="12" cy="12" r="2"/><path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"/><path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"/><circle cx="12" cy="12" r="10"/><path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"/><path d="M19.1 4.9C23 8.8 23 15.2 19.1 19.1"/>',
+  clock:'<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+  save:'<path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/>',
+  folderup:'<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/><path d="M12 10v6"/><path d="m9 13 3 3 3-3"/>',
+  expand:'<path d="m15 15 6 6"/><path d="m8 9-6-6"/><path d="m21 9-6-6"/><path d="m3 21 6-6"/>',
+  pin:'<line x1="12" x2="12" y1="17" y2="22"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/>',
+  record:'<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4" fill="currentColor" stroke="none"/>',
+  arrowup:'<path d="m5 12 7-7 7 7"/><path d="M12 19V5"/>',
+};
+const ic = (n, s=15, sw=1.6) =>
+  `<svg viewBox="0 0 24 24" width="${s}" height="${s}" fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round">${I[n]}</svg>`;
+
+/* ============ 数据 ============ */
+const SERVERS = [
+  {g:"堡垒机", rows:[["堡垒机-演示","jump@192.168.130.3","2222","on"]]},
+  {g:"测试", rows:[["127.122","root@192.168.127.122","22","on"],["127.38","root@192.168.127.38","22","on"],["2.137","root@192.168.2.137","22","on"],["2.203","root@192.168.2.203","22","on"]]},
+  {g:"服务器", rows:[["127.31","root@192.168.127.31","22","on"],["127.32","root@192.168.127.32","22","off"],["2.90","root@192.168.2.90","22","on"]]},
+  {g:"开发", rows:[["2.208","root@192.168.2.208","22","on"]]},
+  {g:"鲲鹏920", rows:[["127.101","root@192.168.127.101","22","on"],["2.20鲲鹏","root@192.168.2.20","22","on"],["2.26鲲鹏","root@192.168.2.26","22","on"]]},
+  {g:"生产", rows:[["127.12","root@192.168.127.12","22","on"],["prod-web-01","root@10.20.1.11","22","on"],["prod-web-02","app@10.20.1.12","22","off"]]},
+];
+const LOGS = [
+  ["08:20:01.113","INFO","[http-nio-8080-exec-4] c.e.w.LoginController - user admin login from 192.168.2.33"],
+  ["08:20:03.882","ERROR","[pool-2-thread-7] c.e.task.SyncJob - sync failed: connection reset by peer", true],
+  ["08:20:03.884","INFO","[pool-2-thread-7] c.e.task.SyncJob - retry 1/3 scheduled in 5s"],
+  ["08:20:09.101","ERROR","[pool-2-thread-7] c.e.task.SyncJob - sync failed again, giving up", true],
+  ["08:20:09.102","WARN","[pool-2-thread-7] c.e.task.SyncJob - mark job #4821 as FAILED"],
+  ["08:20:09.110","INFO","[pool-2-thread-7] c.e.task.SyncJob - notify webhook https://ops.internal/hook/4821"],
+  ["08:20:12.450","INFO","[http-nio-8080-exec-9] c.e.w.ReportController - export report 2026-08 took 1.2s"],
+  ["08:20:13.009","INFO","[scheduler-1] c.e.s.CleanJob - cleaned 14 temp files (213MB)"],
+  ["08:20:15.771","ERROR","[http-nio-8080-exec-2] c.e.w.UploadController - upload aborted: size 2147483648 exceeds limit", true],
+  ["08:20:15.772","WARN","[http-nio-8080-exec-2] c.e.w.UploadController - client 192.168.2.33 got 413"],
+];
+const logHtml = (hits=true, ctx=false) => LOGS.map(([t,lv,msg,hit]) => {
+  const cls = ["ll", lv==="ERROR"?"e":lv==="WARN"?"w":"", hits&&hit?(ctx?"cur":"hit"):""].join(" ");
+  const m = hits&&msg.includes("failed") ? msg.replace("failed","<mark>failed</mark>") : msg;
+  return `<div class="${cls}"><span class="t">2026-09-29 ${t}</span><span><span class="lv">${lv.padEnd(5)}</span> ${m}</span></div>`;
+}).join("");
+
+const srow = (nm,host,port,st,cur,hov,extra="") => `
+  <div class="srow${cur?" cur":""}${hov?" hov":""}">
+    <span class="dot ${st}"></span>
+    <span class="meta"><span class="nm">${nm}${cur?'<span class="chip grn">当前</span>':""}</span><span class="host">${host}</span></span>
+    ${hov
+      ? `<span class="qa"><button class="btn icon sm" title="连接">${ic("play",12)}</button><button class="btn icon sm" title="编辑（设置中心）">${ic("pencil",12)}</button><button class="btn icon sm" title="更多">${ic("more",12)}</button></span>`
+      : `<span class="port">${port}</span>`}
+    ${extra}
+  </div>`;
+
+const sidebarHtml = (curIdx, hovIdx) => `
+  <div class="sidebar">
+    <div class="side-head" style="display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--line)">
+      <span style="font-weight:700;font-size:13px;flex:1">日志控制台</span>
+      <button class="btn icon sm" title="⌘K">${ic("cmd",13)}</button>
+      <button class="btn icon sm" title="设置">${ic("gear",13)}</button>
+    </div>
+    <div style="padding:10px 12px;border-bottom:1px solid var(--line)">
+      <input class="input" style="width:100%" placeholder="搜索名称、分组、地址或标签">
+    </div>
+    <div class="side-list" style="flex:1;overflow-y:auto">
+      ${SERVERS.map((g,gi)=>`
+        <div class="grp">${g.g} <span class="c">${g.rows.length}</span></div>
+        ${g.rows.map((r,ri)=>{
+          const gi2 = gi*10+ri;
+          return srow(r[0],r[1],r[2],r[3],gi2===curIdx,gi2===hovIdx);
+        }).join("")}
+      `).join("")}
+    </div>
+    <div class="side-foot">
+      <span class="dot on"></span>
+      <span class="sum"><b style="color:var(--ink)">127.122</b> · root · /data/logs/eos</span>
+      <span class="mini chip">详情</span>
+    </div>
+  </div>`;
+
+const wtabs = (active) => `
+  <div class="wtabs">
+    <span class="wtab${active==="127.122"?" on":""}">127.122</span>
+    <span class="wtab${active==="127.38"?" on":""}">127.38 <span class="chip">生产</span></span>
+    <span class="wtab${active==="2.137"?" on":""}">2.137</span>
+    <span class="wtab">＋</span>
+    <span style="margin-left:auto;margin-right:6px;display:flex;gap:4px;align-items:center">
+      <span class="kbd">⌘1-9</span><span class="mut" style="font-size:10.5px">切换会话</span>
+    </span>
+  </div>`;
+
+const decision = (html) => `<div class="decision"><b>决策</b> — ${html}</div>`;
+
+/* ============ S1 主框架 ============ */
+function s1(){
+  return `<div class="app">
+    ${sidebarHtml(1, -1)}
+    <div class="workspace">
+      ${wtabs("127.38")}
+      <div class="tbar">
+        <div class="seg"><button class="on">日志预览</button><button>文件目录</button><button>终端</button></div>
+        <div style="position:relative;flex:1;display:flex;align-items:center">
+          <span style="position:absolute;left:9px;color:var(--ink-muted);display:flex">${ic("search",13)}</span>
+          <input class="input" style="width:100%;padding-left:28px" value="sync failed" />
+          <span class="kbd" style="position:absolute;right:8px">/</span>
+        </div>
+        <button class="btn pri">检索</button>
+        <span style="width:1px;height:20px;background:var(--line)"></span>
+        <button class="btn" title="实时追踪">${ic("live",13)} LIVE</button>
+        <button class="btn" title="开始录制">${ic("record",13)} 录制</button>
+        <button class="btn" id="kbtn" title="命令面板">${ic("cmd",13)} <span class="kbd">⌘K</span></button>
+      </div>
+      <div class="rtools">
+        <span class="stat"><b>128</b> 条命中 · 2.1 秒 · 扫描 340 MB</span>
+        <span style="flex:1"></span>
+        <button class="btn icon sm">${ic("left",12)}</button><span class="mono" style="font-size:11px">3 / 128</span><button class="btn icon sm">${ic("right",12)}</button>
+        <div class="seg lite"><button class="on">仅命中</button><button>含上下文</button></div>
+        <button class="btn sm">${ic("download",12)} 下载</button>
+      </div>
+      <div class="content"><div class="note-pad">${logHtml()}</div></div>
+    </div>
+    <div class="palette" id="pal" style="display:none">
+      <div class="box">
+        <div class="pi">${ic("search",15)}<input class="input" autofocus placeholder="搜索服务器、文件、命令…" value="127.3"></div>
+        <div class="list">
+          <div class="cap">服务器</div>
+          <div class="it sel">${ic("folder",14)} <span><b>堡垒机-演示</b> <span class="mut">192.168.130.3 · 堡垒机</span></span><span class="k">⏎ 连接</span></div>
+          <div class="it">${ic("folder",14)} <span><b>127.38</b> <span class="mut">192.168.127.38 · 生产</span></span><span class="k">⏎ 连接</span></div>
+          <div class="cap">最近文件</div>
+          <div class="it">${ic("file",14)} <span><b>/data/logs/eos/eos-server.log</b> <span class="mut">20.0MB · 127.38</span></span><span class="k">⏎ 打开</span></div>
+          <div class="cap">命令</div>
+          <div class="it">${ic("zap",14)} <span>切换到 <b>实时追踪</b></span><span class="k">⌘L</span></div>
+          <div class="it">${ic("record",14)} <span>开始录制日志</span><span class="k">⌘R</span></div>
+          <div class="it">${ic("gear",14)} <span>打开设置中心</span><span class="k">⌘,</span></div>
+        </div>
+      </div>
+    </div>
+  </div>` +
+  decision(`<span class="w">世界级模式：Raycast / Linear 的 ⌘K 命令面板</span> — 服务器、最近文件、命令统一入口（点工具栏 ⌘K 按钮体验）。① 工具栏三层收敛：视图 segmented → 搜索框主角（带 / 快捷键提示）→ 高频按钮（LIVE/录制/⌘K）；② 检索完成状态一行摘要（128 条 · 2.1 秒 · 340MB）替代独立进度面板；③ 命中导航 + 仅命中/含上下文 + 下载合并为结果工具行。`);
+}
+
+/* ============ S2 侧栏 ============ */
+function s2(){
+  return `<div class="app">
+    ${sidebarHtml(11, 12)}
+    <div style="flex:1;display:flex;flex-direction:column;border-left:1px solid var(--line)">
+      <div style="padding:16px 22px;border-bottom:1px solid var(--line)">
+        <b style="font-size:13px">交互规格</b>
+        <div class="mut" style="font-size:11.5px;margin-top:4px;line-height:1.8">
+          悬浮行 → 右侧出现 <b style="color:var(--ink)">连接 / 编辑 / 更多</b> 三个快捷键（编辑直达设置中心该服务器）；<br/>
+          当前连接行 → 左侧 2px 蓝色指示条 + 淡蓝底 + 「当前」徽标；<br/>
+          离线服务器 → 灰点；在线 → 绿点带光晕；<br/>
+          底部状态摘要行 → 点击展开完整状态卡（本地服务 / 服务器 / 主机 / 路径 + 操作记录开关）。
+        </div>
+      </div>
+      <div style="flex:1;overflow:auto;padding:16px 22px">
+        <b style="font-size:12px">状态摘要 · 展开态</b>
+        <div style="margin-top:10px;border:1px solid var(--line);border-radius:var(--r-m);overflow:hidden;max-width:420px">
+          <div style="padding:9px 14px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line);background:var(--panel-muted)">
+            <span class="dot on"></span><b style="flex:1">127.122 · 已连接</b><span class="chip">已登录 3 小时</span>
+          </div>
+          <div style="padding:4px 0;font-size:12px">
+            <div style="display:flex;padding:4px 14px"><span class="mut" style="width:80px">本地服务</span><span class="mono" style="font-size:11px">127.0.0.1:4040 · 运行中</span></div>
+            <div style="display:flex;padding:4px 14px"><span class="mut" style="width:80px">连接方式</span><span>直连 SSH</span></div>
+            <div style="display:flex;padding:4px 14px"><span class="mut" style="width:80px">当前路径</span><span class="mono" style="font-size:11px">/data/logs/eos</span></div>
+            <div style="display:flex;padding:4px 14px;align-items:center"><span class="mut" style="width:80px">操作记录</span><span class="pill" id="apT">隐藏 · 点击显示</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>` +
+  decision(`<span class="w">对齐世界级：侧栏 = 导航 + 上下文，不是状态面板</span> — ① 悬浮快捷操作固定三个且「编辑」直达设置中心对应服务器（消掉"管理/删除"两枚常驻按钮的 54 次键盘遍历）；② 连接状态从 4 行卡压缩为 1 行摘要，点击展开；③ 操作记录开关也放在状态卡里，与设置中心同步。`);
+}
+
+/* ============ S3 检索 ============ */
+function s3(){
+  return `<div class="app">
+    ${sidebarHtml(1,-1)}
+    <div class="workspace">
+      ${wtabs("127.38")}
+      <div class="tbar">
+        <div class="seg lite"><button class="on">结果 1</button><button>结果 2</button><button title="最多 8 个页签">＋</button></div>
+        <div style="position:relative;flex:1;display:flex;align-items:center">
+          <span style="position:absolute;left:9px;color:var(--ink-muted);display:flex">${ic("search",13)}</span>
+          <input class="input" style="width:100%;padding-left:28px" value="sync failed">
+        </div>
+        <button class="btn">${ic("clock",13)} 今天 <span class="mut">▾</span></button>
+        <button class="btn pri">检索</button>
+        <button class="btn" id="advB">${ic("sliders",13)} 高级</button>
+        <button class="btn" style="color:var(--red)">${ic("record",13)} 00:41</button>
+      </div>
+      <div class="rtools">
+        <span class="stat"><b>128</b> 条 · 2.1 秒 · 扫描 340 MB</span>
+        <span style="flex:1"></span>
+        <button class="btn icon sm">${ic("left",12)}</button><span class="mono" style="font-size:11px">3 / 128</span><button class="btn icon sm">${ic("right",12)}</button>
+        <div class="seg lite"><button class="on">仅命中</button><button>含上下文</button></div>
+        <button class="btn sm">${ic("download",12)} 下载</button>
+      </div>
+      <div class="content"><div class="note-pad">${logHtml()}</div></div>
+    </div>
+    <div class="drawer">
+      <div class="dhead"><span class="t">高级检索条件</span><button class="btn icon" id="advX">${ic("x",13)}</button></div>
+      <div class="dbody" style="padding:14px 16px;display:flex;flex-direction:column;gap:13px">
+        <div><div class="mut" style="font-size:11px;margin-bottom:5px">排除关键字</div><input class="input" style="width:100%" placeholder="每行一个，命中行将被排除"></div>
+        <div style="display:flex;align-items:center;gap:10px"><span class="mut" style="font-size:11px">正则模式</span><span class="pill">关闭</span><span style="flex:1"></span><span class="mut mono" style="font-size:10px">grep -E</span></div>
+        <div><div class="mut" style="font-size:11px;margin-bottom:5px">上下文行数</div>
+          <div class="seg lite"><button>0</button><button class="on">2</button><button>5</button><button>10</button></div>
+        </div>
+        <div><div class="mut" style="font-size:11px;margin-bottom:5px">时间范围</div>
+          <div style="display:flex;gap:8px;align-items:center"><input class="input" style="flex:1" value="2026-09-29 00:00"><span class="mut">→</span><input class="input" style="flex:1" value="2026-09-29 23:59"></div>
+        </div>
+        <div><div class="mut" style="font-size:11px;margin-bottom:6px">预设</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap"><span class="fchip on">今天 ERROR</span><span class="fchip">最近 1 小时</span><span class="fchip">昨天全天</span><span class="fchip">${ic("plus",11)} 保存当前</span></div>
+        </div>
+      </div>
+      <div class="dfoot"><button class="btn pri" style="flex:1;justify-content:center">应用条件并检索</button><button class="btn">重置</button></div>
+    </div>
+  </div>` +
+  decision(`<span class="w">条件两段式 + 抽屉承载</span> — ① 常驻行只留 关键字 / 时间范围 / 检索 / 高级 / 录制；排除、正则、上下文、预设进「高级」抽屉（点右上按钮开关）；② 检索进行中：主按钮变 <b>spinner · 检索中 340MB/1.2GB</b>，可随时取消，不再整栏禁用；③ 页签第 9 个时 ＋ 悬浮提示「最早的结果页将被替换」；④ 录制中按钮变计时红点。`);
+}
+
+/* ============ S4 切片+实时 ============ */
+function s4(){
+  return `<div class="app">
+    ${sidebarHtml(1,-1)}
+    <div class="workspace">
+      ${wtabs("127.38")}
+      <div class="slicebar">
+        <span class="mono" style="font-size:11px;color:var(--ink-soft)"><b style="color:var(--ink)">12.4 MB</b> / 20.0 MB</span>
+        <div class="strack"><div class="fill"></div><div class="thumb"></div></div>
+        <span class="mono" style="font-size:11px">62%</span>
+        <button class="btn sm">${ic("tail",12)} 跳到尾部</button>
+        <span class="chip">整行裁切 · 邻页已预热</span>
+      </div>
+      <div class="rtools">
+        <span class="liveb"><i></i>LIVE</span>
+        <span class="mut" style="font-size:11.5px">eos-server.log · tail -F · 自动重连</span>
+        <span style="flex:1"></span>
+        <span style="position:relative;display:flex;align-items:center">
+          <span style="position:absolute;left:8px;color:var(--ink-muted);display:flex">${ic("filter",11)}</span>
+          <input class="input" style="width:170px;height:24px;padding-left:25px;font-size:11.5px" value="ERROR">
+        </span>
+        <span class="pill">${ic("pause",11)} 暂停</span>
+        <button class="btn sm">断开</button>
+      </div>
+      <div class="content"><div class="note-pad">
+        ${logHtml(false)}
+        <div class="ll"><span class="t">09:01:23.556</span><span><span class="lv" style="color:var(--red);font-weight:650">ERROR</span> [scheduler-1] c.e.s.HeartbeatJob - node-3 heartbeat timeout</span></div>
+        <div class="ll"><span class="t">09:01:24.002</span><span><span class="lv" style="color:var(--ink-muted)">INFO </span> [scheduler-1] c.e.s.HeartbeatJob - failover check started</span></div>
+        <div class="ll" style="color:var(--ink-muted)"><span class="t">…</span><span>新日志持续追加 · 向上滚动自动暂停跟随</span></div>
+      </div></div>
+    </div>
+  </div>` +
+  decision(`<span class="w">切片与实时一体化</span> — ① 切片条压缩为一行：字节区间 + 进度槽（可拖拽）+ 百分比 + 跳尾部；② LIVE 从独立模式变成日志视图上的一条状态带：脉冲徽标 + 过滤框 + 暂停/断开，断线时徽标变琥珀色「重连中 ⟳」；③ 上滚自动暂停跟随、到底自动恢复（已在设置中可控）。`);
+}
+
+/* ============ S5 终端 ============ */
+function s5(){
+  return `<div class="app">
+    ${sidebarHtml(1,-1)}
+    <div class="workspace">
+      ${wtabs("终端")}
+      <div class="tbar">
+        <span class="chip grn"><span class="dot on" style="width:5px;height:5px"></span> root@192.168.127.38 · 心跳 25s</span>
+        <span class="mut" style="font-size:11px">会话 1/2</span>
+        <span style="flex:1"></span>
+        <button class="btn sm">分屏</button>
+        <button class="btn sm">${ic("expand",11)} 弹出窗口</button>
+        <button class="btn sm" style="color:var(--accent)">${ic("zap",12)} AI 助手</button>
+        <button class="btn icon sm">${ic("down",13)}</button>
+      </div>
+      <div style="flex:1;display:flex;min-height:0">
+        <div class="term">
+          <div><span class="dim">Last login: Tue Sep 29 08:44:11 2026 from 192.168.2.33</span></div>
+          <div><span class="p">root@127.38</span>:<span class="ok">~</span># tail -f /data/logs/eos/eos-server.log | grep --color ERROR</div>
+          <div style="color:#e06c75">2026-09-29 09:02:11 ERROR c.e.task.SyncJob - sync failed: connection reset</div>
+          <div style="color:#e06c75">2026-09-29 09:02:15 ERROR c.e.task.SyncJob - retry 2/3 failed</div>
+          <div><span class="p">root@127.38</span>:<span class="ok">~</span># <span class="dim"># 按住选中这段堆栈后点 AI 助手，可直接引用</span><span class="cursor"></span></div>
+          <div style="margin-top:6px;color:var(--shell-mut)">⌃C 中断 · ⌘D 断开 · 拖入文件 = SFTP 上传</div>
+        </div>
+        <div style="width:320px;border-left:1px solid var(--line);display:flex;flex-direction:column;background:var(--panel)">
+          <div class="dhead"><span class="t" style="font-size:12.5px">终端 AI</span><span class="chip">GLM-4 · ⌘J</span><button class="btn icon sm">${ic("x",12)}</button></div>
+          <div style="flex:1;padding:12px 14px;display:flex;flex-direction:column;gap:10px;overflow:auto">
+            <div style="border:1px solid var(--line);border-radius:var(--r-m);padding:9px 11px;font-size:11.5px;line-height:1.7;color:var(--ink-soft)">
+              <span class="chip" style="margin-bottom:5px">已引用选中 3 行</span><br/>
+              <span class="mono" style="font-size:10.5px">ERROR c.e.task.SyncJob - sync failed: connection reset…</span>
+            </div>
+            <div style="border:1px solid color-mix(in srgb,var(--accent) 30%,transparent);background:var(--accent-soft);border-radius:var(--r-m);padding:9px 11px;font-size:11.5px;line-height:1.75">
+              连续 2 次重连失败，通常是对端服务重启或中间网络设备断链。建议：<br/>
+              1. <span class="mono" style="font-size:10.5px">ss -tnp | grep 8080</span> 确认目标端口存活<br/>
+              2. 检查 node-3 的防火墙/安全组最近变更<br/>
+              3. 若为机房内网抖动，考虑临时调大 SyncJob 重试间隔
+            </div>
+          </div>
+          <div style="padding:10px 14px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:8px">
+            <input class="input" style="width:100%" placeholder="针对选中内容提问…">
+            <div style="display:flex;gap:5px;flex-wrap:wrap"><span class="fchip">解释错误</span><span class="fchip">给出修复命令</span><span class="fchip">找日志位置</span></div>
+          </div>
+        </div>
+      </div>
+      <div style="border-top:1px solid var(--line);padding:6px 14px;display:flex;gap:6px;align-items:center;flex:none">
+        <span class="mut" style="font-size:11px">快捷命令</span>
+        <span class="fchip">tail -f error.log</span><span class="fchip">df -h</span><span class="fchip">free -m</span><span class="fchip">docker ps</span><span class="fchip">${ic("plus",11)}</span>
+        <span style="flex:1"></span><span class="mut" style="font-size:10.5px">⌘/ 呼出 · 长按编辑</span>
+      </div>
+    </div>
+  </div>` +
+  decision(`<span class="w">终端 = 工作区第一公民</span> — ① 与日志/文件并列成为第三个视图 tab，废除底部面板/浮层/分离三态并存；② 分屏、弹出独立窗口、AI 全部收进终端工具行；③ AI 抽屉：自动引用终端选中内容、快捷追问 chips；API 地址/Key 配置移到偏好设置-高级（终端里零配置噪音）；④ 快捷命令常驻底部一行，⌘/ 呼出。`);
+}
+
+/* ============ S6 文件浏览 ============ */
+function s6(){
+  const trow = (depth, name, open, on, count) => `
+    <div class="trow${on?" on":""}" style="padding-left:${8+depth*16}px">
+      <span class="tw">${open?ic("down",11):ic("right",11)}</span>
+      ${ic("folder",13)}
+      <span class="tn">${name}</span>
+      ${count?`<span class="tc">${count}</span>`:""}
+    </div>`;
+  const fname = (icn, nm, dir) => `<span class="f">${ic(icn,14)}<span class="fnm" style="${dir?"color:var(--accent);font-weight:550":""}">${nm}</span></span>`;
+  return `<div class="app">
+    ${sidebarHtml(1,-1)}
+    <div class="workspace">
+      ${wtabs("文件")}
+      <div class="tbar">
+        <div class="seg lite"><button>日志预览</button><button class="on">文件目录</button><button>终端</button></div>
+        <span style="display:flex;align-items:center;gap:2px;font-size:12px">
+          <span class="mono" style="color:var(--ink-soft);padding:3px 6px">/data</span>${ic("right",11)}<span class="mono" style="color:var(--ink-soft);padding:3px 6px">logs</span>${ic("right",11)}<b style="padding:3px 8px;background:var(--panel-muted);border-radius:5px">eos</b>
+        </span>
+        <span style="flex:1"></span>
+        <input class="input" style="width:150px;height:24px;font-size:11.5px" placeholder="过滤当前目录…">
+        <button class="btn icon sm" title="上传文件">${ic("upload",13)}</button>
+        <button class="btn icon sm" title="刷新">${ic("refresh",13)}</button>
+        <button class="btn icon sm" title="新建目录 / 压缩 / 解压 / 上传目录">${ic("more",13)}</button>
+      </div>
+      <div class="batchbar">
+        <b>已选 3 项</b><span class="mut" style="font-size:11px">· 78.1 MB</span>
+        <button class="btn sm">${ic("right",11)} 移动到…</button>
+        <button class="btn sm danger">${ic("trash",11)} 删除</button>
+        <button class="btn sm">清空选择</button>
+        <span style="flex:1"></span><span class="mut" style="font-size:10.5px">Esc 清空 · 双击进入 · 拖拽移动</span>
+      </div>
+      <div class="content" style="display:flex">
+        <div class="tree" style="flex:0 0 208px;border-right:1px solid var(--line);overflow:auto">
+          ${trow(0,"eos",true,false,"6")}
+          ${trow(1,"archive",false,false,"3")}
+          ${trow(1,"conf",false,false,"2")}
+          ${trow(1,"lib",false,false,"12")}
+          ${trow(1,"logs",true,true,"14")}
+          ${trow(2,"2026-08",false,false,"3")}
+          ${trow(2,"2026-09",false,false,"11")}
+          ${trow(1,"temp",false,false,"0")}
+          ${trow(1,"webapps",false,false,"2")}
+          ${trow(1,"work",false,false,"1")}
+        </div>
+        <div style="flex:1;overflow:auto;position:relative">
+          <table class="tbl">
+            <tr><th style="width:28px"><input type="checkbox" checked></th><th>名称</th><th style="width:90px">大小</th><th style="width:130px">修改时间 ↓</th><th style="width:56px">类型</th></tr>
+            <tr class="sel"><td><input type="checkbox" checked></td><td>${fname("folder","2026-08",true)}</td><td class="mono">--</td><td class="mono">2026-09-20 16:20</td><td class="mut">目录</td></tr>
+            <tr class="sel"><td><input type="checkbox" checked></td><td>${fname("file","eos-server.log")}</td><td class="mono">20.0 MB</td><td class="mono">2026-09-29 09:01</td><td class="mut">文件</td></tr>
+            <tr class="sel"><td><input type="checkbox" checked></td><td>${fname("file","error.log")}</td><td class="mono">2.1 MB</td><td class="mono">2026-09-29 09:01</td><td class="mut">文件</td></tr>
+            <tr><td><input type="checkbox"></td><td>${fname("file","access.log")}</td><td class="mono">108 MB</td><td class="mono">2026-09-29 09:02</td><td class="mut">文件</td></tr>
+            <tr style="background:rgba(0,0,0,0.028)"><td><input type="checkbox"></td><td>${fname("file","eos.jar")}</td><td class="mono">56.1 MB</td><td class="mono">2026-09-20 16:20</td><td class="mut">文件</td>
+              <td style="position:absolute"></td></tr>
+            <tr><td><input type="checkbox"></td><td>${fname("file","application.yml")}</td><td class="mono">3.2 KB</td><td class="mono">2026-09-28 18:44</td><td class="mut">文件</td></tr>
+          </table>
+          <div style="position:absolute;left:210px;top:158px;display:flex;gap:3px;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:2px;box-shadow:0 4px 16px rgba(0,0,0,.1)">
+            <button class="btn icon sm" title="预览">${ic("search",12)}</button>
+            <button class="btn icon sm" title="下载">${ic("download",12)}</button>
+            <button class="btn icon sm" title="重命名">${ic("pencil",12)}</button>
+            <button class="btn icon sm" title="移动">${ic("right",12)}</button>
+            <button class="btn icon sm" title="更多">${ic("more",12)}</button>
+          </div>
+          <div class="menu" style="position:absolute;left:640px;top:236px">
+            <div class="mi">${ic("search",13)} 预览 / 追加到预览</div>
+            <div class="mi">${ic("download",13)} 下载 <span class="k">⌘D</span></div>
+            <div class="mi">${ic("pencil",13)} 编辑</div>
+            <div class="mi">${ic("right",13)} 移动到…</div>
+            <div class="sep"></div>
+            <div class="mi">${ic("copy",13)} 复制远程路径</div>
+            <div class="mi">${ic("pencil",13)} 重命名 <span class="k">F2</span></div>
+            <div class="mi">${ic("file",13)} 压缩为 zip</div>
+            <div class="sep"></div>
+            <div class="mi danger">${ic("trash",13)} 删除 <span class="k">⌫</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>` +
+  decision(`<span class="w">文件浏览打磨（本轮反馈）</span> — ① 目录树展示<b>完整结构</b>：未展开的兄弟目录（conf/lib/temp/webapps/work）以折叠态可见，展开箭头 + 子目录计数，不再是"只有打开过的路径"；② 文件名单行不换行（图标+名称 flex，超长省略号，悬浮看全名）；③ <b>上传/下载/预览/移动/改名是高频操作</b>：行悬浮出现快捷键组（预览/下载/改名/移动/更多），右键菜单保留完整九项并加 压缩/F2/⌫ 快捷键；④ ⋯ 菜单收纳低频项。`);
+}
+
+/* ============ S7 预览 ============ */
+function s7(){
+  const dhead = "background:#161616;border-bottom:1px solid #262626";
+  return `<div style="position:absolute;inset:22px;display:flex;flex-direction:column;border:1px solid #262626;border-radius:12px;background:#0a0a0a;box-shadow:0 24px 70px rgba(0,0,0,.4);overflow:hidden;color:#d7dde5">
+    <div style="display:flex;align-items:center;gap:10px;padding:9px 16px;border-bottom:1px solid #262626;background:#111">
+      <b style="font-size:13px;color:#f2f5f8">eos-server.log</b>
+      <span class="chip" style="color:#c9a227;border-color:rgba(201,162,39,.35);background:rgba(201,162,39,.08)">尾部预览 · 1MB</span>
+      <span class="chip" style="color:#9aa7b4;border-color:#2c2c2c">只读</span>
+      <span style="flex:1"></span>
+      <div class="seg" style="background:#1a1a1a;border-color:#2c2c2c"><button class="on" style="background:#2c2c2c;color:#fff;border-right:1px solid #2c2c2c">源码</button><button style="color:#9aa7b4;border-right:1px solid #2c2c2c">归档 · 132 项</button><button style="color:#9aa7b4">Class</button></div>
+      <button class="btn icon" style="background:#1a1a1a;border-color:#2c2c2c;color:#d7dde5" title="下载">${ic("download",14)}</button>
+      <button class="btn icon" style="background:#1a1a1a;border-color:#2c2c2c;color:#d7dde5" title="最大化">${ic("expand",14)}</button>
+      <button class="btn icon" style="background:#1a1a1a;border-color:#2c2c2c;color:#d7dde5" title="关闭">${ic("x",14)}</button>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;padding:6px 16px;border-bottom:1px solid #1f1f1f;background:#0f0f0f">
+      <span style="position:relative;display:flex;align-items:center;flex:0 0 240px">
+        <span style="position:absolute;left:8px;color:#5c6b7a;display:flex">${ic("search",11)}</span>
+        <input class="input" style="width:100%;height:24px;padding-left:25px;font-size:11.5px;background:#161616;border-color:#2c2c2c;color:#d7dde5" value="sync failed">
+      </span>
+      <span class="mono" style="font-size:10.5px;color:#9aa7b4">14 / 128</span>
+      <button class="btn icon sm" style="background:#161616;border-color:#2c2c2c;color:#d7dde5">${ic("left",11)}</button>
+      <button class="btn icon sm" style="background:#161616;border-color:#2c2c2c;color:#d7dde5">${ic("right",11)}</button>
+      <span style="flex:1"></span>
+      <span class="mono" style="font-size:10.5px;color:#5c6b7a">88,198 – 88,210 行 · 共 88,210 行</span>
+    </div>
+    <div style="flex:1;font-family:var(--mono);font-size:11px;line-height:1.85;padding:10px 0;overflow:auto">
+      ${[["88198","INFO  c.e.task.SyncJob - starting sync job #4821","#8fa1b3"],
+         ["88199","INFO  c.e.task.SyncJob - source: /data/backup/dump.sql.gz (1.8GB)","#8fa1b3"],
+         ["88200","INFO  c.e.task.SyncJob - target: node-3:/data/incoming/","#8fa1b3"],
+         ["88201","ERROR c.e.task.SyncJob - sync failed: connection reset by peer","#e06c75"],
+         ["88202","      at java.net.SocketInputStream.socketRead0(Native Method)","#5c6b7a"],
+         ["88203","      at java.net.SocketInputStream.read(SocketInputStream.java:171)","#5c6b7a"],
+         ["88204","      at c.e.task.SyncJob.transfer(SyncJob.java:214)","#5c6b7a"],
+         ["88205","ERROR c.e.task.SyncJob - retry 1/3 scheduled in 5s","#e06c75"],
+         ["88206","INFO  c.e.task.RetryPolicy - backoff: exponential, max 3 attempts","#8fa1b3"],
+         ["88207","WARN  c.e.task.SyncJob - transfer speed degraded: 12MB/s → 800KB/s","#e5c07b"],
+         ["88208","ERROR c.e.task.SyncJob - sync failed again, giving up","#e06c75"],
+         ["88209","INFO  c.e.task.SyncJob - mark job #4821 as FAILED, notify ops","#8fa1b3"],
+         ["88210","INFO  c.e.w.WebhookDispatcher - POST https://ops.internal/hook/4821 → 200","#8fa1b3"]]
+        .map(([n,t,c])=>`<div style="display:flex;min-width:fit-content"><span style="flex:0 0 52px;text-align:right;padding-right:14px;color:#3d4a57;user-select:none">${n}</span><span style="color:${c}">${t}</span></div>`).join("")}
+    </div>
+    <div style="padding:7px 16px;border-top:1px solid #262626;background:#111;display:flex;gap:14px;align-items:center">
+      <span class="mut" style="font-size:10.5px;color:#5c6b7a">只读 · 大文件仅加载最后 1MB</span>
+      <span class="mut" style="font-size:10.5px;color:#5c6b7a">·</span>
+      <span class="mut" style="font-size:10.5px;color:#5c6b7a">可编辑文件：⌘S 保存回写远程</span>
+      <span style="flex:1"></span>
+      <span class="mono" style="font-size:10px;color:#5c6b7a">UTF-8 · LF · Geist Mono 12px</span>
+    </div>
+  </div>` +
+  decision(`<b>预览整体黑终端风格（本轮反馈）</b> — 头部/搜索行/页脚全部深色，与代码区连成一体；深色下的徽标/分段控件单独适配；编码/字体/行尾信息入页脚。归档/Class 态同用此深色框架。`);
+}
+
+/* ============ S8 传输抽屉 ============ */
+function s8(){
+  return `<div class="app">
+    <div class="workspace">
+      ${wtabs("文件")}
+      <div class="tbar">
+        <div class="seg lite"><button>日志预览</button><button class="on">文件目录</button><button>终端</button></div>
+        <span style="display:flex;align-items:center;gap:2px;font-size:12px">
+          <span class="mono" style="color:var(--ink-soft);padding:3px 6px">/data</span>${ic("right",11)}<span class="mono" style="color:var(--ink-soft);padding:3px 6px">backup</span>
+        </span>
+        <span style="flex:1"></span>
+        <button class="btn icon sm" title="上传文件（进行中，见右抽屉）" style="color:var(--accent)">${ic("upload",13)}</button>
+        <button class="btn icon sm">${ic("refresh",13)}</button>
+        <button class="btn icon sm" title="传输记录">${ic("download",13)}</button>
+      </div>
+      <div class="content" style="position:relative">
+        <table class="tbl">
+          <tr><th style="width:30px"></th><th>名称</th><th style="width:200px">传输进度</th><th style="width:90px">大小</th><th style="width:120px">修改时间</th></tr>
+          <tr>
+            <td></td>
+            <td><span class="f">${ic("upload",14)}<span class="fnm">eos-error-0929.zip</span></span></td>
+            <td><div class="prog" style="margin:0 8px 0 0"><i></i></div><span class="mono" style="font-size:9.5px">64% · 6.2MB/s · 剩余 1.7s</span></td>
+            <td class="mono">28.4 MB</td><td class="mono">上传中</td>
+          </tr>
+          <tr><td></td><td><span class="f">${ic("file",14)}<span class="fnm">dump-2026-09-28.sql.gz</span></span></td><td><span class="chip grn" style="margin-left:8px">已完成</span></td><td class="mono">1.8 GB</td><td class="mono">今天 08:58</td></tr>
+          <tr><td></td><td><span class="f">${ic("file",14)}<span class="fnm">eos-server.log</span></span></td><td></td><td class="mono">20.0 MB</td><td class="mono">今天 09:02</td></tr>
+          <tr><td></td><td><span class="f">${ic("file",14)}<span class="fnm">application.yml</span></span></td><td></td><td class="mono">3.2 KB</td><td class="mono">今天 08:47</td></tr>
+        </table>
+        <div style="position:absolute;top:14px;right:14px;display:flex;flex-direction:column;gap:8px;align-items:flex-end">
+          <div style="background:var(--panel);border:1px solid var(--line);border-radius:var(--r-m);box-shadow:var(--shadow-pop);padding:9px 12px;display:flex;align-items:center;gap:10px;font-size:12px">
+            ${ic("check",13)} <span><b>eos.jar</b> 上传完成 · 56.1 MB · 14 秒</span>
+            <button class="btn sm" style="color:var(--accent)">查看进度</button><button class="btn icon sm">${ic("x",12)}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="drawer" style="position:relative;box-shadow:none;animation:none;border-left:1px solid var(--line)">
+      <div class="dhead">
+        <span class="t">传输记录</span><span class="chip">127.38 · /data/backup</span>
+        <span style="flex:1"></span>
+        <button class="btn icon sm" title="清空当前服务器记录">${ic("trash",13)}</button>
+        <button class="btn icon sm">${ic("x",13)}</button>
+      </div>
+      <div style="padding:10px 16px;border-bottom:1px solid var(--line);display:flex;gap:6px;flex-wrap:wrap">
+        <span class="fchip on">全部 <b>27</b></span>
+        <span class="fchip">${ic("upload",11)} 上传 <b>12</b></span>
+        <span class="fchip">${ic("download",11)} 下载 <b>10</b></span>
+        <span class="fchip" style="color:var(--red);border-color:rgba(212,19,19,0.3)">失败 <b>2</b></span>
+      </div>
+      <div class="dbody">
+        <div class="xfer">
+          <span class="ic up">${ic("upload",13)}</span>
+          <span class="meta">
+            <span class="fn">eos-error-0929.zip → /data/backup/</span>
+            <div class="prog"><i></i></div>
+            <span class="sub"><span>18.2 / 28.4 MB · 64%</span><span>6.2 MB/s</span><span>剩余 1.7s</span></span>
+          </span>
+          <button class="btn icon sm" title="取消">✕</button>
+        </div>
+        <div class="xfer">
+          <span class="ic up">${ic("upload",13)}</span>
+          <span class="meta"><span class="fn">dump-2026-09-28.sql.gz → /data/backup/</span><span class="sub"><span>1.8 GB · 今天 08:58</span></span></span>
+          <span style="margin-left:auto;font-size:10px;color:var(--ink-muted)">08:58</span>
+        </div>
+        <div class="xfer">
+          <span class="ic dn">${ic("download",13)}</span>
+          <span class="meta"><span class="fn">eos-server.log</span><span class="sub"><span>20.0 MB · 今天 09:02</span></span></span>
+          <span style="margin-left:auto;font-size:10px;color:var(--ink-muted)">09:02</span>
+        </div>
+        <div class="xfer">
+          <span class="ic err">${ic("warn",13)}</span>
+          <span class="meta"><span class="fn">heap.hprof</span><span class="sub"><span style="color:var(--red)">失败 · 连接超时 · 今天 08:12</span></span></span>
+          <button class="btn sm" style="margin-left:auto">重试</button>
+        </div>
+      </div>
+      <div class="dfoot"><span class="muted" style="font-size:10.5px;flex:1">每服务器独立 · 保留最近 50 条</span><button class="btn sm">清空本服务器</button></div>
+    </div>
+  </div>` +
+  decision(`<span class="w">传输的上下文是文件窗口（本轮反馈修正）</span> — ① 抽屉左侧 = <b>文件目录视图</b>，正在上传的文件直接出现在文件表里（名称 + 进度条 + 速度行内展示），文件窗口内即可看到传输；② 表格新增「传输进度」列：进行中显示进度条，完成显示徽标；③ 右抽屉与文件表同源：chips 筛选、进行中置顶、失败可重试；④ 上传按钮在传输进行中变强调态，点传输图标开抽屉。`);
+}
+
+/* ============ S9 工具抽屉 ============ */
+function s9(){
+  // 迷你趋势线（60 个采样点，含 09:02 尖峰）
+  const cpu = [12,14,11,13,15,12,10,13,18,16,14,12,15,20,18,16,14,13,15,17,16,15,88,92,74,45,32,25,22,19,18,17,16,15,14,15,16,18,17,15,14,13,15,16,14,13,15,17,16,18,20,19,17,16,15,14,16,18,17,16];
+  const mem = [55,55.5,56,56,57,57,58,58,58,59,60,61,62,66,68,67,66,65,64,63,62,61,61,62,62,63,63,62,62,61,61,60,60,61,61,62,62,63,63,62,61,61,60,60,61,62,62,63,63,64,64,63,62,62,61,61,62,62,62];
+  const disk = [78,78,78,78,78,78,78.1,78.1,78.2,78.2,78.2,78.3,78.3,78.4,78.4,78.5,78.5,78.5,78.6,78.6,78.7,78.7,78.8,78.8,78.8,78.9,78.9,79,79,79,79.1,79.1,79.1,79.2,79.2,79.3,79.3,79.3,79.4,79.4,79.5,79.5,79.6,79.6,79.6,79.7,79.7,79.8,79.8,79.8,79.9,79.9,80,80,80,80.1,80.1,80.2,80.2,80.2];
+  const spark = (data, w, h, color, spike) => {
+    const max = Math.max(...data) * 1.15, min = 0;
+    const pts = data.map((v,i)=>`${(i/(data.length-1)*w).toFixed(1)},${(h - (v-min)/(max-min)*h).toFixed(1)}`).join(" ");
+    const area = `0,${h} ${pts} ${w},${h}`;
+    const spikeDot = spike ? (()=>{ const i=22; const x=(i/(data.length-1)*w).toFixed(1); const y=(h-(data[i]-min)/(max-min)*h).toFixed(1); return `<circle cx="${x}" cy="${y}" r="2.6" fill="#d41313"/><circle cx="${x}" cy="${y}" r="5" fill="rgba(212,19,19,.18)"/>`;})() : "";
+    return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" preserveAspectRatio="none" style="display:block">
+      <polygon points="${area}" fill="${color}" opacity="0.09"/>
+      <polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.4" stroke-linejoin="round"/>
+      ${spikeDot}
+    </svg>`;
+  };
+  const bigChart = () => {
+    const w = 720, h = 150;
+    const gen = (data, color, spike) => {
+      const max = 100, min = 0;
+      const pts = data.map((v,i)=>`${(i/(data.length-1)*w).toFixed(1)},${(h - (v-min)/(max-min)*(h-10)).toFixed(1)}`).join(" ");
+      const area = `0,${h} ${pts} ${w},${h}`;
+      const spikeDot = spike ? (()=>{ const i=22; const x=(i/(data.length-1)*w).toFixed(1); const y=(h-(data[i]-min)/(max-min)*(h-10)).toFixed(1); return `<circle cx="${x}" cy="${y}" r="3" fill="#d41313"/><circle cx="${x}" cy="${y}" r="6" fill="rgba(212,19,19,.16)"/><line x1="${x}" y1="${y}" x2="${x}" y2="${h}" stroke="#d41313" stroke-width="0.8" stroke-dasharray="3 3"/>`;})() : "";
+      return `<polygon points="${area}" fill="${color}" opacity="0.08"/><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linejoin="round"/>${spikeDot}`;
+    };
+    return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" preserveAspectRatio="none" style="display:block">
+      ${[25,50,75].map(y=>`<line x1="0" y1="${h-(y/100)*(h-10)}" x2="${w}" y2="${h-(y/100)*(h-10)}" stroke="var(--line)" stroke-width="0.6" stroke-dasharray="2 4"/>`).join("")}
+      ${gen(cpu,"#0070f3",true)}
+      ${gen(mem,"#0a7b3e",false)}
+      <line x1="${(22/59)*w}" y1="0" x2="${(22/59)*w}" y2="${h}" stroke="var(--line-strong)" stroke-width="0.6"/>
+    </svg>`;
+  };
+  return `<div style="position:absolute;inset:0;display:flex;background:var(--panel)">
+    <div style="flex:1;position:relative;display:flex;min-width:0">
+      ${sidebarHtml(1,-1)}
+      <div class="workspace" style="flex:1">
+        ${wtabs("127.38")}
+        <div class="tbar">
+          <div class="seg"><button class="on">日志预览</button><button>文件目录</button><button>终端</button></div>
+          <input class="input" style="flex:1" placeholder="输入关键字，或直接用 /关键字 后回车">
+          <button class="btn pri">检索</button>
+        </div>
+        <div class="content"><div class="note-pad">${logHtml(false)}</div></div>
+      </div>
+    </div>
+    <div class="drawer" style="position:relative;box-shadow:none;animation:none;width:480px;border-left:1px solid var(--line);z-index:10">
+      <div class="dhead">
+        <span class="t">工具</span>
+        <div class="seg lite" style="margin-left:auto"><button>${ic("plug",12)} 隧道</button><button>${ic("zap",12)} 批量</button><button class="on">${ic("cpu",12)} 监控</button><button>${ic("compare",12)} 对比</button></div>
+        <button class="btn icon sm">${ic("x",13)}</button>
+      </div>
+      <div class="dbody" style="padding:12px 16px;display:flex;flex-direction:column;gap:12px">
+        <div style="display:flex;gap:10px">
+          ${[["CPU","23%","var(--accent)",cpu,true],["内存","61%","var(--green)",mem,false],["磁盘 /data","78%","var(--amber)",disk,false]].map(([k,v,c,data,spike])=>`
+            <div style="flex:1;border:1px solid var(--line);border-radius:var(--r-m);padding:9px 11px 7px">
+              <div style="display:flex;align-items:center;gap:6px"><span class="mut" style="font-size:10.5px">${k}</span><span style="flex:1"></span><span class="mono" style="font-size:9.5px;color:var(--ink-muted)">1h</span></div>
+              <div style="font-size:19px;font-weight:700;margin:1px 0 4px">${v}</div>
+              ${spark(data,100,26,c,spike)}
+            </div>`).join("")}
+        </div>
+        <div style="border:1px solid var(--line);border-radius:var(--r-m);overflow:hidden">
+          <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--line);min-width:0">
+            <b style="font-size:12px;white-space:nowrap">监控记录</b>
+            <span class="chip red" style="flex:0 1 auto;min-width:0">
+              <span class="marq" style="max-width:100%"><span>异常 09:02 · 与日志 ERROR 对齐&nbsp;&nbsp;·&nbsp;&nbsp;异常 09:02 · 与日志 ERROR 对齐</span></span>
+            </span>
+            <span style="flex:1"></span>
+            <div class="seg lite" style="flex:none"><button>5 分钟</button><button class="on">30 分钟</button><button>1 小时</button></div>
+          </div>
+          <div style="padding:8px 10px 2px">${bigChart()}</div>
+          <div style="display:flex;gap:14px;padding:2px 12px 8px;font-size:10.5px;color:var(--ink-soft)">
+            <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:10px;height:2px;background:var(--accent);border-radius:1px"></span>CPU</span>
+            <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:10px;height:2px;background:var(--green);border-radius:1px"></span>内存</span>
+            <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:6px;height:6px;border-radius:50%;background:var(--red)"></span>异常事件</span>
+            <span style="flex:1"></span><span class="mono" style="font-size:9.5px;color:var(--ink-muted)">08:35 ─ 09:05</span>
+          </div>
+        </div>
+        <div style="border:1px solid var(--line);border-radius:var(--r-m);overflow:hidden">
+          <div style="padding:8px 12px;border-bottom:1px solid var(--line);font-weight:600;font-size:12px;display:flex;align-items:center">进程 TOP 5<span style="flex:1"></span><span class="mut mono" style="font-size:10px">按 CPU</span></div>
+          <div style="padding:6px 12px;font-family:var(--mono);font-size:10.5px;color:var(--ink-soft);line-height:2">
+            java&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;38.2%&nbsp;&nbsp;2.1GB&nbsp;&nbsp;eos-server<br/>
+            mysqld&nbsp;&nbsp;&nbsp;&nbsp;12.4%&nbsp;&nbsp;1.3GB<br/>
+            redis-srv&nbsp;&nbsp;3.1%&nbsp;&nbsp;210MB<br/>
+            nginx&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1.2%&nbsp;&nbsp;&nbsp;84MB
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="mut" style="font-size:11px;flex:1">每 10 秒采样 · 本地保留 1 小时环形缓冲</span>
+          <span class="pill on">自动</span><button class="btn sm">${ic("refresh",12)} 刷新</button>
+        </div>
+      </div>
+    </div>
+  </div>` +
+  decision(`<span class="w">监控要能回看，才能快速定位问题（本轮反馈）</span> — ① 指标卡各带 1 小时迷你趋势线；② 「监控记录」时序图：CPU/内存双线 + <b>异常事件标记（红点 + 虚线）与日志 ERROR 时间对齐</b>——看到 09:02 CPU 尖峰即可跳到同一时刻的日志；③ 时间范围 5 分钟/30 分钟/1 小时；④ 数据源：网关状态采集已有（10s/次），网关侧加 1 小时环形缓冲即可，前端零轮询负担。⑤ <b>流式布局原则</b>：控件永不内部换行；空间不足的收缩顺序 = 标题截断 → 控件缩 padding → 次要按钮隐藏进 ⋯。⑥ <b>关键信息禁止省略号</b>：显示不全的内容（如异常标记）改用<b>无缝滚动展示</b>。⑦ <b>抽屉非模态</b>：无遮罩、不变暗、不锁主界面——右侧监控/传输时，左侧检索、看日志、操作文件照常；模态只保留两处：设置中心（互斥全屏）与文件预览（弹窗）。`);
+}
+
+/* ============ S10 设置 ============ */
+function s10(){
+  const prefRow = (label, sub, ctl) => `
+    <div style="display:flex;align-items:center;gap:16px;padding:7px 20px;min-height:42px;border-bottom:1px solid var(--line)">
+      <span style="flex:1;min-width:0"><span style="display:block;font-weight:550;font-size:12.5px">${label}</span><span class="mut" style="font-size:11px">${sub}</span></span>
+      <span style="flex:none;display:inline-flex;align-items:center;gap:8px">${ctl}</span>
+    </div>`;
+  return `<div class="app">
+    <div class="workspace">
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 20px;border-bottom:1px solid var(--line);flex:none">
+        <button class="btn icon">${ic("left",14)}</button>
+        <b style="font-size:13.5px">设置中心</b><span class="mut" style="font-size:11.5px">连接管理与偏好设置分离维护</span>
+        <span style="flex:1"></span><span class="chip grn"><span class="dot on" style="width:5px;height:5px"></span>本地服务 4040</span>
+      </div>
+      <div style="flex:1;display:flex;min-height:0">
+        <div style="flex:0 0 164px;border-right:1px solid var(--line);padding:12px 10px;display:flex;flex-direction:column;gap:5px">
+          <span class="pill on" style="justify-content:center">连接管理</span>
+          <span class="pill" style="justify-content:center">偏好设置</span>
+          <span class="mut" style="font-size:10.5px;margin-top:auto;line-height:1.7;padding:8px 4px;border-top:1px dashed var(--line)">选中即编辑；主界面侧栏「编辑」直达此处。</span>
+        </div>
+        <div style="flex:0 0 268px;border-right:1px solid var(--line);overflow:auto">
+          <div style="padding:10px 12px"><input class="input" style="width:100%" placeholder="搜索名称、主机或标签…"></div>
+          <div class="grp">测试 <span class="c">4</span></div>
+          <div class="srow cur" style="padding:6px 16px"><span class="meta"><span class="nm">127.122 <span class="chip grn">当前连接</span></span><span class="host">root@192.168.127.122</span></span><span class="port">22</span></div>
+          <div class="srow" style="padding:6px 16px"><span class="meta"><span class="nm">127.38</span><span class="host">root@192.168.127.38</span></span><span class="port">22</span></div>
+          <div class="srow" style="padding:6px 16px"><span class="meta"><span class="nm">2.137</span><span class="host">root@192.168.2.137</span></span><span class="port">22</span></div>
+          <div class="grp">生产 <span class="c">3</span></div>
+          <div class="srow" style="padding:6px 16px"><span class="meta"><span class="nm">prod-web-01</span><span class="host">root@10.20.1.11</span></span><span class="port">22</span></div>
+        </div>
+        <div style="flex:1;overflow:auto">
+          <div style="padding:12px 20px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px">
+            <div style="flex:1"><b style="font-size:13px">127.122</b> <span class="chip grn">在线</span> <span class="chip">FinalShell</span><br/><span class="mono" style="font-size:10.5px">root@192.168.127.122:22 · /data/logs/eos</span></div>
+            <button class="btn sm">重连测试</button><button class="btn sm">${ic("term",12)} 打开终端</button>
+          </div>
+          <div style="padding:12px 20px;border-bottom:1px solid var(--line)">
+            <div style="display:flex;align-items:center;margin-bottom:9px"><span class="mut" style="font-size:10.5px;font-weight:650;letter-spacing:.06em">连接凭证</span><span style="flex:1"></span><span class="chip grn">已有可用凭证 · FinalShell 导入</span></div>
+            <div style="display:flex;gap:8px;align-items:center">
+              <span class="mut" style="font-size:11px;width:44px">密码</span>
+              <input class="input" style="flex:1" value="••••••••••••">
+              <button class="btn sm">查看</button><button class="btn sm" style="color:var(--red)">清除</button><button class="btn sm pri">保存</button>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
+              <span class="mut" style="font-size:11px;width:44px">私钥</span>
+              <input class="input" style="flex:1" value="未配置" disabled>
+              <button class="btn sm">粘贴导入</button>
+            </div>
+          </div>
+          <div style="padding:12px 20px;border-bottom:1px solid var(--line)">
+            <div style="display:flex;align-items:center;margin-bottom:9px"><span class="mut" style="font-size:10.5px;font-weight:650;letter-spacing:.06em">JumpServer 路由</span><span style="flex:1"></span><button class="btn sm">保存入口设置</button></div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <span class="chip">入口 jump-entry</span><span class="mut">→</span><span class="chip">资产 eos-app-03</span>
+              <span class="mono" style="font-size:10px;color:var(--ink-muted)">关键字 eos-app</span>
+            </div>
+          </div>
+          <div style="padding:12px 20px;display:flex;align-items:center;gap:10px">
+            <span class="mut" style="font-size:11px;flex:1">最近目录：/data/logs/eos · /data/logs/nginx · /opt/app/config</span>
+            <button class="btn sm" style="color:var(--red)">${ic("trash",12)} 删除此服务器</button>
+          </div>
+          <div style="background:var(--panel-muted);border-top:1px solid var(--line);padding:8px 20px;display:flex;align-items:center;gap:10px">
+            <span class="mut" style="font-size:10.5px">⚠ 已知缺陷 D9：外观能力缺口（水印/动图/日志字体族）在「偏好设置 → 外观」补充，见 S14</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>` +
+  decision(`<b>设置中心 = 已确认 v2 的完整高保真</b> — 左 rail（连接管理/偏好设置）+ 清单（分组/当前连接标记）+ 详情（信息头/凭证行内组/路由/最近目录/危险区一行）；凭证「查看/清除/保存」行内一组；删除降为页脚红字（不过度视觉）。偏好设置页结构同 S14（外观/水印/动效/字体）+ S10 补充（终端 AI API 配置在 高级）。<br/>⚠ D9 标注：外观能力缺口在此屏页脚挂出，跳 S14 设计。`);
+}
+
+/* ============ S11 桌面 ============ */
+function s11(){
+  return `<div style="position:absolute;inset:0;padding:28px;display:flex;gap:36px;align-items:flex-start;justify-content:center;background:var(--bg)">
+    <div>
+      <div class="mut" style="font-size:11px;margin-bottom:8px">macOS 菜单栏 · 托盘</div>
+      <div class="menubar" style="margin-bottom:10px"> <b style="font-weight:600">逆变器</b> 09:41 <span style="flex:1"></span> <b>⬒ 日志控制台</b> </div>
+      <div class="traymenu">
+        <div class="mi">${ic("folder",13)} 显示主窗口</div>
+        <div class="mi">${ic("download",13)} 传输记录 <span class="live"><i></i>1 进行中</span></div>
+        <div class="sep"></div>
+        <div class="mi">${ic("term",13)} 开发者工具</div>
+        <div class="mi" style="color:var(--red)">${ic("x",13)} 退出</div>
+      </div>
+      <div class="mut" style="font-size:10.5px;margin-top:10px;line-height:1.7">崩溃自愈已上线：渲染进程崩溃 → 自动重载（≤3 次/5 分钟）→ 失败弹「重新加载」。</div>
+    </div>
+    <div>
+      <div class="mut" style="font-size:11px;margin-bottom:8px">画中画窗口 · 日志 LIVE（终端/工具同理）</div>
+      <div class="pip">
+        <div class="ph">${ic("live",11)} <span style="flex:1">eos-server.log · 127.38</span><span class="liveb" style="padding:0 7px"><i></i>LIVE</span><button class="btn icon sm">${ic("expand",11)}</button><button class="btn icon sm">${ic("x",11)}</button></div>
+        <div style="padding:10px 14px;font-family:var(--mono);font-size:10.5px;color:var(--ink-soft);line-height:1.9">
+          09:02:11 <span style="color:var(--red)">ERROR</span> SyncJob - sync failed…<br/>
+          09:02:15 <span style="color:var(--red)">ERROR</span> SyncJob - retry 2/3…<br/>
+          09:02:21 <span style="color:var(--amber)">WARN</span> SyncJob - mark FAILED
+        </div>
+      </div>
+      <div style="margin-top:12px;display:flex;gap:8px;align-items:center">
+        <span class="mut" style="font-size:11px">窗口置顶</span><span class="pill on">${ic("pin",11)} ⌘⇧T</span>
+        <span class="mut" style="font-size:10.5px">任意视图工具行一键弹出 PiP</span>
+      </div>
+    </div>
+  </div>` +
+  decision(`<b>桌面三项收口</b> — ① 托盘菜单新增「传输记录 ● N 进行中」动态项（有任务才出现），点开直达抽屉；② PiP 入口统一到各视图工具行（日志/终端/工具各自弹出），PiP 保留 LIVE 徽标与弹出回主窗；③ 置顶保持 ⌘⇧T；崩溃自愈（已上线）不再需要用户感知。`);
+}
+
+/* ============ S12 空态与错误 ============ */
+function s12(){
+  return `<div class="app">
+    <div class="workspace">
+      <div class="banner">
+        <span style="display:flex">${ic("warn",15)}</span>
+        <span class="msg"><b>连接失败 · 认证被拒绝</b> — Permission denied (publickey,password) · root@192.168.127.122:22<br/><span style="color:var(--ink-soft);font-size:11.5px">凭证可能已过期；FinalShell 导入的密码可在设置中心重新获取。</span></span>
+        <button class="btn">${ic("refresh",12)} 重连</button>
+        <button class="btn pri">连接设置</button>
+      </div>
+      <div style="flex:1;display:flex;align-items:center;justify-content:center;gap:56px">
+        ${[["search","还没有检索结果","输入关键字回车，或用 /关键字 语法","查看检索示例"],
+           ["download","当前服务器暂无传输记录","上传或下载文件后会显示在这里","打开文件目录"],
+           ["folder","目录为空","回到上一级，或切换其他服务器","返回上一级"]]
+        .map(([icn,t,s,b])=>`
+          <div style="text-align:center;max-width:200px">
+            <div class="empty" style="position:static;margin-bottom:10px"><div class="ic">${ic(icn,18)}</div></div>
+            <div style="font-weight:650;margin-bottom:3px">${t}</div>
+            <div class="mut" style="font-size:11.5px;margin-bottom:12px;line-height:1.6">${s}</div>
+            <button class="btn">${b}</button>
+          </div>`).join("")}
+      </div>
+    </div>
+  </div>` +
+  decision(`<b>错误与空态统一</b> — ① 连接错误从弹窗改为内容区顶部横幅：中文原因 + 主机上下文 + [重连][连接设置]，不挡内容；② 空状态统一模板：图标 + 一句话 + 主按钮，杜绝装饰性统计；③ 启动卡（等待选择服务器）也用此模板。`);
+}
+
+/* ============ S13 核心排障动线 ============ */
+function s13(){
+  const stage = (no, title, sub, body, kbd) => `
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column;border:1px solid var(--line);border-radius:10px;background:var(--panel);overflow:hidden">
+      <div style="padding:9px 14px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px">
+        <span class="mono" style="font-size:10px;color:var(--accent);font-weight:700">${no}</span>
+        <b style="font-size:12.5px">${title}</b><span style="flex:1"></span><span class="kbd">${kbd}</span>
+      </div>
+      <div class="mut" style="padding:5px 14px 0;font-size:10.5px">${sub}</div>
+      <div style="flex:1;min-height:0">${body}</div>
+    </div>`;
+  return `<div style="position:absolute;inset:0;display:flex;flex-direction:column">
+    <div style="flex:1;display:flex;gap:14px;padding:18px;min-height:0">
+      ${stage("01","选择服务器","点击侧栏行即自动连接并打开上次目录",
+        `<div style="padding:8px 0">${srow("127.38","root@192.168.127.38","22","on",true,false)}</div><div class="mut" style="padding:0 14px;font-size:10.5px;line-height:1.8">状态摘要行出现：<br/>127.122 · root · /data/logs/eos<br/>底部操作记录默认收起</div>`,"单击")}
+      ${stage("02","检索","输入关键字回车；进度内联在按钮上",
+        `<div style="padding:10px 12px;display:flex;flex-direction:column;gap:8px">
+          <div style="display:flex;gap:6px;align-items:center"><input class="input" style="flex:1;height:26px;font-size:11px" value="sync failed"><button class="btn sm pri" style="gap:5px"><span class="spinner"></span> 340MB/1.2GB</button></div>
+          <div class="mut" style="font-size:10.5px;line-height:1.8">完成 → 结果工具行显示<br/><b style="color:var(--ink)">128 条 · 2.1 秒 · 340MB</b><br/>随时可 Esc 取消，不锁界面</div>
+        </div>`,"/ 或 ⌘F")}
+      ${stage("03","命中阅读","仅命中/含上下文切换；悬浮行可复制/书签/以此为起点再检索",
+        `<div style="padding:8px 0">
+          <div class="ll hit"><span class="t">08:20:03.882</span><span><span class="lv" style="color:var(--red)">ERROR</span> sync <mark>failed</mark>: connection reset…</span></div>
+          <div class="ll cur"><span class="t">08:20:09.101</span><span><span class="lv" style="color:var(--red)">ERROR</span> sync <mark>failed</mark> again…</span></div>
+          <div class="ll" style="color:var(--ink-muted)"><span class="t">…</span><span>◀ 3/128 ▶ 命中导航</span></div>
+        </div>`,"◀ ▶")}
+      ${stage("04","切片 + 实时接力","命中行 → 跳转对应字节切片；尾部开 LIVE",
+        `<div style="padding:10px 12px;display:flex;flex-direction:column;gap:9px">
+          <div style="display:flex;align-items:center;gap:6px"><div class="strack" style="height:4px"><div class="fill"></div><div class="thumb"></div></div><span class="mono" style="font-size:9px">62%</span></div>
+          <div style="display:flex;align-items:center;gap:6px"><span class="liveb" style="padding:0 7px"><i></i>LIVE</span><span class="mut" style="font-size:10px">tail -F 跟随中</span></div>
+          <div class="mut" style="font-size:10.5px;line-height:1.7">命中跳转保留 3 行上下文；<br/>到底自动续；上滚暂停跟随</div>
+        </div>`,"⌘L")}
+    </div>
+  </div>` +
+  decision(`<span class="w">这就是本产品的核心，设计权重最高</span> — 四段动线必须一次顺滑：选服务器（自动连接）→ 检索（内联进度、不锁界面）→ 命中阅读（导航/复制/书签/二次检索）→ 切片与实时接力（位置保持）。实施时以此为<b>主验收线</b>；文件/传输/工具都是支撑设施。补充优化：搜索历史 20 条下拉、条件命名收藏、行级复制/书签、后台检索角标。`);
+}
+
+/* ============ S14 外观 · 主题 · 水印 ============ */
+function s14(){
+  const thumb = (bg, label, on) => `
+    <div style="text-align:center;cursor:pointer">
+      <div style="width:96px;height:60px;border-radius:8px;border:2px solid ${on?"var(--accent)":"var(--line)"};background:${bg};position:relative;overflow:hidden">
+        <div style="position:absolute;left:8px;top:8px;width:34px;height:5px;border-radius:3px;background:rgba(23,23,23,.25)"></div>
+        <div style="position:absolute;left:8px;top:18px;right:8px;height:4px;border-radius:2px;background:rgba(23,23,23,.12)"></div>
+        <div style="position:absolute;left:8px;top:27px;right:18px;height:4px;border-radius:2px;background:rgba(23,23,23,.12)"></div>
+        <div style="position:absolute;left:8px;top:36px;right:28px;height:4px;border-radius:2px;background:rgba(23,23,23,.12)"></div>
+      </div>
+      <div style="font-size:11px;margin-top:6px;color:${on?"var(--accent)":"var(--ink-soft)"};font-weight:${on?600:400}">${label}</div>
+    </div>`;
+  return `<div class="app">
+    <div class="workspace">
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 20px;border-bottom:1px solid var(--line);flex:none">
+        <button class="btn icon">${ic("left",14)}</button>
+        <b style="font-size:13.5px">偏好设置</b><span class="mut" style="font-size:11.5px">外观 · 主题背景 · 字体 · 水印 · 动效</span>
+      </div>
+      <div class="content" style="padding:0">
+        <div style="border-bottom:1px solid var(--line)">
+          <div class="grp" style="padding:10px 20px 8px">背景方案</div>
+          <div style="display:flex;gap:14px;padding:2px 20px 12px">
+            ${thumb("linear-gradient(180deg,#ffffff,#fafafa)","默认",true)}
+            ${thumb("linear-gradient(180deg,#f4f6f8,#eceff3)","雾面",false)}
+            ${thumb("linear-gradient(180deg,#faf7f0,#f3ede1)","纸感",false)}
+            ${thumb("linear-gradient(135deg,#eef5ff,#fff7ed)","自定义",false)}
+          </div>
+        </div>
+        <div style="border-bottom:1px solid var(--line);padding:12px 20px">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+            <span class="mut" style="font-size:10.5px;font-weight:650;letter-spacing:.06em">自定义背景 · 图片模式</span>
+            <span class="fchip on">纯色</span><span class="fchip">渐变</span><span class="fchip on" style="border-color:var(--accent)">图片</span>
+            <span style="flex:1"></span><button class="btn sm">选择图片…</button>
+          </div>
+          <div style="display:flex;gap:22px;align-items:center;flex-wrap:wrap">
+            <label style="display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--ink-soft)">遮罩亮度 <input type="range" style="width:110px;accent-color:var(--accent)" value="30"> <span class="mono" style="font-size:10px">30%</span></label>
+            <label style="display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--ink-soft)">背景模糊 <input type="range" style="width:110px;accent-color:var(--accent)" value="0"> <span class="mono" style="font-size:10px">0px</span></label>
+            <label style="display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--ink-soft)">文字颜色 <input type="color" value="#171717" style="width:30px;height:22px;border:1px solid var(--line);border-radius:5px;background:none"></label>
+            <label style="display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--ink-soft)">日志底色 <input type="color" value="#0a0a0a" style="width:30px;height:22px;border:1px solid var(--line);border-radius:5px;background:none"></label>
+          </div>
+        </div>
+        <div style="border-bottom:1px solid var(--line);padding:12px 20px">
+          <div class="grp" style="padding:0 0 10px">字体（三处独立）</div>
+          <table class="tbl" style="max-width:860px">
+            <tr><th>作用区</th><th style="width:190px">字体族</th><th style="width:150px">字号</th></tr>
+            <tr><td>界面</td><td><select class="input" style="height:26px"><option>Geist（默认）</option><option>苹方</option><option>微软雅黑</option><option>宋体</option><option>系统字体</option></select></td><td><span class="pill">跟随界面密度</span></td></tr>
+            <tr><td>日志预览</td><td><select class="input" style="height:26px"><option>Geist Mono</option><option>SF Mono</option><option>JetBrains Mono</option><option>系统等宽</option></select></td><td><input class="input" style="width:76px;height:26px" value="12 px"></td></tr>
+            <tr><td>终端</td><td><select class="input" style="height:26px"><option>Geist Mono</option><option>SF Mono</option><option>JetBrains Mono</option><option>系统等宽</option></select></td><td><input class="input" style="width:76px;height:26px" value="12 px"></td></tr>
+          </table>
+          <div style="margin-top:10px;border:1px dashed var(--line-strong);border-radius:8px;padding:8px 14px;font-family:var(--mono);font-size:11.5px;color:var(--ink-soft)">
+            实时预览 — 2026-09-29 09:02:11 <span style="color:var(--red)">ERROR</span> c.e.task.SyncJob - sync failed: connection reset by peer
+          </div>
+        </div>
+        <div style="border-bottom:1px solid var(--line);padding:12px 20px;display:flex;gap:28px">
+          <div style="flex:1;max-width:460px">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+              <span class="mut" style="font-size:10.5px;font-weight:650;letter-spacing:.06em">水印 <span class="chip" style="margin-left:4px">新增</span></span>
+              <span style="flex:1"></span><span class="pill on">开启</span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px;font-size:11.5px;color:var(--ink-soft)">
+              <label style="display:flex;align-items:center;gap:8px">内容模板 <input class="input" style="flex:1;height:26px" value="{用户} · {主机} · {时间} 内部资料"></label>
+              <label style="display:flex;align-items:center;gap:8px">透明度 <input type="range" style="width:110px;accent-color:var(--accent)" value="5"> <span class="mono" style="font-size:10px">5%</span></label>
+              <div style="display:flex;gap:6px;align-items:center">作用范围 <span class="fchip on">日志/预览区</span><span class="fchip">全局</span></div>
+            </div>
+          </div>
+          <div style="flex:1;border:1px solid var(--line);border-radius:10px;position:relative;overflow:hidden;min-height:120px;background:var(--panel)">
+            <div style="padding:8px 0">
+              <div class="ll"><span class="t">09:02:11.001</span><span><span class="lv" style="color:var(--red)">ERROR</span> SyncJob - sync failed…</span></div>
+              <div class="ll"><span class="t">09:02:12.110</span><span><span class="lv" style="color:var(--ink-muted)">INFO </span> SyncJob - retry scheduled</span></div>
+              <div class="ll"><span class="t">09:02:15.771</span><span><span class="lv" style="color:var(--amber)">WARN </span> UploadController - got 413</span></div>
+            </div>
+            <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;overflow:hidden">
+              <div style="transform:rotate(-22deg);font-size:13px;color:rgba(23,23,23,0.07);font-weight:700;white-space:nowrap;line-height:3.2;text-align:center">
+                lyc · 127.38 · 09:41 内部资料&nbsp;&nbsp;&nbsp;lyc · 127.38 · 09:41 内部资料<br/>
+                lyc · 127.38 · 09:41 内部资料&nbsp;&nbsp;&nbsp;lyc · 127.38 · 09:41 内部资料
+              </div>
+            </div>
+          </div>
+        </div>
+        <div style="padding:12px 20px;display:flex;gap:28px;align-items:center">
+          <div style="display:flex;align-items:center;gap:10px;font-size:11.5px;color:var(--ink-soft)">动效 <span class="seg lite"><button class="on">标准</button><button>减少</button></span></div>
+          <div style="display:flex;align-items:center;gap:10px;font-size:11.5px;color:var(--ink-soft)">动态背景（图片缓慢缩放） <span class="pill">关闭</span><span class="mut" style="font-size:10px">动效=减少 时强制停用</span></div>
+          <span style="flex:1"></span><button class="btn danger">恢复默认显示</button>
+        </div>
+      </div>
+    </div>
+  </div>` +
+  decision(`<span class="w">外观/主题专项（补上轮遗漏）</span> — ① 背景方案 4 张可视缩略卡直接点选；② 图片背景新增 <b>遮罩亮度 + 模糊</b> 滑杆（解决浅字压图不可读）；③ 字体三处独立（界面/日志/终端）+ 实时预览行——日志字体族是现状没有的能力；④ <b>水印为新增能力</b>：内容模板 {用户}{主机}{时间}+自定义文字、斜向平铺、透明度 4-8%、作用范围可选，防排障截图外发泄露；⑤ 动图=动态背景（Ken Burns），动效=减少时强制停用；暗色模式/跟随系统列入未来计划。`);
+}
+
+/* ============ S15 窗口与断点 ============ */
+function s15(){
+  const mini = (w, h, label, body, note) => `
+    <div style="text-align:center">
+      <div style="width:${w}px;height:${h}px;border:1px solid var(--line-strong);border-radius:8px;overflow:hidden;display:flex;background:var(--panel);margin:0 auto;box-shadow:0 2px 10px rgba(0,0,0,.05)">
+        ${body}
+      </div>
+      <div class="mono" style="font-size:10px;color:var(--ink-muted);margin-top:6px">${label}</div>
+      <div class="mut" style="font-size:10.5px;margin-top:3px;line-height:1.6;max-width:${Math.max(w,180)}px">${note}</div>
+    </div>`;
+  const rail = `<div style="flex:0 0 8px;background:var(--panel-muted);border-right:1px solid var(--line)"></div>`;
+  const listCol = `<div style="flex:0 0 22%;border-right:1px solid var(--line);padding:6px"><div style="height:6px;width:70%;background:var(--panel-muted);border-radius:3px;margin-bottom:5px"></div><div style="height:6px;width:55%;background:var(--panel-muted);border-radius:3px;margin-bottom:5px"></div><div style="height:6px;width:62%;background:var(--panel-muted);border-radius:3px"></div></div>`;
+  const tableCol = `<div style="flex:1;padding:6px"><div style="height:6px;width:40%;background:var(--accent-soft);border-radius:3px;margin-bottom:5px"></div><div style="height:6px;width:75%;background:var(--panel-muted);border-radius:3px;margin-bottom:5px"></div><div style="height:6px;width:60%;background:var(--panel-muted);border-radius:3px"></div></div>`;
+  return `<div style="position:absolute;inset:0;overflow:auto;padding:22px 26px">
+    <div style="display:flex;gap:22px;align-items:flex-start;flex-wrap:wrap">
+      ${mini(430,264,"≥1440 标准窗口",
+        `<div style="flex:0 0 190px;border-right:1px solid var(--line);padding:8px"><div style="height:7px;width:60%;background:var(--panel-muted);border-radius:3px;margin-bottom:6px"></div><div style="height:7px;width:48%;background:var(--panel-muted);border-radius:3px;margin-bottom:6px"></div><div style="height:7px;width:55%;background:var(--panel-muted);border-radius:3px"></div></div>
+         <div style="flex:1;display:flex"><div style="flex:0 0 34%;border-right:1px solid var(--line);padding:8px"><div style="height:7px;width:80%;background:var(--accent-soft);border-radius:3px"></div></div><div style="flex:1;padding:8px"><div style="height:7px;width:70%;background:var(--panel-muted);border-radius:3px"></div></div></div>`,
+        "侧栏 240 / 清单 268 / 详情自适应；抽屉 420 为推挤式（内容收窄不遮盖）。")}
+      ${mini(340,264,"1024 – 1440 小窗",
+        `<div style="flex:0 0 150px;border-right:1px solid var(--line);padding:8px"><div style="height:7px;width:70%;background:var(--panel-muted);border-radius:3px;margin-bottom:6px"></div><div style="height:7px;width:50%;background:var(--panel-muted);border-radius:3px"></div></div>
+         <div style="flex:1;padding:8px"><div style="height:7px;width:60%;background:var(--accent-soft);border-radius:3px"></div></div>
+         <div style="flex:0 0 0px"></div>`,
+        "侧栏压到 200；抽屉改为覆盖式（浮在内容上，不挤压表格）；文件树 <1024 自动隐藏（目录改下拉）。")}
+      ${mini(250,264,"800×600 最小窗口",
+        `${rail}<div style="flex:1;padding:8px"><div style="height:7px;width:66%;background:var(--accent-soft);border-radius:3px;margin-bottom:6px"></div><div style="height:7px;width:80%;background:var(--panel-muted);border-radius:3px"></div></div>`,
+        "侧栏折叠为 56px 图标列（服务器头像点竖排，悬浮展开全名）；表格隐藏「类型」列保「大小/时间」。")}
+    </div>
+    <div style="margin-top:20px;border:1px solid var(--line);border-radius:10px;overflow:hidden;max-width:980px">
+      <div style="padding:8px 14px;border-bottom:1px solid var(--line);background:var(--panel-muted);font-weight:650;font-size:12px">窗口适配规范（实施必须遵守）</div>
+      <table class="tbl">
+        <tr><th style="width:170px">断点</th><th>行为</th></tr>
+        <tr><td class="mono">≥ 1440</td><td>侧栏 240 · 设置清单 268 · 抽屉 420 推挤式 · 文件树常驻</td></tr>
+        <tr><td class="mono">1024 – 1440</td><td>侧栏 200 · 抽屉覆盖式（带遮罩点击关闭）· 文件树常驻</td></tr>
+        <tr><td class="mono">800 – 1024</td><td>侧栏折叠 56 图标列（悬浮展开）· 文件树隐藏改下拉 · 抽屉覆盖式</td></tr>
+        <tr><td class="mono">&lt; 800 / 最小尺寸</td><td>表格隐藏「类型」列；工具栏搜索框收缩为图标（点开浮层）；终端分屏改上下堆叠</td></tr>
+        <tr><td class="mono">PiP</td><td>默认 980×680，最小 720×420；内容随宽度降级（隐藏工具行次要按钮）</td></tr>
+        <tr><td class="mono">通用</td><td>所有面板分隔线统一 <b>1px solid var(--line)</b>，禁止相邻面板双边框叠放（左 pane 不设 border-right + 右 pane border-left）</td></tr>
+      </table>
+    </div>
+  </div>` +
+  decision(`<span class="w">防止实现走样：窗口真实状态入规范（本轮反馈）</span> — ① 分割线粗细不统一的根因 = <b>相邻面板双边框叠放</b>（左 pane border-right + 抽屉 border-left = 2px），规范已定死：单边框原则；② 应用里排查到 3 处 2px 边框（transfer 弹窗 / 终端分屏 / 设置锚点），实施时统一收敛为 1px；③ 三档窗口 + 最小尺寸 + PiP 的布局行为写死在上表，实施验收按表核对。`);
+}
+
+
+/* ============ 路由 ============ */
+const SCREENS = {
+  s1:{n:"S1 主框架 · ⌘K 命令面板",d:"工具栏收敛 · 结果工具行 · 命令面板（Raycast/Linear 模式）",f:s1},
+  s2:{n:"S2 服务器侧栏",d:"悬浮快捷操作 · 状态摘要 · 与设置清单同构",f:s2},
+  s3:{n:"S3 日志检索",d:"条件两段式 · 高级抽屉 · 进度内联",f:s3},
+  s4:{n:"S4 切片 + 实时",d:"紧凑切片条 · LIVE 状态带一体化",f:s4},
+  s5:{n:"S5 终端工作台",d:"工作区第三 tab · AI 抽屉 · 快捷命令",f:s5},
+  s6:{n:"S6 文件浏览",d:"面包屑 · 批量操作条 · 右键菜单分组",f:s6},
+  s7:{n:"S7 文件预览",d:"源码/归档/Class 三态 · 文件内搜索",f:s7},
+  s8:{n:"S8 传输记录抽屉",d:"文件窗口内传输 · 表内进度 · 右抽屉同源",f:s8},
+  s9:{n:"S9 工具抽屉",d:"隧道/批量/状态/对比 四合一",f:s9},
+  s10:{n:"S10 设置中心",d:"已确认的 v2（微调：危险区降为页脚）",f:s10},
+  s11:{n:"S11 桌面能力",d:"托盘动态项 · PiP 统一入口 · 置顶",f:s11},
+  s12:{n:"S12 空态与错误",d:"错误横幅 · 空状态模板",f:s12},
+  s13:{n:"S13 核心排障动线",d:"选服务器 → 检索 → 命中阅读 → 切片/实时接力",f:s13},
+  s14:{n:"S14 外观 · 主题 · 水印",d:"背景/字体/水印（新增）/动态背景",f:s14},
+  s15:{n:"S15 窗口与断点",d:"三档窗口行为 · 最小尺寸 · 分隔线单边框原则",f:s15},
+};
+const vp = document.getElementById("viewport");
+function go(id){
+  document.querySelectorAll("#index button").forEach(b=>b.classList.toggle("on",b.dataset.s===id));
+  const meta = SCREENS[id];
+  document.getElementById("d-n").textContent = meta.n;
+  document.getElementById("d-d").textContent = meta.d;
+  vp.innerHTML = `<div class="screen on">${meta.f()}</div>`;
+  const pal = vp.querySelector("#pal");
+  const kb = vp.querySelector("#kbtn");
+  if (kb && pal) kb.addEventListener("click", ()=> pal.style.display = pal.style.display==="none"?"flex":"none");
+  const advB = vp.querySelector("#advB"), advX = vp.querySelector("#advX");
+  if (advB && advX){ advB.addEventListener("click",()=>{}); }
+  const apT = vp.querySelector("#apT");
+  if (apT) apT.addEventListener("click",()=>{ apT.classList.toggle("on"); apT.textContent = apT.classList.contains("on")?"显示中 · 点击隐藏":"隐藏 · 点击显示"; });
+  location.hash = id;
+  document.getElementById("viewport").scrollTop = 0;
+}
+document.querySelectorAll("#index button").forEach(b=>b.addEventListener("click",()=>go(b.dataset.s)));
+const h = location.hash.slice(1);
+go(SCREENS[h] ? h : "s1");
+window.addEventListener("hashchange",()=>{ const id=location.hash.slice(1); if(SCREENS[id]) go(id); });
+</script>
+</body>
+</html>

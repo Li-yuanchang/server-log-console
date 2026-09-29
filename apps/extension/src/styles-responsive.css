@@ -402,7 +402,6 @@
 }
 
 .settings-workspace-grid-overview,
-.settings-workspace-grid-inventory,
 .settings-workspace-grid-server,
 .settings-workspace-grid-preferences,
 .settings-form-grid-single {
@@ -448,6 +447,10 @@
   color: var(--ink);
 }
 
+.settings-preference-item-wide {
+  grid-column: span 2;
+}
+
 .settings-preference-toggle {
   cursor: pointer;
   text-align: left;
@@ -486,6 +489,134 @@
   color: var(--ink);
 }
 
+.settings-theme-customizer {
+  align-content: start;
+  gap: 12px;
+}
+
+.settings-theme-customizer-head {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.settings-theme-customizer-head > div {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.settings-theme-customizer-head span,
+.settings-color-field span,
+.settings-image-field span {
+  color: var(--ink-soft);
+  font-size: 12px;
+}
+
+.settings-theme-customizer-head strong {
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.settings-theme-customizer-head select {
+  width: min(180px, 44%);
+  min-height: 30px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 0 8px;
+}
+
+.settings-custom-theme-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.settings-field-span-2 {
+  grid-column: 1 / -1;
+}
+
+.settings-color-field,
+.settings-image-field {
+  display: grid;
+  align-content: start;
+  gap: 7px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.settings-color-field {
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+}
+
+.settings-color-field span {
+  grid-column: 1 / -1;
+}
+
+.settings-color-field input[type="color"] {
+  width: 34px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.settings-color-field code {
+  justify-self: end;
+  padding: 5px 7px;
+  border-radius: 7px;
+  font-family: "Geist Mono", "SF Mono", Consolas, monospace;
+  font-size: 11px;
+}
+
+.settings-image-field input,
+.settings-image-field select {
+  width: 100%;
+  min-height: 30px;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 0 9px;
+  color: var(--ink);
+  background: var(--panel-strong);
+}
+
+.settings-image-picker-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.settings-hidden-file-input {
+  display: none !important;
+}
+
+.settings-secondary-action {
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--panel-strong);
+  color: var(--ink-soft);
+  box-shadow: none;
+  white-space: nowrap;
+}
+
+.settings-secondary-action:hover:not(:disabled) {
+  border-color: var(--line-strong);
+  background: var(--panel-muted);
+  color: var(--accent);
+  filter: none;
+}
+
 .settings-preference-reset {
   border-style: dashed;
 }
@@ -508,7 +639,6 @@
 }
 
 .settings-card-scroll,
-.settings-server-list,
 .settings-asset-list {
   min-height: 0;
 }
@@ -685,7 +815,6 @@
   line-height: 1.5;
 }
 
-.settings-server-list,
 .settings-asset-list {
   display: grid;
   gap: 8px;
@@ -863,8 +992,26 @@
 
   .settings-preference-grid,
   .settings-roadmap-grid,
+  .settings-custom-theme-grid,
   .settings-form-grid-two,
   .settings-meta-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .settings-preference-item-wide {
+    grid-column: span 1;
+  }
+
+  .settings-theme-customizer-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .settings-theme-customizer-head select {
+    width: 100%;
+  }
+
+  .settings-image-picker-row {
     grid-template-columns: minmax(0, 1fr);
   }
 }

@@ -165,7 +165,7 @@
   overflow-x: hidden;
   padding: 5px 6px;
   border-radius: 8px;
-  background: linear-gradient(180deg, var(--shell), var(--shell-soft));
+  background: var(--log-viewer-background, linear-gradient(180deg, var(--shell), var(--shell-soft)));
   color: var(--shell-ink);
   border: 1px solid #15202b;
   white-space: pre-wrap;

@@ -6,6 +6,40 @@
 - **`docs/版本修复归档-2026-04-14.md`** — 记录问题背景、根因、修改点、经验教训和防复发清单。
 - **维护约定** — 详细代码链、安装版资源命中、排查过程与复盘结论统一写入归档，不在 `CHANGELOG.md` 重复展开。
 
+## [0.3.230] — 2026-09-28
+
+内存诊断探针与图标语义统一版本。
+
+### 新增
+
+- **内存指标探针** — 主进程每 5 分钟将各进程工作集内存（Browser/Tab/GPU）与渲染进程 JS 堆用量写入 `/tmp/slc-mem-probe.log`，崩溃瞬间（renderer-gone）额外采样一次，为长会话内存增长提供实测曲线。
+
+### 修复
+
+- **图标语义统一（modern 主题对齐 lucide）** — 返回上一级 FolderUp→ArrowUp；上传目录 FolderOpen→FolderUp；批量移动 FolderOpen→FolderInput（新增 folder-move）；传输记录 ArrowUpDown→ArrowLeftRight（与 classic 一致）；清空选择 Undo2→ListX；重命名自绘文本线→TextCursorInput；含上下文自绘横线→AlignJustify。
+
+### 验证
+
+- **类型检查** — `apps/extension` 的 `npm run typecheck` 通过；`apps/electron/main.cjs` 语法检查通过。
+- **安装版验证** — 打包 0.3.230 安装到 `/Applications` 并启动，`did-finish-load` 正常；探针首条记录 `rendererJsHeap=24.8MB/3585.8MB`，确认 V8 堆上限约 3.5GB。
+- **内存根源审计结论** — 全部显式缓冲均有上限；膨胀主因是单次搜索结果被复制 4~6 份（`results` 状态含 matches/rawOutput/contextOutput，结果页签再存 content+fullContent+matches，最多 8 页签驻留），叠加 ≤10MB 文件预览双份内容；具体待探针曲线实测坐实。
+
+## [0.3.229] — 2026-09-28
+
+渲染进程崩溃自动恢复版本。
+
+### 修复
+
+- **崩溃自动恢复** — 主窗口渲染进程崩溃（`render-process-gone` 且非正常退出）时自动 reload 页面，5 分钟内最多 3 次；重载 10 秒未完成则销毁重建窗口；连续失败后弹窗提供「重新加载 / 退出」，替代原先的白屏假死。
+- **PiP 窗口崩溃兜底** — 画中画窗口（日志/终端/工具）渲染进程崩溃后自动关闭该窗口，走既有 `pip-window-closed` 通知链，前端状态正常回收。
+
+### 验证
+
+- **类型检查** — `apps/extension` 与 `apps/gateway` 的 `npm run typecheck` 通过。
+- **安装版验证** — 打包 0.3.229 并安装到 `/Applications/ServerLogConsole.app`，`gateway health ok attempt=1`。
+- **崩溃恢复实测** — SIGKILL 渲染进程后，探针日志记录 `render-process-gone killed 9` → `renderer recovery reload attempt=1` → 234ms 后 `did-finish-load` → `renderer recovery reload finished`，新渲染进程正常拉起，窗口自动恢复。
+- **根因备注** — 前一次会话（0.3.228，运行 31.5 小时）于 9-28 07:00 发生渲染进程 SIGTRAP 崩溃，栈落在 V8/GC 路径，判断为长会话 JS 堆耗尽；本版本先解决"崩溃后白屏无恢复"的体验问题，内存增长源待后续专项排查（`docs/未来开发计划.md` 可记录）。
+
 ## [0.3.80] — 2026-04-14
 
 文件浏览目录删除与右键切换修复版本。

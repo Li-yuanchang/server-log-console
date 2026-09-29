@@ -83,6 +83,7 @@ import { WorkspaceTabContextMenu, type WorkspaceTabMenuState } from "./Workspace
 import { WorkspaceSessionTabs } from "./WorkspaceSessionTabs.js";
 import { SettingsModalOverlay } from "./SettingsModalOverlay.js";
 import { WorkspaceStartupCards } from "./WorkspaceStartupCards.js";
+import { ImmediateTooltip } from "./ImmediateTooltip.js";
 import { DialogOverlays } from "./DialogOverlays.js";
 import { useTerminalWindowManager } from "./useTerminalWindowManager.js";
 import { useKeyboardShortcuts } from "./useKeyboardShortcuts.js";
@@ -171,6 +172,25 @@ function getJumpServerStatusContextLabel(value: string): string {
   return value || "未确定目标";
 }
 
+function toCssImageUrl(value: string): string {
+  const normalized = value.trim();
+  if (!normalized) return "none";
+  const source = /^(https?:|file:|data:|blob:)/i.test(normalized)
+    ? normalized
+    : normalized.startsWith("/")
+      ? `file://${normalized}`
+      : normalized;
+  return `url(${JSON.stringify(source)})`;
+}
+
+function fontFamilyValue(value: string): string {
+  if (value === "pingfang") return "\"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", sans-serif";
+  if (value === "microsoft-yahei") return "\"Microsoft YaHei\", \"PingFang SC\", sans-serif";
+  if (value === "simsun") return "\"Songti SC\", \"SimSun\", serif";
+  if (value === "system") return "-apple-system, BlinkMacSystemFont, \"SF Pro Text\", \"PingFang SC\", sans-serif";
+  return "\"Geist\", \"Inter\", -apple-system, \"SF Pro Text\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", sans-serif";
+}
+
 export function App() {
   const [servers, setServers] = useState<ServerSummary[]>([]);
   const [serverId, setServerId] = useState(pipUrlParams.get("serverId") ?? "");
@@ -248,16 +268,41 @@ export function App() {
     setUiDensity,
     uiSurface,
     setUiSurface,
+    uiBackgroundMode,
+    setUiBackgroundMode,
+    customBackgroundColor,
+    setCustomBackgroundColor,
+    customGradientStart,
+    setCustomGradientStart,
+    customGradientEnd,
+    setCustomGradientEnd,
+    customBackgroundImage,
+    setCustomBackgroundImage,
+    customTextColor,
+    setCustomTextColor,
+    customLogBackgroundColor,
+    setCustomLogBackgroundColor,
+    customTerminalBackgroundColor,
+    setCustomTerminalBackgroundColor,
+    uiFontFamily,
+    setUiFontFamily,
     logFontSize,
     setLogFontSize,
     terminalFontSize,
     setTerminalFontSize,
     motionMode,
     setMotionMode,
+    activityPanelVisible,
+    setActivityPanelVisible,
     resetUiPreferences,
   } = useUiTheme();
-  const [showConnectionSettings, setShowConnectionSettings] = useState(false);
-  const [settingsWorkspaceView, setSettingsWorkspaceView] = useState<SettingsWorkspaceView>("preferences");
+  // 深链：?settings=connections|preferences 直接打开设置中心（web 端验证与分享用）
+  const [showConnectionSettings, setShowConnectionSettings] = useState(() => new URLSearchParams(window.location.search).has("settings"));
+  const [showTransferHistory, setShowTransferHistory] = useState(() => new URLSearchParams(window.location.search).has("transfer"));
+  const [settingsWorkspaceView, setSettingsWorkspaceView] = useState<SettingsWorkspaceView>(() => {
+    const param = new URLSearchParams(window.location.search).get("settings");
+    return param === "connections" || param === "preferences" ? param : "preferences";
+  });
   const [manualServerDraft, setManualServerDraft] = useState<ManualServerDraft>(() => createManualServerDraft());
   const [showQueryAdvanced, setShowQueryAdvanced] = useState(false);
   const [credentialStatus, setCredentialStatus] = useState<ServerCredentialStatus | null>(null);
@@ -279,7 +324,6 @@ export function App() {
   const [showKeywordBar, setShowKeywordBar] = useState(true);
   const [showDirectoryFilter, setShowDirectoryFilter] = useState(false);
   const [showPathHistory, setShowPathHistory] = useState(false);
-  const [showTransferHistory, setShowTransferHistory] = useState(false);
   const [transferHistory, setTransferHistory] = useState<TransferHistoryEntry[]>(() => readTransferHistory());
   const [directoryInput, setDirectoryInput] = useState("");
   const [pathbarMode, setPathbarMode] = useState<"browse" | "edit">("browse");
@@ -1268,6 +1312,7 @@ export function App() {
     closeWorkspaceSession,
     startCreateManualServer,
     startEditManualServer,
+    editManualServerDraft,
     saveManualServer,
     requestDeleteServer,
   } = useServerManagement({
@@ -1451,6 +1496,8 @@ export function App() {
     fetchCredentialStatus,
     fetchServerRoute,
     saveCredentialForServer,
+    loadCredentialSecretForServer,
+    clearCredentialForServer,
     saveServerRouteForServer,
     searchJumpServerAssets,
     testServerConnection,
@@ -1525,6 +1572,7 @@ export function App() {
     preserveSessionOnDispose: isStandaloneTerminalWindow,
     onSelectionMenu: setTermSelMenu,
     terminalFontSize,
+    terminalBackgroundColor: customTerminalBackgroundColor,
   });
 
   useEffect(() => {
@@ -2624,10 +2672,18 @@ export function App() {
     browseLogFiles,
   });
 
-  const appShellClassName = `app-shell${uiTheme === "modern" ? " theme-modern" : ""} ui-density-${uiDensity} ui-surface-${uiSurface} ui-motion-${motionMode}${isElectron ? " electron-immersive" : ""}${isElectron && isMacOS ? " electron-macos-immersive" : ""}`;
+  const appShellClassName = `app-shell${uiTheme === "modern" ? " theme-modern" : ""} ui-density-${uiDensity} ui-surface-${uiSurface}${uiSurface === "custom" ? ` ui-custom-background-${uiBackgroundMode}` : ""} ui-motion-${motionMode}${isElectron ? " electron-immersive" : ""}${isElectron && isMacOS ? " electron-macos-immersive" : ""}`;
   const appShellStyle = {
     "--log-font-size": `${logFontSize}px`,
     "--terminal-font-size": `${terminalFontSize}px`,
+    "--app-font-family": fontFamilyValue(uiFontFamily),
+    "--custom-background-color": customBackgroundColor,
+    "--custom-gradient-start": customGradientStart,
+    "--custom-gradient-end": customGradientEnd,
+    "--custom-background-image": toCssImageUrl(customBackgroundImage),
+    "--custom-text-color": customTextColor,
+    "--custom-log-background-color": customLogBackgroundColor,
+    "--custom-terminal-background-color": customTerminalBackgroundColor,
   } as CSSProperties;
 
   if (isStandaloneTerminalWindow) {
@@ -2734,7 +2790,9 @@ export function App() {
           selectedServer={selectedServer}
           directoryPath={directoryPath}
           activityPanelHeight={activityPanelHeight}
+          activityPanelVisible={activityPanelVisible}
           sidebarActivityLines={sidebarActivityLines}
+          onDeleteServer={requestDeleteServer}
           onOpenSettingsWorkspace={openSettingsWorkspace}
           onCloseSettingsWorkspace={closeSettingsWorkspace}
           onActivityPanelResizeStart={handleActivityPanelResizeStart}
@@ -3464,7 +3522,7 @@ export function App() {
                       <button className="ghost-button" onClick={() => testServerConnection(selectedServer?.basePath?.trim() || "/")} disabled={isBusy}>
                         重新连接
                       </button>
-                      <button className="ghost-button" onClick={() => openSettingsWorkspace("server")}>
+                      <button className="ghost-button" onClick={() => openSettingsWorkspace("connections")}>
                         当前服务器
                       </button>
                     </div>
@@ -3505,7 +3563,7 @@ export function App() {
                             disabled={isBusy}
                             title="批量移动"
                           >
-                            <ToolIcon theme={uiTheme} kind="folder" />
+                            <ToolIcon theme={uiTheme} kind="folder-move" />
                           </button>
                           <button
                             type="button"
@@ -3581,6 +3639,7 @@ export function App() {
                           onOpenContextMenu={(entry, clientX, clientY) => { openContextMenu(entry, clientX, clientY); }}
                           onToggleSelection={toggleFileSelection}
                           onDownload={(path) => { void downloadFile(path); }}
+                          onEdit={(entry) => { void previewFile(entry); }}
                           onRename={openRenameDialog}
                           onDelete={deleteRemoteFile}
                         />
@@ -3729,6 +3788,15 @@ export function App() {
                 uiTheme,
                 uiDensity,
                 uiSurface,
+                uiBackgroundMode,
+                customBackgroundColor,
+                customGradientStart,
+                customGradientEnd,
+                customBackgroundImage,
+                customTextColor,
+                customLogBackgroundColor,
+                customTerminalBackgroundColor,
+                uiFontFamily,
                 logFontSize,
                 terminalFontSize,
                 motionMode,
@@ -3740,9 +3808,20 @@ export function App() {
                 serverStatusAutoRefresh: serverSystemProfileAutoRefresh,
                 serverStatusRefreshIntervalMs: SERVER_STATUS_REFRESH_INTERVAL_MS,
                 activityPanelHeight,
+                activityPanelVisible,
+                onToggleActivityPanelVisible: () => setActivityPanelVisible((current) => !current),
                 onUiThemeChange: setUiTheme,
                 onUiDensityChange: setUiDensity,
                 onUiSurfaceChange: setUiSurface,
+                onUiBackgroundModeChange: setUiBackgroundMode,
+                onCustomBackgroundColorChange: setCustomBackgroundColor,
+                onCustomGradientStartChange: setCustomGradientStart,
+                onCustomGradientEndChange: setCustomGradientEnd,
+                onCustomBackgroundImageChange: setCustomBackgroundImage,
+                onCustomTextColorChange: setCustomTextColor,
+                onCustomLogBackgroundColorChange: setCustomLogBackgroundColor,
+                onCustomTerminalBackgroundColorChange: setCustomTerminalBackgroundColor,
+                onUiFontFamilyChange: setUiFontFamily,
                 onLogFontSizeChange: setLogFontSize,
                 onTerminalFontSizeChange: setTerminalFontSize,
                 onMotionModeChange: setMotionMode,
@@ -3775,20 +3854,21 @@ export function App() {
                 onSaveFinalShellPath: () => { void saveFinalShellPath(); },
                 onImport: (tool) => { void importFromTool(tool || selectedImportTool); },
               }}
-              inventorySection={{
+              connectionSection={{
                 managedServers: servers,
                 manualServers,
                 importedServers,
-                selectedServerId: serverId,
                 draft: manualServerDraft,
                 canSaveDraft: canSaveManualServer,
-                onSelectServer: selectServerById,
                 onStartCreate: startCreateManualServer,
-                onStartEdit: startEditManualServer,
                 onChangeDraft: (patch) => setManualServerDraft((current) => ({ ...current, ...patch })),
                 onResetDraft: () => setManualServerDraft(createManualServerDraft()),
                 onSaveDraft: () => { void saveManualServer(); },
-                onDeleteServer: requestDeleteServer,
+                onSelectServer: (nextServerId) => {
+                  selectServerById(nextServerId);
+                  closeSettingsWorkspace();
+                },
+                onEditManualServer: editManualServerDraft,
               }}
               currentServerSection={{
                 selectedServer,
@@ -3801,6 +3881,16 @@ export function App() {
                 onCredentialPasswordChange: setCredentialPassword,
                 onCredentialPrivateKeyChange: setCredentialPrivateKey,
                 onSaveCredential: () => { void saveCredentialForServer(); },
+                onLoadCredentialSecret: () => { void loadCredentialSecretForServer(); },
+                onClearCredential: () => {
+                  if (!selectedServer) return;
+                  setConfirmDialog({
+                    title: "清除连接凭证",
+                    message: `确定清除"${selectedServer.name}"保存的密码/私钥？\n清除后再次连接需要重新录入或重新导入。`,
+                    danger: true,
+                    onConfirm: () => { void clearCredentialForServer(); }
+                  });
+                },
                 onTestConnection: () => { void testServerConnection(currentConnectionDirectory); },
                 onOpenTerminal: () => openTerminalView(),
                 availableBastions,
@@ -3877,6 +3967,8 @@ export function App() {
 
       <DialogOverlays
         uiTheme={uiTheme}
+        uploadProgress={uploadProgress}
+        downloadProgress={downloadProgress}
         renameDialog={renameDialog}
         moveDialog={moveDialog}
         batchMoveDialog={batchMoveDialog}
@@ -3956,6 +4048,7 @@ export function App() {
         onTransferHistoryClear={requestClearTransferHistory}
         onTransferHistoryClose={() => setShowTransferHistory(false)}
       />
+      <ImmediateTooltip />
     </main>
   );
 }
