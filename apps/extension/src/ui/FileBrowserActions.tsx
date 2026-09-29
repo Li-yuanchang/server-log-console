@@ -20,7 +20,8 @@ type Props = {
 export function FileBrowserActions(props: Props) {
   return (
     <>
-      <button className="ghost-button icon-button" title="返回上一级" onClick={props.onBrowseParent} disabled={props.isBusy || !props.hasServer}>
+      {/* D1: 返回上一级是只读导航，忙碌期间保持可用 */}
+      <button className="ghost-button icon-button" title="返回上一级" onClick={props.onBrowseParent} disabled={!props.hasServer}>
         <ToolIcon theme={props.uiTheme} kind="open" />
       </button>
       <button
@@ -51,7 +52,8 @@ export function FileBrowserActions(props: Props) {
       <button className="ghost-button icon-button" title="上传目录" onClick={props.onUploadDirectory} disabled={props.isBusy || !props.hasServer}>
         <ToolIcon theme={props.uiTheme} kind="folder-up" />
       </button>
-      <button className="ghost-button icon-button" title="刷新目录" onClick={props.onRefresh} disabled={props.isBusy || !props.hasServer}>
+      {/* D1: 刷新目录是只读查看操作，忙碌期间保持可用；写类（新建/上传）仍锁忙碌 */}
+      <button className="ghost-button icon-button" title="刷新目录" onClick={props.onRefresh} disabled={!props.hasServer}>
         <ToolIcon theme={props.uiTheme} kind="refresh" />
       </button>
     </>

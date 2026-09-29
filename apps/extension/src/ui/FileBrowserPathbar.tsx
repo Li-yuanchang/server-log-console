@@ -9,7 +9,6 @@ type Props = {
   breadcrumbItems: BreadcrumbItem[];
   inputRef: RefObject<HTMLInputElement | null>;
   hasServer: boolean;
-  isBusy: boolean;
   onSetDirectoryInput: (value: string) => void;
   onEnterEditMode: () => void;
   onExitEditMode: () => void;
@@ -53,6 +52,7 @@ export function FileBrowserPathbar(props: Props) {
         return (
           <div className="pathbar-breadcrumb-node" key={item.path}>
             {index > 1 ? <span className="pathbar-breadcrumb-separator">/</span> : null}
+            {/* D1: 面包屑跳转是只读导航，忙碌期间保持可用 */}
             <button
               type="button"
               className={isLast ? "pathbar-breadcrumb-item is-current" : "pathbar-breadcrumb-item"}
@@ -64,7 +64,7 @@ export function FileBrowserPathbar(props: Props) {
                 }
                 props.onCommitDirectoryPath(item.path);
               }}
-              disabled={!props.hasServer || props.isBusy}
+              disabled={!props.hasServer}
             >
               {item.label}
             </button>
