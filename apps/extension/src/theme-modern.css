@@ -4827,6 +4827,8 @@ body.is-electron .settings-exclusive-head input {
   background: var(--panel);
   font-size: 10.5px;
   color: var(--ink-soft);
+}
+
 /* === 工具抽屉 === */
 .tool-drawer-seg {
   display: inline-flex;
@@ -4911,6 +4913,8 @@ body.is-electron .settings-exclusive-head input {
   flex: 1 1 0%;
   min-width: 0;
   font-size: 10.5px;
+}
+
 /* --- S6 文件操作提权：行悬浮快捷操作组 --- */
 .theme-modern .file-row-actions {
   display: inline-flex;
@@ -5078,6 +5082,7 @@ body.is-electron .settings-exclusive-head input {
   font-size: 10px;
   color: var(--ink-muted);
   white-space: nowrap;
+}
 
 /* --- S6 右键菜单分组与快捷键标注 --- */
 .theme-modern .context-menu-item {
