@@ -1,6 +1,13 @@
+import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, Cpu, Database, HardDrive, Network, RefreshCw, Server, Activity } from "lucide-react";
 import type { ServerSummary, ServerSystemProfileResponse } from "@server-log-console/shared";
 import { useEscapeToClose } from "./useEscapeToClose.js";
+
+// 监控趋势：前端环形缓冲，默认 10s/次采样，360 个点 ≈ 1 小时
+const TREND_SAMPLE_CAPACITY = 360;
+const TREND_WINDOW_MS = 30 * 60 * 1000;
+
+type TrendSample = { t: number; serverId: string; cpu: number; mem: number; disk: number };
 
 type Props = {
   visible: boolean;
@@ -77,6 +84,40 @@ function MetricPill({ label, value, hint, tone = "blue" }: { label: string; valu
   );
 }
 
+// 迷你趋势线（SVG sparkline，参照重设计原型 s9 的 spark()：淡面积 + 1.4px 折线）
+function TrendSparkline({ data, color }: { data: number[]; color: string }) {
+  const width = 100;
+  const height = 26;
+  if (data.length < 2) {
+    return <div className="server-status-trend-spark-empty">采样积累中…</div>;
+  }
+  const peak = Math.max(...data) * 1.15;
+  const top = peak > 0 ? peak : 1;
+  const points = data
+    .map((value, index) => `${((index / (data.length - 1)) * width).toFixed(1)},${(height - (value / top) * height).toFixed(1)}`)
+    .join(" ");
+  const areaPoints = `0,${height} ${points} ${width},${height}`;
+  return (
+    <svg className="server-status-trend-spark" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" aria-hidden="true">
+      <polygon points={areaPoints} style={{ fill: color, opacity: 0.09 }} />
+      <polyline points={points} style={{ fill: "none", stroke: color, strokeWidth: 1.4, strokeLinejoin: "round" }} />
+    </svg>
+  );
+}
+
+function TrendCard({ label, windowLabel, value, color, samples }: { label: string; windowLabel: string; value: number; color: string; samples: number[] }) {
+  return (
+    <div className="server-status-trend-card">
+      <div className="server-status-trend-card-head">
+        <span className="server-status-trend-card-label">{label}</span>
+        <span className="server-status-trend-card-win">{windowLabel}</span>
+      </div>
+      <div className="server-status-trend-card-value">{clampPercent(value).toFixed(1)}%</div>
+      <TrendSparkline data={samples} color={color} />
+    </div>
+  );
+}
+
 export function ServerStatusPanel({
   visible,
   server,
@@ -91,7 +132,43 @@ export function ServerStatusPanel({
   onClose
 }: Props) {
   useEscapeToClose(visible, onClose);
+
+  // 环形缓冲：每次状态采样（自动/手动刷新成功）push 一个点，最多保留 360 个（≈1 小时）
+  const trendSamplesRef = useRef<TrendSample[]>([]);
+  const [, setTrendTick] = useState(0);
+  useEffect(() => {
+    if (!profile) return;
+    const collectedAtMs = Date.parse(profile.collectedAt);
+    const sampleTime = Number.isFinite(collectedAtMs) ? collectedAtMs : Date.now();
+    const list = trendSamplesRef.current;
+    const last = list[list.length - 1];
+    // 切换服务器后清空缓冲，避免两个主机的采样混在同一条趋势里
+    if (last && last.serverId !== profile.serverId) {
+      list.length = 0;
+    } else if (last && last.t === sampleTime) {
+      return;
+    }
+    const sampleMemory = profile.memory;
+    const sampleDiskMax = Math.max(...(profile.disks || []).map((disk) => disk.percent), 0);
+    const sampleLoadPerCore = profile.cpu.cores ? (profile.loadAverage[0] / profile.cpu.cores) * 100 : 0;
+    list.push({
+      t: sampleTime,
+      serverId: profile.serverId,
+      cpu: clampPercent(sampleLoadPerCore),
+      mem: clampPercent(sampleMemory?.percent || 0),
+      disk: clampPercent(sampleDiskMax),
+    });
+    if (list.length > TREND_SAMPLE_CAPACITY) {
+      list.splice(0, list.length - TREND_SAMPLE_CAPACITY);
+    }
+    setTrendTick((current) => current + 1);
+  }, [profile]);
+
   if (!visible) return null;
+
+  // 当前视图窗口（30 分钟）内的采样点
+  const trendWindowStart = Date.now() - TREND_WINDOW_MS;
+  const trendSamples = trendSamplesRef.current.filter((sample) => sample.t >= trendWindowStart);
 
   const memory = profile?.memory;
   const swap = profile?.swap;
@@ -171,6 +248,23 @@ export function ServerStatusPanel({
             <MetricPill label="内存" value={`${(memory?.percent || 0).toFixed(1)}%`} hint={`${formatBytes(memory?.used || 0)} / ${formatBytes(memory?.total || 0)}`} />
             <MetricPill label="磁盘最高" value={`${diskMax.toFixed(0)}%`} hint={`${profile.disks.length} 个挂载点`} tone={diskMax >= 85 ? "amber" : "blue"} />
           </div>
+
+          <section className="server-status-trend" aria-label="监控趋势">
+            <div className="server-status-trend-head">
+              <span className="server-status-trend-title">监控趋势</span>
+              <span className="server-status-trend-note">每 {Math.round(refreshIntervalMs / 1000)} 秒采样 · 本地保留 1 小时环形缓冲</span>
+              <div className="server-status-trend-range" role="group" aria-label="趋势时间范围">
+                <button type="button" disabled title="实施中">5 分钟</button>
+                <button type="button" className="on" title="最近 30 分钟">30 分钟</button>
+                <button type="button" disabled title="实施中">1 小时</button>
+              </div>
+            </div>
+            <div className="server-status-trend-cards">
+              <TrendCard label="CPU" windowLabel="30m" value={loadPerCore} color="var(--accent)" samples={trendSamples.map((sample) => sample.cpu)} />
+              <TrendCard label="内存" windowLabel="30m" value={memory?.percent || 0} color="var(--green)" samples={trendSamples.map((sample) => sample.mem)} />
+              <TrendCard label="磁盘" windowLabel="30m" value={diskMax} color="var(--amber, var(--ink-muted))" samples={trendSamples.map((sample) => sample.disk)} />
+            </div>
+          </section>
 
           <section className="server-status-card server-status-overview">
             <div className="server-status-card-title">
