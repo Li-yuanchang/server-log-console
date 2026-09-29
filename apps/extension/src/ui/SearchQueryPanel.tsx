@@ -1,5 +1,7 @@
-import type { RefObject } from "react";
+import { useRef, useState, type RefObject } from "react";
+import { ChevronDown, Download } from "lucide-react";
 import type { SearchSettingsState } from "./utils.js";
+import { readSearchHistory } from "./storage.js";
 
 type SearchQueryPreset = {
   label: string;
@@ -32,29 +34,93 @@ type Props = {
   onToggleMultiFileMode: () => void;
   filePattern: string;
   onFilePatternChange: (value: string) => void;
+  searching: boolean;
+  highlightSummary: string;
+  onHighlightPrev: () => void;
+  onHighlightNext: () => void;
+  resultContextMode: boolean;
+  canToggleResultContext: boolean;
+  onToggleResultContext: () => void;
+  canDownloadResults: boolean;
+  onDownloadResults: () => void;
 };
 
 export function SearchQueryPanel(props: Props) {
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyItems, setHistoryItems] = useState<string[]>([]);
+  const historyShellRef = useRef<HTMLDivElement | null>(null);
+
+  function openHistory() {
+    setHistoryItems(readSearchHistory());
+    setHistoryOpen(true);
+  }
+
   return (
     <>
       {props.showKeywordBar ? (
-        <div className="toolbar-search-row">
-          <input
-            ref={props.keywordInputRef}
-            className="command-input command-input-keyword"
-            value={props.settings.keywordInput}
-            onChange={(event) => props.onKeywordInputChange(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                props.onRunSearch();
-              }
-            }}
-            placeholder="输入关键字，或直接用 /关键字 后回车"
-            disabled={!props.hasServer}
-          />
+        <div className="toolbar-search-row" ref={historyShellRef}>
+          <div className="keyword-shell" onBlur={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setHistoryOpen(false);
+          }}>
+            <input
+              ref={props.keywordInputRef}
+              className="command-input command-input-keyword"
+              value={props.settings.keywordInput}
+              onChange={(event) => props.onKeywordInputChange(event.target.value)}
+              onFocus={openHistory}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  props.onRunSearch();
+                } else if (event.key === "Escape") {
+                  setHistoryOpen(false);
+                }
+              }}
+              placeholder="输入关键字，或直接用 /关键字 后回车"
+              disabled={!props.hasServer}
+            />
+            <button
+              type="button"
+              className="ghost-button icon-button keyword-history-toggle"
+              title="检索历史"
+              aria-label="检索历史"
+              tabIndex={-1}
+              disabled={!props.hasServer}
+              onClick={() => (historyOpen ? setHistoryOpen(false) : openHistory())}
+            >
+              <ChevronDown size={13} strokeWidth={1.8} />
+            </button>
+            {historyOpen && historyItems.length ? (
+              <div className="search-history-panel" role="listbox">
+                <div className="search-history-cap">最近检索</div>
+                {historyItems.map((item) => (
+                  <button
+                    key={item}
+                    type="button"
+                    className="search-history-item"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => {
+                      props.onKeywordInputChange(item);
+                      setHistoryOpen(false);
+                    }}
+                  >
+                    {item}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
           <button className="ghost-button slim-button" onClick={props.onClearKeyword} disabled={!props.hasServer}>
             清空
+          </button>
+          <button
+            type="button"
+            className={`ghost-button slim-button search-run-button${props.searching ? " search-run-busy" : ""}`}
+            onClick={props.onRunSearch}
+            disabled={!props.hasServer || props.searching}
+          >
+            {props.searching ? <span className="btn-spinner" aria-hidden="true" /> : null}
+            {props.searching ? "检索中" : "检索"}
           </button>
         </div>
       ) : null}
@@ -63,6 +129,29 @@ export function SearchQueryPanel(props: Props) {
         <div className="toolbar-inline toolbar-hint toolbar-summary">
           <span>{props.toolbarSummaryLabel}</span>
           <span>{props.toolbarMetaLabel}</span>
+          <span style={{ flex: 1 }} />
+          {props.highlightSummary ? (
+            <span className="summary-nav">
+              <button type="button" className="ghost-button icon-button" title="上一处命中" aria-label="上一处命中" onClick={props.onHighlightPrev}>▲</button>
+              <span className="mono summary-nav-count">{props.highlightSummary}</span>
+              <button type="button" className="ghost-button icon-button" title="下一处命中" aria-label="下一处命中" onClick={props.onHighlightNext}>▼</button>
+            </span>
+          ) : null}
+          {props.canToggleResultContext ? (
+            <span className="summary-seg">
+              <button type="button" className={!props.resultContextMode ? "on" : ""} onClick={props.onToggleResultContext}>仅命中</button>
+              <button type="button" className={props.resultContextMode ? "on" : ""} onClick={props.onToggleResultContext}>含上下文</button>
+            </span>
+          ) : null}
+          <button
+            type="button"
+            className="ghost-button slim-button"
+            onClick={props.onDownloadResults}
+            disabled={!props.canDownloadResults}
+            title="下载结果"
+          >
+            <Download size={12} strokeWidth={1.8} /> 下载
+          </button>
         </div>
       ) : null}
 
