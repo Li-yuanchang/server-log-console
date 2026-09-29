@@ -2681,6 +2681,18 @@ export function App() {
     browseLogFiles,
   });
 
+  const openFileBrowserEntry = (entry: LogFileEntry) => {
+    if (entry.kind === "directory") {
+      void browseDirectoryWithNav(entry.path);
+      return;
+    }
+    if (isSpecialPreviewFile(entry.name || entry.path)) {
+      void previewFile(entry);
+      return;
+    }
+    void openEntry(entry);
+  };
+
   const appShellClassName = `app-shell${uiTheme === "modern" ? " theme-modern" : ""} ui-density-${uiDensity} ui-surface-${uiSurface}${uiSurface === "custom" ? ` ui-custom-background-${uiBackgroundMode}` : ""} ui-motion-${motionMode}${isElectron ? " electron-immersive" : ""}${isElectron && isMacOS ? " electron-macos-immersive" : ""}`;
   const appShellStyle = {
     "--log-font-size": `${logFontSize}px`,
@@ -3617,6 +3629,7 @@ export function App() {
                         <button type="button" className="table-head-button" onClick={() => toggleFileSort("name")}>
                           {renderSortLabel("name", "名称")}
                         </button>
+                        {uiTheme === "modern" ? <span className="file-transfer-head-cell">传输进度</span> : null}
                         <button type="button" className="table-head-button" onClick={() => toggleFileSort("size")}>
                           {renderSortLabel("size", "大小")}
                         </button>
@@ -3643,23 +3656,14 @@ export function App() {
                           uiTheme={uiTheme}
                           formatBytes={formatBytes}
                           formatDateTime={formatDateTime}
-                          onOpenEntry={(entry) => {
-                            if (entry.kind === "directory") {
-                              void browseDirectoryWithNav(entry.path);
-                              return;
-                            }
-                            if (isSpecialPreviewFile(entry.name || entry.path)) {
-                              void previewFile(entry);
-                              return;
-                            }
-                            void openEntry(entry);
-                          }}
+                          uploadProgress={uploadProgress}
+                          downloadProgress={downloadProgress}
+                          onOpenEntry={openFileBrowserEntry}
                           onOpenContextMenu={(entry, clientX, clientY) => { openContextMenu(entry, clientX, clientY); }}
                           onToggleSelection={toggleFileSelection}
                           onDownload={(path) => { void downloadFile(path); }}
-                          onEdit={(entry) => { void previewFile(entry); }}
+                          onMove={openMoveDialog}
                           onRename={openRenameDialog}
-                          onDelete={deleteRemoteFile}
                         />
                       )}
                     </FileBrowserContentColumn>
@@ -3931,6 +3935,7 @@ export function App() {
         menu={contextMenu}
         menuRef={contextMenuRef}
         onClose={() => setContextMenu(null)}
+        onOpen={openFileBrowserEntry}
         onPreview={(entry) => { void previewFile(entry); }}
         onDownload={(path) => { void downloadFile(path); }}
         onRename={openRenameDialog}
@@ -3942,7 +3947,7 @@ export function App() {
         }}
         onCompress={(entry) => {
           const parentDir = entry.path.substring(0, entry.path.lastIndexOf("/")) || "/";
-          setCompressDialog({ sourcePath: entry.path, sourceName: entry.name, archiveType: "tar.gz", targetDir: parentDir });
+          setCompressDialog({ sourcePath: entry.path, sourceName: entry.name, archiveType: "zip", targetDir: parentDir });
         }}
         onMkdir={(parentDir) => {
           setMkdirDialog({ parentDir, dirName: "" });
