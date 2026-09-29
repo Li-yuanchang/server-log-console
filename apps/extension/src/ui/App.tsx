@@ -2980,8 +2980,6 @@ export function App() {
                 terminalPanelOpen={terminalPanelOpen}
                 onToggleTerminal={toggleTerminalPanel}
                 hasServer={!!serverId}
-                serverStatusOpen={showUtilityWorkspace && activeUtilityPanel === "status"}
-                onOpenServerStatus={openServerStatusPanel}
                 isRecording={!!recordingSession}
                 canToggleRecording={canToggleRecording}
                 onToggleRecording={() => {
@@ -2996,6 +2994,9 @@ export function App() {
             <SearchQueryPanel
               showKeywordBar={showKeywordBar}
               showQueryAdvanced={showQueryAdvanced}
+              onToggleQueryAdvanced={() => {
+                setShowQueryAdvanced((current) => !current);
+              }}
               hasServer={!!serverId}
               keywordInputRef={keywordInputRef}
               onKeywordInputChange={setKeywordInput}

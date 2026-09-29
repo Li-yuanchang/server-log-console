@@ -774,3 +774,103 @@
   text-underline-offset: 2px;
   box-shadow: none;
 }
+
+/* ---------- 15. 侧栏快捷组：覆盖旧 absolute 规则（修 铅笔-only/·22 重叠） ---------- */
+.theme-modern .server-item-quick-actions {
+  position: static !important;
+  display: none !important;
+  align-items: center !important;
+  gap: 2px !important;
+  padding: 0 !important;
+  background: none !important;
+  border-radius: 0 !important;
+  right: auto !important;
+}
+.theme-modern .server-item-wrap:hover .server-item-quick-actions,
+.theme-modern .server-item-wrap-active .server-item-quick-actions {
+  display: inline-flex !important;
+}
+.theme-modern .server-item-wrap:hover .server-item > .server-item-meta,
+.theme-modern .server-item-wrap-active .server-item > .server-item-meta {
+  display: none !important;
+}
+.theme-modern .server-item-mini-action {
+  width: 22px !important;
+  height: 22px !important;
+  min-width: 22px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 0 !important;
+  border: none !important;
+  background: transparent !important;
+  color: var(--ink-muted) !important;
+  border-radius: 5px !important;
+}
+.theme-modern .server-item-mini-action:hover {
+  background: var(--panel) !important;
+  border-color: var(--line) !important;
+  color: var(--ink) !important;
+}
+.theme-modern .server-item-mini-danger:hover { color: var(--red, #d41313) !important; }
+
+/* ---------- 16. 高级条件抽屉内表单（S3） ---------- */
+.theme-modern .advanced-strip-drawer {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border: none !important;
+  padding: 14px 16px !important;
+  background: transparent !important;
+}
+.theme-modern .advanced-strip-drawer .advanced-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.theme-modern .advanced-strip-drawer label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--ink-muted);
+  flex: 1;
+  min-width: 0;
+}
+.theme-modern .advanced-strip-drawer .time-pair { display: flex; gap: 6px; }
+.theme-modern .advanced-strip-drawer .time-pair input { min-width: 0; flex: 1; }
+.theme-modern .advanced-strip-drawer .preset-strip {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.theme-modern .advanced-strip-drawer select,
+.theme-modern .advanced-strip-drawer input {
+  height: 28px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--ink);
+  font: inherit;
+  font-size: 12.5px;
+  padding: 0 8px;
+  min-width: 0;
+}
+.theme-modern .advanced-strip-drawer .regex-pill {
+  height: 28px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--ink-soft);
+  padding: 0 12px;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+.theme-modern .advanced-strip-drawer .regex-pill-active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+  font-weight: 550;
+}

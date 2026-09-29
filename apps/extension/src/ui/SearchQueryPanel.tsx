@@ -1,5 +1,6 @@
 import { useRef, useState, type RefObject } from "react";
 import { Download, Search } from "lucide-react";
+import { Drawer } from "./Drawer.js";
 import type { SearchSettingsState } from "./utils.js";
 import { readSearchHistory } from "./storage.js";
 
@@ -30,6 +31,7 @@ type Props = {
   onEndTimeChange: (value: string) => void;
   searchPresets: SearchQueryPreset[];
   onResetAdvanced: () => void;
+  onToggleQueryAdvanced: () => void;
   multiFileMode: boolean;
   onToggleMultiFileMode: () => void;
   filePattern: string;
@@ -156,8 +158,8 @@ export function SearchQueryPanel(props: Props) {
         </div>
       ) : null}
 
-      {props.showQueryAdvanced ? (
-        <div className="advanced-strip">
+      <Drawer open={props.showQueryAdvanced} onClose={props.onToggleQueryAdvanced} title="高级检索条件" width={420}>
+        <div className="advanced-strip advanced-strip-drawer">
           <div className="advanced-row advanced-row-main">
             <label>
               匹配
@@ -243,7 +245,7 @@ export function SearchQueryPanel(props: Props) {
             <button className="ghost-button" onClick={props.onResetAdvanced} disabled={!props.hasServer}>清空</button>
           </div>
         </div>
-      ) : null}
+      </Drawer>
     </>
   );
 }
