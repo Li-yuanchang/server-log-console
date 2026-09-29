@@ -1,8 +1,11 @@
 import { useCallback } from "react";
 import type { ServerSummary, ServerCredentialStatus, ServerRouteConfig, ServerConnectionTestResponse, JumpServerAssetOption } from "@server-log-console/shared";
+import type { SettingsWorkspaceView } from "./ConnectionSettingsWorkspace.js";
 import {
   apiGetCredentialStatus,
+  apiGetCredentialSecret,
   apiSaveCredential,
+  apiClearCredential,
   apiGetServerRoute,
   apiSaveServerRoute,
   apiSearchJumpServerAssets,
@@ -14,6 +17,8 @@ export type ServerConnectionAPI = {
   fetchCredentialStatus: (targetServerId: string) => Promise<void>;
   fetchServerRoute: (targetServerId: string) => Promise<void>;
   saveCredentialForServer: () => Promise<void>;
+  loadCredentialSecretForServer: () => Promise<void>;
+  clearCredentialForServer: () => Promise<void>;
   saveServerRouteForServer: () => Promise<void>;
   searchJumpServerAssets: () => Promise<void>;
   testServerConnection: (targetDirectoryPath?: string, options?: { auto?: boolean }) => Promise<void>;
@@ -57,7 +62,7 @@ export function useServerConnection(deps: {
   fetchServers: () => Promise<ServerSummary[]>;
   fetchDirectoryListing: (path: string) => Promise<any>;
   rememberDirectoryIfUseful: (serverId: string, path: string, count: number) => void;
-  openSettingsWorkspace: (view?: "preferences" | "overview" | "server" | "inventory") => void;
+  openSettingsWorkspace: (view?: SettingsWorkspaceView) => void;
 }): ServerConnectionAPI {
   const {
     serverId,
@@ -174,6 +179,40 @@ export function useServerConnection(deps: {
     }, "连接凭证已保存");
   }, [serverId, credentialUsername, credentialPassword, credentialPrivateKey, withBusy, setCredentialStatus, setCredentialPassword, setCredentialPrivateKey, setActionStatus, pushActivity, fetchServers]);
 
+  const loadCredentialSecretForServer = useCallback(async () => {
+    if (!serverId) {
+      return;
+    }
+
+    await withBusy("正在读取已保存凭证...", async () => {
+      const payload = await apiGetCredentialSecret(serverId);
+      setCredentialUsername(payload.username || "");
+      setCredentialPassword(payload.password || "");
+      setCredentialPrivateKey(payload.privateKey || "");
+      setActionStatus(payload.hasPassword || payload.hasPrivateKey
+        ? `已读取 ${payload.serverName} 的保存凭证，可查看、复制或覆盖。`
+        : `${payload.serverName} 当前没有保存密码或私钥。`);
+      pushActivity(`已读取连接凭证明文：${payload.serverName}（来源：${payload.source}）`);
+    });
+  }, [serverId, withBusy, setCredentialUsername, setCredentialPassword, setCredentialPrivateKey, setActionStatus, pushActivity]);
+
+  const clearCredentialForServer = useCallback(async () => {
+    if (!serverId) {
+      return;
+    }
+
+    await withBusy("正在清除连接凭证...", async () => {
+      const payload = await apiClearCredential(serverId);
+      setCredentialStatus(payload);
+      setCredentialPassword("");
+      setCredentialPrivateKey("");
+      setCredentialUsername(payload.username || "");
+      await fetchServers();
+      setActionStatus(`已清除连接凭证：${payload.serverName}`);
+      pushActivity(`已清除连接凭证：${payload.serverName}`);
+    }, "连接凭证已清除");
+  }, [serverId, withBusy, setCredentialStatus, setCredentialPassword, setCredentialPrivateKey, setCredentialUsername, fetchServers, setActionStatus, pushActivity]);
+
   const saveServerRouteForServer = useCallback(async () => {
     if (!serverId) {
       return;
@@ -268,7 +307,7 @@ export function useServerConnection(deps: {
       }
 
       if (!payload.connected && ((availableBastions.length && selectedServer?.connectionKind !== "bastion") || looksLikeJumpServer(selectedServer))) {
-        openSettingsWorkspace("server");
+        openSettingsWorkspace("connections");
       }
 
       if (payload.connected && selectedServer?.connectionKind === "bastion" && looksLikeJumpServer(selectedServer)) {
@@ -332,7 +371,7 @@ export function useServerConnection(deps: {
       }
 
       if ((availableBastions.length && selectedServer?.connectionKind !== "bastion") || looksLikeJumpServer(selectedServer)) {
-        openSettingsWorkspace("server");
+        openSettingsWorkspace("connections");
       }
     } finally {
       setIsDirectoryLoading(false);
@@ -344,6 +383,8 @@ export function useServerConnection(deps: {
     fetchCredentialStatus,
     fetchServerRoute,
     saveCredentialForServer,
+    loadCredentialSecretForServer,
+    clearCredentialForServer,
     saveServerRouteForServer,
     searchJumpServerAssets,
     testServerConnection: testServerConnectionLocal,

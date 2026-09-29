@@ -128,6 +128,13 @@ export class LocalConfigService {
     await this.writeJson("credentials.json", this.persistedCredentials);
   }
 
+  async clearCredential(serverId: string): Promise<void> {
+    delete this.persistedCredentials[serverId];
+    delete this.importedCredentials[serverId];
+    await this.writeJson("credentials.json", this.persistedCredentials);
+    await this.writeJson("imported-credentials.json", this.importedCredentials);
+  }
+
   getServerRoute(serverId: string): ServerRouteConfig {
     return {
       serverId,
@@ -225,8 +232,12 @@ export class LocalConfigService {
 
   async deleteImportedServer(serverId: string): Promise<void> {
     this.importedServers = this.importedServers.filter((server) => server.id !== serverId);
+    delete this.importedCredentials[serverId];
+    delete this.persistedCredentials[serverId];
     delete this.serverRoutes[serverId];
     await this.writeJson("imported-servers.json", this.importedServers);
+    await this.writeJson("imported-credentials.json", this.importedCredentials);
+    await this.writeJson("credentials.json", this.persistedCredentials);
     await this.writeJson("server-routes.json", this.serverRoutes);
   }
 

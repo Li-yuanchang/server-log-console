@@ -148,6 +148,10 @@
   border-radius: 0;
 }
 
+.electron-macos-immersive .dialog-shell-maximized {
+  --dialog-traffic-light-safearea: 88px;
+}
+
 .preview-header {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
@@ -158,6 +162,20 @@
   border-bottom: 1px solid #e2e8f0;
   background: rgba(248, 250, 252, 0.92);
   flex-shrink: 0;
+}
+
+.electron-macos-immersive .dialog-shell-maximized .dialog-titlebar {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  min-height: 54px;
+  padding-left: calc(var(--dialog-traffic-light-safearea, 0px) + 12px);
+  -webkit-app-region: drag;
+}
+
+.electron-macos-immersive .dialog-shell-maximized .dialog-titlebar button,
+.electron-macos-immersive .dialog-shell-maximized .dialog-titlebar [role="button"],
+.electron-macos-immersive .dialog-shell-maximized .dialog-titlebar input,
+.electron-macos-immersive .dialog-shell-maximized .dialog-titlebar select {
+  -webkit-app-region: no-drag;
 }
 
 .preview-title {
@@ -585,10 +603,14 @@ button.archive-preview-row:disabled {
 }
 
 .class-source-preview .code-editor-container .cm-panel.cm-search {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) repeat(3, 36px) auto auto auto 30px;
+  grid-template-areas:
+    "search next prev select case regexp word close"
+    "replace replaceBtn replaceAll replaceAll . . . close";
   align-items: center;
   gap: 8px;
-  min-height: 44px;
+  min-height: 88px;
   padding: 7px 44px 7px 12px !important;
   border-bottom: 1px solid #dbe5ef !important;
   background: linear-gradient(180deg, #ffffff 0%, #f6f9fd 100%) !important;
@@ -596,9 +618,16 @@ button.archive-preview-row:disabled {
   font-size: 12px;
 }
 
+.class-source-preview .code-editor-container .cm-panel.cm-search:not(:has(input[name="replace"])) {
+  grid-template-columns: minmax(180px, 1fr) repeat(3, 36px) auto auto auto 30px;
+  grid-template-areas: "search next prev select case regexp word close";
+  min-height: 44px;
+}
+
 .class-source-preview .code-editor-container .cm-textfield {
   height: 30px;
-  min-width: min(420px, 40vw);
+  min-width: 0;
+  width: 100%;
   margin: 0 !important;
   padding: 0 11px !important;
   border: 1px solid #c7d5e6 !important;
@@ -616,16 +645,21 @@ button.archive-preview-row:disabled {
 }
 
 .class-source-preview .code-editor-container .cm-button {
+  display: inline-grid;
+  place-items: center;
   height: 30px;
+  min-width: 34px;
   margin: 0 !important;
-  padding: 0 11px !important;
+  padding: 0 !important;
   border: 1px solid #cfd9e6 !important;
   border-radius: 8px;
   background: linear-gradient(180deg, #ffffff 0%, #edf3f9 100%) !important;
   color: #243145 !important;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
   font: inherit !important;
+  font-size: 0 !important;
   font-weight: 650;
+  line-height: 1;
 }
 
 .class-source-preview .code-editor-container .cm-button:hover {
@@ -691,12 +725,23 @@ button.archive-preview-row:disabled {
 
 @media (max-width: 1180px) {
   .class-source-preview .code-editor-container .cm-panel.cm-search {
-    flex-wrap: wrap;
-    align-content: center;
+    grid-template-columns: minmax(160px, 1fr) repeat(3, 34px) 28px;
+    grid-template-areas:
+      "search next prev select close"
+      "case regexp word word close"
+      "replace replaceBtn replaceAll replaceAll close";
+    min-height: 118px;
+  }
+
+  .class-source-preview .code-editor-container .cm-panel.cm-search:not(:has(input[name="replace"])) {
+    grid-template-areas:
+      "search next prev select close"
+      "case regexp word word close";
+    min-height: 82px;
   }
 
   .class-source-preview .code-editor-container .cm-textfield {
-    min-width: min(320px, 52vw);
+    min-width: 0;
   }
 }
 
@@ -1530,6 +1575,294 @@ button.class-outline-row {
 .code-editor-container .cm-scroller {
   overflow: auto;
   background: #050607;
+}
+
+.code-editor-container .cm-foldGutter .cm-gutterElement {
+  cursor: pointer;
+  min-width: 18px;
+  padding: 0 3px;
+}
+
+.code-editor-container .cm-foldGutter {
+  min-width: 22px;
+  background: #050607;
+}
+
+.code-editor-container .cm-fold-marker {
+  display: inline-grid;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+  border-radius: 5px;
+  color: #bfdbfe;
+  background: rgba(96, 165, 250, 0.1);
+  box-shadow: inset 0 0 0 1px rgba(147, 197, 253, 0.16);
+  font-size: 13px;
+  line-height: 1;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.code-editor-container .cm-foldGutter .cm-gutterElement:hover .cm-fold-marker {
+  background: rgba(96, 165, 250, 0.28);
+  color: #ffffff;
+  box-shadow: inset 0 0 0 1px rgba(147, 197, 253, 0.42);
+}
+
+.code-editor-container .cm-foldPlaceholder {
+  margin: 0 4px;
+  padding: 1px 8px 2px;
+  border: 1px solid rgba(125, 148, 178, 0.28);
+  border-radius: 999px;
+  background: rgba(30, 41, 59, 0.88);
+  color: #b8c7da;
+  cursor: pointer;
+  font-size: 11px;
+  font-style: normal;
+}
+
+.code-editor-container .cm-matchingBracket {
+  background: rgba(34, 211, 238, 0.2) !important;
+  outline: 1px solid rgba(125, 211, 252, 0.74) !important;
+  border-radius: 4px;
+  color: #e0f2fe !important;
+  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.12);
+}
+
+.code-editor-container .cm-nonmatchingBracket {
+  background: rgba(248, 113, 113, 0.18) !important;
+  outline: 1px solid rgba(248, 113, 113, 0.72) !important;
+  border-radius: 4px;
+  color: #fecaca !important;
+}
+
+.code-editor-container .cm-panels,
+.code-editor-container .cm-search {
+  background: #111820 !important;
+  border-color: rgba(148, 163, 184, 0.2) !important;
+  color: #dbe5f1 !important;
+}
+
+.code-editor-container .cm-panel.cm-search {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) repeat(3, 36px) auto auto auto 30px;
+  grid-template-areas:
+    "search next prev select case regexp word close"
+    "replace replaceBtn replaceAll replaceAll . . . close";
+  align-items: center;
+  gap: 8px;
+  min-height: 88px;
+  padding: 8px 46px 8px 12px !important;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.2) !important;
+  background: linear-gradient(180deg, #151f2a 0%, #0e151d 100%) !important;
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.24);
+  font-size: 12px;
+}
+
+.code-editor-container .cm-panel.cm-search:not(:has(input[name="replace"])) {
+  grid-template-columns: minmax(180px, 1fr) repeat(3, 36px) auto auto auto 30px;
+  grid-template-areas: "search next prev select case regexp word close";
+  min-height: 46px;
+}
+
+.code-editor-container .cm-textfield {
+  height: 31px;
+  min-width: 0;
+  width: 100%;
+  margin: 0 !important;
+  padding: 0 12px !important;
+  border: 1px solid rgba(148, 163, 184, 0.28) !important;
+  border-radius: 9px;
+  background: #050607 !important;
+  color: #f3f7fb !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  font: inherit !important;
+  outline: none;
+}
+
+.code-editor-container .cm-textfield[name="search"] {
+  grid-area: search;
+}
+
+.code-editor-container .cm-textfield[name="replace"] {
+  grid-area: replace;
+}
+
+.code-editor-container .cm-textfield:focus {
+  border-color: rgba(96, 165, 250, 0.72) !important;
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.code-editor-container .cm-button {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  height: 31px;
+  min-width: 34px;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 1px solid rgba(148, 163, 184, 0.22) !important;
+  border-radius: 9px;
+  background: linear-gradient(180deg, #1c2936 0%, #121b25 100%) !important;
+  color: #dbe5f1 !important;
+  box-shadow: none !important;
+  font: inherit !important;
+  font-size: 0 !important;
+  font-weight: 650;
+  line-height: 1;
+}
+
+.code-editor-container .cm-panel.cm-search br {
+  display: none;
+}
+
+.code-editor-container .cm-button::before {
+  content: "";
+  display: block;
+  width: 16px;
+  height: 16px;
+  background: currentColor;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-size: 16px 16px;
+  mask-size: 16px 16px;
+}
+
+.code-editor-container .cm-button[name="next"] {
+  grid-area: next;
+}
+
+.code-editor-container .cm-button[name="next"]::before {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M8 3v9'/%3E%3Cpath d='m4.5 8.5 3.5 3.5 3.5-3.5'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M8 3v9'/%3E%3Cpath d='m4.5 8.5 3.5 3.5 3.5-3.5'/%3E%3C/svg%3E");
+}
+
+.code-editor-container .cm-button[name="prev"] {
+  grid-area: prev;
+}
+
+.code-editor-container .cm-button[name="prev"]::before {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M8 13V4'/%3E%3Cpath d='M4.5 7.5 8 4l3.5 3.5'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M8 13V4'/%3E%3Cpath d='M4.5 7.5 8 4l3.5 3.5'/%3E%3C/svg%3E");
+}
+
+.code-editor-container .cm-button[name="select"] {
+  grid-area: select;
+}
+
+.code-editor-container .cm-button[name="select"]::before {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.65' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5.5 2.8H3.8a1 1 0 0 0-1 1v1.7'/%3E%3Cpath d='M10.5 2.8h1.7a1 1 0 0 1 1 1v1.7'/%3E%3Cpath d='M13.2 10.5v1.7a1 1 0 0 1-1 1h-1.7'/%3E%3Cpath d='M5.5 13.2H3.8a1 1 0 0 1-1-1v-1.7'/%3E%3Ccircle cx='8' cy='8' r='2.2'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.65' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5.5 2.8H3.8a1 1 0 0 0-1 1v1.7'/%3E%3Cpath d='M10.5 2.8h1.7a1 1 0 0 1 1 1v1.7'/%3E%3Cpath d='M13.2 10.5v1.7a1 1 0 0 1-1 1h-1.7'/%3E%3Cpath d='M5.5 13.2H3.8a1 1 0 0 1-1-1v-1.7'/%3E%3Ccircle cx='8' cy='8' r='2.2'/%3E%3C/svg%3E");
+}
+
+.code-editor-container .cm-button[name="replace"] {
+  grid-area: replaceBtn;
+}
+
+.code-editor-container .cm-button[name="replace"]::before {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.65' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 4.5h7.2a2.8 2.8 0 0 1 0 5.6H5'/%3E%3Cpath d='m7.5 7.6-2.5 2.5 2.5 2.5'/%3E%3Cpath d='M11.5 2.8 13 4.3l-3.9 3.9H7.6V6.7z'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.65' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 4.5h7.2a2.8 2.8 0 0 1 0 5.6H5'/%3E%3Cpath d='m7.5 7.6-2.5 2.5 2.5 2.5'/%3E%3Cpath d='M11.5 2.8 13 4.3l-3.9 3.9H7.6V6.7z'/%3E%3C/svg%3E");
+}
+
+.code-editor-container .cm-button[name="replaceAll"] {
+  grid-area: replaceAll;
+}
+
+.code-editor-container .cm-button[name="replaceAll"]::before {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.55' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 4.2h8.2a2.4 2.4 0 0 1 2.3 2.4'/%3E%3Cpath d='m11.2 2 2.3 2.2-2.3 2.3'/%3E%3Cpath d='M13 11.8H4.8a2.4 2.4 0 0 1-2.3-2.4'/%3E%3Cpath d='m4.8 14-2.3-2.2 2.3-2.3'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.55' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 4.2h8.2a2.4 2.4 0 0 1 2.3 2.4'/%3E%3Cpath d='m11.2 2 2.3 2.2-2.3 2.3'/%3E%3Cpath d='M13 11.8H4.8a2.4 2.4 0 0 1-2.3-2.4'/%3E%3Cpath d='m4.8 14-2.3-2.2 2.3-2.3'/%3E%3C/svg%3E");
+}
+
+.code-editor-container .cm-button:hover {
+  border-color: rgba(96, 165, 250, 0.42) !important;
+  background: #203044 !important;
+  color: #ffffff !important;
+  filter: none;
+}
+
+.code-editor-container .cm-panel.cm-search label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 31px;
+  margin: 0 !important;
+  color: #a8b7c9;
+  font-size: 12px !important;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.code-editor-container .cm-panel.cm-search label:has(input[name="case"]) {
+  grid-area: case;
+}
+
+.code-editor-container .cm-panel.cm-search label:has(input[name="re"]) {
+  grid-area: regexp;
+}
+
+.code-editor-container .cm-panel.cm-search label:has(input[name="word"]) {
+  grid-area: word;
+}
+
+.code-editor-container .cm-panel.cm-search input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  margin: 0 !important;
+  accent-color: #60a5fa;
+}
+
+.code-editor-container .cm-panel.cm-search button[name="close"] {
+  position: absolute !important;
+  top: 10px !important;
+  right: 10px !important;
+  display: inline-grid;
+  place-items: center;
+  width: 27px;
+  height: 27px;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 1px solid transparent !important;
+  border-radius: 8px;
+  background: transparent !important;
+  color: #91a1b6 !important;
+  font-size: 18px !important;
+  line-height: 1;
+  box-shadow: none !important;
+}
+
+.code-editor-container .cm-panel.cm-search button[name="close"]:hover {
+  border-color: rgba(248, 113, 113, 0.24) !important;
+  background: rgba(127, 29, 29, 0.28) !important;
+  color: #fecaca !important;
+}
+
+.code-editor-container .cm-searchMatch {
+  background: rgba(245, 158, 11, 0.42) !important;
+  outline: 1px solid rgba(251, 191, 36, 0.34);
+}
+
+.code-editor-container .cm-searchMatch-selected {
+  background: rgba(96, 165, 250, 0.34) !important;
+  outline-color: rgba(147, 197, 253, 0.58);
+}
+
+@media (max-width: 1180px) {
+  .code-editor-container .cm-panel.cm-search {
+    grid-template-columns: minmax(160px, 1fr) repeat(3, 34px) 28px;
+    grid-template-areas:
+      "search next prev select close"
+      "case regexp word word close"
+      "replace replaceBtn replaceAll replaceAll close";
+    min-height: 118px;
+  }
+
+  .code-editor-container .cm-panel.cm-search:not(:has(input[name="replace"])) {
+    grid-template-areas:
+      "search next prev select close"
+      "case regexp word word close";
+    min-height: 82px;
+  }
 }
 
 .preview-dialog .preview-save-btn,

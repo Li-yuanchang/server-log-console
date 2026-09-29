@@ -205,6 +205,17 @@ export interface ServerCredentialStatus {
   message: string;
 }
 
+export interface ServerCredentialSecret {
+  serverId: string;
+  serverName: string;
+  username: string;
+  source: "manual" | "finalshell" | "xshell" | "environment" | "none";
+  password?: string;
+  privateKey?: string;
+  hasPassword: boolean;
+  hasPrivateKey: boolean;
+}
+
 export interface ServerConnectionTestRequest {
   directoryPath?: string;
 }

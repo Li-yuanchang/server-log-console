@@ -492,6 +492,13 @@ ipcMain.handle("open-pip-window", (_event, config = {}) => {
   }
 
   bindDevToolsShortcut(nextPipWindow);
+  nextPipWindow.webContents.on("render-process-gone", (_event, details) => {
+    probe(`pip render-process-gone ${pipMode} ${details.reason} ${details.exitCode}`);
+    if (isQuitting || details.reason === "clean-exit") return;
+    if (!nextPipWindow.isDestroyed()) {
+      nextPipWindow.close();
+    }
+  });
   nextPipWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (url === "about:blank" || url.startsWith("about:")) {
       return { action: "allow" };
@@ -569,6 +576,150 @@ ipcMain.handle("send-pip-state", (event, state = {}) => {
   return { ok: true };
 });
 
+// --- Renderer crash recovery ---
+const RENDERER_RECOVERY_WINDOW_MS = 5 * 60 * 1000;
+const RENDERER_RECOVERY_MAX_ATTEMPTS = 3;
+const RENDERER_RELOAD_WATCHDOG_MS = 10_000;
+let rendererRecoveryAttempts = [];
+let rendererRecovering = false;
+let rendererReloadWatchdog = null;
+
+function clearRendererReloadWatchdog() {
+  if (rendererReloadWatchdog !== null) {
+    clearTimeout(rendererReloadWatchdog);
+    rendererReloadWatchdog = null;
+  }
+}
+
+function recreateMainWindow() {
+  rendererRecovering = false;
+  clearRendererReloadWatchdog();
+  probe("renderer recovery recreate window");
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.destroy();
+  }
+  createWindow();
+}
+
+async function offerCrashedWindowReload() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  const { response } = await dialog.showMessageBox(mainWindow, {
+    type: "error",
+    title: "页面已崩溃",
+    message: "日志控制台页面崩溃了",
+    detail: "自动恢复多次未成功。可以重建窗口（界面状态会按本地保存自动恢复），或退出应用。",
+    buttons: ["重新加载", "退出"],
+    defaultId: 0,
+    cancelId: 1,
+  });
+  if (response === 0) {
+    rendererRecoveryAttempts = [];
+    recreateMainWindow();
+  } else {
+    app.quit();
+  }
+}
+
+function handleMainRendererGone(details) {
+  probe(`createWindow render-process-gone ${details.reason} ${details.exitCode}`);
+  void captureMemoryProbe("renderer-gone");
+  if (isQuitting || details.reason === "clean-exit") {
+    return;
+  }
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return;
+  }
+
+  const now = Date.now();
+  rendererRecoveryAttempts = rendererRecoveryAttempts.filter((time) => now - time < RENDERER_RECOVERY_WINDOW_MS);
+  rendererRecoveryAttempts.push(now);
+
+  if (rendererRecoveryAttempts.length > RENDERER_RECOVERY_MAX_ATTEMPTS) {
+    probe(`renderer recovery attempts exhausted (${rendererRecoveryAttempts.length} in window), offering manual reload`);
+    void offerCrashedWindowReload();
+    return;
+  }
+
+  if (rendererRecovering) {
+    return;
+  }
+
+  rendererRecovering = true;
+  probe(`renderer recovery reload attempt=${rendererRecoveryAttempts.length} reason=${details.reason}`);
+
+  let reloadSettled = false;
+  const settleReload = () => {
+    if (reloadSettled) return;
+    reloadSettled = true;
+    clearRendererReloadWatchdog();
+    rendererRecovering = false;
+    rendererRecoveryAttempts = [];
+    probe("renderer recovery reload finished");
+  };
+
+  mainWindow.webContents.once("did-finish-load", settleReload);
+
+  try {
+    mainWindow.webContents.reload();
+  } catch (error) {
+    probe(`renderer recovery reload threw ${error && error.stack ? error.stack : String(error)}`);
+    recreateMainWindow();
+    return;
+  }
+
+  clearRendererReloadWatchdog();
+  rendererReloadWatchdog = setTimeout(() => {
+    if (reloadSettled) return;
+    reloadSettled = true;
+    probe("renderer recovery reload watchdog timeout, recreating window");
+    recreateMainWindow();
+  }, RENDERER_RELOAD_WATCHDOG_MS);
+}
+
+// --- Memory probe (long-session diagnostics) ---
+const MEM_PROBE_INTERVAL_MS = 5 * 60 * 1000;
+const MEMORY_PROBE_LOG = "/tmp/slc-mem-probe.log";
+let memoryProbeTimer = null;
+
+function formatMb(bytes) {
+  return `${Math.round((bytes / 1024 / 1024) * 10) / 10}MB`;
+}
+
+async function captureMemoryProbe(reason) {
+  try {
+    const parts = [];
+    for (const metric of app.getAppMetrics()) {
+      const mem = metric.memory || {};
+      const working = (mem.workingSetSize || 0) * 1024;
+      const peak = (mem.peakWorkingSetSize || 0) * 1024;
+      parts.push(`${metric.type}:${formatMb(working)}/${formatMb(peak)}`);
+    }
+    let jsHeap = "";
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      try {
+        const heap = await mainWindow.webContents.executeJavaScript(
+          "performance.memory ? { used: performance.memory.usedJSHeapSize, limit: performance.memory.jsHeapSizeLimit } : null",
+          false
+        );
+        if (heap) {
+          jsHeap = ` rendererJsHeap=${formatMb(heap.used)}/${formatMb(heap.limit)}`;
+        }
+      } catch {}
+    }
+    fs.appendFileSync(MEMORY_PROBE_LOG, `${new Date().toISOString()} reason=${reason} ${parts.join(" ")}${jsHeap}\n`);
+  } catch {}
+}
+
+function startMemoryProbe() {
+  if (memoryProbeTimer) {
+    return;
+  }
+  void captureMemoryProbe("startup");
+  memoryProbeTimer = setInterval(() => {
+    void captureMemoryProbe("interval");
+  }, MEM_PROBE_INTERVAL_MS);
+}
+
 // --- Window (VS Code approach: load local HTML instantly, no server dependency) ---
 function createWindow() {
   const indexFile = path.join(getExtensionDistDir(), "index.html");
@@ -607,7 +758,7 @@ function createWindow() {
   mainWindow.once("ready-to-show", () => probe("createWindow ready-to-show"));
   mainWindow.webContents.on("did-finish-load", () => probe("createWindow did-finish-load"));
   mainWindow.webContents.on("did-fail-load", (_event, code, description) => probe(`createWindow did-fail-load ${code} ${description}`));
-  mainWindow.webContents.on("render-process-gone", (_event, details) => probe(`createWindow render-process-gone ${details.reason} ${details.exitCode}`));
+  mainWindow.webContents.on("render-process-gone", (_event, details) => handleMainRendererGone(details));
   mainWindow.webContents.on("console-message", (_event, level, message, line, sourceId) => {
     probe(`renderer console level=${level} line=${line} source=${sourceId || ""} ${message}`);
   });
@@ -686,6 +837,8 @@ app.whenReady().then(() => {
   // 2. Start gateway in background — frontend's health check auto-connects when ready
   startGateway();
   probe("startGateway called");
+
+  startMemoryProbe();
 
   app.on("activate", () => {
     probe("app activate");

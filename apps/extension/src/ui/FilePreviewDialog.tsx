@@ -57,14 +57,30 @@ export function FilePreviewDialog(props: FilePreviewDialogProps) {
     onToggleMaximize,
     onClose,
   } = props;
+  const [editorSearchToken, setEditorSearchToken] = useState(0);
+  const isTextPreviewDialog = Boolean(dialog && dialog.previewKind !== "archive" && dialog.previewKind !== "class");
   useEscapeToClose(Boolean(dialog), onClose);
+  useEffect(() => {
+    if (!isTextPreviewDialog) {
+      return;
+    }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "f") {
+        event.preventDefault();
+        event.stopPropagation();
+        setEditorSearchToken((token) => token + 1);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown, { capture: true });
+    return () => window.removeEventListener("keydown", handleKeyDown, { capture: true });
+  }, [isTextPreviewDialog]);
 
   if (!dialog) {
     return null;
   }
   const readonlyLabel = dialog.previewLabel || (dialog.fileName.endsWith(".record.log") ? "录制预览" : "尾部预览");
   const isStructuredPreview = dialog.previewKind === "archive" || dialog.previewKind === "class";
-  const previewClassName = `preview-dialog${dialog.maximized ? " preview-dialog-maximized" : ""}${dialog.previewKind && dialog.previewKind !== "text" ? ` preview-dialog-${dialog.previewKind}` : ""}`;
+  const previewClassName = `dialog-shell preview-dialog${dialog.maximized ? " dialog-shell-maximized preview-dialog-maximized" : ""}${dialog.previewKind && dialog.previewKind !== "text" ? ` preview-dialog-${dialog.previewKind}` : ""}`;
 
   return (
     <div className="confirm-backdrop preview-backdrop">
@@ -94,7 +110,7 @@ export function FilePreviewDialog(props: FilePreviewDialogProps) {
           document.addEventListener("mouseup", onUp);
         }}
       >
-        <div className="preview-header">
+        <div className="dialog-titlebar preview-header">
           <div className="preview-title">
             {dialog.fileName}
             {dialog.readOnly
@@ -110,6 +126,11 @@ export function FilePreviewDialog(props: FilePreviewDialogProps) {
             <button type="button" className="preview-save-btn" onClick={onDownload}>
               下载
             </button>
+            {!isStructuredPreview ? (
+              <button type="button" className="preview-save-btn" onClick={() => setEditorSearchToken((token) => token + 1)}>
+                搜索
+              </button>
+            ) : null}
             {!dialog.readOnly && (
               <button
                 type="button"
@@ -145,10 +166,12 @@ export function FilePreviewDialog(props: FilePreviewDialogProps) {
           <StructuredPreview dialog={dialog} theme={theme} onPreviewArchiveEntry={onPreviewArchiveEntry} />
         ) : (
           <CodeEditor
-            value={dialog.originalContent}
+            value={dialog.content}
             fileName={dialog.fileName}
+            documentKey={dialog.filePath}
             theme={theme}
             readOnly={dialog.readOnly}
+            openSearchToken={editorSearchToken}
             onChange={onChange}
             onSave={onSave}
           />
@@ -527,6 +550,7 @@ function ArchiveEntryPreviewContent({
       <CodeEditor
         value={preview.content}
         fileName={preview.fileName || preview.entryName || "archive-entry.txt"}
+        documentKey={`${dialog.filePath}!/${preview.entryName || preview.fileName || "archive-entry"}`}
         theme={theme === "modern" ? "classic" : theme}
         readOnly
         onChange={() => undefined}
@@ -678,6 +702,7 @@ function ClassPreview({ dialog, theme, compact = false }: { dialog: PreviewDialo
               <CodeEditor
                 value={readableSource}
                 fileName={`${simpleName || "Decompiled"}.java`}
+                documentKey={`${dialog.filePath}#decompiled`}
                 theme={theme === "modern" ? "classic" : theme}
                 focusLine={sourceFocusLine}
                 focusLineToken={sourceFocusToken}

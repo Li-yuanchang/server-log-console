@@ -136,6 +136,15 @@ app.get("/api/servers/:serverId/credential", (req, res) => {
   }
 });
 
+app.get("/api/servers/:serverId/credential/secret", (req, res) => {
+  try {
+    const server = serverRegistryService.getServer(req.params.serverId);
+    res.json(credentialResolverService.reveal(server));
+  } catch (error) {
+    res.status(404).json({ message: error instanceof Error ? error.message : "Unknown error" });
+  }
+});
+
 app.get("/api/servers/:serverId/route", (req, res) => {
   try {
     const server = serverRegistryService.getServer(req.params.serverId);
@@ -257,6 +266,18 @@ app.post("/api/servers/:serverId/credential", async (req, res) => {
     const server = serverRegistryService.getServer(req.params.serverId);
     await localConfigService.saveCredential(server.id, req.body || {});
     serverRegistryService.setManualServers(localConfigService.listManualServers());
+    res.json(credentialResolverService.inspect(server));
+  } catch (error) {
+    res.status(400).json({ message: error instanceof Error ? error.message : "Unknown error" });
+  }
+});
+
+app.delete("/api/servers/:serverId/credential", async (req, res) => {
+  try {
+    const server = serverRegistryService.getServer(req.params.serverId);
+    await localConfigService.clearCredential(server.id);
+    serverRegistryService.setManualServers(localConfigService.listManualServers());
+    serverRegistryService.setImportedServers(localConfigService.listImportedServers());
     res.json(credentialResolverService.inspect(server));
   } catch (error) {
     res.status(400).json({ message: error instanceof Error ? error.message : "Unknown error" });

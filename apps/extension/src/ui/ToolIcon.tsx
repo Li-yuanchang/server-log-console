@@ -1,26 +1,30 @@
 import {
   Search,
   ArrowDownToLine,
-  ArrowUpDown,
+  AlignJustify,
+  ArrowLeftRight,
+  ArrowUp,
   FileText,
   SlidersHorizontal,
   FolderUp,
   FolderOpen,
+  FolderInput,
   RefreshCw,
   Filter,
+  ListX,
   Settings,
   TerminalSquare,
   Sparkles,
-  Undo2,
   History,
   Download,
   Upload,
   Trash2,
   Pencil,
+  TextCursorInput,
   FolderPlus,
 } from "lucide-react";
 
-type IconKind = "search" | "tail" | "files" | "more" | "open" | "refresh" | "filter" | "highlight" | "context" | "settings" | "terminal" | "sparkle" | "undo" | "history" | "transfer" | "download" | "upload" | "delete" | "rename" | "folder" | "folder-plus";
+type IconKind = "search" | "tail" | "files" | "more" | "open" | "refresh" | "filter" | "highlight" | "context" | "settings" | "terminal" | "sparkle" | "undo" | "history" | "transfer" | "download" | "upload" | "delete" | "edit" | "rename" | "folder" | "folder-plus" | "folder-up" | "folder-move";
 
 export function ToolIcon({ kind, theme }: { kind: IconKind; theme?: "classic" | "modern" }) {
   if (theme === "classic") return <ClassicIcon kind={kind} />;
@@ -187,11 +191,22 @@ function ClassicIcon({ kind }: { kind: IconKind }) {
           <path d="M9 7V10.5" />
         </svg>
       );
+    case "edit":
+      return (
+        <svg {...common}>
+          <path d="M3.2 2.8H9.2L12.8 6.4V13.2H3.2z" />
+          <path d="M9.2 2.8V6.4H12.8" />
+          <path d="M5.4 11.5L8.9 8L10.4 9.5L6.9 13H5.4z" />
+        </svg>
+      );
     case "rename":
       return (
         <svg {...common}>
-          <path d="M4 12.5L10.5 3.5L13 6L6.5 15H4V12.5Z" />
-          <path d="M9 5L11.5 7.5" />
+          <path d="M3 4H13" />
+          <path d="M3 12H13" />
+          <path d="M6 6.2V9.8" />
+          <path d="M10 6.2V9.8" />
+          <path d="M6 8H10" />
         </svg>
       );
     case "folder":
@@ -209,10 +224,27 @@ function ClassicIcon({ kind }: { kind: IconKind }) {
           <path d="M6.3 9.8H9.7" />
         </svg>
       );
+    case "folder-up":
+      return (
+        <svg {...common}>
+          <path d="M2.2 5H6.2L7.5 6.3H13.8V12.8H2.2z" />
+          <path d="M8 11.3V8" />
+          <path d="M6.3 9.7L8 8L9.7 9.7" />
+        </svg>
+      );
+    case "folder-move":
+      return (
+        <svg {...common}>
+          <path d="M2.2 7.5H6.2L7.5 8.8H13.8V12.8H2.2z" />
+          <path d="M2.2 7.5V5.7H6.2L7.5 7" />
+          <path d="M10 2.5V6" />
+          <path d="M8.3 4.3L10 6L11.7 4.3" />
+        </svg>
+      );
   }
 }
 
-const LUCIDE_PROPS = { size: 16, strokeWidth: 1.8, "aria-hidden": true } as const;
+const LUCIDE_PROPS = { size: 16, strokeWidth: 1.45, "aria-hidden": true } as const;
 
 function ModernIcon({ kind }: { kind: IconKind }) {
   switch (kind) {
@@ -225,7 +257,7 @@ function ModernIcon({ kind }: { kind: IconKind }) {
     case "more":
       return <SlidersHorizontal {...LUCIDE_PROPS} />;
     case "open":
-      return <FolderUp {...LUCIDE_PROPS} />;
+      return <ArrowUp {...LUCIDE_PROPS} />;
     case "refresh":
       return <RefreshCw {...LUCIDE_PROPS} />;
     case "filter":
@@ -238,14 +270,7 @@ function ModernIcon({ kind }: { kind: IconKind }) {
         </svg>
       );
     case "context":
-      return (
-        <svg {...LUCIDE_PROPS} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M3 3.5H13" />
-          <path d="M5 6.5H11" />
-          <path d="M3 9.5H13" />
-          <path d="M3 12.5H13" opacity="0.7" />
-        </svg>
-      );
+      return <AlignJustify {...LUCIDE_PROPS} />;
     case "settings":
       return <Settings {...LUCIDE_PROPS} />;
     case "terminal":
@@ -253,22 +278,28 @@ function ModernIcon({ kind }: { kind: IconKind }) {
     case "sparkle":
       return <Sparkles {...LUCIDE_PROPS} />;
     case "undo":
-      return <Undo2 {...LUCIDE_PROPS} />;
+      return <ListX {...LUCIDE_PROPS} />;
     case "history":
       return <History {...LUCIDE_PROPS} />;
     case "transfer":
-      return <ArrowUpDown {...LUCIDE_PROPS} />;
+      return <ArrowLeftRight {...LUCIDE_PROPS} />;
     case "download":
       return <Download {...LUCIDE_PROPS} />;
     case "upload":
       return <Upload {...LUCIDE_PROPS} />;
     case "delete":
       return <Trash2 {...LUCIDE_PROPS} />;
-    case "rename":
+    case "edit":
       return <Pencil {...LUCIDE_PROPS} />;
+    case "rename":
+      return <TextCursorInput {...LUCIDE_PROPS} />;
     case "folder":
       return <FolderOpen {...LUCIDE_PROPS} />;
     case "folder-plus":
       return <FolderPlus {...LUCIDE_PROPS} />;
+    case "folder-up":
+      return <FolderUp {...LUCIDE_PROPS} />;
+    case "folder-move":
+      return <FolderInput {...LUCIDE_PROPS} />;
   }
 }

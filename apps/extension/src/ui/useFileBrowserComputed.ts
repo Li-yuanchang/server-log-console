@@ -96,7 +96,7 @@ export function useFileBrowserComputed(deps: {
     const direction = fileSortDirection === "asc" ? 1 : -1;
     return [...filteredEntries].sort((left, right) => {
       if (left.kind !== right.kind) {
-        return left.kind === "directory" ? -1 : 1;
+        return (left.kind === "directory" ? -1 : 1) * direction;
       }
 
       let result = 0;

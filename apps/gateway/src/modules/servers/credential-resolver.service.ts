@@ -1,4 +1,4 @@
-import type { ServerCredentialStatus, ServerSummary } from "@server-log-console/shared";
+import type { ServerCredentialSecret, ServerCredentialStatus, ServerSummary } from "@server-log-console/shared";
 import { LocalConfigService } from "./local-config.service.js";
 
 export interface ResolvedSshCredentials {
@@ -103,6 +103,45 @@ export class CredentialResolverService {
       hasUsableCredential: false,
       passwordMayNeedManualOverride: false,
       message: "当前没有可用连接凭证。请手动录入用户名 + 密码，或用户名 + 私钥。"
+    };
+  }
+
+  reveal(server: ServerSummary): ServerCredentialSecret {
+    const persisted = this.localConfigService.getPersistedCredential(server.id);
+    if (persisted) {
+      return {
+        serverId: server.id,
+        serverName: server.name,
+        username: persisted.username || server.username,
+        source: "manual",
+        password: persisted.password,
+        privateKey: persisted.privateKey,
+        hasPassword: Boolean(persisted.password),
+        hasPrivateKey: Boolean(persisted.privateKey)
+      };
+    }
+
+    const imported = this.localConfigService.getImportedCredential(server.id);
+    if (imported) {
+      return {
+        serverId: server.id,
+        serverName: server.name,
+        username: imported.username || server.username,
+        source: server.source === "xshell" ? "xshell" : "finalshell",
+        password: imported.password,
+        privateKey: imported.privateKey,
+        hasPassword: Boolean(imported.password),
+        hasPrivateKey: Boolean(imported.privateKey)
+      };
+    }
+
+    return {
+      serverId: server.id,
+      serverName: server.name,
+      username: server.username,
+      source: "none",
+      hasPassword: false,
+      hasPrivateKey: false
     };
   }
 

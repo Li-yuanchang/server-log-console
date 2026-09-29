@@ -29,6 +29,17 @@ interface UseTerminalSessionOptions {
   preserveSessionOnDispose?: boolean;
   onSelectionMenu?: (menu: { x: number; y: number; text: string } | null) => void;
   terminalFontSize?: number;
+  terminalBackgroundColor?: string;
+}
+
+function readTerminalTheme(container: HTMLElement | null, overrideBackground?: string) {
+  const cs = getComputedStyle(container ?? document.documentElement);
+  const shellBg = overrideBackground?.trim()
+    || cs.getPropertyValue("--terminal-background").trim()
+    || cs.getPropertyValue("--shell").trim()
+    || "#0a0a0a";
+  const shellInk = cs.getPropertyValue("--shell-ink").trim() || "#e8e8e8";
+  return { shellBg, shellInk };
 }
 
 function rebuildSelectionFromBuffer(terminal: Terminal): string {
@@ -211,9 +222,7 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
       return terminalRef.current;
     }
 
-    const cs = getComputedStyle(document.documentElement);
-    const shellBg = cs.getPropertyValue("--shell").trim() || "#0a0a0a";
-    const shellInk = cs.getPropertyValue("--shell-ink").trim() || "#e8e8e8";
+    const { shellBg, shellInk } = readTerminalTheme(containerRef.current, options.terminalBackgroundColor);
 
     const terminal = new Terminal({
       cursorBlink: true,
@@ -259,9 +268,17 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
     if (!terminal) {
       return;
     }
+    const { shellBg, shellInk } = readTerminalTheme(containerRef.current, options.terminalBackgroundColor);
     terminal.options.fontSize = options.terminalFontSize || 12;
+    terminal.options.theme = {
+      ...terminal.options.theme,
+      background: shellBg,
+      foreground: shellInk,
+      black: shellBg,
+      white: shellInk,
+    };
     scheduleFit([0, 24, 96]);
-  }, [options.terminalFontSize, scheduleFit]);
+  }, [options.terminalBackgroundColor, options.terminalFontSize, scheduleFit]);
 
   useEffect(() => {
     if (!options.active || !containerRef.current) {

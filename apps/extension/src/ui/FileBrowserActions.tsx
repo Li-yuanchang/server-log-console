@@ -49,7 +49,7 @@ export function FileBrowserActions(props: Props) {
         <ToolIcon theme={props.uiTheme} kind="upload" />
       </button>
       <button className="ghost-button icon-button" title="上传目录" onClick={props.onUploadDirectory} disabled={props.isBusy || !props.hasServer}>
-        <ToolIcon theme={props.uiTheme} kind="folder" />
+        <ToolIcon theme={props.uiTheme} kind="folder-up" />
       </button>
       <button className="ghost-button icon-button" title="刷新目录" onClick={props.onRefresh} disabled={props.isBusy || !props.hasServer}>
         <ToolIcon theme={props.uiTheme} kind="refresh" />

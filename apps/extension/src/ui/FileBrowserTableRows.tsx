@@ -15,6 +15,7 @@ type Props = {
   onOpenContextMenu: (entry: LogFileEntry, clientX: number, clientY: number) => void;
   onToggleSelection: (path: string, checked: boolean) => void;
   onDownload: (path: string) => void;
+  onEdit: (entry: LogFileEntry) => void;
   onRename: (entry: LogFileEntry) => void;
   onDelete: (path: string) => void;
 };
@@ -108,17 +109,22 @@ export function FileBrowserTableRows(props: Props) {
             <strong>{entry.name}</strong>
             <span className="file-row-actions" onClick={(event) => event.stopPropagation()} onMouseDown={(event) => event.stopPropagation()}>
               {entry.kind === "file" ? (
-                <span role="button" tabIndex={0} className="file-action-icon" title="下载" onClick={(event) => { event.stopPropagation(); props.onDownload(entry.path); }}>
+                <button type="button" className="file-action-icon" title="下载" aria-label={`下载 ${entry.name}`} onClick={(event) => { event.stopPropagation(); props.onDownload(entry.path); }}>
                   <ToolIcon theme={props.uiTheme} kind="download" />
-                </span>
+                </button>
               ) : null}
-              <span role="button" tabIndex={0} className="file-action-icon" title="重命名" onClick={(event) => { event.stopPropagation(); props.onRename(entry); }}>
-                <ToolIcon theme={props.uiTheme} kind="rename" />
-              </span>
               {entry.kind === "file" ? (
-                <span role="button" tabIndex={0} className="file-action-icon file-action-danger" title="删除" onClick={(event) => { event.stopPropagation(); props.onDelete(entry.path); }}>
+                <button type="button" className="file-action-icon" title="编辑" aria-label={`编辑 ${entry.name}`} onClick={(event) => { event.stopPropagation(); props.onEdit(entry); }}>
+                  <ToolIcon theme={props.uiTheme} kind="edit" />
+                </button>
+              ) : null}
+              <button type="button" className="file-action-icon" title="重命名" aria-label={`重命名 ${entry.name}`} onClick={(event) => { event.stopPropagation(); props.onRename(entry); }}>
+                <ToolIcon theme={props.uiTheme} kind="rename" />
+              </button>
+              {entry.kind === "file" ? (
+                <button type="button" className="file-action-icon file-action-danger" title="删除" aria-label={`删除 ${entry.name}`} onClick={(event) => { event.stopPropagation(); props.onDelete(entry.path); }}>
                   <ToolIcon theme={props.uiTheme} kind="delete" />
-                </span>
+                </button>
               ) : null}
             </span>
           </span>
