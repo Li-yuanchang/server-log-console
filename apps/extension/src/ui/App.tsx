@@ -11,6 +11,7 @@ import { FileBrowserPathbar, buildBreadcrumbItems } from "./FileBrowserPathbar.j
 import { FileBrowserStrip } from "./FileBrowserStrip.js";
 import { FileBrowserTableRows } from "./FileBrowserTableRows.js";
 import { FileBrowserTreeColumn } from "./FileBrowserTreeColumn.js";
+import { looksLikeJumpServer } from "./terminal-utils.js";
 import type { PreviewDialogState } from "./FilePreviewDialog.js";
 import type { ConfirmDialogState } from "./ModalDialogs.js";
 import { ConnectionSettingsWorkspace, type ManualServerDraft, type SettingsWorkspaceView } from "./ConnectionSettingsWorkspace.js";
@@ -1637,7 +1638,6 @@ export function App() {
     tableEntries,
     allVisibleFilesSelected,
     filteredGroupedServers,
-    treeEntries,
     sidebarActivityLines,
     recentActivityLines,
   } = useFileBrowserComputed({
@@ -1651,6 +1651,14 @@ export function App() {
     directoryPath,
     activityLines,
   });
+  // S6 文件树懒加载目标：堡垒机 SFTP 走 bastionId，其余走 serverId（与目录列表主链路保持一致）
+  const treeListingTarget = useMemo(() => {
+    if (!serverId) {
+      return null;
+    }
+    const isBastionSftp = selectedServer?.connectionKind === "bastion" && looksLikeJumpServer(selectedServer);
+    return isBastionSftp ? { bastionId: serverId } : { serverId };
+  }, [serverId, selectedServer]);
   const connectionStateText = buildConnectionSummary(selectedServer, connectionTestStatus);
   const terminalPanelStatusText = !selectedServer
     ? (localServiceState === "online" ? "未选择服务器" : (isElectron ? "正在等待内置连接服务启动..." : "本地连接服务未启动"))
@@ -3641,8 +3649,9 @@ export function App() {
                     <FileBrowserTreeColumn
                       title="目录树"
                       summary={`${formatNumber(directoryEntries.length)} 个目录`}
-                      entries={treeEntries}
-                      emptyLabel="当前层级没有子目录"
+                      serverId={serverId}
+                      directoryPath={directoryPath || "/"}
+                      listingTarget={treeListingTarget}
                       onBrowse={(path) => { void browseDirectoryWithNav(path); }}
                       onOpenContextMenu={(entry, clientX, clientY) => {
                         openContextMenu({ path: entry.path, name: entry.label || entry.path.split("/").pop() || "/", kind: "directory" }, clientX, clientY);
@@ -3751,8 +3760,9 @@ export function App() {
                   >
                     <FileBrowserTreeColumn
                       title="目录"
-                      summary={`${formatNumber(treeEntries.length)} 项`}
-                      entries={treeEntries}
+                      serverId={serverId}
+                      directoryPath={directoryPath || "/"}
+                      listingTarget={treeListingTarget}
                       onBrowse={(path) => { void browseDirectoryWithNav(path); }}
                       onOpenContextMenu={(entry, clientX, clientY) => {
                         openContextMenu({ path: entry.path, name: entry.label || entry.path.split("/").pop() || "/", kind: "directory" }, clientX, clientY);

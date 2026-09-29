@@ -148,6 +148,20 @@ export async function apiGetDirectoryListing(params: {
   return readPayload<LogFileListResponse>(response, "读取远程目录失败");
 }
 
+export type DirectoryListingTarget = { serverId?: string; bastionId?: string };
+
+// S6 文件树：单目录子目录懒加载封装（复用现有列目录接口，只取 kind === "directory"）
+export async function apiListSubdirectories(params: DirectoryListingTarget & {
+  directoryPath: string;
+}): Promise<string[]> {
+  const listing = await apiGetDirectoryListing(params);
+  const collator = new Intl.Collator("zh-CN", { numeric: true, sensitivity: "base" });
+  return listing.entries
+    .filter((entry) => entry.kind === "directory")
+    .map((entry) => entry.path)
+    .sort((left, right) => collator.compare(left, right));
+}
+
 export async function apiGetLogMeta(serverId: string, filePath: string): Promise<LogFileMetaResponse> {
   const response = await fetch(`${localServiceBase}/api/logs/meta`, {
     method: "POST",
