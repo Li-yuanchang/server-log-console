@@ -70,7 +70,8 @@ export function buildWorkspaceSession(targetServer: ServerSummary) {
     id: `workspace:${targetServer.id}` as const,
     serverId: targetServer.id,
     serverName: targetServer.name || targetServer.host || targetServer.id,
-    serverHost: targetServer.host
+    serverHost: targetServer.host,
+    serverGroup: targetServer.groupPath?.[targetServer.groupPath.length - 1]
   };
 }
 

@@ -1,3 +1,4 @@
+import { Ellipsis } from "lucide-react";
 import type { LogFileEntry } from "@server-log-console/shared";
 import type { DownloadProgressState, UploadProgressState } from "./FeedbackOverlays.js";
 import { ToolIcon } from "./ToolIcon.js";
@@ -192,7 +193,7 @@ export function FileBrowserTableRows(props: Props) {
                   props.onOpenContextMenu(entry, rect.right + 4, rect.bottom + 4);
                 }}
               >
-                <ToolIcon theme={props.uiTheme} kind="more" />
+                <Ellipsis size={13} strokeWidth={1.8} />
               </button>
             </span>
           </span>

@@ -1,4 +1,4 @@
-import { Activity, Circle, Command as CommandIcon, Pin, PinOff, Radio } from "lucide-react";
+import { Activity, CircleDot, Command as CommandIcon, Ellipsis, Pin, PinOff, Radio } from "lucide-react";
 import { ToolIcon } from "./ToolIcon.js";
 
 type Props = {
@@ -58,7 +58,7 @@ export function SearchToolbarActions(props: Props) {
         <span>状态</span>
       </button>
       <button className={`ghost-button toolbar-action-button${props.isRecording ? " btn-recording-active" : ""}`} onClick={props.onToggleRecording} disabled={!props.canToggleRecording}>
-        <Circle size={14} strokeWidth={1.8} fill="currentColor" />
+        <CircleDot size={14} strokeWidth={1.8} />
         <span>{props.isRecording ? "结束录制" : "录制"}</span>
       </button>
       <button
@@ -68,7 +68,7 @@ export function SearchToolbarActions(props: Props) {
         title={props.showQueryAdvanced ? "收起条件" : "更多条件"}
         aria-label={props.showQueryAdvanced ? "收起条件" : "更多条件"}
       >
-        <ToolIcon theme={props.uiTheme} kind="more" />
+        <Ellipsis size={14} strokeWidth={1.8} />
       </button>
       <button
         type="button"

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { ServerSummary, ServerConnectionTestResponse } from "@server-log-console/shared";
 import type { SettingsWorkspaceView } from "./ConnectionSettingsWorkspace.js";
-import { Command as CommandIcon } from "lucide-react";
+import { Command as CommandIcon, Ellipsis, Pencil, Play, Trash2 } from "lucide-react";
 import { ToolIcon } from "./ToolIcon.js";
 
 export type SidebarPanelProps = {
@@ -136,22 +136,39 @@ export function SidebarPanel(props: SidebarPanelProps) {
                         <button
                           type="button"
                           className="server-item-mini-action"
-                          title="管理连接"
-                          onClick={() => {
-                            selectServerById(server.id);
-                            onOpenSettingsWorkspace("connections");
-                          }}
+                          title="连接"
+                          aria-label={`连接 ${server.name}`}
+                          onClick={() => selectServerById(server.id)}
                         >
-                          管理
+                          <Play size={12} strokeWidth={1.8} />
+                        </button>
+                        <button
+                          type="button"
+                          className="server-item-mini-action"
+                          title="编辑（设置中心）"
+                          aria-label={`编辑 ${server.name}`}
+                          onClick={() => onOpenSettingsWorkspace("connections")}
+                        >
+                          <Pencil size={12} strokeWidth={1.8} />
+                        </button>
+                        <button
+                          type="button"
+                          className="server-item-mini-action"
+                          title="更多"
+                          aria-label={`${server.name} 更多操作`}
+                          onClick={() => onOpenSettingsWorkspace("connections")}
+                        >
+                          <Ellipsis size={12} strokeWidth={1.8} />
                         </button>
                         {server.source ? (
                           <button
                             type="button"
                             className="server-item-mini-action server-item-mini-danger"
                             title="删除连接"
+                            aria-label={`删除 ${server.name}`}
                             onClick={() => onDeleteServer(server)}
                           >
-                            删除
+                            <Trash2 size={12} strokeWidth={1.8} />
                           </button>
                         ) : null}
                       </div>
