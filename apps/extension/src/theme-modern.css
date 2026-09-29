@@ -4745,3 +4745,107 @@ body.is-electron .settings-exclusive-head input {
 }
 .summary-seg button + button { border-left: 1px solid var(--line); }
 .summary-seg button.on { background: var(--ink); color: #fff; font-weight: 600; }
+
+/* --- S6 文件操作提权：行悬浮快捷操作组 --- */
+.theme-modern .file-row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 1px 2px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+
+.theme-modern .file-row:hover .file-row-actions,
+.theme-modern .file-row-active .file-row-actions,
+.theme-modern .file-row:focus-within .file-row-actions {
+  opacity: 1;
+  pointer-events: auto;
+  background: var(--panel);
+}
+
+.theme-modern .file-row-actions .file-action-icon {
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+}
+
+/* --- S6 文件表传输进度列 --- */
+.theme-modern .file-table-head {
+  grid-template-columns: 48px minmax(0, 1fr) 180px 84px 138px 52px;
+}
+
+.theme-modern .file-row {
+  grid-template-columns: 48px minmax(0, 1fr) 180px 84px 138px 52px;
+}
+
+.theme-modern .file-transfer-head-cell {
+  color: var(--ink-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.theme-modern .file-transfer-cell {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  min-width: 0;
+}
+
+.theme-modern .file-transfer-track {
+  display: block;
+  width: 100%;
+  max-width: 156px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--panel-muted);
+  overflow: hidden;
+}
+
+.theme-modern .file-transfer-fill {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--accent), #4aa3ff);
+  transform-origin: left center;
+  transition: transform 200ms ease;
+}
+
+.theme-modern .file-transfer-meta {
+  font-family: "Geist Mono", "SFMono-Regular", monospace;
+  font-size: 9.5px;
+  color: var(--ink-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* --- S6 右键菜单分组与快捷键标注 --- */
+.theme-modern .context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.theme-modern .context-menu-key {
+  margin-left: auto;
+  padding-left: 16px;
+  font-family: "Geist Mono", "SFMono-Regular", monospace;
+  font-size: 10.5px;
+  color: var(--ink-muted);
+}
+
+.theme-modern .context-menu-separator {
+  height: 1px;
+  margin: 4px 8px;
+  background: var(--line);
+}
