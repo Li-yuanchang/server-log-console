@@ -419,7 +419,7 @@ export function useLogViewer(params: LogViewerParams): LogViewerAPI {
         return;
       }
       const rect = container.getBoundingClientRect();
-      const nextX = Math.min(Math.max(8, event.clientX - rect.left), Math.max(8, rect.width - 44));
+      const nextX = Math.min(Math.max(8, event.clientX - rect.left), Math.max(8, rect.width - 72));
       const nextY = Math.min(Math.max(8, event.clientY - rect.top), Math.max(8, rect.height - 44));
       setters.setViewerSelMenu({ x: nextX, y: nextY, text });
     }, 10);

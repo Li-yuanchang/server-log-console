@@ -29,6 +29,8 @@ interface UseTerminalSessionOptions {
   preserveSessionOnDispose?: boolean;
   onSelectionMenu?: (menu: { x: number; y: number; text: string } | null) => void;
   terminalFontSize?: number;
+  /** S14：终端字体族（CSS 字体栈字符串）。变更后 xterm 需重排以免列宽错位。 */
+  terminalFontFamily?: string;
   terminalBackgroundColor?: string;
 }
 
@@ -227,7 +229,7 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
     const terminal = new Terminal({
       cursorBlink: true,
       fontSize: options.terminalFontSize || 12,
-      fontFamily: "'SFMono-Regular', 'Consolas', monospace",
+      fontFamily: options.terminalFontFamily || "'SFMono-Regular', 'Consolas', monospace",
       theme: {
         background: shellBg,
         foreground: shellInk,
@@ -261,7 +263,8 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
     fitAddonRef.current = fitAddon;
     terminalRef.current = terminal;
     return terminal;
-  }, [options.terminalFontSize]);
+    // terminalFontFamily 变更需重建实例，故一并作为依赖
+  }, [options.terminalFontSize, options.terminalFontFamily]);
 
   useEffect(() => {
     const terminal = terminalRef.current;
@@ -270,6 +273,11 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
     }
     const { shellBg, shellInk } = readTerminalTheme(containerRef.current, options.terminalBackgroundColor);
     terminal.options.fontSize = options.terminalFontSize || 12;
+    /* S14：字体族同步。改字体族会改变字符宽度，必须配合 scheduleFit 重排，
+       否则 xterm 的列数/光标位置会错乱。 */
+    if (options.terminalFontFamily) {
+      terminal.options.fontFamily = options.terminalFontFamily;
+    }
     terminal.options.theme = {
       ...terminal.options.theme,
       background: shellBg,
@@ -278,7 +286,7 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
       white: shellInk,
     };
     scheduleFit([0, 24, 96]);
-  }, [options.terminalBackgroundColor, options.terminalFontSize, scheduleFit]);
+  }, [options.terminalBackgroundColor, options.terminalFontSize, options.terminalFontFamily, scheduleFit]);
 
   useEffect(() => {
     if (!options.active || !containerRef.current) {
