@@ -37,6 +37,9 @@ type Props = {
   filePattern: string;
   onFilePatternChange: (value: string) => void;
   searching: boolean;
+  /** 检索进行中显示在按钮上的进度标签（原型 S13：进度内联在按钮上，如 `340MB/1.2GB`）。
+      为空时回落为「检索中」。 */
+  searchProgressLabel?: string;
   highlightSummary: string;
   onHighlightPrev: () => void;
   onHighlightNext: () => void;
@@ -123,7 +126,16 @@ export function SearchQueryPanel(props: Props) {
             disabled={!props.hasServer || props.searching}
           >
             {props.searching ? <span className="btn-spinner" aria-hidden="true" /> : null}
-            {props.searching ? "检索中" : "检索"}
+            {/* 原型 S13 第 02 段：进度内联在按钮上（如 `340MB/1.2GB`），不锁界面 */}
+            {props.searching ? (
+              props.searchProgressLabel ? (
+                <span className="search-run-progress">{props.searchProgressLabel}</span>
+              ) : (
+                "检索中"
+              )
+            ) : (
+              "检索"
+            )}
           </button>
         </div>
       ) : null}
@@ -135,9 +147,21 @@ export function SearchQueryPanel(props: Props) {
           <span style={{ flex: 1 }} />
           {props.highlightSummary ? (
             <span className="summary-nav">
-              <button type="button" className="ghost-button icon-button" title="上一处命中" aria-label="上一处命中" onClick={props.onHighlightPrev}>▲</button>
+              {/* 原型 S1/S3 rtools 命中导航 = ◀ 3 / 128 ▶（prototype.html 第 417 行：
+                  左 `m12 19-7-7 7-7`+`M19 12H5`、右 `m9 18 6-6-6-6`，均 12px、sw1.6）。
+                  原实现误用纵向三角 ▲▼，方向与原型不符。 */}
+              <button type="button" className="ghost-button icon-button" title="上一处命中" aria-label="上一处命中" onClick={props.onHighlightPrev}>
+                <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="m12 19-7-7 7-7" />
+                  <path d="M19 12H5" />
+                </svg>
+              </button>
               <span className="mono summary-nav-count">{props.highlightSummary}</span>
-              <button type="button" className="ghost-button icon-button" title="下一处命中" aria-label="下一处命中" onClick={props.onHighlightNext}>▼</button>
+              <button type="button" className="ghost-button icon-button" title="下一处命中" aria-label="下一处命中" onClick={props.onHighlightNext}>
+                <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="m9 18 6-6-6-6" />
+                </svg>
+              </button>
             </span>
           ) : null}
           {props.canToggleResultContext ? (
@@ -158,7 +182,35 @@ export function SearchQueryPanel(props: Props) {
         </div>
       ) : null}
 
-      <Drawer open={props.showQueryAdvanced} onClose={props.onToggleQueryAdvanced} title="高级检索条件" width={420}>
+      <Drawer
+        open={props.showQueryAdvanced}
+        onClose={props.onToggleQueryAdvanced}
+        title="高级检索条件"
+        width={420}
+        footer={(
+          <>
+            <button
+              type="button"
+              className="ghost-button slim-button"
+              onClick={props.onResetAdvanced}
+              disabled={!props.hasServer}
+            >
+              重置
+            </button>
+            <button
+              type="button"
+              className="ghost-button slim-button primary-action advanced-apply-button"
+              onClick={() => {
+                props.onRunSearch();
+                props.onToggleQueryAdvanced();
+              }}
+              disabled={!props.hasServer}
+            >
+              应用条件并检索
+            </button>
+          </>
+        )}
+      >
         <div className="advanced-strip advanced-strip-drawer">
           <div className="advanced-row advanced-row-main">
             <label>
@@ -234,7 +286,7 @@ export function SearchQueryPanel(props: Props) {
             {props.searchPresets.map((preset) => (
               <button
                 key={preset.label}
-                className={preset.label === props.settings.selectedPreset ? "ghost-button preset-active" : "ghost-button"}
+                className={preset.label === props.settings.selectedPreset ? "fchip fchip-on" : "fchip"}
                 onClick={preset.apply}
                 type="button"
                 disabled={!props.hasServer}
@@ -242,7 +294,6 @@ export function SearchQueryPanel(props: Props) {
                 {preset.label}
               </button>
             ))}
-            <button className="ghost-button" onClick={props.onResetAdvanced} disabled={!props.hasServer}>清空</button>
           </div>
         </div>
       </Drawer>

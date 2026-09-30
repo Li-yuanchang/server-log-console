@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { ServerSummary, ServerConnectionTestResponse } from "@server-log-console/shared";
 import type { SettingsWorkspaceView } from "./ConnectionSettingsWorkspace.js";
-import { Command as CommandIcon, Copy, Ellipsis, Pencil, Trash2 } from "lucide-react";
+import { Command as CommandIcon, Copy, Ellipsis, Pencil, Play, Trash2, ServerOff, FolderSearch } from "lucide-react";
 import { ToolIcon } from "./ToolIcon.js";
 
 export type SidebarPanelProps = {
@@ -108,6 +108,10 @@ export function SidebarPanel(props: SidebarPanelProps) {
       <div className="server-groups pane-section">
         {showServiceOfflineState ? (
           <div className="empty-box sidebar-empty-box">
+            {/* S12 原型空态模板：44×44 描边图标 + 一句话 + 主按钮 */}
+            <span className="empty-box-icon" aria-hidden="true">
+              <ServerOff size={18} strokeWidth={1.8} />
+            </span>
             <strong>{isElectron ? "正在等待内置连接服务启动" : "本地服务未启动"}</strong>
             <span>{isElectron ? "应用会自动重试连接本地服务；如果长时间没有恢复，我会继续排查安装版启动链路。" : "请在终端执行 npm run dev:gateway 启动本地连接服务，然后点击下方\"检查服务\"。"}</span>
           </div>
@@ -134,6 +138,20 @@ export function SidebarPanel(props: SidebarPanelProps) {
                         <span className="server-item-meta">{server.port}</span>
                       </button>
                       <div className="server-item-quick-actions" aria-label={`${server.name} 管理操作`}>
+                        {/* 原型 srow() 悬浮组 = 三个按钮：连接 ▶ / 编辑 ✏️ / 更多 ⋯
+                            （prototype.html 第 350-352 行）。图标 12px、描边 1.6（原型 ic 默认 sw=1.6）。 */}
+                        <button
+                          type="button"
+                          className="server-item-mini-action"
+                          title="连接"
+                          aria-label={`连接 ${server.name}`}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            selectServerById(server.id);
+                          }}
+                        >
+                          <Play size={12} strokeWidth={1.6} />
+                        </button>
                         <button
                           type="button"
                           className="server-item-mini-action"
@@ -141,7 +159,7 @@ export function SidebarPanel(props: SidebarPanelProps) {
                           aria-label={`编辑 ${server.name}`}
                           onClick={() => onOpenSettingsWorkspace("connections")}
                         >
-                          <Pencil size={12} strokeWidth={1.8} />
+                          <Pencil size={12} strokeWidth={1.6} />
                         </button>
                         <button
                           type="button"
@@ -153,7 +171,7 @@ export function SidebarPanel(props: SidebarPanelProps) {
                             setServerMenuId((current) => current === server.id ? "" : server.id);
                           }}
                         >
-                          <Ellipsis size={12} strokeWidth={1.8} />
+                          <Ellipsis size={12} strokeWidth={1.6} />
                         </button>
                         {serverMenuId === server.id ? (
                           <div className="server-item-menu" onClick={(event) => event.stopPropagation()}>
@@ -189,6 +207,9 @@ export function SidebarPanel(props: SidebarPanelProps) {
           ))
         ) : (
           <div className="empty-box sidebar-empty-box">
+            <span className="empty-box-icon" aria-hidden="true">
+              <FolderSearch size={18} strokeWidth={1.8} />
+            </span>
             <strong>还没有服务器</strong>
             <span>检查 FinalShell 目录后导入，或手动补录连接信息。</span>
           </div>
