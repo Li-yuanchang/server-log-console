@@ -197,7 +197,7 @@ ipcMain.handle("open-pip-window", (_event, config) => {
     alwaysOnTop: true,
     titleBarStyle: "hiddenInset",
     trafficLightPosition: { x: 12, y: 12 },
-    backgroundColor: "#1a1a2e",
+    backgroundColor: (config.mode || "viewer") === "terminal" ? "#0a0a0a" : "#fafafa",
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,

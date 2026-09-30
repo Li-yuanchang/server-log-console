@@ -476,7 +476,8 @@ ipcMain.handle("open-pip-window", (_event, config = {}) => {
     alwaysOnTop: isUtilityMode ? false : true,
     titleBarStyle: isUtilityMode ? "default" : "hiddenInset",
     trafficLightPosition: isUtilityMode ? undefined : { x: 12, y: 12 },
-    backgroundColor: "#0a0a0a",
+    // 终端小窗保持深色底；日志/工具小窗跟随浅色主题，避免黑窗与主题割裂
+    backgroundColor: isTerminalMode ? "#0a0a0a" : "#fafafa",
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
