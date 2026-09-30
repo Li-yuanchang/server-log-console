@@ -1,7 +1,7 @@
 import type { SearchSettingsState } from "./utils.js";
 
 const browserTreeWidthStorageKey = "server-log-console:browser-tree-width";
-const browserTreeWidthDefault = 224;
+const browserTreeWidthDefault = 208;
 const browserTreeWidthMin = 170;
 const browserTreeWidthMax = 380;
 const activityPanelHeightStorageKey = "server-log-console:activity-panel-height";
@@ -305,11 +305,27 @@ function normalizeShortcutCommand(value: unknown): ShortcutCommand | null {
   };
 }
 
+/* S5 原型：终端底部「快捷命令」常驻一行并预置常用命令。
+   首次使用（无持久化数据）时给出原型里的四条默认命令，避免出现空白快捷栏。
+   这些条目 serverId 为空串，表示对所有服务器可见，用户可在管理面板里增删改。 */
+const defaultShortcutCommandSeeds: Array<{ id: string; label: string; command: string }> = [
+  { id: "builtin-tail-error", label: "tail -f error.log", command: "tail -f error.log" },
+  { id: "builtin-df-h", label: "df -h", command: "df -h" },
+  { id: "builtin-free-m", label: "free -m", command: "free -m" },
+  { id: "builtin-docker-ps", label: "docker ps", command: "docker ps" },
+];
+const defaultShortcutCommands: ShortcutCommand[] = defaultShortcutCommandSeeds.map((seed) => ({
+  ...seed,
+  serverId: "",
+  createdAt: "",
+  updatedAt: "",
+}));
+
 export function readShortcutCommands(): ShortcutCommand[] {
   try {
     const raw = globalThis.localStorage?.getItem(shortcutCommandsStorageKey);
     if (!raw) {
-      return [];
+      return defaultShortcutCommands;
     }
     const parsed = JSON.parse(raw) as unknown[];
     if (!Array.isArray(parsed)) {

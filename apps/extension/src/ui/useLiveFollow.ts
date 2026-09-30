@@ -224,6 +224,24 @@ export function useLiveFollow(opts: UseLiveFollowOptions): UseLiveFollowReturn {
     liveSocketRef.current = null;
   }, []);
 
+  // bfcache 恢复（浏览器前进/后退缓存）会把页面冻结，WebSocket 死掉且 close
+  // 事件可能被吞掉；恢复时若实时跟随意图仍在但 socket 已死，强制补一次重连。
+  useEffect(() => {
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (!liveFollowDesiredRef.current || !liveFollowTargetRef.current) return;
+      const socket = liveSocketRef.current;
+      if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) return;
+      scheduleLiveFollowReconnect(event.persisted ? "页面从缓存恢复" : "页面重新可见");
+    };
+    window.addEventListener("pageshow", onPageShow);
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") onPageShow(new PageTransitionEvent("pageshow"));
+    });
+    return () => {
+      window.removeEventListener("pageshow", onPageShow);
+    };
+  }, []);
+
   return {
     liveFollowEnabled,
     liveFollowConnected,
