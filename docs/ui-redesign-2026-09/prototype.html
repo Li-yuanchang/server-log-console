@@ -12,11 +12,17 @@
   --green:#0a7b3e; --green-dot:#22c55e; --red:#d41313; --red-soft:rgba(212,19,19,.07);
   --amber:#b45309; --amber-soft:rgba(180,83,9,.09);
   --shell:#0a0a0a; --shell-ink:#d7dde5; --shell-mut:#5c6b7a;
+  --on-accent:#ffffff;
   --r-s:6px; --r-m:8px; --r-l:10px;
   --mono:"Geist Mono","SFMono-Regular","Menlo","Consolas",monospace;
   --font:"Geist","Inter",-apple-system,"SF Pro Text","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
   --shadow-pop:0 12px 40px rgba(0,0,0,.14),0 2px 8px rgba(0,0,0,.06);
 }
+/* ---- 背景方案联动（S14）：accent 三件套 + on-accent 跟随方案整体切换 ----
+   --on-accent 是 token 而非写死白色：由各方案按 accent 明度给出（浅暖 accent 配深字），
+   主按钮文字、spinner 前景全部引用它。 */
+.app.skin-mist{--accent:#31708f;--accent-h:#275a73;--accent-soft:rgba(49,112,143,.1);--on-accent:#ffffff}
+.app.skin-paper{--accent:#8a6a3f;--accent-h:#71552f;--accent-soft:rgba(138,106,63,.12);--on-accent:#ffffff}
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{height:100%}
 body{font-family:var(--font);letter-spacing:-.01em;font-size:12.5px;color:var(--ink);background:var(--bg);display:flex;overflow:hidden}
@@ -44,15 +50,32 @@ input,select,textarea{font:inherit;letter-spacing:inherit}
 .screen.on{display:flex}
 
 /* ---------- 设计系统 ---------- */
-.btn{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 11px;font-size:12px;border:1px solid var(--line);border-radius:var(--r-s);background:var(--panel);color:var(--ink);transition:background .12s,border-color .12s;white-space:nowrap}
-.btn:hover{background:var(--panel-muted)}
-.btn.pri{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:550}
-.btn.pri:hover{background:var(--accent-h)}
+/* ============ 按钮系统（统一刻度 · 全量走主题 token · 跟随背景方案联动） ============
+   尺寸刻度：默认 28px 高 / sm 24px 高；水平呼吸 12px / 9px；图标钮正方形（28/24）。
+   圆角：默认 var(--r-m)=8px，sm var(--r-s)=6px（比旧版 5~6px 更圆润）。
+   文字色：主按钮 var(--on-accent)（token，跟随背景方案动态给黑/白）；
+          次级按钮恒为 var(--ink)，hover 只变底和描边，不改文字颜色。
+   hover：次级 = accent-soft 底 + accent 26% 描边（跟随主题色）；
+          主按钮 = accent-h 加深 + 主题色软阴影；danger = red-soft 底。
+   过渡统一 150ms ease，背景/描边/文字/阴影四属性，保证「丝滑」。 */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:28px;padding:0 12px;font-size:12px;font-weight:500;
+  border:1px solid var(--line);border-radius:var(--r-m);background:var(--panel);color:var(--ink);cursor:pointer;white-space:nowrap;
+  transition:background .15s ease,border-color .15s ease,color .15s ease,box-shadow .15s ease}
+.btn:hover{background:var(--accent-soft);border-color:color-mix(in srgb,var(--accent) 26%,transparent);color:var(--ink)}
+.btn:active{background:color-mix(in srgb,var(--accent) 14%,transparent);border-color:color-mix(in srgb,var(--accent) 32%,transparent)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent);font-weight:550}
+.btn.pri:hover{background:var(--accent-h);border-color:var(--accent-h);color:var(--on-accent);box-shadow:0 2px 8px color-mix(in srgb,var(--accent) 28%,transparent)}
+.btn.pri:active{background:color-mix(in srgb,var(--accent-h) 82%,var(--ink) 18%);box-shadow:none}
 .btn.danger{color:var(--red)}
-.btn.icon{width:28px;padding:0;justify-content:center}
-.btn.sm{height:24px;padding:0 8px;font-size:11px;border-radius:5px}
-.btn[disabled]{opacity:.45;cursor:default}
-.btn .spinner{width:11px;height:11px;border:1.5px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite}
+.btn.danger:hover{background:var(--red-soft);border-color:color-mix(in srgb,var(--red) 30%,transparent);color:var(--red)}
+.btn.icon{width:28px;padding:0}
+.btn.sm{height:24px;padding:0 9px;gap:5px;font-size:11px;border-radius:var(--r-s)}
+.btn.sm.icon{width:24px;padding:0}
+.btn[disabled]{opacity:.45;cursor:default;pointer-events:none}
+/* 深色表面（文件预览源码栏等）上的按钮变体：替代散落的内联深色样式 */
+.btn.dk{background:#1a1a1a;border-color:#2c2c2c;color:#d7dde5}
+.btn.dk:hover{background:#242424;border-color:#3a3a3a;color:#ffffff}
+.btn .spinner{width:11px;height:11px;border:1.5px solid color-mix(in srgb,var(--on-accent) 35%,transparent);border-top-color:var(--on-accent);border-radius:50%;animation:spin .7s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 .input{height:28px;padding:0 10px;font-size:12.5px;border:1px solid var(--line);border-radius:var(--r-s);background:var(--panel);color:var(--ink);outline:none;transition:border-color .12s,box-shadow .12s}
 .input:focus{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
@@ -60,17 +83,17 @@ input,select,textarea{font:inherit;letter-spacing:inherit}
 .seg{display:inline-flex;border:1px solid var(--line);border-radius:var(--r-s);overflow:hidden;background:var(--panel)}
 .seg>button{display:inline-flex;align-items:center;justify-content:center;gap:5px;height:28px;padding:0 11px;font-size:12px;color:var(--ink-soft);border-right:1px solid var(--line);white-space:nowrap}
 .seg>button:last-child{border-right:none}
-.seg>button.on{background:var(--ink);color:#fff;font-weight:600}
-.seg.lite>button.on{background:var(--accent-soft);color:var(--accent);font-weight:600}
+.seg>button.on{background:transparent;color:var(--accent);font-weight:600}
+.seg.lite>button.on{background:transparent;color:var(--accent);font-weight:600}
 .chip{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;color:var(--ink-muted);border:1px solid var(--line);border-radius:999px;padding:1px 8px}
 .chip.grn{color:var(--green);border-color:color-mix(in srgb,var(--green) 32%,transparent);background:color-mix(in srgb,var(--green) 6%,transparent)}
 .chip.red{color:var(--red);border-color:color-mix(in srgb,var(--red) 30%,transparent)}
 .chip.amb{color:var(--amber);border-color:color-mix(in srgb,var(--amber) 30%,transparent)}
 .pill{display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 11px;font-size:11.5px;border:1px solid var(--line);border-radius:999px;background:var(--panel);color:var(--ink);white-space:nowrap}
-.pill.on{border-color:var(--accent);color:var(--accent);background:var(--accent-soft);font-weight:550}
+.pill.on{border-color:var(--accent);color:var(--accent);font-weight:550}
 .fchip{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 11px;font-size:11.5px;border:1px solid var(--line);border-radius:999px;color:var(--ink-soft);cursor:pointer;white-space:nowrap}
 .fchip:hover{border-color:var(--line-strong);color:var(--ink)}
-.fchip.on{border-color:var(--accent);color:var(--accent);background:var(--accent-soft);font-weight:550}
+.fchip.on{border-color:var(--accent);color:var(--accent);font-weight:550}
 .fchip .n{font-weight:650}
 .fchip.red .n{color:var(--red)}
 .dot{width:7px;height:7px;border-radius:50%;flex:none}
@@ -90,7 +113,7 @@ input,select,textarea{font:inherit;letter-spacing:inherit}
 .workspace{flex:1;display:flex;flex-direction:column;min-width:0;min-height:0}
 .wtabs{display:flex;align-items:center;gap:2px;padding:0 10px;border-bottom:1px solid var(--line);flex:none}
 .wtab{display:flex;align-items:center;gap:6px;height:34px;padding:0 13px;font-size:12px;color:var(--ink-soft);border-bottom:2px solid transparent}
-.wtab.on{color:var(--ink);font-weight:600;border-bottom-color:var(--ink)}
+.wtab.on{color:var(--accent);font-weight:600;border-bottom-color:var(--accent)}
 .tbar{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--line);flex:none}
 .content{flex:1;min-height:0;position:relative;overflow:auto}
 
@@ -133,6 +156,12 @@ input,select,textarea{font:inherit;letter-spacing:inherit}
 
 /* 切片条 */
 .slicebar{display:flex;align-items:center;gap:12px;padding:8px 14px;border-bottom:1px solid var(--line);flex:none}
+/* 日志视图合并条（用户要求：切片条 + 实时状态带 合并为一行；对应实现 .log-view-bar） */
+.log-view-bar{display:flex;align-items:center;gap:12px;padding:6px 12px;border-bottom:1px solid var(--line);flex:none;min-width:0;background:var(--panel)}
+.log-view-bar>.slicebar,.log-view-bar>.rtools{border-bottom:none;padding:0;background:transparent}
+.log-view-bar>.slicebar{flex:1 1 auto}
+.log-view-bar>.rtools{flex:0 1 auto}
+.log-view-bar>.rtools .sp-b{flex:0 0 0}
 .strack{flex:1;height:5px;border-radius:3px;background:var(--panel-muted);position:relative}
 .strack .fill{position:absolute;left:0;top:0;bottom:0;width:62%;background:color-mix(in srgb,var(--accent) 25%,transparent);border-radius:3px}
 .strack .thumb{position:absolute;top:-4px;left:62%;width:9px;height:13px;background:var(--accent);border-radius:3px;box-shadow:0 1px 4px rgba(0,112,243,.4)}
@@ -485,7 +514,7 @@ function s3(){
           <span style="position:absolute;left:9px;color:var(--ink-muted);display:flex">${ic("search",13)}</span>
           <input class="input" style="width:100%;padding-left:28px" value="sync failed">
         </div>
-        <button class="btn">${ic("clock",13)} 今天 <span class="mut">▾</span></button>
+        <button class="btn">${ic("clock",14)} 今天 <span class="mut">▾</span></button>
         <button class="btn pri">检索</button>
         <button class="btn" id="advB">${ic("sliders",13)} 高级</button>
         <button class="btn" style="color:var(--red)">${ic("record",13)} 00:41</button>
@@ -526,33 +555,41 @@ function s4(){
     ${sidebarHtml(1,-1)}
     <div class="workspace">
       ${wtabs("127.38")}
-      <div class="slicebar">
-        <span class="mono" style="font-size:11px;color:var(--ink-soft)"><b style="color:var(--ink)">12.4 MB</b> / 20.0 MB</span>
-        <div class="strack"><div class="fill"></div><div class="thumb"></div></div>
-        <span class="mono" style="font-size:11px">62%</span>
-        <button class="btn sm">${ic("tail",12)} 跳到尾部</button>
-        <span class="chip">整行裁切 · 邻页已预热</span>
-      </div>
-      <div class="rtools">
-        <span class="liveb"><i></i>LIVE</span>
-        <span class="mut" style="font-size:11.5px">eos-server.log · tail -F · 自动重连</span>
-        <span style="flex:1"></span>
-        <span style="position:relative;display:flex;align-items:center">
-          <span style="position:absolute;left:8px;color:var(--ink-muted);display:flex">${ic("filter",11)}</span>
-          <input class="input" style="width:170px;height:24px;padding-left:25px;font-size:11.5px" value="ERROR">
-        </span>
-        <span class="pill">${ic("pause",11)} 暂停</span>
-        <button class="btn sm">断开</button>
+      <div class="log-view-bar">
+        <div class="slicebar">
+          <button class="btn icon sm" title="上一页">${ic("left",12)}</button>
+          <span class="mono" style="font-size:11px;color:var(--ink-soft)"><b style="color:var(--ink)">12.4 MB</b> / 20.0 MB</span>
+          <div class="strack" title="拖拽跳转到指定位置"><div class="fill"></div><div class="thumb"></div></div>
+          <span class="mono" style="font-size:11px;min-width:38px;text-align:right">62%</span>
+          <button class="btn icon sm" title="下一页">${ic("right",12)}</button>
+          <button class="btn sm">跳到尾部</button>
+        </div>
+        <div class="rtools">
+          <span class="liveb"><i></i>LIVE</span>
+          <span class="mut" style="font-size:11.5px">eos-server.log · tail -F · 自动重连</span>
+          <span style="flex:1"></span>
+          <span style="position:relative;display:flex;align-items:center">
+            <span style="position:absolute;left:8px;color:var(--ink-muted);display:flex">${ic("filter",11)}</span>
+            <input class="input" style="width:170px;height:24px;padding-left:25px;font-size:11.5px" value="ERROR">
+          </span>
+          <span class="pill">${ic("pause",11)} 暂停</span>
+          <span style="width:1px;height:16px;background:var(--line)"></span>
+          <button class="btn icon sm on" title="异常/告警高亮">${ic("warn",12)}</button>
+          <button class="btn icon sm" title="下载结果">${ic("download",12)}</button>
+          <button class="btn icon sm" title="弹出独立小窗">${ic("expand",12)}</button>
+          <button class="btn icon sm" title="更多工具">${ic("gear",12)}</button>
+        </div>
       </div>
       <div class="content"><div class="note-pad">
         ${logHtml(false)}
+        <div class="ll"><span class="t">09:01:23.556</span><span>选中一段日志后，光标处浮现 <span style="display:inline-flex;align-items:center;gap:4px;padding:2px 9px;border:1px solid var(--line);border-radius:8px;background:var(--panel);font-size:10.5px;box-shadow:0 4px 12px rgba(15,23,42,.14)">${ic("copy",10)} 复制</span> pill，点击即复制所选</span></div>
         <div class="ll"><span class="t">09:01:23.556</span><span><span class="lv" style="color:var(--red);font-weight:650">ERROR</span> [scheduler-1] c.e.s.HeartbeatJob - node-3 heartbeat timeout</span></div>
         <div class="ll"><span class="t">09:01:24.002</span><span><span class="lv" style="color:var(--ink-muted)">INFO </span> [scheduler-1] c.e.s.HeartbeatJob - failover check started</span></div>
         <div class="ll" style="color:var(--ink-muted)"><span class="t">…</span><span>新日志持续追加 · 向上滚动自动暂停跟随</span></div>
       </div></div>
     </div>
   </div>` +
-  decision(`<span class="w">切片与实时一体化</span> — ① 切片条压缩为一行：字节区间 + 进度槽（可拖拽）+ 百分比 + 跳尾部；② LIVE 从独立模式变成日志视图上的一条状态带：脉冲徽标 + 过滤框 + 暂停/断开，断线时徽标变琥珀色「重连中 ⟳」；③ 上滚自动暂停跟随、到底自动恢复（已在设置中可控）。`);
+  decision(`<span class="w">切片与实时一体化（2026-09-30 二轮修订）</span> — ① 切片条 = <b>一行式阅读进度条</b>：‹ 翻页 | 字节区间 | 进度槽（拖拽即跳转指定位置）| 百分比 | › 翻页 | 跳到尾部；<b>百分比语义 = 已读窗口末端位置，读到文件尾恒为 100%</b>（旧行为用窗口起点，最后一页停在 90%+）；② 尾页时「跳到尾部」自动变「回到头部」；③ 调试信息（偏移/边界/切片大小/文件信息）收进「更多工具」面板，常驻行不再出现；④ LIVE 状态带 = 脉冲徽标 + 过滤框 + 暂停（断开收进右上 LIVE 开关）；⑤ 状态条右端融合<b>高频动作组</b>：警告高亮 / 仅命中↔上下文 / 下载 / 书签 / 弹出小窗 / 更多工具（自带 on 态），标题行不再重复；⑥ <b>选中复制</b>：在日志区选中文本，光标处浮现「复制」pill，点击即复制。`);
 }
 
 /* ============ S5 终端 ============ */
@@ -566,9 +603,9 @@ function s5(){
         <span class="mut" style="font-size:11px">会话 1/2</span>
         <span style="flex:1"></span>
         <button class="btn sm">分屏</button>
-        <button class="btn sm">${ic("expand",11)} 弹出窗口</button>
+        <button class="btn sm">${ic("expand",12)} 弹出窗口</button>
         <button class="btn sm" style="color:var(--accent)">${ic("zap",12)} AI 助手</button>
-        <button class="btn icon sm">${ic("down",13)}</button>
+        <button class="btn icon sm">${ic("down",12)}</button>
       </div>
       <div style="flex:1;display:flex;min-height:0">
         <div class="term">
@@ -636,8 +673,8 @@ function s6(){
       </div>
       <div class="batchbar">
         <b>已选 3 项</b><span class="mut" style="font-size:11px">· 78.1 MB</span>
-        <button class="btn sm">${ic("right",11)} 移动到…</button>
-        <button class="btn sm danger">${ic("trash",11)} 删除</button>
+        <button class="btn sm">${ic("right",12)} 移动到…</button>
+        <button class="btn sm danger">${ic("trash",12)} 删除</button>
         <button class="btn sm">清空选择</button>
         <span style="flex:1"></span><span class="mut" style="font-size:10.5px">Esc 清空 · 双击进入 · 拖拽移动</span>
       </div>
@@ -701,9 +738,9 @@ function s7(){
       <span class="chip" style="color:#9aa7b4;border-color:#2c2c2c">只读</span>
       <span style="flex:1"></span>
       <div class="seg" style="background:#1a1a1a;border-color:#2c2c2c"><button class="on" style="background:#2c2c2c;color:#fff;border-right:1px solid #2c2c2c">源码</button><button style="color:#9aa7b4;border-right:1px solid #2c2c2c">归档 · 132 项</button><button style="color:#9aa7b4">Class</button></div>
-      <button class="btn icon" style="background:#1a1a1a;border-color:#2c2c2c;color:#d7dde5" title="下载">${ic("download",14)}</button>
-      <button class="btn icon" style="background:#1a1a1a;border-color:#2c2c2c;color:#d7dde5" title="最大化">${ic("expand",14)}</button>
-      <button class="btn icon" style="background:#1a1a1a;border-color:#2c2c2c;color:#d7dde5" title="关闭">${ic("x",14)}</button>
+      <button class="btn icon dk" title="下载">${ic("download",14)}</button>
+      <button class="btn icon dk" title="最大化">${ic("expand",14)}</button>
+      <button class="btn icon dk" title="关闭">${ic("x",14)}</button>
     </div>
     <div style="display:flex;align-items:center;gap:8px;padding:6px 16px;border-bottom:1px solid #1f1f1f;background:#0f0f0f">
       <span style="position:relative;display:flex;align-items:center;flex:0 0 240px">
@@ -711,8 +748,8 @@ function s7(){
         <input class="input" style="width:100%;height:24px;padding-left:25px;font-size:11.5px;background:#161616;border-color:#2c2c2c;color:#d7dde5" value="sync failed">
       </span>
       <span class="mono" style="font-size:10.5px;color:#9aa7b4">14 / 128</span>
-      <button class="btn icon sm" style="background:#161616;border-color:#2c2c2c;color:#d7dde5">${ic("left",11)}</button>
-      <button class="btn icon sm" style="background:#161616;border-color:#2c2c2c;color:#d7dde5">${ic("right",11)}</button>
+      <button class="btn icon sm dk">${ic("left",12)}</button>
+      <button class="btn icon sm dk">${ic("right",12)}</button>
       <span style="flex:1"></span>
       <span class="mono" style="font-size:10.5px;color:#5c6b7a">88,198 – 88,210 行 · 共 88,210 行</span>
     </div>
@@ -755,7 +792,7 @@ function s8(){
         </span>
         <span style="flex:1"></span>
         <button class="btn icon sm" title="上传文件（进行中，见右抽屉）" style="color:var(--accent)">${ic("upload",13)}</button>
-        <button class="btn icon sm">${ic("refresh",13)}</button>
+        <button class="btn icon sm">${ic("refresh",12)}</button>
         <button class="btn icon sm" title="传输记录">${ic("download",13)}</button>
       </div>
       <div class="content" style="position:relative">
@@ -784,7 +821,7 @@ function s8(){
         <span class="t">传输记录</span><span class="chip">127.38 · /data/backup</span>
         <span style="flex:1"></span>
         <button class="btn icon sm" title="清空当前服务器记录">${ic("trash",13)}</button>
-        <button class="btn icon sm">${ic("x",13)}</button>
+        <button class="btn icon sm">${ic("x",12)}</button>
       </div>
       <div style="padding:10px 16px;border-bottom:1px solid var(--line);display:flex;gap:6px;flex-wrap:wrap">
         <span class="fchip on">全部 <b>27</b></span>
@@ -874,7 +911,7 @@ function s9(){
       <div class="dhead">
         <span class="t">工具</span>
         <div class="seg lite" style="margin-left:auto"><button>${ic("plug",12)} 隧道</button><button>${ic("zap",12)} 批量</button><button class="on">${ic("cpu",12)} 监控</button><button>${ic("compare",12)} 对比</button></div>
-        <button class="btn icon sm">${ic("x",13)}</button>
+        <button class="btn icon sm">${ic("x",12)}</button>
       </div>
       <div class="dbody" style="padding:12px 16px;display:flex;flex-direction:column;gap:12px">
         <div style="display:flex;gap:10px">
@@ -941,8 +978,8 @@ function s10(){
           <span class="pill" style="justify-content:center">偏好设置</span>
           <span class="mut" style="font-size:10.5px;margin-top:auto;line-height:1.7;padding:8px 4px;border-top:1px dashed var(--line)">选中即编辑；主界面侧栏「编辑」直达此处。</span>
         </div>
-        <div style="flex:0 0 268px;border-right:1px solid var(--line);overflow:auto">
-          <div style="padding:10px 12px"><input class="input" style="width:100%" placeholder="搜索名称、主机或标签…"></div>
+        <div style="flex:0 0 268px;border-right:1px solid var(--line);overflow:auto;display:flex;flex-direction:column">
+          <div style="padding:10px 12px;display:flex;gap:8px;align-items:center;position:sticky;top:0;background:var(--panel);z-index:1"><input class="input" style="flex:1" placeholder="搜索名称、主机或标签…"><button class="btn sm pri" title="手动新建连接（表单同「编辑」）">＋ 新增</button></div>
           <div class="grp">测试 <span class="c">4</span></div>
           <div class="srow cur" style="padding:6px 16px"><span class="meta"><span class="nm">127.122 <span class="chip grn">当前连接</span></span><span class="host">root@192.168.127.122</span></span><span class="port">22</span></div>
           <div class="srow" style="padding:6px 16px"><span class="meta"><span class="nm">127.38</span><span class="host">root@192.168.127.38</span></span><span class="port">22</span></div>
@@ -953,40 +990,64 @@ function s10(){
         <div style="flex:1;overflow:auto">
           <div style="padding:12px 20px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px">
             <div style="flex:1"><b style="font-size:13px">127.122</b> <span class="chip grn">在线</span> <span class="chip">FinalShell</span><br/><span class="mono" style="font-size:10.5px">root@192.168.127.122:22 · /data/logs/eos</span></div>
-            <button class="btn sm">重连测试</button><button class="btn sm">${ic("term",12)} 打开终端</button>
+            <button class="btn sm">重连测试</button><button class="btn sm">${ic("term",12)} 打开终端</button><button class="btn sm icon" title="更多：编辑连接 · 复制地址 · 导入来源">${ic("more",12)}</button>
           </div>
           <div style="padding:12px 20px;border-bottom:1px solid var(--line)">
-            <div style="display:flex;align-items:center;margin-bottom:9px"><span class="mut" style="font-size:10.5px;font-weight:650;letter-spacing:.06em">连接凭证</span><span style="flex:1"></span><span class="chip grn">已有可用凭证 · FinalShell 导入</span></div>
-            <div style="display:flex;gap:8px;align-items:center">
-              <span class="mut" style="font-size:11px;width:44px">密码</span>
-              <input class="input" style="flex:1" value="••••••••••••">
-              <button class="btn sm">查看</button><button class="btn sm" style="color:var(--red)">清除</button><button class="btn sm pri">保存</button>
-            </div>
-            <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
-              <span class="mut" style="font-size:11px;width:44px">私钥</span>
-              <input class="input" style="flex:1" value="未配置" disabled>
-              <button class="btn sm">粘贴导入</button>
+            <div style="display:flex;align-items:center;margin-bottom:10px"><span class="mut" style="font-size:10.5px;font-weight:650;letter-spacing:.06em">连接信息</span><span style="flex:1"></span><button class="btn sm">编辑</button></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px 24px;font-size:11.5px">
+              <span><span class="mut">主机</span>　<span class="mono">192.168.127.122</span></span>
+              <span><span class="mut">端口</span>　<span class="mono">22</span></span>
+              <span><span class="mut">用户名</span>　<span class="mono">root</span></span>
+              <span><span class="mut">类型</span>　普通直连</span>
+              <span><span class="mut">目录</span>　<span class="mono">/data/logs/eos</span></span>
+              <span><span class="mut">来源</span>　FinalShell 导入</span>
             </div>
           </div>
           <div style="padding:12px 20px;border-bottom:1px solid var(--line)">
-            <div style="display:flex;align-items:center;margin-bottom:9px"><span class="mut" style="font-size:10.5px;font-weight:650;letter-spacing:.06em">JumpServer 路由</span><span style="flex:1"></span><button class="btn sm">保存入口设置</button></div>
-            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-              <span class="chip">入口 jump-entry</span><span class="mut">→</span><span class="chip">资产 eos-app-03</span>
-              <span class="mono" style="font-size:10px;color:var(--ink-muted)">关键字 eos-app</span>
+            <div style="display:flex;align-items:center;margin-bottom:9px"><span class="mut" style="font-size:10.5px;font-weight:650;letter-spacing:.06em">连接凭证</span><span style="flex:1"></span><span class="chip grn">已有可用凭证 · FinalShell 导入</span><button class="btn sm">编辑凭证</button></div>
+            <div style="display:flex;gap:14px;font-size:11.5px">
+              <span><span class="mut">认证方式</span>　密码 · 已保存</span>
+              <span><span class="mut">私钥</span>　未配置</span>
             </div>
+            <details style="margin-top:10px;border:1px solid var(--line);border-radius:var(--r-s)">
+              <summary style="padding:7px 12px;font-size:11.5px;cursor:pointer;color:var(--ink-soft)">凭证编辑（密码 / 私钥 / 高级）</summary>
+              <div style="padding:10px 12px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:8px">
+                <div style="display:flex;gap:8px;align-items:center">
+                  <span class="mut" style="font-size:11px;width:44px">密码</span>
+                  <input class="input" style="flex:1" value="••••••••••••">
+                  <button class="btn sm">查看</button><button class="btn sm danger">清除</button>
+                </div>
+                <div style="display:flex;gap:8px;align-items:center">
+                  <span class="mut" style="font-size:11px;width:44px">私钥</span>
+                  <input class="input" style="flex:1" value="未配置" disabled>
+                  <button class="btn sm">粘贴导入</button>
+                </div>
+                <div style="display:flex;gap:8px;align-items:center;justify-content:flex-end;border-top:1px dashed var(--line);padding-top:8px">
+                  <span class="mut" style="font-size:10.5px;margin-right:auto">留空密码 = 不覆盖已保存凭证</span>
+                  <button class="btn sm">取消</button><button class="btn sm pri">保存凭证</button>
+                </div>
+              </div>
+            </details>
+          </div>
+          <div style="padding:12px 20px;border-bottom:1px solid var(--line)">
+            <details>
+              <summary style="display:flex;align-items:center;gap:8px;font-size:11.5px;cursor:pointer;list-style:none"><span class="mut" style="font-size:10.5px;font-weight:650;letter-spacing:.06em">连接入口</span><span class="mut" style="font-weight:400;letter-spacing:0">当前服务器按直连处理</span><span style="flex:1"></span><span class="mut" style="font-size:10.5px">展开配置堡垒机 ▾</span></summary>
+              <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px">
+                <span class="chip">入口 jump-entry</span><span class="mut">→</span><span class="chip">资产 eos-app-03</span>
+                <span class="mono" style="font-size:10px;color:var(--ink-muted)">关键字 eos-app</span>
+                <span style="flex:1"></span><button class="btn sm">保存入口设置</button>
+              </div>
+            </details>
           </div>
           <div style="padding:12px 20px;display:flex;align-items:center;gap:10px">
             <span class="mut" style="font-size:11px;flex:1">最近目录：/data/logs/eos · /data/logs/nginx · /opt/app/config</span>
             <button class="btn sm" style="color:var(--red)">${ic("trash",12)} 删除此服务器</button>
           </div>
-          <div style="background:var(--panel-muted);border-top:1px solid var(--line);padding:8px 20px;display:flex;align-items:center;gap:10px">
-            <span class="mut" style="font-size:10.5px">⚠ 已知缺陷 D9：外观能力缺口（水印/动图/日志字体族）在「偏好设置 → 外观」补充，见 S14</span>
-          </div>
         </div>
       </div>
     </div>
   </div>` +
-  decision(`<b>设置中心 = 已确认 v2 的完整高保真</b> — 左 rail（连接管理/偏好设置）+ 清单（分组/当前连接标记）+ 详情（信息头/凭证行内组/路由/最近目录/危险区一行）；凭证「查看/清除/保存」行内一组；删除降为页脚红字（不过度视觉）。偏好设置页结构同 S14（外观/水印/动效/字体）+ S10 补充（终端 AI API 配置在 高级）。<br/>⚠ D9 标注：外观能力缺口在此屏页脚挂出，跳 S14 设计。`);
+  decision(`<b>设置中心详情 = 只读详情 + 编辑态分层（对齐常规服务器管理工具）</b> — 详情区默认<b>只读</b>：连接信息为键值网格（主机/端口/用户/类型/目录/来源），凭证区只展示<b>生效状态</b>（认证方式·已保存 / 私钥·未配置），消除"编辑框与状态卡并存"的歧义；编辑行为分三层入口：① 头部 ⋯ 菜单收纳「编辑连接 / 复制地址」等低频项；② 「编辑」进入连接信息表单、「编辑凭证」展开凭证编辑（密码/私钥/保存，含"留空不覆盖"提示，危险动作「清除」仅在编辑态出现）；③ 「连接入口」教学提示折叠为一行摘要，展开才见堡垒机路由配置。危险区「删除此服务器」仍为页脚红字不过度视觉。<b>连接的获得 = 两条路径并列</b>：导入（FinalShell 等，头部 ⋯ 菜单「导入来源」）与<b>手动新增</b>（清单顶部常驻「＋ 新增」主按钮，表单复用「编辑」；空分组时空状态也提供同款按钮），手动维护不依赖导入。左 rail / 清单 / 偏好设置结构不变。<br/>D9 页脚标注已按反馈移除（缺陷跟踪走文档，不占设置界面）。`);
 }
 
 /* ============ S11 桌面 ============ */
@@ -1007,7 +1068,7 @@ function s11(){
     <div>
       <div class="mut" style="font-size:11px;margin-bottom:8px">画中画窗口 · 日志 LIVE（终端/工具同理）</div>
       <div class="pip">
-        <div class="ph">${ic("live",11)} <span style="flex:1">eos-server.log · 127.38</span><span class="liveb" style="padding:0 7px"><i></i>LIVE</span><button class="btn icon sm">${ic("expand",11)}</button><button class="btn icon sm">${ic("x",11)}</button></div>
+        <div class="ph">${ic("live",11)} <span style="flex:1">eos-server.log · 127.38</span><span class="liveb" style="padding:0 7px"><i></i>LIVE</span><button class="btn icon sm">${ic("expand",12)}</button><button class="btn icon sm">${ic("x",12)}</button></div>
         <div style="padding:10px 14px;font-family:var(--mono);font-size:10.5px;color:var(--ink-soft);line-height:1.9">
           09:02:11 <span style="color:var(--red)">ERROR</span> SyncJob - sync failed…<br/>
           09:02:15 <span style="color:var(--red)">ERROR</span> SyncJob - retry 2/3…<br/>
@@ -1030,7 +1091,7 @@ function s12(){
       <div class="banner">
         <span style="display:flex">${ic("warn",15)}</span>
         <span class="msg"><b>连接失败 · 认证被拒绝</b> — Permission denied (publickey,password) · root@192.168.127.122:22<br/><span style="color:var(--ink-soft);font-size:11.5px">凭证可能已过期；FinalShell 导入的密码可在设置中心重新获取。</span></span>
-        <button class="btn">${ic("refresh",12)} 重连</button>
+        <button class="btn">${ic("refresh",14)} 重连</button>
         <button class="btn pri">连接设置</button>
       </div>
       <div style="flex:1;display:flex;align-items:center;justify-content:center;gap:56px">
@@ -1089,15 +1150,15 @@ function s13(){
 
 /* ============ S14 外观 · 主题 · 水印 ============ */
 function s14(){
-  const thumb = (bg, label, on) => `
-    <div style="text-align:center;cursor:pointer">
+  const thumb = (bg, label, on, skin) => `
+    <div class="skin-thumb" data-skin="${skin||""}" onclick="setSkin(this)" style="text-align:center;cursor:pointer">
       <div style="width:96px;height:60px;border-radius:8px;border:2px solid ${on?"var(--accent)":"var(--line)"};background:${bg};position:relative;overflow:hidden">
         <div style="position:absolute;left:8px;top:8px;width:34px;height:5px;border-radius:3px;background:rgba(23,23,23,.25)"></div>
         <div style="position:absolute;left:8px;top:18px;right:8px;height:4px;border-radius:2px;background:rgba(23,23,23,.12)"></div>
         <div style="position:absolute;left:8px;top:27px;right:18px;height:4px;border-radius:2px;background:rgba(23,23,23,.12)"></div>
         <div style="position:absolute;left:8px;top:36px;right:28px;height:4px;border-radius:2px;background:rgba(23,23,23,.12)"></div>
       </div>
-      <div style="font-size:11px;margin-top:6px;color:${on?"var(--accent)":"var(--ink-soft)"};font-weight:${on?600:400}">${label}</div>
+      <div class="skin-label" style="font-size:11px;margin-top:6px;color:${on?"var(--accent)":"var(--ink-soft)"};font-weight:${on?600:400}">${label}</div>
     </div>`;
   return `<div class="app">
     <div class="workspace">
@@ -1109,10 +1170,10 @@ function s14(){
         <div style="border-bottom:1px solid var(--line)">
           <div class="grp" style="padding:10px 20px 8px">背景方案</div>
           <div style="display:flex;gap:14px;padding:2px 20px 12px">
-            ${thumb("linear-gradient(180deg,#ffffff,#fafafa)","默认",true)}
-            ${thumb("linear-gradient(180deg,#f4f6f8,#eceff3)","雾面",false)}
-            ${thumb("linear-gradient(180deg,#faf7f0,#f3ede1)","纸感",false)}
-            ${thumb("linear-gradient(135deg,#eef5ff,#fff7ed)","自定义",false)}
+            ${thumb("linear-gradient(180deg,#ffffff,#fafafa)","默认",true,"")}
+            ${thumb("linear-gradient(180deg,#f4f6f8,#eceff3)","雾面",false,"mist")}
+            ${thumb("linear-gradient(180deg,#faf7f0,#f3ede1)","纸感",false,"paper")}
+            ${thumb("linear-gradient(135deg,#eef5ff,#fff7ed)","自定义",false,"")}
           </div>
         </div>
         <div style="border-bottom:1px solid var(--line);padding:12px 20px">
@@ -1233,7 +1294,7 @@ const SCREENS = {
   s7:{n:"S7 文件预览",d:"源码/归档/Class 三态 · 文件内搜索",f:s7},
   s8:{n:"S8 传输记录抽屉",d:"文件窗口内传输 · 表内进度 · 右抽屉同源",f:s8},
   s9:{n:"S9 工具抽屉",d:"隧道/批量/状态/对比 四合一",f:s9},
-  s10:{n:"S10 设置中心",d:"已确认的 v2（微调：危险区降为页脚）",f:s10},
+  s10:{n:"S10 设置中心",d:"详情只读分层 + 编辑态切换（对齐常规工具）",f:s10},
   s11:{n:"S11 桌面能力",d:"托盘动态项 · PiP 统一入口 · 置顶",f:s11},
   s12:{n:"S12 空态与错误",d:"错误横幅 · 空状态模板",f:s12},
   s13:{n:"S13 核心排障动线",d:"选服务器 → 检索 → 命中阅读 → 切片/实时接力",f:s13},
@@ -1241,6 +1302,21 @@ const SCREENS = {
   s15:{n:"S15 窗口与断点",d:"三档窗口行为 · 最小尺寸 · 分隔线单边框原则",f:s15},
 };
 const vp = document.getElementById("viewport");
+/* S14 背景方案演示：切换 .app 上的 skin class，accent/on-accent 整体联动（按钮跟随主题） */
+function setSkin(el){
+  const app = el.closest(".app");
+  const skin = el.dataset.skin || "";
+  app.classList.remove("skin-mist","skin-paper");
+  if (skin) app.classList.add("skin-" + skin);
+  app.querySelectorAll(".skin-thumb").forEach(t=>{
+    const on = t === el;
+    t.querySelector("div").style.borderColor = on ? "var(--accent)" : "var(--line)";
+    const lb = t.querySelector(".skin-label");
+    lb.style.color = on ? "var(--accent)" : "var(--ink-soft)";
+    lb.style.fontWeight = on ? 600 : 400;
+  });
+}
+window.setSkin = setSkin;
 function go(id){
   document.querySelectorAll("#index button").forEach(b=>b.classList.toggle("on",b.dataset.s===id));
   const meta = SCREENS[id];
