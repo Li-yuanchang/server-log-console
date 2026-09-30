@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { PictureInPicture2, X, Clipboard, ClipboardPaste, Zap, RefreshCw, Plug, Sparkles, Columns } from "lucide-react";
+import { PictureInPicture2, Clipboard, ClipboardPaste, Zap, RefreshCw, Plug, ListPlus, Expand, ChevronDown } from "lucide-react";
 import type { RefObject } from "react";
 import type { ServerSummary } from "@server-log-console/shared";
 import { looksLikeJumpServer } from "./terminal-utils.js";
 import { TerminalShortcuts } from "./TerminalShortcuts.js";
 import { TerminalAI } from "./TerminalAI.js";
+import { TerminalQuickBar } from "./TerminalQuickBar.js";
 import { copyText } from "./utils.js";
 
 interface TerminalPanelProps {
@@ -56,6 +57,13 @@ export function TerminalPanel(props: TerminalPanelProps) {
   const terminalStatusText = props.statusText?.trim() || (props.connected ? "终端已连接" : (props.serverId ? "等待连接终端..." : "未选择服务器"));
   const standaloneMetaText = terminalSubtitle && terminalSubtitle !== terminalTitle ? terminalSubtitle : "";
   const showStandaloneConnectionStrip = false;
+  /* 原型 S5 第 565 行：`root@192.168.127.38 · 心跳 25s`（user@host 形态）。
+     心跳值无实现侧数据源，仅保留 user@host；无用户名时退回服务器名。 */
+  const statusChipLabel = props.server?.username && props.server?.host
+    ? `${props.server.username}@${props.server.host}`
+    : terminalTitle;
+  /* 原型 S5 第 566 行：`会话 1/2`。实现侧当前无多会话数据，按 1/1 呈现。 */
+  const sessionCountLabel = "会话 1/1";
 
   useEffect(() => {
     onFitRef.current = props.onFit;
@@ -208,34 +216,40 @@ export function TerminalPanel(props: TerminalPanelProps) {
           </>
         ) : (
           <div className="terminal-panel-bar-info">
-            <span className={`terminal-status-dot ${props.connected ? "terminal-status-dot-connected" : ""}`} />
-            <strong>{terminalTitle}</strong>
-            <span>{terminalSubtitle}</span>
-            {isJumpServer ? <span>堡垒机</span> : null}
+            {/* 原型 S5 第 565 行：<span class="chip grn"><dot/> root@192.168.127.38 · 心跳 25s</span> */}
+            <span className={`chip grn terminal-status-chip${props.connected ? "" : " terminal-status-chip-off"}`}>
+              <span className={`dot ${props.connected ? "on" : "off"}`} />
+              {statusChipLabel}
+            </span>
+            {/* 原型 S5 第 566 行：<span class="mut">会话 1/2</span> */}
+            <span className="terminal-bar-meta terminal-bar-session">{sessionCountLabel}</span>
+            {isJumpServer ? <span className="terminal-bar-meta">堡垒机</span> : null}
           </div>
         )}
         <div className="terminal-panel-bar-actions">
+          {/* 原型 S5 第 568-571 行：分屏 / (expand) 弹出窗口 / (zap) AI 助手 / (down) */}
           <button
             type="button"
-            className={`terminal-toolbar-button${showShortcuts ? " terminal-shortcuts-toggle-active" : ""}`}
+            className={`terminal-toolbar-button terminal-toolbar-button-icon${showShortcuts ? " terminal-shortcuts-toggle-active" : ""}`}
             onClick={() => props.onToggleTerminalOverlay("shortcuts")}
             disabled={!props.serverId}
             title="快捷命令"
           >
-            <Zap size={13} />
+            <ListPlus size={13} />
           </button>
-          <button
-            type="button"
-            className={`terminal-toolbar-button${showAI ? " tai-toggle-active" : ""}`}
-            onClick={() => props.onToggleTerminalOverlay("ai")}
-            disabled={!props.serverId}
-            title="AI 助手"
-          >
-            <Sparkles size={13} />
-          </button>
-          <button className="terminal-toolbar-button" type="button" onClick={props.onReconnect} disabled={props.isBusy || !props.serverId} title={props.connected ? "重连" : "连接"}>
+          <button className="terminal-toolbar-button terminal-toolbar-button-icon" type="button" onClick={props.onReconnect} disabled={props.isBusy || !props.serverId} title={props.connected ? "重连" : "连接"}>
             {props.connected ? <RefreshCw size={13} /> : <Plug size={13} />}
           </button>
+          {!isStandalone ? (
+            <button
+              className="terminal-toolbar-button"
+              type="button"
+              onClick={props.onSplitMode}
+              title="分屏模式"
+            >
+              分屏
+            </button>
+          ) : null}
           {!isStandalone ? (
             <button
               className="terminal-toolbar-button"
@@ -243,17 +257,23 @@ export function TerminalPanel(props: TerminalPanelProps) {
               onClick={() => void togglePip()}
               title={(isElectronRuntime ? props.detached : isBrowserPip) ? "收回终端" : "弹出独立小窗"}
             >
-              <PictureInPicture2 size={13} />
+              <Expand size={11} />
+              弹出窗口
             </button>
           ) : null}
+          <button
+            type="button"
+            className={`terminal-toolbar-button terminal-toolbar-button-accent${showAI ? " tai-toggle-active" : ""}`}
+            onClick={() => props.onToggleTerminalOverlay("ai")}
+            disabled={!props.serverId}
+            title="AI 助手"
+          >
+            <Zap size={12} />
+            AI 助手
+          </button>
           {!isStandalone ? (
-            <button className="terminal-toolbar-button" type="button" onClick={props.onSplitMode} title="分屏模式">
-              <Columns size={13} />
-            </button>
-          ) : null}
-          {!isStandalone ? (
-            <button className="terminal-toolbar-button" type="button" onClick={props.onClose} title="关闭终端">
-              <X size={13} />
+            <button className="terminal-toolbar-button terminal-toolbar-button-icon" type="button" onClick={props.onClose} title="收起终端">
+              <ChevronDown size={13} />
             </button>
           ) : null}
         </div>
@@ -279,6 +299,8 @@ export function TerminalPanel(props: TerminalPanelProps) {
             >
               <div ref={props.containerRef} className="xterm-container" />
             </div>
+            {/* 原型 S5 第 580 行：终端内容区底部操作提示（dim） */}
+            <div className="terminal-hint-bar">⌃C 中断 · ⌘D 断开 · 拖入文件 = SFTP 上传</div>
             {props.selMenu && (
               <div className="terminal-sel-menu" style={{ left: props.selMenu.x, top: props.selMenu.y }}>
                 <button type="button" title="复制" onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }} onClick={() => void handleCopy()}>
@@ -307,6 +329,7 @@ export function TerminalPanel(props: TerminalPanelProps) {
                 <TerminalAI
                   serverId={props.serverId}
                   serverLabel={props.server?.name || props.server?.host || props.serverId}
+                  selectionText={props.selMenu?.text || ""}
                   onExecute={(command) => {
                     props.pasteToTerminal(command);
                     props.onFocus();
@@ -318,6 +341,16 @@ export function TerminalPanel(props: TerminalPanelProps) {
           ) : null}
         </div>
       </div>
+      {!isStandalone && props.serverId && !showDetachedPlaceholder ? (
+        <TerminalQuickBar
+          serverId={props.serverId}
+          onExecute={(command) => {
+            props.pasteToTerminal(command + "\n");
+            props.onFocus();
+          }}
+          onOpenManager={() => props.onToggleTerminalOverlay("shortcuts")}
+        />
+      ) : null}
       {showDetachedPlaceholder ? (
         <div className="viewer-pip-placeholder" style={{ padding: "20px", minHeight: "80px" }}>
           <PictureInPicture2 size={20} strokeWidth={1.5} />
