@@ -9,51 +9,98 @@
       window.__SLC_PIP_MODE__=new URLSearchParams(location.search).get('pip')||'';
       document.documentElement.dataset.slcPip=window.__SLC_PIP_MODE__?'1':'0';
       document.documentElement.dataset.slcElectron=/Electron/.test(navigator.userAgent)?'1':'0';
+      /* 首屏骨架跟随主题外观（ui-surface localStorage 与 useUiTheme 同键名），
+         避免冷启动时灰蓝骨架叠在纸感/雾面主题上的突兀感。custom 自定义背景拿不到完整
+         参数组合，回落 plain 中性色。 */
+      try{
+        var skSurface=localStorage.getItem('ui-surface');
+        document.documentElement.dataset.skSurface=(skSurface==='mist'||skSurface==='paper')?skSurface:'plain';
+      }catch(e){document.documentElement.dataset.skSurface='plain'}
     </script>
     <style>
       html,body,#root{margin:0;width:100%;height:100%;min-height:100%;overflow:hidden;background:#fafafa}
       html[data-slc-pip="1"],html[data-slc-pip="1"] body,html[data-slc-pip="1"] #root{background:#0a0a0a}
-      #app-loading{position:fixed;inset:0;z-index:9999;display:flex;background:#fafafa;font-family:-apple-system,BlinkMacSystemFont,'Geist Sans','PingFang SC',sans-serif;transition:opacity .25s ease}
-      #sk-side{width:260px;min-width:260px;background:#fff;border-right:1px solid #eaeaea;padding:12px;display:flex;flex-direction:column;gap:10px}
-      #sk-main{flex:1;display:flex;flex-direction:column;background:#fafafa}
-      #sk-toolbar{height:auto;background:#fff;border-bottom:1px solid #eaeaea;display:flex;align-items:center;padding:8px 16px;gap:8px}
-      #sk-content{flex:1;display:flex;align-items:center;justify-content:center;color:#8b95a3;font-size:13px;letter-spacing:.3px;background:#fafafa}
-      #sk-status{height:28px;background:#fff;border-top:1px solid #eaeaea;display:flex;align-items:center;padding:0 12px}
-      .sk-block{border-radius:6px;background:#edf0f3}
-      html[data-slc-electron="1"] #sk-side{padding-top:38px}
-      html[data-slc-pip="1"] #app-loading,html[data-slc-pip="1"] #sk-main,html[data-slc-pip="1"] #sk-content,html[data-slc-pip="1"] #sk-status{background:#0a0a0a}
+      /* 骨架主题令牌：值逐项抄自 theme-modern.css 各 ui-surface-* 块（2026-09-30 重设计）。
+         几何对齐真实布局：侧栏 240px（<1440px 时 200px，同 theme-modern.css:3810 媒体查询）、
+         工具栏 45px（commandbar 8px padding + 28px 按钮 + 1px 下边框）、无底部状态栏（真实应用没有）。
+         中间区域渲染与真实 workspace-placeholder 同构的启动卡（44px 图标 + 标题 + 副文案），
+         React 挂载后无缝替换，不再抖动。 */
+      #app-loading{
+        --sk-bg:#fafafa;--sk-panel:#ffffff;--sk-muted:#f2f2f2;--sk-line:#eaeaea;
+        --sk-ink:#171717;--sk-ink-muted:#8f8f8f;--sk-ink-soft:#666666;--sk-accent:#0070f3;
+        position:fixed;inset:0;z-index:9999;display:flex;
+        background:var(--sk-bg);color:var(--sk-ink-muted);
+        font-family:-apple-system,BlinkMacSystemFont,'Geist Sans','PingFang SC',sans-serif;
+        transition:opacity .25s ease;
+      }
+      html[data-sk-surface="mist"] #app-loading{
+        --sk-bg:#eef5f7;--sk-panel:rgba(248,252,253,.94);--sk-muted:#e7eff3;
+        --sk-line:rgba(49,95,141,.16);--sk-ink-soft:#4f6a80;--sk-ink-muted:#7d95a8;
+      }
+      html[data-sk-surface="paper"] #app-loading{
+        --sk-bg:#f4efe4;--sk-panel:rgba(255,252,244,.94);--sk-muted:#ece3d2;
+        --sk-line:rgba(120,88,48,.16);--sk-ink-soft:#6d5a3d;--sk-ink-muted:#9c8a6b;
+      }
+      #sk-side{flex:0 0 240px;background:var(--sk-panel);border-right:1px solid var(--sk-line);display:flex;flex-direction:column}
+      @media (max-width:1440px){#sk-side{flex-basis:200px}}
+      #sk-side-head{flex:none;height:45px;display:flex;align-items:center;gap:6px;padding:0 14px;border-bottom:1px solid var(--sk-line)}
+      #sk-side-head .sk-block{width:26px;height:26px;border-radius:6px}
+      #sk-side-head .sk-block+ .sk-block{width:52px;height:12px}
+      #sk-side-list{flex:1;padding:8px 8px;display:flex;flex-direction:column;gap:2px;overflow:hidden}
+      .sk-server-row{display:flex;align-items:center;gap:8px;height:40px;padding:0 8px;border-radius:6px}
+      .sk-server-row .sk-dot{flex:none;width:6px;height:6px;border-radius:50%;background:var(--sk-muted)}
+      .sk-server-row .sk-lines{flex:1;display:flex;flex-direction:column;gap:5px}
+      .sk-server-row .sk-line{height:9px;border-radius:3px;background:var(--sk-muted)}
+      .sk-server-row .sk-line.w1{width:62%}.sk-server-row .sk-line.w2{width:38%;opacity:.7}
+      #sk-main{flex:1;min-width:0;display:flex;flex-direction:column;background:var(--sk-bg)}
+      #sk-toolbar{flex:none;height:45px;background:var(--sk-panel);border-bottom:1px solid var(--sk-line);display:flex;align-items:center;gap:8px;padding:0 12px}
+      .sk-tab{width:74px;height:28px;border-radius:8px;background:var(--sk-muted)}
+      #sk-content{flex:1;display:flex;align-items:center;justify-content:center}
+      .sk-startup{display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;margin-top:-40px}
+      .sk-startup-icon{width:44px;height:44px;display:flex;align-items:center;justify-content:center;border:1px solid var(--sk-line);border-radius:12px;color:var(--sk-ink-soft);margin-bottom:6px}
+      .sk-startup strong{font-size:15px;font-weight:650;color:var(--sk-ink);letter-spacing:-.01em}
+      .sk-startup span{font-size:12px;line-height:1.7;color:var(--sk-ink-muted)}
+      .sk-spin{width:14px;height:14px;margin-top:10px;border:2px solid var(--sk-muted);border-top-color:var(--sk-accent);border-radius:50%;animation:sk-spin .8s linear infinite}
+      @keyframes sk-spin{to{transform:rotate(360deg)}}
+      .sk-block{border-radius:6px;background:var(--sk-muted)}
+      html[data-slc-electron="1"] #sk-side-head{padding-top:38px;height:83px}
+      html[data-slc-pip="1"] #app-loading{--sk-bg:#0a0a0a;--sk-panel:#111111;--sk-muted:rgba(126,200,227,.14);--sk-line:rgba(126,200,227,.08);--sk-ink:rgba(255,255,255,.92);--sk-ink-soft:rgba(195,208,224,.72);--sk-ink-muted:rgba(195,208,224,.6);--sk-accent:#7ec8e3}
       html[data-slc-pip="1"] #sk-side,html[data-slc-pip="1"] #sk-toolbar{display:none}
-      html[data-slc-pip="1"] #sk-content{color:rgba(195,208,224,.72)}
-      html[data-slc-pip="1"] #sk-status{border-top:1px solid rgba(126,200,227,.08)}
-      html[data-slc-pip="1"] .sk-block{background:rgba(126,200,227,.14)}
     </style>
     <script type="module" src="./src/main.tsx"></script>
   </head>
   <body>
     <div id="app-loading">
-      <!-- Skeleton: sidebar -->
+      <!-- Skeleton: sidebar（几何对齐真实 .sidebar-panel 240px + sidebar-head 45px） -->
       <div id="sk-side">
-        <div class="sk-block" style="height:32px"></div>
-        <div class="sk-block" style="height:28px;width:70%"></div>
-        <div style="flex:1"></div>
-        <div class="sk-block" style="height:20px;width:60%;opacity:.5"></div>
+        <div id="sk-side-head">
+          <div class="sk-block"></div>
+          <div class="sk-block"></div>
+        </div>
+        <div id="sk-side-list">
+          <div class="sk-server-row"><span class="sk-dot"></span><span class="sk-lines"><i class="sk-line w1"></i><i class="sk-line w2"></i></span></div>
+          <div class="sk-server-row"><span class="sk-dot"></span><span class="sk-lines"><i class="sk-line w1"></i><i class="sk-line w2"></i></span></div>
+          <div class="sk-server-row"><span class="sk-dot"></span><span class="sk-lines"><i class="sk-line w1"></i><i class="sk-line w2"></i></span></div>
+          <div class="sk-server-row"><span class="sk-dot"></span><span class="sk-lines"><i class="sk-line w1"></i><i class="sk-line w2"></i></span></div>
+        </div>
       </div>
       <!-- Skeleton: main area -->
       <div id="sk-main">
-        <!-- Toolbar -->
+        <!-- Toolbar（几何对齐真实 toolbar-commandbar：8+28+8 + 1px 下边框 = 45px） -->
         <div id="sk-toolbar">
-          <div class="sk-block" style="height:28px;width:120px"></div>
-          <div class="sk-block" style="height:28px;width:80px"></div>
-          <div style="flex:1"></div>
-          <div class="sk-block" style="height:28px;width:28px"></div>
+          <div class="sk-tab"></div>
+          <div class="sk-tab"></div>
         </div>
-        <!-- Content -->
+        <!-- Content：与真实 workspace-placeholder 同构的启动卡 -->
         <div id="sk-content">
-          正在连接服务…
-        </div>
-        <!-- Status bar -->
-        <div id="sk-status">
-          <div id="sk-status-chip" class="sk-block" style="height:12px;width:100px;border-radius:3px"></div>
+          <div class="sk-startup">
+            <div class="sk-startup-icon">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>
+            </div>
+            <strong>正在连接服务…</strong>
+            <span>正在等待本地连接服务就绪</span>
+            <div class="sk-spin"></div>
+          </div>
         </div>
       </div>
     </div>
