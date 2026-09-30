@@ -1,9 +1,18 @@
 /* ============================================================================
-   theme-modern-v2.css — 现代主题 v2（推翻式重写）
-   样式源 = docs/ui-redesign-2026-09/prototype.html 的设计系统，1:1 移植。
-   加载顺序：styles.css → theme-modern.css → 本文件（最后生效）。
-   规则：颜色只用 token；分隔线 1px var(--line) 单边框；控件单行 nowrap；
-        流式布局 flex+wrap+min-width:0；相邻面板禁止双边框叠放。
+   theme-modern-v2.css — 样式标准 v2.0（归一化）
+   定位：现代主题的唯一视觉权威。旧 theme-modern.css 处于退役流程：
+   未还原区域暂由其兜底，还原完成的区域以本文件为准（同特异性后者胜）。
+   依据：docs/ui-redesign-2026-09/prototype.html（样式源）+ THEME-SPEC v2。
+   硬规则：
+     1) 颜色只用 token（--panel/--ink/--accent/--line/--red/--green…）
+     2) 分隔线 1px solid var(--line)，相邻面板禁止双边框叠放
+     3) 控件 white-space:nowrap 单行；流式收缩 = 标题截断→缩 padding→隐藏进⋯
+     4) 抽屉推挤式(≥1440)/覆盖式(<1440)；无横向阴影
+     5) 关键信息溢出滚动展示，禁止省略号截断
+   目录：
+     0 tokens | 1 基础控件 | 2 侧栏 | 3 页签 | 4 工具栏 | 5 列头/表
+     6 检索历史 | 7 命令面板 | 8 抽屉 | 9 页签细节 | 10 侧栏快捷组
+     11 空状态 | 13/14 快捷键钮/placeholder | 17 侧栏行(权威) | 18 抽屉推挤
    ============================================================================ */
 
 /* ---------- 0. Tokens（与原型一致） ---------- */
@@ -12,60 +21,84 @@
   --v2-radius-m: 8px;
   --v2-radius-l: 10px;
   --v2-shadow-pop: 0 12px 40px rgba(0, 0, 0, 0.14), 0 2px 8px rgba(0, 0, 0, 0.06);
-  --v2-mono: "Geist Mono", "SFMono-Regular", "Menlo", "Consolas", monospace;
+  /* 收敛到 --mono 单一来源：三套等宽变量（--mono / --mono-font-family / --v2-mono）
+     此前各自重复定义同一字体栈，改为统一引用后可单点控制日志/终端字体族 */
+  --v2-mono: var(--mono);
 }
 
 /* ---------- 1. 基础控件（原型 .btn/.input/.chip/.pill/.fchip/.kbd/.seg） ---------- */
+/* 按钮系统（对齐 prototype.html 设计系统 §按钮系统）：
+   刻度 28/24 高 · 呼吸 12/9 · 圆角 --v2-radius-m(8)/--v2-radius-s(6)；
+   次级 hover = accent-soft 底 + accent 26% 描边（跟随主题），文字恒 --ink；
+   主按钮 = accent 底 + var(--on-accent) 文字（token，禁止写死白色），hover accent-strong + 主题软阴影；
+   过渡统一 150ms ease × 背景/描边/文字/阴影。 */
 .theme-modern .ghost-button,
 .theme-modern button.ghost-button {
   height: 28px;
-  padding: 0 11px;
-  font-size: 12px;
+  padding: 0 12px;
+  gap: 6px;
+  font-size: var(--fs-xs);
   font-weight: 500;
   border: 1px solid var(--line);
-  border-radius: var(--v2-radius-s);
+  border-radius: var(--v2-radius-m);
   background: var(--panel);
   color: var(--ink);
   white-space: nowrap;
   box-shadow: none;
+  transition: background 150ms ease, border-color 150ms ease, color 150ms ease, box-shadow 150ms ease;
 }
 .theme-modern .ghost-button:hover:not(:disabled) {
-  background: var(--panel-muted);
-  border-color: var(--line);
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 26%, transparent);
   color: var(--ink);
   filter: none;
+}
+.theme-modern .ghost-button:active:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 32%, transparent);
 }
 .theme-modern .ghost-button.icon-button {
   width: 28px;
   padding: 0;
   justify-content: center;
 }
-.theme-modern .ghost-button.slim-button {
-  height: 26px;
-  padding: 0 10px;
-  font-size: 11.5px;
+/* R3：危险态红字。theme-modern.css 的 `.danger-button`（0,2,0）与
+   v2 的 `.ghost-button`（0,2,0）同特异性，但 v2 后加载 → 红字被压成 --ink。
+   这里用同等特异性、后置规则把红字还原（原型 .btn.danger：color:var(--red)）。 */
+.theme-modern .ghost-button.danger-button,
+.theme-modern .danger-button {
+  color: var(--red);
+  border-color: color-mix(in srgb, var(--red) 24%, transparent);
+  background: var(--red-soft);
 }
+.theme-modern .ghost-button.danger-button:hover:not(:disabled),
+.theme-modern .danger-button:hover:not(:disabled) {
+  color: var(--red);
+  background: color-mix(in srgb, var(--red) 10%, transparent);
+}
+.theme-modern .ghost-button.file-batch-danger { color: var(--red); }
 .theme-modern .ghost-button.settings-primary-action,
 .theme-modern .ghost-button.primary-action,
 .theme-modern button.search-run-button {
   background: var(--accent);
   border-color: var(--accent);
-  color: #ffffff;
+  color: var(--on-accent);
   font-weight: 550;
 }
 .theme-modern .ghost-button.settings-primary-action:hover:not(:disabled),
 .theme-modern .ghost-button.primary-action:hover:not(:disabled),
 .theme-modern button.search-run-button:hover:not(:disabled) {
-  background: var(--accent-strong, #0060df);
-  border-color: var(--accent-strong, #0060df);
-  color: #ffffff;
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+  color: var(--on-accent);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 28%, transparent);
 }
 
 .theme-modern .command-input,
 .theme-modern input.command-input {
   height: 30px;
   padding: 0 10px;
-  font-size: 12.5px;
+  font-size: var(--fs-sm);
   border: 1px solid var(--line);
   border-radius: var(--v2-radius-s);
   background: var(--panel);
@@ -80,7 +113,7 @@
 
 .theme-modern .kbd {
   font-family: var(--v2-mono);
-  font-size: 9.5px;
+  font-size: var(--fs-2xs);
   color: var(--ink-soft);
   border: 1px solid var(--line-strong);
   border-bottom-width: 2px;
@@ -89,6 +122,80 @@
   line-height: 14px;
   display: inline-block;
 }
+
+/* ---------- 1b. 徽标类小控件（原型 .chip/.chip.grn/.chip.red/.chip.amb、.pill/.pill.on）
+   原型 prototype.html 第 65–70 行。此前实现侧只登记了段落注释、未落规则，
+   导致 S8/S9/S12 的 `.chip`/`.pill` 落回全局 `button{}`（蓝渐变底）。 ---------- */
+.theme-modern .chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--fs-2xs);
+  color: var(--ink-muted);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 1px 8px;
+  white-space: nowrap;
+}
+.theme-modern .chip.grn {
+  color: var(--green);
+  border-color: color-mix(in srgb, var(--green) 32%, transparent);
+  background: color-mix(in srgb, var(--green) 6%, transparent);
+}
+.theme-modern .chip.red {
+  color: var(--red);
+  border-color: color-mix(in srgb, var(--red) 30%, transparent);
+}
+.theme-modern .chip.amb {
+  color: var(--amber);
+  border-color: color-mix(in srgb, var(--amber) 30%, transparent);
+}
+.theme-modern .pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 11px;
+  font-size: var(--fs-2xs);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--ink);
+  white-space: nowrap;
+}
+.theme-modern .pill.on {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+  font-weight: 550;
+}
+/* 原型 .fchip：24px 高、圆角 999px、1px 描边；选中淡蓝底蓝字（prototype.html 第 71–75 行） */
+.theme-modern .fchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 11px;
+  font-size: var(--fs-2xs);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--ink-soft);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.theme-modern .fchip:hover { border-color: var(--line-strong); color: var(--ink); }
+.theme-modern .fchip.on,
+.theme-modern .fchip-on {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+  font-weight: 550;
+}
+.theme-modern .fchip .n,
+.theme-modern .fchip-count { font-weight: 650; }
+.theme-modern .fchip.red .n,
+.theme-modern .fchip-red { color: var(--red); }
 
 /* ---------- 2. 侧栏（原型 .sidebar） ---------- */
 .theme-modern .sidebar-panel {
@@ -101,7 +208,7 @@
 }
 .theme-modern .sidebar-head-row { align-items: center; }
 .theme-modern .sidebar-head-title .topbar-title {
-  font-size: 13px;
+  font-size: var(--fs-sm);
   font-weight: 700;
   letter-spacing: -0.01em;
 }
@@ -117,19 +224,19 @@
   padding: 10px 14px 4px;
 }
 .theme-modern .server-list .pane-title-row .pane-title {
-  font-size: 10.5px;
+  font-size: var(--fs-2xs);
   font-weight: 600;
   color: var(--ink-muted);
 }
 .theme-modern .server-list .pane-title-row span {
-  font-size: 10.5px;
+  font-size: var(--fs-2xs);
   color: var(--line-strong, #d4d4d4);
 }
 
 .theme-modern .sidebar-panel .server-list .command-input,
 .theme-modern .sidebar-panel input[placeholder*="名称"] {
   height: 28px;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   border-radius: var(--v2-radius-s);
 }
 
@@ -137,7 +244,7 @@
 .theme-modern .server-groups { border-top: 1px solid var(--line); }
 .theme-modern .server-group-title,
 .theme-modern .server-list .server-group-title {
-  font-size: 10.5px;
+  font-size: var(--fs-2xs);
   font-weight: 600;
   color: var(--ink-muted);
   padding: 12px 14px 4px;
@@ -176,7 +283,7 @@
 }
 .theme-modern .server-item strong,
 .theme-modern .server-item .server-item-name {
-  font-size: 12.5px;
+  font-size: var(--fs-sm);
   font-weight: 550;
   color: var(--ink);
   white-space: nowrap;
@@ -186,7 +293,7 @@
 .theme-modern .server-item .server-item-meta,
 .theme-modern .server-item .server-item-host {
   font-family: var(--v2-mono);
-  font-size: 10px;
+  font-size: var(--fs-2xs);
   color: var(--ink-muted);
   white-space: nowrap;
   overflow: hidden;
@@ -210,16 +317,29 @@
   color: var(--ink);
 }
 
-/* 侧栏底部状态摘要行 */
+/* 侧栏底部状态摘要行（原型 .side-foot，prototype.html 第 113–116 行：常驻可见，
+   padding 7px 14px、border-top 1px var(--line)、dot + 摘要 + 「详情」胶囊）。
+   recon S1-16 / S2：theme-modern.css:571 把 .compact-connection-card 置 display:none，
+   整条隐藏，违反原型「连接状态压缩为 1 行摘要、点击展开」的决策。
+   此处以 v2（后加载、同特异性）恢复显示，并去掉 .status-card 的卡片边框/底色，
+   让它回归「贴底一行摘要」形态。 */
 .theme-modern .sidebar-status {
+  display: flex;
+  flex-direction: column;
+  padding: 7px 14px;
   border-top: 1px solid var(--line);
   border-bottom: none;
+  border-left: none;
+  border-right: none;
+  border-radius: 0;
   background: var(--panel);
+  gap: 0;
 }
-.theme-modern .sidebar-status .pane-title { font-size: 11px; color: var(--ink-soft); }
-.theme-modern .sidebar-status .sidebar-status-sum { font-size: 11px; }
+.theme-modern .sidebar-status:hover { background: var(--panel-muted); }
+.theme-modern .sidebar-status .pane-title { font-size: var(--fs-2xs); color: var(--ink-soft); }
+.theme-modern .sidebar-status .sidebar-status-sum { font-size: var(--fs-2xs); }
 .theme-modern .sidebar-status .sidebar-status-toggle {
-  font-size: 10px;
+  font-size: var(--fs-2xs);
   color: var(--ink-muted);
   border: 1px solid var(--line);
   border-radius: 999px;
@@ -232,7 +352,7 @@
   background: #c8ccd2;
 }
 .theme-modern .sidebar-status .sidebar-status-dot.on {
-  background: var(--green-dot, #22c55e);
+  background: var(--green-dot);
   box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.15);
 }
 
@@ -260,6 +380,13 @@
   min-width: 0;
 }
 .theme-modern .workspace-session-tab {
+  /* recon S1-18：原型 .wtab = height 34px / padding 0 13px（prototype.html 第 92 行），
+     此前实测仅 29px / padding 6px 14px。 */
+  height: 34px;
+  padding: 0 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   border: none !important;
   border-bottom: 2px solid transparent !important;
   border-radius: 0 !important;
@@ -276,7 +403,7 @@
 .theme-modern .workspace-session-tab-active .workspace-session-tab-trigger {
   background: transparent !important;
   color: var(--ink-soft);
-  font-size: 12px;
+  font-size: var(--fs-xs);
   font-weight: 500;
 }
 .theme-modern .workspace-session-tab-active .workspace-session-tab-trigger {
@@ -290,7 +417,7 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 10.5px;
+  font-size: var(--fs-2xs);
   color: var(--ink-muted);
   white-space: nowrap;
 }
@@ -309,42 +436,79 @@
   padding: 8px 12px;
   min-width: 0;
 }
+/* 分段控件（原型 .seg / .seg.lite，prototype.html 第 60-64 行）
+   两档变体：
+     · 主档（.seg）      → 选中项黑底白字，用于主视图切换（原型 S1 工具栏第 402 行）
+     · lite 档（.seg.lite）→ 选中项淡蓝底蓝字，用于次级切换（原型第 418/483/508/627/752/876/895 行）
+   几何（两档一致）：容器高 30px（28px 按钮 + 上下各 1px 边框）、圆角 var(--r-s)=6px、
+   按钮 padding 0 11px、按钮高 28px、gap 5px、字号 12px。
+   注意：原型中 .seg 容器为 background:var(--panel)（白底），lite 档仅改选中项配色，
+   容器底色不变，因此这里不覆盖容器 background。 */
+.theme-modern .seg,
 .theme-modern .toolbar-view-switch {
   order: 0;
   display: inline-flex;
   align-items: stretch;
   border: 1px solid var(--line);
-  border-radius: var(--v2-radius-m);
+  border-radius: var(--v2-radius-s);
   overflow: hidden;
   background: var(--panel);
   flex: none;
   padding: 0;
   gap: 0;
 }
+.theme-modern .seg > button,
 .theme-modern .toolbar-view-switch-btn {
-  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 28px;
   margin: 0;
-  padding: 0 13px;
+  padding: 0 11px;
   border: none !important;
+  border-right: 1px solid var(--line);
   border-radius: 0 !important;
   background: var(--panel) !important;
   color: var(--ink-soft) !important;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   font-weight: 500;
   white-space: nowrap;
   box-shadow: none !important;
 }
-.theme-modern .toolbar-view-switch-btn + .toolbar-view-switch-btn {
+.theme-modern .seg > button:last-child { border-right: none !important; }
+/* 主视图切换：相邻按钮间用左侧分隔线（容器内无 last-child 归零问题） */
+.theme-modern .toolbar-view-switch-btn { border-right: none !important; }
+.theme-modern .toolbar-view-switch-btn + .toolbar-view-switch-btn,
+.theme-modern .seg > button + button {
   border-left: 1px solid var(--line) !important;
 }
+.theme-modern .seg > button:hover:not(.on):not(:disabled),
 .theme-modern .toolbar-view-switch-btn:hover:not(.is-active) {
   background: var(--panel-muted) !important;
   color: var(--ink) !important;
 }
+/* 主档选中态：黑底白字（原型 .seg>button.on） */
+.theme-modern .seg > button.on,
 .theme-modern .toolbar-view-switch-btn.is-active {
   background: var(--ink) !important;
   color: #ffffff !important;
   font-weight: 600;
+}
+/* lite 档选中态：淡蓝底蓝字（原型 .seg.lite>button.on）
+   用在次级切换：工具抽屉页签、结果工具行「仅命中/含上下文」、结果页签条等。
+   必须排在其他 .theme-modern .seg > button.on 之后，且用同等 !important 压制。 */
+.theme-modern .seg.lite > button.on,
+.theme-modern .tool-drawer-seg > button.on,
+.theme-modern .summary-seg.lite > button.on,
+.theme-modern .result-tab-strip.lite > button.on {
+  background: var(--accent-soft) !important;
+  color: var(--accent) !important;
+  font-weight: 600;
+}
+.theme-modern .seg.lite > button:hover:not(.on):not(:disabled) {
+  background: var(--panel-muted) !important;
+  color: var(--ink) !important;
 }
 .theme-modern .toolbar-commandbar .toolbar-search-row {
   order: 1;
@@ -356,7 +520,8 @@
 .theme-modern .toolbar-commandbar .keyword-shell { flex: 1; min-width: 0; }
 .theme-modern .toolbar-commandbar .command-input-keyword {
   width: 100%;
-  height: 30px;
+  /* recon S1-22：原型工具栏搜索框 = .input 高 28（prototype.html 第 57 / 405 行） */
+  height: 28px;
   padding-left: 28px;
   padding-right: 48px;
 }
@@ -391,9 +556,9 @@
   white-space: nowrap;
 }
 .theme-modern .toolbar-live-button.toolbar-live-on {
-  color: var(--red, #d41313);
-  border-color: color-mix(in srgb, var(--red, #d41313) 32%, transparent);
-  background: color-mix(in srgb, var(--red, #d41313) 6%, transparent);
+  color: var(--red);
+  border-color: color-mix(in srgb, var(--red) 32%, transparent);
+  background: color-mix(in srgb, var(--red) 6%, transparent);
   font-weight: 650;
 }
 .theme-modern .toolbar-live-button.toolbar-live-on svg { animation: v2-live-pulse 1.4s ease-in-out infinite; }
@@ -409,37 +574,55 @@
   flex-wrap: nowrap;
   min-width: 0;
   padding: 6px 2px 0;
-  font-size: 11.5px;
+  font-size: var(--fs-xs);
   color: var(--ink-soft);
 }
-.theme-modern .toolbar-summary span { font-size: 11.5px; }
+.theme-modern .toolbar-summary span { font-size: var(--fs-xs); }
+/* 命中导航按钮 = 原型 .btn.icon.sm（prototype.html 第 417 行）：28 宽 × 24 高、r5、
+   1px solid var(--line) 边框、白底、ink-soft 图标。
+   原实现为 20×20 无边框裸按钮，与原型不符。 */
 .theme-modern .toolbar-summary .summary-nav .ghost-button {
-  width: 20px;
-  height: 20px;
+  width: 28px;
+  height: 24px;
+  min-width: 28px;
   padding: 0;
-  border: none;
-  background: none;
-  color: var(--ink-muted);
-  font-size: 9px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--panel);
+  color: var(--ink-soft);
+  font-size: var(--fs-2xs);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
-.theme-modern .toolbar-summary .summary-nav .ghost-button:hover { color: var(--ink); background: var(--panel-muted); }
+.theme-modern .toolbar-summary .summary-nav .ghost-button:hover:not(:disabled) { color: var(--ink); background: var(--panel-muted); }
+.theme-modern .toolbar-summary .summary-nav .ghost-button svg { width: 12px; height: 12px; }
 .theme-modern .toolbar-summary .summary-nav-count {
   font-family: var(--v2-mono);
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   color: var(--ink);
   min-width: 36px;
   text-align: center;
 }
+/* 结果工具行「仅命中 / 含上下文」= 原型 .seg lite（prototype.html 第 418 / 497 行）。
+   原型几何：容器高 30px / 圆角 6px / 按钮高 28px / padding 0 11px —— 此前实现为
+   22px 高 + 0 10px + 黑底选中，属于次级切换误用了主档配色，此处一并对齐。 */
 .theme-modern .summary-seg {
   display: inline-flex;
+  align-items: stretch;
   border: 1px solid var(--line);
   border-radius: var(--v2-radius-s);
   overflow: hidden;
+  background: var(--panel);
 }
 .theme-modern .summary-seg button {
-  height: 22px;
-  padding: 0 10px;
-  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 11px;
+  font-size: var(--fs-xs);
   border: none;
   background: var(--panel);
   color: var(--ink-soft);
@@ -447,7 +630,13 @@
   white-space: nowrap;
 }
 .theme-modern .summary-seg button + button { border-left: 1px solid var(--line); }
-.theme-modern .summary-seg button.on { background: var(--ink); color: #fff; font-weight: 600; }
+.theme-modern .summary-seg button:hover:not(.on) { background: var(--panel-muted); color: var(--ink); }
+/* lite 档：淡蓝底蓝字（原型 .seg.lite>button.on） */
+.theme-modern .summary-seg button.on {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
 
 .theme-modern .toolbar-commandbar .advanced-strip { order: 4; flex-basis: 100%; }
 
@@ -466,12 +655,12 @@
 .theme-modern .browser-column-head {
   background: var(--panel-muted);
   border-bottom: 1px solid var(--line);
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   color: var(--ink-soft);
   min-height: 30px;
 }
 .theme-modern .browser-column-head .pane-title {
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   font-weight: 600;
   color: var(--ink-soft);
 }
@@ -481,7 +670,7 @@
 .theme-modern .file-table-head .file-th,
 .theme-modern .file-table-head th,
 .theme-modern .file-table-head [class*="head-cell"] {
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   font-weight: 600;
   color: var(--ink-soft);
 }
@@ -494,11 +683,11 @@
   box-shadow: var(--v2-shadow-pop);
 }
 .theme-modern .search-history-cap {
-  font-size: 10px;
+  font-size: var(--fs-2xs);
   font-weight: 650;
   color: var(--ink-muted);
 }
-.theme-modern .search-history-item { border-radius: 5px; font-size: 12.5px; }
+.theme-modern .search-history-item { border-radius: 5px; font-size: var(--fs-sm); }
 .theme-modern .search-history-item:hover { background: var(--panel-muted); }
 
 /* ---------- 7. 命令面板（原型 .palette） ---------- */
@@ -516,7 +705,19 @@
   border: 1px solid var(--line);
   color: var(--ink);
 }
-.theme-modern .palette-item-sel { background: var(--accent-soft); }
+/* 列表项：原型 .palette .it —— 透明底 + 深字（hover/选中才上 accent-soft）。
+   实现里 .palette-item 是 <button>，会被 theme-modern.css:747 的全局
+   `.theme-modern button{background:#171717;color:#fff}` 压成黑底（specificity 0,1,1
+   > 裸类 0,1,0）→ 整个命令面板列表变黑。此处在 .theme-modern 作用域下补回
+   （0,2,0），并置 background:none 覆盖黑底。 */
+.theme-modern .palette-item {
+  background: none;
+  color: var(--ink);
+  font-weight: 400;
+}
+.theme-modern .palette-item:hover { background: var(--panel-muted); }
+.theme-modern .palette-item-sel,
+.theme-modern .palette-item-sel:hover { background: var(--accent-soft); }
 
 /* ---------- 8. 抽屉（原型 .drawer：无横向阴影） ---------- */
 .theme-modern .xdrawer {
@@ -525,7 +726,7 @@
   box-shadow: none;
 }
 .theme-modern .xdrawer-head { border-bottom: 1px solid var(--line); }
-.theme-modern .xdrawer-title { font-size: 13px; font-weight: 700; color: var(--ink); }
+.theme-modern .xdrawer-title { font-size: var(--fs-sm); font-weight: 700; color: var(--ink); }
 .theme-modern .xrow { border-bottom: 1px solid var(--line); }
 .theme-modern .xrow:hover { background: color-mix(in srgb, var(--ink) 3.5%, transparent); }
 
@@ -534,7 +735,7 @@
 .theme-modern .workspace-session-tab:hover .workspace-session-tab-close,
 .theme-modern .workspace-session-tab-active .workspace-session-tab-close { opacity: 1; }
 .theme-modern .workspace-session-tab-group {
-  font-size: 9.5px;
+  font-size: var(--fs-2xs);
   color: var(--ink-muted);
   border: 1px solid var(--line);
   border-radius: 999px;
@@ -550,7 +751,7 @@
   background: none;
   border-radius: 5px;
   color: var(--ink-muted);
-  font-size: 13px;
+  font-size: var(--fs-sm);
   cursor: pointer;
   line-height: 1;
 }
@@ -567,19 +768,52 @@
 }
 
 /* ---------- 11. 空状态模板（原型 S12：图标+一句话+主按钮，居中） ---------- */
+/* 启动卡（等待选择服务器 / 正在连接）同样走 S12 模板（原型 1049 行决策③）。
+   基础样式是 space-between 行排卡片（styles-pip-toast.css），此处覆写为
+   与 .empty 一致的居中列排；图标用模板统一的 44×44 描边容器规格。 */
 .theme-modern .workspace-startup-card {
   border: none;
   background: transparent;
   box-shadow: none;
   text-align: center;
   padding: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
 }
 .theme-modern .workspace-startup-card strong {
   display: block;
-  font-size: 14px;
+  font-size: var(--fs-base);
   font-weight: 650;
   color: var(--ink);
-  margin-bottom: 4px;
+  margin-bottom: 3px;
+}
+.theme-modern .workspace-startup-card > span {
+  font-size: var(--fs-xs);
+  line-height: 1.6;
+  max-width: 320px;
+  margin-bottom: 12px;
+}
+/* 空闲态副文案用 muted；忙碌态保留 .connect-status-busy 的 accent 色 */
+.theme-modern .workspace-startup-card > .connect-status-idle {
+  color: var(--ink-muted);
+}
+.theme-modern .workspace-startup-card .connect-progress-actions {
+  margin-top: 0;
+}
+.theme-modern .workspace-startup-icon {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  color: var(--ink-muted);
+  margin-bottom: 6px;
 }
 
 /* ---------- 13. / 快捷键钮与空状态卡修正 ---------- */
@@ -600,7 +834,7 @@
   background: var(--panel);
   color: var(--ink-soft);
   font-family: var(--v2-mono);
-  font-size: 10px;
+  font-size: var(--fs-2xs);
   line-height: 1;
   cursor: pointer;
 }
@@ -632,12 +866,12 @@
   min-height: 200px;
 }
 .theme-modern .workspace-placeholder strong {
-  font-size: 14px !important;
+  font-size: var(--fs-base) !important;
   font-weight: 650 !important;
   color: var(--ink) !important;
 }
 .theme-modern .workspace-placeholder span {
-  font-size: 11.5px;
+  font-size: var(--fs-xs);
   color: var(--ink-muted);
   line-height: 1.7;
 }
@@ -702,7 +936,7 @@
   padding: 0;
   border: none;
   background: transparent;
-  font-size: 11.5px;
+  font-size: var(--fs-xs);
   font-weight: 500;
   text-align: left;
   color: var(--ink);
@@ -712,14 +946,15 @@
   flex: none;
   margin-left: auto;
   font-family: var(--v2-mono);
-  font-size: 10px;
+  font-size: var(--fs-2xs);
   color: var(--ink-muted);
 }
 
 /* === 日志行时间戳列 === */
 /* 对齐 prototype .ll：时间戳 muted 灰列 148px（flex）+ 内容列；命中行左 2px 蓝条；mark 无背景下划线 */
 .theme-modern .log-line {
-  --log-time-col-w: 148px;
+  --log-time-col-w: 148px;   /* 时间戳内容宽（原型值，等宽字符对齐） */
+  --log-time-gap: 12px;      /* 时间戳与正文之间的呼吸间距（原型 148px 列宽在完整时间戳下只剩 0.8px） */
 }
 /* 有时间戳的行：时间列（muted 等宽、固定 148px）+ 内容列，基线对齐 */
 .theme-modern .log-line-ts {
@@ -727,9 +962,11 @@
   align-items: baseline;
 }
 .theme-modern .log-line .log-line-time {
-  flex: 0 0 var(--log-time-col-w);
-  width: var(--log-time-col-w);
-  color: var(--shell-mut, #5c6b7a);
+  flex: 0 0 calc(var(--log-time-col-w) + var(--log-time-gap));
+  width: calc(var(--log-time-col-w) + var(--log-time-gap));
+  box-sizing: border-box;
+  padding-right: var(--log-time-gap);
+  color: var(--shell-mut);
   font-size: calc(var(--log-font-size, 12px) - 1px);
   letter-spacing: -0.2px;
   white-space: pre;
@@ -741,7 +978,7 @@
 }
 /* 无时间戳行（堆栈 at ...、空行）：不拆列，整行缩进挂在内容列下（行内边距 10px + 148px 列宽） */
 .theme-modern .log-line-no-time {
-  padding-left: calc(var(--log-time-col-w) + 10px);
+  padding-left: calc(var(--log-time-col-w) + var(--log-time-gap) + 10px);
 }
 /* 聚焦/书签行带 3px 左边框，缩进回吐 3px 保持内容列对齐 */
 .theme-modern .log-line-no-time.log-line-focus,
@@ -812,7 +1049,7 @@
   border-color: var(--line) !important;
   color: var(--ink) !important;
 }
-.theme-modern .server-item-mini-danger:hover { color: var(--red, #d41313) !important; }
+.theme-modern .server-item-mini-danger:hover { color: var(--red) !important; }
 
 /* ---------- 16. 高级条件抽屉内表单（S3） ---------- */
 .theme-modern .advanced-strip-drawer {
@@ -834,7 +1071,7 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   color: var(--ink-muted);
   flex: 1;
   min-width: 0;
@@ -850,14 +1087,21 @@
 .theme-modern .advanced-strip-drawer input {
   height: 28px;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--v2-radius-s, 6px);
   background: var(--panel);
   color: var(--ink);
   font: inherit;
-  font-size: 12.5px;
+  font-size: var(--fs-sm);
   padding: 0 8px;
   min-width: 0;
 }
+.theme-modern .advanced-strip-drawer select:focus,
+.theme-modern .advanced-strip-drawer input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+.theme-modern .advanced-strip-drawer input::placeholder { color: var(--ink-muted); }
 .theme-modern .advanced-strip-drawer .regex-pill {
   height: 28px;
   border: 1px solid var(--line);
@@ -865,7 +1109,7 @@
   background: var(--panel);
   color: var(--ink-soft);
   padding: 0 12px;
-  font-size: 11.5px;
+  font-size: var(--fs-xs);
   cursor: pointer;
 }
 .theme-modern .advanced-strip-drawer .regex-pill-active {
@@ -873,4 +1117,1488 @@
   color: var(--accent);
   background: var(--accent-soft);
   font-weight: 550;
+}
+
+/* 抽屉底部操作条（原型 .dfoot）：重置 + 主按钮占满 */
+.theme-modern .advanced-apply-button {
+  flex: 1;
+  justify-content: center;
+}
+
+/* ============================================================
+   17. 侧栏服务器行 — 布局规范（本节为唯一权威，覆盖一切旧规则）
+   结构：wrap = flex 行；行内 [点][名/host][端口]；悬浮时端口让位给操作组；
+        仅悬浮显示操作组；选中态 = accent-soft 底 + 左侧 2px 指示条（端口保留）。
+   ============================================================ */
+.theme-modern .server-item-wrap,
+.theme-modern .server-list .server-item-wrap {
+  display: flex !important;
+  align-items: center !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+}
+.theme-modern .server-item-wrap-active,
+.theme-modern .server-list .server-item-wrap-active {
+  background: var(--accent-soft) !important;
+  box-shadow: inset 2px 0 0 var(--accent) !important;
+}
+.theme-modern .server-item,
+.theme-modern .server-list button.server-item {
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  height: 40px !important;
+  min-height: 40px !important;
+  padding: 0 0 0 14px !important;
+  margin: 0 !important;
+  border: none !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  text-align: left !important;
+  cursor: pointer !important;
+}
+.theme-modern .server-item .server-status-dot {
+  flex: none !important;
+  width: 7px !important;
+  height: 7px !important;
+  border-radius: 50% !important;
+}
+.theme-modern .server-item .server-item-main {
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 1px !important;
+  align-items: flex-start !important;
+}
+.theme-modern .server-item .server-item-main strong {
+  font-size: var(--fs-sm) !important;
+  font-weight: 550 !important;
+  color: var(--ink) !important;
+  line-height: 1.35 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  max-width: 100% !important;
+}
+.theme-modern .server-item .server-item-main span {
+  font-family: var(--v2-mono) !important;
+  font-size: var(--fs-2xs) !important;
+  color: var(--ink-muted) !important;
+  line-height: 1.35 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  max-width: 100% !important;
+}
+.theme-modern .server-item > .server-item-meta {
+  flex: none !important;
+  font-family: var(--v2-mono) !important;
+  font-size: var(--fs-2xs) !important;
+  color: var(--ink-soft) !important;
+  padding: 0 12px 0 8px !important;
+  margin: 0 !important;
+}
+/* 悬浮：端口让位、操作组出现；选中（非悬浮）端口保留 */
+.theme-modern .server-item-quick-actions {
+  display: none !important;
+  position: static !important;
+  flex: none !important;
+  align-items: center !important;
+  gap: 2px !important;
+  padding: 0 10px 0 0 !important;
+  margin: 0 !important;
+  background: none !important;
+  right: auto !important;
+}
+.theme-modern .server-item-wrap:hover .server-item-quick-actions {
+  display: inline-flex !important;
+}
+.theme-modern .server-item-wrap:hover .server-item > .server-item-meta {
+  display: none !important;
+}
+.theme-modern .server-item-mini-action {
+  width: 22px !important;
+  height: 22px !important;
+  min-width: 22px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: none !important;
+  background: transparent !important;
+  color: var(--ink-muted) !important;
+  border-radius: 5px !important;
+  box-shadow: none !important;
+}
+.theme-modern .server-item-mini-action:hover {
+  background: var(--panel) !important;
+  color: var(--ink) !important;
+  box-shadow: inset 0 0 0 1px var(--line) !important;
+}
+.theme-modern .server-item-menu {
+  position: absolute;
+  right: 10px;
+  top: calc(100% - 6px);
+  z-index: 70;
+  min-width: 150px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--v2-radius-m);
+  box-shadow: var(--v2-shadow-pop);
+  padding: 4px;
+}
+.theme-modern .server-item-wrap { position: relative !important; }
+.theme-modern .server-item-menu-item {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  width: 100% !important;
+  padding: 6px 10px !important;
+  border: none !important;
+  background: none !important;
+  border-radius: 5px !important;
+  font: inherit !important;
+  font-size: var(--fs-xs) !important;
+  color: var(--ink) !important;
+  cursor: pointer !important;
+  text-align: left !important;
+  white-space: nowrap !important;
+}
+.theme-modern .server-item-menu-item:hover { background: var(--panel-muted) !important; }
+.theme-modern .server-item-menu-danger { color: var(--red) !important; }
+
+/* ============================================================
+   18. 抽屉推挤式（S15 规范：≥1440 推挤内容不遮盖；<1440 覆盖式）
+   ============================================================ */
+@media (min-width: 1440px) {
+  .theme-modern.v2-drawer-push .shell-layout {
+    padding-right: 420px;
+    transition: padding-right 0.18s ease;
+  }
+}
+@media (max-width: 1439.9px) {
+  .theme-modern.v2-drawer-push .shell-layout { padding-right: 0; }
+}
+/* 抽屉内表单/按钮归一（背景/输入在抽屉内与主界面同标准） */
+.theme-modern .xdrawer .ghost-button {
+  height: 28px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--ink);
+  white-space: nowrap;
+}
+.theme-modern .xdrawer input:where(:not([type="checkbox"], [type="color"])),
+.theme-modern .xdrawer select,
+.theme-modern .xdrawer textarea {
+  height: 28px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--fs-sm);
+  padding: 0 8px;
+  min-width: 0;
+}
+.theme-modern .xdrawer textarea { height: auto; padding: 6px 8px; }
+.theme-modern .xdrawer input:focus,
+.theme-modern .xdrawer select:focus,
+.theme-modern .xdrawer textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+/* ============================================================
+   19. S6/S3 精修：呼吸间距 · 路径面包屑 chips · 批量条横跨 · 抽屉表单
+   ============================================================ */
+
+/* 1) 侧栏行呼吸间距（点与信息之间） */
+.theme-modern .server-item .server-status-dot { margin-right: 5px !important; }
+.theme-modern .server-item { gap: 10px !important; }
+
+/* 2) 路径面包屑 = chips（VS Code 式，最后段加重） */
+.theme-modern .pathbar-breadcrumbs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  height: 34px;
+  padding: 0 6px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.theme-modern .pathbar-breadcrumb-node { display: inline-flex; align-items: center; gap: 2px; flex: none; }
+.theme-modern .pathbar-breadcrumb-separator {
+  color: var(--line-strong);
+  font-size: var(--fs-2xs);
+  padding: 0 2px;
+}
+.theme-modern .pathbar-breadcrumb-item {
+  font: inherit;
+  font-size: var(--fs-xs);
+  color: var(--ink-soft);
+  background: none;
+  border: none;
+  border-radius: 5px;
+  padding: 3px 7px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.theme-modern .pathbar-breadcrumb-item:hover { background: var(--panel-muted); color: var(--ink); }
+.theme-modern .pathbar-breadcrumb-item.is-current {
+  color: var(--ink);
+  font-weight: 600;
+  background: var(--panel-muted);
+}
+.theme-modern .directory-input {
+  height: 30px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--fs-sm);
+  padding: 0 10px;
+  min-width: 0;
+}
+
+/* 3) 批量条横跨双列（列头对齐，勾选不再产生落差；browser-grid 实际为 flex，有批量条时开启换行：
+      第一行 = 批量条(全宽)，第二行 = 树列 + 分隔 + 内容列。
+      align-content 必须是 flex-start：stretch 会把容器剩余高度灌进批量条行，小窗口/短列表时批量条被撑到上百像素 */
+/* 批量条已移入文件列表头槽位（不再作为 .browser-grid 的子元素），
+   故原先为容纳它而开启的换行布局不再需要，.browser-grid 恢复单行 flex。 */
+.theme-modern .file-batch-span {
+  min-width: 0;
+}
+.theme-modern .file-batch-span .file-batch-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--accent-soft) !important;
+  border: none !important;
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 22%, transparent) !important;
+  border-radius: 0 !important;
+  /* 原型 .batchbar: padding:6px 12px（此前 14px，右缘与表头/行内 12px 网格不齐） */
+  padding: 6px 12px !important;
+  min-height: 36px;
+  /* 关键：批量条高度恒定，不随容器剩余高度拉伸（短窗口下不再出现大空白） */
+  height: auto !important;
+  flex-grow: 0 !important;
+  align-self: flex-start !important;
+}
+.theme-modern .file-batch-span .file-batch-summary { font-size: var(--fs-xs); color: var(--ink); flex: 1 1 auto !important; min-width: 0 !important; max-width: none !important; overflow: visible !important; }
+.theme-modern .file-batch-span .file-batch-actions .ghost-button { margin-left: 0 !important; }
+.theme-modern .file-batch-span .file-batch-action-button + .file-batch-action-button { margin-left: 0 !important; }
+.theme-modern .file-batch-span .file-batch-action-button {
+  height: 24px;
+  width: 24px;
+  padding: 0;
+  justify-content: center;
+}
+
+/* 4) 高级条件抽屉表单归一（高特异性压旧 grid 规则） */
+.theme-modern .xdrawer-body { background: var(--panel) !important; }
+.theme-modern .advanced-strip.advanced-strip-drawer {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 12px !important;
+  background: var(--panel) !important;
+  border: none !important;
+  padding: 14px 16px !important;
+}
+.theme-modern .advanced-strip.advanced-strip-drawer .advanced-row {
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  flex-wrap: wrap !important;
+  min-width: 0 !important;
+}
+.theme-modern .advanced-strip.advanced-strip-drawer label {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  gap: 4px !important;
+  font-size: var(--fs-2xs) !important;
+  color: var(--ink-muted) !important;
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+}
+.theme-modern .advanced-strip.advanced-strip-drawer select,
+.theme-modern .advanced-strip.advanced-strip-drawer input {
+  height: 28px !important;
+  width: auto !important;
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  border: 1px solid var(--line) !important;
+  border-radius: 6px !important;
+  background: var(--panel) !important;
+  color: var(--ink) !important;
+  font: inherit !important;
+  font-size: var(--fs-sm) !important;
+  padding: 0 8px !important;
+  box-shadow: none !important;
+}
+.theme-modern .advanced-strip.advanced-strip-drawer .time-pair {
+  display: flex !important;
+  gap: 6px !important;
+}
+.theme-modern .advanced-strip.advanced-strip-drawer .time-pair input { min-width: 0 !important; }
+.theme-modern .advanced-strip.advanced-strip-drawer .regex-pill,
+.theme-modern .advanced-strip.advanced-strip-drawer .ghost-button {
+  width: auto !important;
+  flex: none !important;
+  height: 28px !important;
+  align-self: flex-end !important;
+  border: 1px solid var(--line) !important;
+  border-radius: 6px !important;
+  background: var(--panel) !important;
+  color: var(--ink) !important;
+  font-size: var(--fs-xs) !important;
+  padding: 0 12px !important;
+  white-space: nowrap !important;
+}
+.theme-modern .advanced-strip.advanced-strip-drawer .regex-pill-active {
+  border-color: var(--accent) !important;
+  color: var(--accent) !important;
+  background: var(--accent-soft) !important;
+  font-weight: 550 !important;
+}
+.theme-modern .advanced-strip.advanced-strip-drawer .preset-strip {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 6px !important;
+}
+
+/* ---------- 20. 侧栏呼吸间距强规格 + 批量条按钮右置 ---------- */
+.theme-modern .server-list .server-item-wrap .server-item {
+  gap: 12px !important;
+  padding-left: 14px !important;
+}
+.theme-modern .server-item .server-status-dot {
+  position: static !important;
+  margin: 0 6px 0 0 !important;
+  transform: none !important;
+}
+.theme-modern .server-item .server-item-main {
+  margin-left: 0 !important;
+}
+/* 批量条：摘要居左占满，操作按钮整组靠右 */
+.theme-modern .file-batch-span .file-batch-actions { gap: 8px !important; }
+.theme-modern .file-batch-span .file-batch-summary { flex: 1 1 auto !important; min-width: 0 !important; }
+
+/* ---------- 21. S5 终端工作台：终端 = 工作区内容区视图（原型 S5） ---------- */
+/* 容器：占满工作区内容区，无圆角无边距，替代底部面板形态 */
+.theme-modern .workspace-panel.workspace-panel-terminal {
+  padding: 0;
+}
+.theme-modern .workspace-panel .terminal-bottom-panel {
+  flex: 1 1 0%;
+  width: 100%;
+  max-height: none;
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--terminal-background, var(--shell));
+}
+/* 工具行（原型 tbar）：状态 chip + 会话信息 + 右侧操作组 */
+.theme-modern .terminal-panel-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  min-height: 40px;
+  flex: none;
+  background: var(--terminal-background, var(--shell));
+  border-bottom: 1px solid var(--line);
+}
+.theme-modern .terminal-panel-bar-info {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--fs-xs);
+  color: var(--shell-mut);
+  white-space: nowrap;
+  min-width: 0;
+}
+.theme-modern .terminal-panel-bar-info strong {
+  color: var(--shell-ink, var(--ink));
+  font-weight: 550;
+}
+.theme-modern .terminal-panel-bar-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+.theme-modern .terminal-toolbar-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 26px;
+  min-width: 26px;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: var(--v2-radius-s);
+  background: transparent;
+  color: var(--shell-mut);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.theme-modern .terminal-toolbar-button:hover {
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+  color: var(--shell-ink, var(--ink));
+}
+.theme-modern .terminal-toolbar-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.theme-modern .terminal-shortcuts-toggle-active,
+.theme-modern .tai-toggle-active {
+  color: var(--shell-ink, var(--ink));
+  background: color-mix(in srgb, var(--ink) 12%, transparent);
+}
+/* 终端主体：撑满剩余高度 */
+.theme-modern .terminal-body-slot {
+  flex: 1 1 0%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.theme-modern .terminal-main-shell {
+  flex: 1 1 0%;
+}
+/* AI 抽屉（终端右侧，非模态伴生） */
+.theme-modern .terminal-side-panel {
+  flex: 0 0 320px;
+  width: 320px;
+  border-left: 1px solid var(--line);
+}
+/* 分屏工作区条 */
+.theme-modern .terminal-workarea-split {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0%;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--terminal-background, var(--shell));
+}
+.theme-modern .terminal-workarea-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  min-height: 40px;
+  flex: none;
+  border-bottom: 1px solid var(--line);
+  font-size: var(--fs-xs);
+  color: var(--shell-mut);
+}
+.theme-modern .terminal-workarea-bar strong {
+  color: var(--shell-ink, var(--ink));
+  font-weight: 550;
+}
+.theme-modern .terminal-workarea-bar-meta { font-size: var(--fs-2xs); }
+.theme-modern .terminal-workarea-bar-spacer { flex: 1; }
+.theme-modern .terminal-workarea-split .terminal-split-root {
+  flex: 1 1 0%;
+  min-height: 0;
+  display: flex;
+}
+/* 快捷命令常驻行（原型 S5 底部 fchip 行） */
+.theme-modern .terminal-quick-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 14px;
+  flex: none;
+  border-top: 1px solid var(--line);
+  background: var(--terminal-background, var(--shell));
+  min-height: 34px;
+}
+.theme-modern .terminal-quick-bar-label {
+  font-size: var(--fs-2xs);
+  color: var(--shell-mut);
+  white-space: nowrap;
+}
+.theme-modern .terminal-quick-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 11px;
+  font-size: var(--fs-xs);
+  border: 1px solid color-mix(in srgb, var(--ink) 14%, transparent);
+  border-radius: 999px;
+  color: color-mix(in srgb, var(--shell-ink, var(--ink)) 82%, transparent);
+  background: transparent;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.theme-modern .terminal-quick-chip:hover {
+  border-color: color-mix(in srgb, var(--ink) 28%, transparent);
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+}
+.theme-modern .terminal-quick-chip-add { padding: 0 8px; }
+.theme-modern .terminal-quick-bar-spacer { flex: 1; }
+.theme-modern .terminal-quick-bar-hint {
+  font-size: var(--fs-2xs);
+  color: var(--shell-mut);
+  white-space: nowrap;
+}
+/* 分屏工作区条按钮（深色终端上的 ghost） */
+.theme-modern .terminal-workarea-bar .ghost-button {
+  height: 26px;
+  padding: 0 11px;
+  font-size: var(--fs-xs);
+  background: transparent;
+  border-color: color-mix(in srgb, var(--ink) 22%, transparent);
+  color: var(--shell-ink, var(--ink));
+}
+.theme-modern .terminal-workarea-bar .ghost-button:hover {
+  background: color-mix(in srgb, var(--ink) 10%, transparent);
+}
+/* 分屏 pane 头部（TerminalPane 自带头部） */
+.theme-modern .terminal-workarea-split .terminal-split-root,
+.theme-modern .terminal-workarea-split .terminal-split-row,
+.theme-modern .terminal-workarea-split .terminal-split-col {
+  min-height: 0;
+}
+
+/* ---------- 22. S7 文件预览：整体深色（头部/搜索/页脚与代码区连成一体） ---------- */
+.theme-modern .preview-dialog,
+.theme-modern .preview-dialog-archive,
+.theme-modern .preview-dialog-class {
+  border: 1px solid color-mix(in srgb, var(--ink) 18%, transparent);
+  border-radius: 10px;
+  background: var(--shell, #0b0e11);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.42);
+}
+.theme-modern .preview-header {
+  border-bottom: 1px solid var(--line);
+  background: var(--terminal-background, var(--shell));
+}
+.theme-modern .preview-title {
+  color: var(--shell-ink, #e8edf3);
+}
+.theme-modern .preview-meta {
+  color: var(--shell-mut);
+}
+.theme-modern .preview-readonly-badge {
+  color: #d9b06c;
+  background: rgba(217, 176, 108, 0.14);
+}
+.theme-modern .preview-loading-badge {
+  color: #8fc1e8;
+  background: rgba(143, 193, 232, 0.14);
+}
+.theme-modern .preview-dirty {
+  color: #e8a04c;
+  background: rgba(232, 160, 76, 0.14);
+}
+.theme-modern .preview-dialog-archive .preview-readonly-badge {
+  color: #6fd3c0;
+  background: rgba(111, 211, 192, 0.14);
+}
+.theme-modern .preview-dialog-class .preview-readonly-badge {
+  color: #8fb7f5;
+  background: rgba(143, 183, 245, 0.14);
+}
+/* 头部按钮（下载/搜索/保存/最大化/关闭） */
+.theme-modern .preview-save-btn,
+.theme-modern .preview-maximize-btn,
+.theme-modern .preview-close {
+  border: 1px solid color-mix(in srgb, var(--ink) 16%, transparent);
+  background: transparent;
+  color: var(--shell-ink, #e8edf3);
+}
+.theme-modern .preview-save-btn:hover,
+.theme-modern .preview-maximize-btn:hover,
+.theme-modern .preview-close:hover {
+  background: color-mix(in srgb, var(--ink) 10%, transparent);
+}
+.theme-modern .preview-save-btn-disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+/* 页脚：编码/大小/行数/EOL 信息（原型 S7） */
+.theme-modern .preview-footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 30px;
+  padding: 0 14px;
+  flex: none;
+  border-top: 1px solid var(--line);
+  background: var(--terminal-background, var(--shell));
+  color: var(--shell-mut);
+  font-size: var(--fs-2xs);
+  font-family: var(--v2-mono);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.theme-modern .preview-footer-path {
+  min-width: 0;
+  max-width: 46%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.theme-modern .preview-footer-sep {
+  width: 1px;
+  height: 12px;
+  flex: none;
+  background: color-mix(in srgb, var(--ink) 14%, transparent);
+}
+.theme-modern .preview-footer-spacer { flex: 1; }
+.theme-modern .preview-footer-hint { opacity: 0.75; }
+/* 归档/Class 结构化预览同框架深色 */
+.theme-modern .preview-dialog .structured-preview {
+  background: var(--terminal-background, var(--shell));
+  color: var(--shell-ink, #dbe5f1);
+}
+
+/* ---------- 23. S6 文件浏览打磨（对齐原型） ---------- */
+/* 工具行：面包屑紧凑不拉伸（原型 = mono chips + › 分隔，末段胶囊加重） */
+.theme-modern .file-browser-workbench .workspace-strip {
+  /* 原型 S6 tbar：路径在左，`flex:1` 撑开，过滤框与图标组靠右 —— 左右分布而非紧贴路径。
+     基础样式 .workspace-strip 是 display:grid，需 !important 才能确保覆盖 */
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  /* 基础样式带 margin: -6px -6px 0（为抵消旧父容器 padding）。
+     上下不对称的负 margin 会把内容整体拉偏，垂直居中失效，必须一并清零。 */
+  margin: 0 !important;
+  /* 上下内边距取 9px：9 + 26(控件) + 9 + 1(下边框) = 45 … 实测容器 46px（偶数），
+     偶数高度才能让 26px 内容上下均分（否则 47px 会取整成上 10 / 下 11，视觉偏上）。 */
+  padding: 10px 12px 9px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+}
+.theme-modern .file-browser-workbench .workspace-pathbar { flex: 0 1 auto; min-width: 0; max-width: 60%; }
+.theme-modern .file-browser-workbench .workspace-pathbar > * { flex: 0 1 auto; width: auto; }
+/* 图标组靠右：与路径呈左右布局（原型 tbar 的 flex:1 撑开效果） */
+.theme-modern .file-browser-workbench .workspace-actions { gap: 2px; margin-left: auto; }
+.theme-modern .file-browser-workbench .workspace-actions .icon-button { width: 26px; height: 26px; }
+/* ⋯ 收纳菜单 */
+.theme-modern .fb-more-wrap { position: relative; display: inline-flex; }
+.theme-modern .fb-more-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 60;
+  min-width: 190px;
+  padding: 5px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--panel);
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.16);
+  display: flex;
+  flex-direction: column;
+}
+.theme-modern .fb-more-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 9px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--ink);
+  font-size: var(--fs-xs);
+  text-align: left;
+  cursor: pointer;
+}
+.theme-modern .fb-more-item:hover { background: var(--panel-muted); }
+.theme-modern .fb-more-item:disabled { opacity: 0.45; cursor: not-allowed; }
+.theme-modern .fb-more-sep { height: 1px; margin: 4px 6px; background: var(--line); }
+/* 批量条（原型：已选 N 项 · 大小 ｜ 移动到…/删除/清空选择 ｜ 右侧快捷键提示） */
+.theme-modern .file-batch-actions { display: flex; align-items: center; gap: 8px; min-width: 0; }
+/* 原型 .batchbar 里计数是 <b>已选 3 项</b>，浏览器默认 font-weight:700；
+   此前实现写 650，比原型轻一档。 */
+.theme-modern .file-batch-title { font-size: var(--fs-xs); font-weight: 700; color: var(--ink); white-space: nowrap; }
+.theme-modern .file-batch-mut { font-size: var(--fs-2xs); color: var(--ink-soft); white-space: nowrap; }
+.theme-modern .file-batch-text-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 26px;
+  /* 宽度按内容自适应，「移动到…」不被固定宽度挤压裁切 */
+  min-width: 0;
+  /* !important：theme-modern.css 的 .theme-modern .ghost-button 在本文件之后加载，
+     同等特异性下会覆盖 padding，导致「移动到…」贴边被裁 */
+  padding: 0 14px !important;
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--panel);
+  color: var(--ink);
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.theme-modern .file-batch-text-button:hover { background: var(--panel-muted); }
+.theme-modern .file-batch-text-button:disabled { opacity: 0.5; cursor: not-allowed; }
+.theme-modern .file-batch-danger { color: var(--red); }
+.theme-modern .file-batch-spacer { flex: 1; }
+.theme-modern .file-batch-hint { font-size: var(--fs-2xs); color: var(--ink-soft); opacity: 0.85; white-space: nowrap; }
+/* 目录树列去标题头（原型 = 直接树）；文件列的列头保留为「摘要/批量条」槽位：
+   两者互斥占同一行 → 勾选/取消时高度恒定，不推挤表格也不留空白。 */
+.theme-modern .browser-tree-column .browser-column-head { display: none; }
+.theme-modern .browser-file-column .browser-column-head {
+  display: flex;
+  align-items: center;
+  /* 固定高度：摘要态与批量条态共用此槽位，高度必须完全一致，否则切换时表格上下跳 */
+  height: 34px;
+  min-height: 34px;
+  padding: 0 12px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+}
+/* 槽位内的批量条内容不撑高容器 */
+.theme-modern .browser-file-column .browser-column-head .file-batch-actions {
+  height: 34px;
+  padding: 0;
+  background: transparent !important;
+  border: none !important;
+}
+/* 面包屑紧凑：抵消旧表的底色大块，恢复原型 mono chips + › 分隔 */
+.theme-modern .file-browser-workbench .pathbar-breadcrumbs {
+  min-height: 26px;
+  height: 26px;
+  padding: 0 4px;
+  border-radius: 7px;
+  background: transparent;
+  gap: 1px;
+}
+.theme-modern .file-browser-workbench .pathbar-breadcrumbs:hover { background: transparent; }
+/* 分隔符文本已由组件渲染（FileBrowserPathbar 的 › ），不要再加伪元素，否则出现 › › */
+.theme-modern .file-browser-workbench .pathbar-breadcrumb-separator { font-size: var(--fs-2xs); color: var(--ink-soft); opacity: 0.7; }
+.theme-modern .file-browser-workbench .pathbar-breadcrumb-item {
+  font-family: var(--v2-mono, ui-monospace, Menlo, monospace);
+  font-size: var(--fs-xs);
+  padding: 2px 7px;
+  border-radius: 5px;
+  background: transparent !important;
+  color: var(--ink-soft) !important;
+}
+.theme-modern .file-browser-workbench .pathbar-breadcrumb-item:hover { background: var(--panel-muted) !important; color: var(--ink) !important; }
+.theme-modern .file-browser-workbench .pathbar-breadcrumb-item.is-current {
+  background: var(--panel-muted) !important;
+  color: var(--ink) !important;
+  font-weight: 600;
+}
+.theme-modern .file-browser-workbench .pathbar-breadcrumb-item {
+  padding: 2px 7px !important;
+}
+.theme-modern .file-browser-workbench .pathbar-breadcrumb-separator {
+  font-size: var(--fs-xs);
+  padding: 0 1px;
+}
+/* S6 行悬浮快捷组 —— 对齐原型：
+   `background: var(--panel)` + `border: 1px solid var(--line)` + `radius 6px`
+   + `padding: 2px` + `gap: 3px` + `box-shadow: 0 4px 16px rgba(0,0,0,.1)`，
+   绝对定位浮在行尾、垂直居中，不参与行内布局（避免撑高行/遮挡名称）。 */
+.theme-modern .file-table .file-row { position: relative; }
+.theme-modern .file-name-cell .file-row-actions {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 2px;
+  gap: 3px;
+  border-radius: 6px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 100ms ease;
+  z-index: 2;
+}
+.theme-modern .file-table .file-row:hover .file-row-actions,
+.theme-modern .file-table .file-row-active .file-row-actions,
+.theme-modern .file-table .file-row:focus-within .file-row-actions {
+  opacity: 1;
+  pointer-events: auto;
+  background: var(--panel) !important;
+}
+.theme-modern .file-table .file-row .file-action-icon {
+  width: 24px;
+  height: 24px;
+  display: inline-grid;
+  place-items: center;
+  border: none;
+  border-radius: 5px;
+  background: transparent !important;
+  color: var(--ink-soft);
+  box-shadow: none !important;
+}
+.theme-modern .file-table .file-row .file-action-icon:hover {
+  background: var(--panel-muted) !important;
+  color: var(--accent);
+}
+/* 勾选模式下隐藏悬浮组，避免与 checkbox 冲突 */
+.theme-modern .file-table .file-row.file-row-select-mode .file-row-actions { display: none; }
+/* 批量条计数用等宽数字，位数变化时右侧按钮不左右移动 */
+.theme-modern .file-batch-title,
+.theme-modern .file-batch-mut {
+  font-variant-numeric: tabular-nums;
+  min-width: max-content;
+}
+/* 批量条紧贴文件区（原型：批量条 34px 一行，下沿即表头） */
+.theme-modern .file-batch-actions { min-height: 32px; padding: 0 10px; }
+.theme-modern .file-table-head { font-size: var(--fs-sm); padding: 5px 16px 5px 12px; }
+
+/* S6 列宽（选择/名称/[传输]/大小/修改时间/类型）统一在 theme-modern.css 定义，
+   此处不再重复，避免表头与数据行取到不同模板导致错位。 */
+.theme-modern .file-table .file-size-cell,
+.theme-modern .file-table .file-kind-cell {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* 修改时间列：等宽数字 + 单行，杜绝「日期/时间」折成两行 */
+.theme-modern .file-table .file-mtime-cell,
+.theme-modern .file-table-head .table-head-button:nth-last-child(2) {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* 行尾快捷组：绝对定位浮在行尾，不参与行内布局，
+   故宽度必须按内容自适应 —— 固定 108px 会裁掉 5 个 24px 图标中的首尾
+   （recon S6-4：实测 scrollWidth 129 > offsetWidth 108）。
+   原型该组为内容自适应卡片（158×30），此处等价实现。 */
+.theme-modern .file-name-cell {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+.theme-modern .file-name-cell .file-row-actions {
+  width: max-content;
+  min-width: 0;
+  flex: none;
+}
+
+/* ---------- 24. S7 文件预览深色 → 仅模态预览弹窗（.preview-dialog） ----------
+   ⚠️ 原实现把深色套到 `.pip-viewer-wrap`（内嵌视图），并以
+   `:has(.viewer-shell .slicebar)` / `:has(.viewer-shell .virtuoso-scroller)` 当"预览态"判据。
+   但**日志视图本身也渲染 .virtuoso-scroller 与 .slicebar**，判据失效 →
+   内嵌视图（日志/切片）的标题条被涂黑，形成一条大黑边（用户截图确认）。
+   原型对照：S4 切片/日志视图 = **浅色**（.content 白底、.ll 深字）；
+            S7 文件预览 = 深色，但那是**模态弹窗**，实现对应 `.preview-dialog`。
+   故内嵌 `.pip-viewer-wrap` 一律浅色（base `.viewer-actions-strip{background:var(--panel)}` 生效），
+   深色作用域只保留 `.preview-dialog`（见 align-s7-s8.css）。 */
+
+/* 深色下的分段控件单独适配（原型 S7 第 703 行的深色 .seg：
+   <div class="seg" style="background:#1a1a1a;border-color:#2c2c2c">
+     <button class="on" style="background:#2c2c2c;color:#fff;border-right:1px solid #2c2c2c">源码</button>
+     <button style="color:#9aa7b4;border-right:1px solid #2c2c2c">归档 · 132 项</button>
+     <button style="color:#9aa7b4">Class</button>
+   选中项在深色下不再是黑底（黑压黑不可辨），改用 #2c2c2c 抬升一档以保持选中可读性。
+   ⚠️ 作用域只限 `.preview-dialog`（S7 模态预览弹窗）——
+     内嵌 `.pip-viewer-wrap` 是浅色视图，其分段控件（结果页签等）应走浅色，不在此处涂黑。 */
+.theme-modern .preview-dialog .seg {
+  background: #1a1a1a;
+  border-color: #2c2c2c;
+}
+.theme-modern .preview-dialog .seg > button {
+  background: #1a1a1a !important;
+  color: #9aa7b4 !important;
+  border-right-color: #2c2c2c;
+}
+.theme-modern .preview-dialog .seg > button.on {
+  background: #2c2c2c !important;
+  color: #ffffff !important;
+  font-weight: 600;
+}
+.theme-modern .preview-dialog .seg.lite > button.on {
+  background: rgba(0, 112, 243, 0.22) !important;
+  color: #8fc1e8 !important;
+  font-weight: 600;
+}
+
+/* S6：勾选态与非勾选态行高必须一致（消除勾选瞬间的纵向抖动）。
+   高度对齐原型 S6 数据行 30px（theme-modern.css 已把左右 padding 收为 0 12px）。 */
+.theme-modern .file-table .file-row,
+.theme-modern .file-table .file-row.file-row-select-mode {
+  /* 原型 .tbl td = padding 4px 12px + height 30px，实际行高 ≈ 38px。
+     此前写死 30px（把 30 当作含 padding 的总高）比原型矮 8px，视觉压抑。 */
+  min-height: 38px;
+  height: 38px;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+.theme-modern .file-table .file-row .file-select-cell {
+  /* 跟随行高而非写死高度：基础规则带 margin: -4px 0（为 hover 背景留溢出空间），
+     若再写死 height 会让复选框中心比行中心偏上 4px，视觉不居中。 */
+  height: auto;
+  min-height: 0;
+  align-self: stretch;
+  margin: 0;
+}
+
+/* S6：文件列表滚动条常驻占位，避免勾选/传输态出现滚动条时列宽跳变 */
+.theme-modern .browser-file-column-body,
+.theme-modern .browser-tree-column .tree-list {
+  scrollbar-gutter: stable;
+}
+
+/* S6：选择列收窄并去掉列间距，让名称紧贴勾选框（原型：勾选框贴左，名称紧随），
+   同时避免 48px+10px 造成的左侧大空白与左树不对齐 */
+.theme-modern .file-table-head,
+.theme-modern .file-row {
+  column-gap: 0;
+}
+.theme-modern .file-select-cell,
+.theme-modern .file-table .file-select-cell {
+  width: 28px;
+  min-width: 28px;
+  padding-left: 8px;
+  justify-content: flex-start;
+}
+/* 表头「名称」需与数据行的名称文字对齐（行内名称前有 14px 图标 + 8px 间距） */
+.theme-modern .file-name-cell { padding-left: 6px; }
+.theme-modern .file-table-head > .table-head-button:first-of-type { padding-left: 30px; }
+
+/* S6：选中行必须压过斑马纹。theme-modern.css 的 .file-row:nth-child(2n) 与
+   .file-row-selected 特异性相同且加载更晚，会把选中底色压成纯白 */
+.theme-modern .file-table .file-row.file-row-selected,
+.theme-modern .file-table .file-row.file-row-selected:nth-child(2n) {
+  background: rgba(59, 130, 246, 0.08) !important;
+}
+.theme-modern .file-table .file-row.file-row-selected:hover:not(:disabled) {
+  background: rgba(59, 130, 246, 0.13) !important;
+}
+
+/* ---------- 25. 键盘焦点可见体系（文档 §3g-3 七态验收 · P0） ----------
+   此前 :focus 仅 5 处、:focus-visible 为 0，221 个 button 获得键盘焦点后无任何
+   视觉指示，键盘用户无法定位。统一用 :focus-visible（仅在键盘导航时显示，
+   鼠标点击不出现轮廓）。 */
+.theme-modern :focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+/* 输入类控件本身已有 border 高亮，焦点环改为内嵌避免布局位移 */
+.theme-modern input:focus-visible,
+.theme-modern select:focus-visible,
+.theme-modern textarea:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+/* 深色区域（终端 / 预览）用浅色焦点环保证对比度 */
+.theme-modern .terminal-workarea :focus-visible,
+.theme-modern .pip-viewer-wrap :focus-visible {
+  outline-color: color-mix(in srgb, var(--accent) 45%, #ffffff);
+}
+/* 行 / 列表项作为可点区域时，焦点环内收以免被相邻行裁切 */
+.theme-modern .file-row:focus-visible,
+.theme-modern .server-item:focus-visible,
+.theme-modern .tree-item:focus-visible {
+  outline-offset: -2px;
+}
+/* 焦点态与悬浮态视觉区分：焦点保留底色提示 */
+.theme-modern .file-row:focus-visible {
+  background: var(--accent-soft);
+}
+
+/* 禁用态游标：全局 button:disabled 的 cursor 被 .theme-modern button{cursor:pointer}
+   压掉，导致禁用按钮仍显示手型（G25） */
+.theme-modern button:disabled,
+.theme-modern [aria-disabled="true"],
+.theme-modern .ghost-button:disabled,
+.theme-modern .icon-button:disabled {
+  cursor: not-allowed;
+}
+
+/* 兜底：位于 portal / 主题容器外、但仍属于本应用的控件（如命令面板输入框） */
+body:has(.theme-modern) :focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+body:has(.theme-modern) input:focus-visible,
+body:has(.theme-modern) select:focus-visible,
+body:has(.theme-modern) textarea:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+body:has(.theme-modern) button:disabled {
+  cursor: not-allowed;
+}
+
+/* ---------- 26. S12 连接错误横幅（原型 .banner） ----------
+   原型决策：连接错误从占位块改为内容区顶部横幅，不挡内容，
+   含图标 + 中文原因 + 主机上下文 + [重连][连接设置]，红底红字表意。 */
+.theme-modern .connection-error-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: none;
+  padding: 9px 16px;
+  background: var(--red-soft);
+  border-bottom: 1px solid color-mix(in srgb, var(--red) 25%, transparent);
+  font-size: var(--fs-xs);
+  color: var(--red);
+}
+.theme-modern .connection-error-banner-icon {
+  display: flex;
+  flex: none;
+}
+.theme-modern .connection-error-banner-msg {
+  flex: 1;
+  min-width: 0;
+  line-height: 1.55;
+}
+.theme-modern .connection-error-banner-msg b {
+  font-weight: 650;
+}
+.theme-modern .connection-error-banner-hint {
+  display: block;
+  color: var(--ink-soft);
+  font-size: var(--fs-xs);
+}
+.theme-modern .connection-error-banner .ghost-button {
+  flex: none;
+  height: 28px;
+  padding: 0 11px;
+  font-size: var(--fs-xs);
+}
+
+/* S13：检索按钮内联进度（`340MB/1.2GB`）——不换行 + 等宽数字防抖动 */
+.theme-modern .search-run-button {
+  white-space: nowrap;
+}
+.theme-modern .search-run-button .search-run-progress {
+  font-family: var(--mono-font-family);
+  font-variant-numeric: tabular-nums;
+}
+
+/* S14/G9：xterm 输入捕获层必须用与终端一致的等宽字体。
+   该层承担输入法与候选框定位，若继承界面比例字体会导致中文候选框错位。 */
+.theme-modern .xterm-helper-textarea {
+  font-family: var(--terminal-font-family, var(--mono-font-family));
+  font-size: var(--terminal-font-size, 12px);
+}
+
+
+
+/* 全场景统一：基础 .workspace-strip 带 margin: -6px -6px 0（旧父容器抵消设计）。
+   上下不对称的负 margin 会让标题条内容整体偏上，垂直居中失效 ——
+   该规则此前只在文件浏览工作区被覆盖，日志预览等其他视图仍受影响，故统一清零。 */
+.theme-modern .workspace-strip {
+  margin: 0 !important;
+  align-items: center;
+  /* 去掉写死高度，交给上下 padding 精确控制留白：
+     显式 padding 9px/9px（内容 28px + 18px = 46px，含 1px 下边框正好偶数），
+     比依赖 align-items 在奇数高度下的取整分配更可控。 */
+  box-sizing: content-box;
+  height: auto;
+  min-height: 0;
+  /* 下边框占 1px，故下 padding 取 8px（8+1=9）与上 9px 视觉等距 */
+  padding-top: 9px;
+  padding-bottom: 8px;
+}
+
+/* ---------- 27. S12 空态统一模板（原型 .empty）----------
+   原型：图标 + 一句话 + 副文案 + 主按钮，整体**垂直水平居中**。
+   此前实现是 align-content:start 的顶对齐虚线卡片，内容贴左上、下方大片空白。 */
+.theme-modern .viewer-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  text-align: center;
+  min-height: 100%;
+  padding: 24px;
+  border: none;
+  background: transparent;
+}
+.theme-modern .viewer-empty-state strong {
+  font-weight: 650;
+  font-size: var(--fs-title);
+  color: var(--ink);
+  margin-bottom: 3px;
+}
+.theme-modern .viewer-empty-state > span {
+  font-size: var(--fs-xs);
+  color: var(--ink-muted);
+  margin-bottom: 12px;
+  line-height: 1.6;
+  max-width: 320px;
+}
+.theme-modern .viewer-empty-state .toolbar-inline {
+  justify-content: center;
+  gap: 8px;
+}
+/* 空态图标：44×44 描边容器（与原型 .empty .ic 一致） */
+.theme-modern .viewer-empty-state-icon {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  color: var(--ink-muted);
+  margin-bottom: 6px;
+}
+
+/* ---------- 28. 侧栏排版对齐原型（S2）----------
+   原型：.nm 服务器名 12.5px/550 · .host 主机 10px mono · .port 端口 11px mono
+   此前实现字号层级混乱（分组标签比服务器名小、主机 11px 偏大）。 */
+.theme-modern .server-item strong {
+  font-size: var(--fs-sm);
+  font-weight: 550;
+  color: var(--ink);
+}
+.theme-modern .server-item .server-item-main span {
+  font-size: var(--fs-2xs);
+  font-weight: 500;
+  font-family: var(--mono-font-family);
+  color: var(--ink-muted);
+}
+.theme-modern .server-item > .server-item-meta {
+  font-size: var(--fs-2xs);
+  font-weight: 500;
+  font-family: var(--mono-font-family);
+  color: var(--ink-soft);
+}
+/* 分组标签：原型 11px/600，须大于等于辅助文字但弱于服务器名 */
+.theme-modern .server-group-title {
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+  color: var(--ink-muted);
+}
+
+/* ---------- 29. S5 终端 AI 抽屉：浅色适配 ----------
+   原型规格（S5）：
+   容器 width:320px / border-left:1px solid var(--line) / background:var(--panel)
+   普通气泡 border:1px solid var(--line) + radius --r-m + padding 9px 11px + 11.5px/1.7
+   AI 气泡  border:1px solid color-mix(--accent 30%) + background:var(--accent-soft)
+   快捷追问 chips = .fchip（24px 高、圆角 999px、1px 描边）
+   styles-tsc.css 里的 .tai-* 原为独立深色主题（80 处深色硬编码、零主题适配），
+   压在浅色应用里形成突兀黑块，此处统一改走 token。 */
+.theme-modern .terminal-side-panel {
+  width: 320px;
+  border-left: 1px solid var(--line);
+  background: var(--panel);
+}
+.theme-modern .tai-dropdown,
+.theme-modern .tai-panel,
+.theme-modern .tai-root {
+  background: var(--panel) !important;
+  color: var(--ink) !important;
+  border-color: var(--line) !important;
+}
+.theme-modern .tai-header {
+  border-bottom: 1px solid var(--line) !important;
+  background: var(--panel) !important;
+}
+.theme-modern .tai-header-title { color: var(--ink) !important; font-size: var(--fs-sm); font-weight: 650; }
+.theme-modern .tai-hdr-btn { color: var(--ink-soft) !important; }
+.theme-modern .tai-hdr-btn:hover { background: var(--panel-muted) !important; color: var(--ink) !important; }
+
+/* 消息气泡：普通 = 描边卡片；AI = 强调底 */
+.theme-modern .tai-msg,
+.theme-modern .tai-msg-ai > * {
+  color: var(--ink) !important;
+}
+.theme-modern .tai-msg-ai {
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent) !important;
+  background: var(--accent-soft) !important;
+  border-radius: var(--r-m);
+}
+.theme-modern .tai-msg-user {
+  border: 1px solid var(--line) !important;
+  background: var(--panel-muted) !important;
+  border-radius: var(--r-m);
+}
+.theme-modern .tai-msg-text { font-size: var(--fs-xs); line-height: 1.7; }
+.theme-modern .tai-cmd-block {
+  border: 1px solid var(--line) !important;
+  background: var(--panel-muted) !important;
+  border-radius: var(--r-s);
+}
+.theme-modern .tai-cmd-block code,
+.theme-modern .tai-cmd-block pre {
+  font-family: var(--mono-font-family);
+  font-size: var(--fs-2xs);
+  color: var(--ink) !important;
+}
+.theme-modern .tai-thinking { color: var(--ink-muted) !important; }
+
+/* 输入区 */
+.theme-modern .tai-input-bar {
+  border-top: 1px solid var(--line) !important;
+  background: var(--panel) !important;
+}
+.theme-modern .tai-textarea {
+  background: var(--panel-muted) !important;
+  border: 1px solid var(--line) !important;
+  color: var(--ink) !important;
+  font-size: var(--fs-xs);
+  border-radius: var(--r-s);
+}
+.theme-modern .tai-textarea::placeholder { color: var(--ink-muted); }
+.theme-modern .tai-send-btn {
+  background: var(--accent) !important;
+  color: var(--on-accent) !important;
+  border-radius: var(--r-s);
+}
+.theme-modern .tai-send-btn:disabled { opacity: 0.45; }
+
+/* 空态与推荐问题：对齐原型 .fchip */
+.theme-modern .tai-empty,
+.theme-modern .tai-suggestions {
+  color: var(--ink-soft) !important;
+  background: transparent !important;
+}
+.theme-modern .tai-suggestion,
+.theme-modern .tai-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 11px;
+  font-size: var(--fs-xs);
+  border: 1px solid var(--line) !important;
+  border-radius: 999px;
+  color: var(--ink-soft) !important;
+  background: var(--panel) !important;
+  white-space: nowrap;
+}
+.theme-modern .tai-suggestion:hover,
+.theme-modern .tai-chip:hover {
+  border-color: var(--line-strong) !important;
+  color: var(--ink) !important;
+}
+.theme-modern .tai-brand,
+.theme-modern .tai-welcome-title { color: var(--ink) !important; }
+.theme-modern .tai-welcome-desc { color: var(--ink-muted) !important; }
+.theme-modern .tai-settings {
+  background: var(--panel) !important;
+  color: var(--ink) !important;
+}
+.theme-modern .tai-settings input,
+.theme-modern .tai-settings select {
+  background: var(--panel-muted) !important;
+  border: 1px solid var(--line) !important;
+  color: var(--ink) !important;
+}
+
+/* ---------- 30. S5 终端工具行：状态 chip + 会话信息 ----------
+   原型：<span class="chip grn"><span class="dot on"></span> root@192.168.127.38 · 心跳 25s</span>
+        + <span class="mut">会话 1/2</span> */
+.theme-modern .terminal-conn-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  font-size: var(--fs-xs);
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+.theme-modern .terminal-conn-chip-on {
+  border-color: color-mix(in srgb, var(--green) 32%, transparent);
+  background: color-mix(in srgb, var(--green) 8%, transparent);
+  color: var(--green);
+}
+.theme-modern .terminal-conn-chip strong {
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: inherit;
+}
+.theme-modern .terminal-conn-chip-sub {
+  font-family: var(--mono-font-family);
+  font-size: var(--fs-2xs);
+  color: var(--ink-muted);
+}
+.theme-modern .terminal-bar-meta {
+  font-size: var(--fs-2xs);
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+/* 工具行按钮补齐文字按钮样式（原型「分屏 / 弹出窗口 / AI 助手」带文字） */
+.theme-modern .terminal-toolbar-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 9px;
+  border: 1px solid transparent;
+  border-radius: var(--r-s);
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: var(--fs-xs);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.theme-modern .terminal-toolbar-button:hover:not(:disabled) {
+  background: var(--panel-muted);
+  color: var(--ink);
+}
+.theme-modern .terminal-toolbar-button.tai-toggle-active {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 28%, transparent);
+}
+
+/* ============================================================
+   30. 侧栏服务器树 · 对齐原型 .srow（用户显式要求）
+   原型权威：prototype.html 98–116（.srow / .grp / .dot）
+   原型实测值：行 40px·gap 8·padding 0 12 0 14；名 12.5px·550；主机 10px mono；
+              端口 11px mono·--ink-soft；分组 10.5px·600；点 7px。
+   用户显式调整：去掉选中行左侧 2px 蓝色指示条（原型 .srow.cur 带此条，本次不回改）。
+   实现约束：一律引用设计 token（规范 §10：禁止裸 font-size、禁止裸色值）。
+     · 字号 → --fs-*（服务器名 --fs-sm；主机/端口/分组 --fs-2xs）
+     · 颜色 → --accent-soft / --green-dot，其余用 color-mix 从 token 派生
+     · 圆角 → --r-s
+     · 几何（行高/gap/padding/点径）代码库暂无对应 token，按原型像素直取
+   ============================================================ */
+/* 1) 行几何：40px 高（展开/塌缩通用）；左右内边距 14·12 与 点↔文字间距 8
+      仅在展开态（≥1025px）——否则会压过 <1024px 图标塌缩模式的 padding:0。 */
+.theme-modern .server-item,
+.theme-modern .server-list button.server-item,
+.theme-modern .server-list .server-item-wrap .server-item {
+  height: 40px !important;
+  min-height: 40px !important;
+  border-left: none !important;
+}
+@media (min-width: 1025px) {
+  .theme-modern .server-item,
+  .theme-modern .server-list button.server-item,
+  .theme-modern .server-list .server-item-wrap .server-item {
+    padding: 0 12px 0 14px !important;
+    gap: 8px !important;
+  }
+}
+.theme-modern .server-item .server-status-dot {
+  position: static !important;
+  margin: 0 !important;
+  transform: none !important;
+  flex: none !important;
+}
+/* 塌缩态（<1024px 图标模式）：复位内边距/间距，避免上面的行几何与
+   v2:1417 的 padding-left:14px!important 压过 theme-modern.css 的塌缩规则。 */
+@media (max-width: 1024px) {
+  .theme-modern .sidebar-panel .server-item,
+  .theme-modern .sidebar-panel .server-list .server-item-wrap .server-item {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    gap: 0 !important;
+  }
+}
+/* 2) 行内字号：名 --fs-sm / 主机·端口·分组 --fs-2xs（走 token） */
+.theme-modern .server-item .server-item-main strong,
+.theme-modern .server-item strong,
+.theme-modern .server-item .server-item-name {
+  font-size: var(--fs-sm) !important;
+  font-weight: 550 !important;
+  line-height: 1.35 !important;
+}
+.theme-modern .server-item .server-item-main span {
+  font-size: var(--fs-2xs) !important;
+  line-height: 1.4 !important;
+}
+.theme-modern .server-item > .server-item-meta {
+  font-size: var(--fs-2xs) !important;
+  padding: 0 !important;
+}
+.theme-modern .server-group-title,
+.theme-modern .server-list .server-group-title {
+  font-size: var(--fs-2xs) !important;
+  font-weight: 600 !important;
+  padding: 12px 14px 4px !important;
+}
+.theme-modern .server-item-quick-actions {
+  padding: 0 12px 0 0 !important;
+}
+/* 3) 选中样式：仅 accent-soft 底；去掉左侧蓝色指示条（用户要求） */
+.theme-modern .server-item-wrap-active,
+.theme-modern .server-list .server-item-wrap-active,
+.theme-modern .server-item-wrap-active:hover {
+  background: var(--accent-soft) !important;
+  box-shadow: none !important;
+}
+.theme-modern .server-item-wrap-active .server-item,
+.theme-modern .server-item-active {
+  border-left: none !important;
+  background: transparent !important;
+}
+/* 4) 状态点效果：7px；在线绿 + 3px 光环；离线灰 + 3px 浅环（原型 .dot）
+   颜色走 token：在线 --green-dot；离线/待定由 --ink / --amber 派生。 */
+.theme-modern .server-status-dot,
+.theme-modern .server-item .server-status-dot {
+  width: 7px !important;
+  height: 7px !important;
+}
+.theme-modern .server-status-dot.dot-connected {
+  background: var(--green-dot) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--green-dot) 15%, transparent) !important;
+}
+.theme-modern .server-status-dot.dot-idle {
+  background: color-mix(in srgb, var(--ink-muted) 40%, var(--panel)) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ink) 5%, transparent) !important;
+}
+.theme-modern .server-status-dot.dot-pending {
+  background: var(--amber) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--amber) 18%, transparent) !important;
+}
+/* 5) 悬浮快捷操作组（原型 .qa / .qa .btn，prototype.html 106–112）
+   原型：.btn.icon.sm = 28×24 / 图标 12 / 组内 gap 2；
+        组内 align-items:center 且与行同高居中（实测 qaCy−rowCy=0）。
+   实现旧基础规则带 transform:translate(4px,-50%) + position:absolute，
+   后又被 v2 改成 position:static 却未复位 transform → 整组上偏 12px（实测 −12）。
+   此处复位 transform 并统一尺寸，使按钮真正垂直居中。
+   圆角走 token --r-s（原型 5px 与 token 6px 差 1px，以项目 token 为准，规范 §10）。 */
+.theme-modern .server-item-quick-actions {
+  transform: none !important;
+  top: auto !important;
+  align-items: center !important;
+}
+.theme-modern .server-item-quick-actions .server-item-mini-action,
+.theme-modern .server-item-mini-action {
+  width: 28px !important;
+  min-width: 28px !important;
+  height: 24px !important;
+  min-height: 24px !important;
+  border-radius: var(--r-s) !important;
+  /* 原型 .qa .btn：透明描边 + 透明底 + muted 图标；
+     hover 才显 1px var(--line) 边框 + 白底 + ink 图标（prototype.html 111-112）。 */
+  border: 1px solid transparent !important;
+  background: transparent !important;
+  color: var(--ink-muted) !important;
+  box-shadow: none !important;
+}
+.theme-modern .server-item-quick-actions .server-item-mini-action:hover,
+.theme-modern .server-item-mini-action:hover {
+  border-color: var(--line) !important;
+  background: var(--panel) !important;
+  color: var(--ink) !important;
+  box-shadow: none !important;
+}
+.theme-modern .server-item-quick-actions .server-item-mini-action.is-open {
+  border-color: var(--line) !important;
+  background: var(--panel) !important;
+  color: var(--ink) !important;
 }
