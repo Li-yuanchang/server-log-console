@@ -1,4 +1,16 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { EditorView } from "@codemirror/view";
+import { SearchQuery, findNext, findPrevious, getSearchQuery, openSearchPanel, searchPanelOpen, setSearchQuery } from "@codemirror/search";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  Maximize2,
+  Minimize2,
+  MoreHorizontal,
+  Search,
+  X,
+} from "lucide-react";
 import { CodeEditor } from "./CodeEditor";
 import type { FilePreviewResponse } from "./api.js";
 import { useEscapeToClose } from "./useEscapeToClose.js";
@@ -46,6 +58,142 @@ interface FilePreviewDialogProps {
   onClose: () => void;
 }
 
+type EditorSearchStats = { total: number; current: number };
+type EditorVisibleRange = { from: number; to: number; total: number };
+
+// 文件内搜索行（原型 S7 第 708-718 行）：把查询写进 CodeMirror（命中高亮）、
+// 维护「当前 / 总数」与可视行号区间。CodeEditor 自身不暴露 view，故经 DOM 反查。
+function useEditorSearch(
+  rootRef: RefObject<HTMLDivElement | null>,
+  enabled: boolean,
+  documentKey: string | undefined
+) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const [query, setQuery] = useState("");
+  const [stats, setStats] = useState<EditorSearchStats>({ total: 0, current: 0 });
+  const [range, setRange] = useState<EditorVisibleRange>({ from: 1, to: 1, total: 1 });
+
+  const getView = useCallback((): EditorView | null => {
+    const root = rootRef.current;
+    if (!root) return null;
+    const editor = root.querySelector<HTMLElement>(".cm-editor");
+    return editor ? EditorView.findFromDOM(editor) : null;
+  }, [rootRef]);
+
+  const refreshStats = useCallback(() => {
+    const view = getView();
+    if (!view) {
+      setStats({ total: 0, current: 0 });
+      return;
+    }
+    const activeQuery = getSearchQuery(view.state);
+    if (!activeQuery.search) {
+      setStats({ total: 0, current: 0 });
+      return;
+    }
+    let total = 0;
+    let current = 0;
+    const head = view.state.selection.main.head;
+    const cursor = activeQuery.getCursor(view.state);
+    for (let step = cursor.next(); !step.done; step = cursor.next()) {
+      total += 1;
+      if (step.value.from <= head && head <= step.value.to) {
+        current = total;
+      }
+    }
+    setStats({ total, current });
+  }, [getView]);
+
+  const refreshRange = useCallback(() => {
+    const view = getView();
+    if (!view) return;
+    const doc = view.state.doc;
+    const ranges = view.visibleRanges;
+    const firstPos = ranges.length ? ranges[0].from : 0;
+    const lastPos = ranges.length ? ranges[ranges.length - 1].to : 1;
+    const from = doc.lineAt(Math.min(firstPos, doc.length)).number;
+    const to = doc.lineAt(Math.min(Math.max(lastPos, 1), doc.length)).number;
+    setRange({ from, to, total: doc.lines });
+  }, [getView]);
+
+  const focusInput = useCallback(() => {
+    inputRef.current?.focus();
+    inputRef.current?.select();
+  }, []);
+
+  const step = useCallback((direction: 1 | -1) => {
+    const view = getView();
+    if (!view) return;
+    if (direction === 1) {
+      findNext(view);
+    } else {
+      findPrevious(view);
+    }
+    refreshStats();
+    refreshRange();
+  }, [getView, refreshStats, refreshRange]);
+
+  // 查询写入编辑器并跳到首个命中（原型搜索框即改即搜）。
+  // CodeMirror 的高亮仅在自带搜索面板「打开」时生效（highlight({panel})），
+  // 而原型用内联搜索行取代了该面板 —— 故此处程序化打开面板以获得命中高亮，
+  // 再由 CSS 隐藏面板本体（原型 S7 708-718 行）。
+  useEffect(() => {
+    if (!enabled) return;
+    const handle = window.setTimeout(() => {
+      const view = getView();
+      if (!view) return;
+      if (getSearchQuery(view.state).search !== query) {
+        view.dispatch({ effects: setSearchQuery.of(new SearchQuery({ search: query })) });
+        if (query) findNext(view);
+      }
+      if (query && !searchPanelOpen(view.state)) {
+        openSearchPanel(view);
+      }
+      refreshStats();
+      refreshRange();
+    }, 160);
+    return () => window.clearTimeout(handle);
+  }, [query, enabled, documentKey, getView, refreshStats, refreshRange]);
+
+  // 切换文件清空查询
+  useEffect(() => {
+    setQuery("");
+    setStats({ total: 0, current: 0 });
+  }, [documentKey]);
+
+  // 跟随滚动更新行号区间
+  useEffect(() => {
+    if (!enabled) return;
+    let scroller: HTMLElement | null = null;
+    const onScroll = () => refreshRange();
+    const attach = () => {
+      const view = getView();
+      if (!view) return false;
+      if (scroller === view.scrollDOM) return true;
+      if (scroller) scroller.removeEventListener("scroll", onScroll);
+      scroller = view.scrollDOM;
+      scroller.addEventListener("scroll", onScroll, { passive: true });
+      refreshRange();
+      return true;
+    };
+    let interval: number | undefined;
+    if (!attach()) {
+      interval = window.setInterval(() => {
+        if (attach() && interval) {
+          window.clearInterval(interval);
+          interval = undefined;
+        }
+      }, 250);
+    }
+    return () => {
+      if (interval) window.clearInterval(interval);
+      if (scroller) scroller.removeEventListener("scroll", onScroll);
+    };
+  }, [enabled, documentKey, getView, refreshRange]);
+
+  return { query, setQuery, stats, range, focusInput, step, inputRef };
+}
+
 export function FilePreviewDialog(props: FilePreviewDialogProps) {
   const {
     dialog,
@@ -57,34 +205,61 @@ export function FilePreviewDialog(props: FilePreviewDialogProps) {
     onToggleMaximize,
     onClose,
   } = props;
-  const [editorSearchToken, setEditorSearchToken] = useState(0);
-  const isTextPreviewDialog = Boolean(dialog && dialog.previewKind !== "archive" && dialog.previewKind !== "class");
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const isStructuredPreview = dialog?.previewKind === "archive" || dialog?.previewKind === "class";
+  const isTextPreview = Boolean(dialog && dialog.previewKind !== "archive" && dialog.previewKind !== "class");
+  const search = useEditorSearch(dialogRef, isTextPreview && !dialog?.loading, dialog?.filePath);
   useEscapeToClose(Boolean(dialog), onClose);
+
+  // ⌘F 聚焦内联搜索框（原型 S7 第 708-718 行取代 CodeMirror 自带面板）
   useEffect(() => {
-    if (!isTextPreviewDialog) {
+    if (!isTextPreview) {
       return;
     }
+    const focusSearch = search.focusInput;
     const handleKeyDown = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "f") {
         event.preventDefault();
         event.stopPropagation();
-        setEditorSearchToken((token) => token + 1);
+        focusSearch();
       }
     };
     window.addEventListener("keydown", handleKeyDown, { capture: true });
     return () => window.removeEventListener("keydown", handleKeyDown, { capture: true });
-  }, [isTextPreviewDialog]);
+  }, [isTextPreview, search.focusInput]);
+
+  useEffect(() => {
+    if (!moreOpen) {
+      return;
+    }
+    const onDocumentMouseDown = (event: MouseEvent) => {
+      if (dialogRef.current && !dialogRef.current.contains(event.target as Node)) {
+        setMoreOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onDocumentMouseDown);
+    return () => document.removeEventListener("mousedown", onDocumentMouseDown);
+  }, [moreOpen]);
 
   if (!dialog) {
     return null;
   }
   const readonlyLabel = dialog.previewLabel || (dialog.fileName.endsWith(".record.log") ? "录制预览" : "尾部预览");
-  const isStructuredPreview = dialog.previewKind === "archive" || dialog.previewKind === "class";
   const previewClassName = `dialog-shell preview-dialog${dialog.maximized ? " dialog-shell-maximized preview-dialog-maximized" : ""}${dialog.previewKind && dialog.previewKind !== "text" ? ` preview-dialog-${dialog.previewKind}` : ""}`;
+  const archiveCount = dialog.archiveInfo?.entryCount ?? dialog.archiveEntries?.length ?? 0;
+  const activeKind = dialog.previewKind ?? "text";
+  const segmentItems: Array<{ key: string; label: string; active: boolean }> = [
+    { key: "text", label: "源码", active: activeKind === "text" },
+    { key: "archive", label: `归档 · ${archiveCount} 项`, active: activeKind === "archive" },
+    { key: "class", label: "Class", active: activeKind === "class" },
+  ];
+  const eol = dialog.content.includes("\r\n") ? "CRLF" : "LF";
 
   return (
     <div className="confirm-backdrop preview-backdrop">
       <div
+        ref={dialogRef}
         className={previewClassName}
         onMouseDown={(event) => {
           const target = event.target as HTMLElement;
@@ -111,50 +286,80 @@ export function FilePreviewDialog(props: FilePreviewDialogProps) {
         }}
       >
         <div className="dialog-titlebar preview-header">
-          <div className="preview-title">
-            {dialog.fileName}
-            {dialog.readOnly
-              ? <span className="preview-readonly-badge">只读 · {readonlyLabel} · {formatBytes(dialog.size)}</span>
-              : dialog.content !== dialog.originalContent ? <span className="preview-dirty"> (已修改)</span> : null
-            }
-          </div>
-          <div className="preview-meta">
-            <span>{formatBytes(dialog.size)}</span>
-            {dialog.loading ? <span className="preview-loading-badge">加载中…</span> : null}
+          <b className="preview-title" title={dialog.filePath}>{dialog.fileName}</b>
+          {dialog.readOnly ? (
+            <span className="chip preview-chip-gold">{readonlyLabel} · {formatBytes(dialog.size)}</span>
+          ) : null}
+          {dialog.readOnly ? <span className="chip preview-chip-muted">只读</span> : null}
+          {!dialog.readOnly && dialog.content !== dialog.originalContent ? (
+            <span className="preview-dirty">已修改</span>
+          ) : null}
+          {dialog.loading ? <span className="preview-loading-badge">加载中…</span> : null}
+          <span className="preview-header-spacer" />
+          <div className="seg preview-view-seg" role="tablist" aria-label="预览视图">
+            {segmentItems.map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                role="tab"
+                aria-selected={item.active}
+                aria-disabled={!item.active}
+                tabIndex={item.active ? 0 : -1}
+                className={item.active ? "on" : undefined}
+                title={item.active ? item.label : `${item.label}（当前文件不支持）`}
+              >
+                {item.label}
+              </button>
+            ))}
           </div>
           <div className="preview-actions">
-            <button type="button" className="preview-save-btn" onClick={onDownload}>
-              下载
+            <button type="button" className="preview-icon-btn" title="下载" aria-label="下载" onClick={onDownload}>
+              <Download size={14} strokeWidth={1.9} />
             </button>
-            {!isStructuredPreview ? (
-              <button type="button" className="preview-save-btn" onClick={() => setEditorSearchToken((token) => token + 1)}>
-                搜索
-              </button>
-            ) : null}
-            {!dialog.readOnly && (
-              <button
-                type="button"
-                className={`preview-save-btn ${dialog.content === dialog.originalContent || dialog.saving ? "preview-save-btn-disabled" : ""}`}
-                onClick={onSave}
-                disabled={dialog.content === dialog.originalContent || dialog.saving}
-              >
-                {dialog.saving ? "保存中..." : "保存"}
-              </button>
-            )}
             <button
               type="button"
-              className="preview-maximize-btn"
+              className="preview-icon-btn"
               title={dialog.maximized ? "还原窗口" : "最大化"}
+              aria-label="最大化"
               onClick={onToggleMaximize}
             >
               {dialog.maximized
-                ? <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3"><rect x="3.5" y="5" width="7" height="6" rx="1"/><path d="M5 5V3.5a1 1 0 011-1h4.5a1 1 0 011 1V8a1 1 0 01-1 1H9"/></svg>
-                : <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3"><rect x="2.5" y="2.5" width="9" height="9" rx="1.5"/></svg>
-              }
+                ? <Minimize2 size={14} strokeWidth={1.8} />
+                : <Maximize2 size={14} strokeWidth={1.8} />}
             </button>
-            <button type="button" className="preview-close" onClick={onClose}>
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3.5 3.5l7 7M10.5 3.5l-7 7"/></svg>
+            <button type="button" className="preview-icon-btn preview-close-icon" title="关闭" aria-label="关闭" onClick={onClose}>
+              <X size={14} strokeWidth={2} />
             </button>
+            {!dialog.readOnly ? (
+              <span className="preview-more">
+                <button
+                  type="button"
+                  className="preview-icon-btn"
+                  title="更多"
+                  aria-label="更多"
+                  aria-expanded={moreOpen}
+                  onClick={() => setMoreOpen((open) => !open)}
+                >
+                  <MoreHorizontal size={14} strokeWidth={1.9} />
+                </button>
+                {moreOpen ? (
+                  <div className="preview-more-menu" role="menu">
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="preview-more-item"
+                      disabled={dialog.content === dialog.originalContent || dialog.saving}
+                      onClick={() => {
+                        setMoreOpen(false);
+                        onSave();
+                      }}
+                    >
+                      {dialog.saving ? "保存中…" : "保存 ⌘S"}
+                    </button>
+                  </div>
+                ) : null}
+              </span>
+            ) : null}
           </div>
         </div>
         {dialog.loading ? (
@@ -165,17 +370,72 @@ export function FilePreviewDialog(props: FilePreviewDialogProps) {
         ) : isStructuredPreview ? (
           <StructuredPreview dialog={dialog} theme={theme} onPreviewArchiveEntry={onPreviewArchiveEntry} />
         ) : (
-          <CodeEditor
-            value={dialog.content}
-            fileName={dialog.fileName}
-            documentKey={dialog.filePath}
-            theme={theme}
-            readOnly={dialog.readOnly}
-            openSearchToken={editorSearchToken}
-            onChange={onChange}
-            onSave={onSave}
-          />
+          <>
+            <div className="preview-searchbar">
+              <span className="preview-search-shell">
+                <Search size={11} strokeWidth={2} />
+                <input
+                  ref={search.inputRef}
+                  value={search.query}
+                  onChange={(event) => search.setQuery(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      search.step(event.shiftKey ? -1 : 1);
+                    }
+                  }}
+                  placeholder="在文件中搜索…"
+                  aria-label="在文件中搜索"
+                />
+              </span>
+              <span className="preview-search-count">
+                {search.query ? `${search.stats.current} / ${search.stats.total}` : ""}
+              </span>
+              <button
+                type="button"
+                className="preview-search-nav"
+                title="上一个"
+                aria-label="上一个匹配"
+                disabled={!search.stats.total}
+                onClick={() => search.step(-1)}
+              >
+                <ChevronLeft size={12} strokeWidth={2} />
+              </button>
+              <button
+                type="button"
+                className="preview-search-nav"
+                title="下一个"
+                aria-label="下一个匹配"
+                disabled={!search.stats.total}
+                onClick={() => search.step(1)}
+              >
+                <ChevronRight size={12} strokeWidth={2} />
+              </button>
+              <span className="preview-search-spacer" />
+              <span className="preview-search-range">
+                {`${search.range.from.toLocaleString("en-US")} – ${search.range.to.toLocaleString("en-US")} 行 · 共 ${search.range.total.toLocaleString("en-US")} 行`}
+              </span>
+            </div>
+            <CodeEditor
+              value={dialog.content}
+              fileName={dialog.fileName}
+              documentKey={dialog.filePath}
+              theme={theme}
+              readOnly={dialog.readOnly}
+              onChange={onChange}
+              onSave={onSave}
+            />
+          </>
         )}
+        {!dialog.loading && !isStructuredPreview ? (
+          <div className="preview-footer">
+            <span className="preview-footer-note">
+              {dialog.readOnly ? "只读 · 大文件仅加载最后 1MB" : "可编辑文件：⌘S 保存回写远程"}
+            </span>
+            <span className="preview-footer-spacer" />
+            <span className="preview-footer-meta">UTF-8 · {eol} · Geist Mono 12px</span>
+          </div>
+        ) : null}
         <div className="preview-resize-handle" />
       </div>
     </div>
