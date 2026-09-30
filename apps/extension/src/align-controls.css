@@ -1,0 +1,101 @@
+/* ============================================================
+   align-controls.css — 控件统一（用户决策 2026-09-30）
+   ------------------------------------------------------------
+   背景：theme-modern.css 的全局按钮此前硬编码 `background:#171717`（黑底白字），
+        导致「未单独定义样式的按钮」全部落成黑按钮，与 accent 蓝主按钮并存 →
+        用户观感「有蓝有黑」。现已改为跟随主题 token（见 theme-modern.css §8）。
+   本文件负责两件收尾事，全部引用主题 token，不写死色值：
+     1) 深色表面护栏：终端分屏栏按钮是深色表面上的透明按钮，不能被全局
+        按钮规则（白底）命中 —— 补带 `.theme-modern` 前缀的同规则。
+     2) 「检索 │ LIVE」竖直分隔线 = 1px × 20px var(--line)
+        （原型 prototype.html 第 409 行）。
+   ============================================================ */
+
+/* ---------- 1. 深色表面 · 终端分屏栏按钮 ---------- */
+/* styles-terminal-workspace.css 的 `.terminal-pane-bar-actions button` 无
+   `.theme-modern` 前缀（0,1,1），会被后加载的全局 `.theme-modern button` 压成白底。
+   此处以同特异性 + 靠后 + `.theme-modern` 前缀复位为「深色表面透明按钮」。 */
+.theme-modern .terminal-pane-bar-actions button {
+  height: auto;
+  min-height: var(--ctl-h);
+  min-width: var(--ctl-h);
+  padding: 0 6px;
+  border: none;
+  border-radius: var(--ctl-radius);
+  background: transparent;
+  color: color-mix(in srgb, var(--shell-ink) 55%, transparent);
+  font-size: var(--fs-2xs);
+  box-shadow: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.theme-modern .terminal-pane-bar-actions button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--shell-ink) 10%, transparent);
+  color: var(--shell-ink);
+}
+
+/* ---------- 2. 「检索 │ LIVE」竖直分隔线 ---------- */
+/* 原型 409 行：<span style="width:1px;height:20px;background:var(--line)">，
+   位于「检索」按钮与「LIVE」按钮之间。实现里 LIVE 位于 .toolbar-search-actions
+   的首位，故以该容器的 ::before 呈现这条线。
+   仅在宽屏（≥1181px，检索与 LIVE 同排）显示；<1180px 时该区换行到独立一行，
+   行首留一条孤立竖线反而突兀，故隐藏。 */
+@media (min-width: 1181px) {
+  .theme-modern .toolbar-commandbar .toolbar-search-actions::before {
+    content: "";
+    flex: none;
+    width: 1px;
+    height: 20px;
+    background: var(--line);
+  }
+}
+
+/* ---------- 3. 扁平行内按钮：复位高度 ----------
+   默认按钮规则给了标准高度 --ctl-h(28px)。下列控件是「行内可点文本/图标」
+   （表头排序、折叠开关、下拉箭头、归档整行、大纲行），靠自身 padding 决定高度，
+   不应被拉成 28px。此处仅复位 height，其余属性仍由各自类规则决定。 */
+.theme-modern .table-head-button,
+.theme-modern .settings-toggle-button,
+.theme-modern .tsc-dropdown button,
+.theme-modern .tai-dropdown button,
+.theme-modern button.archive-preview-row,
+.theme-modern .archive-manager-preview button.archive-preview-row,
+.theme-modern .class-outline-row,
+.theme-modern .class-ide-tabs button {
+  height: auto;
+}
+
+/* ---------- 4. 主按钮（强调色）统一 ----------
+   全站「主操作」按钮统一为 accent 底 + --on-accent 字，全部随主题令牌。
+   含此前已存在但硬编码 #fff 的 settings-primary-action / primary-action /
+   search-run-button，一并收口到 --on-accent（与 .primary-button 同源）。 */
+.theme-modern .primary-button,
+.theme-modern .ghost-button.settings-primary-action,
+.theme-modern .ghost-button.primary-action,
+.theme-modern button.search-run-button {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+  font-weight: 550;
+}
+.theme-modern .primary-button:hover:not(:disabled),
+.theme-modern .ghost-button.settings-primary-action:hover:not(:disabled),
+.theme-modern .ghost-button.primary-action:hover:not(:disabled),
+.theme-modern button.search-run-button:hover:not(:disabled) {
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+  color: var(--on-accent);
+}
+
+/* ---------- 3. 前置图标搜索框 · 输入框留白兜底 ---------- */
+/* 现象：多处「放大镜图标 + 输入框」的搜索框，图标叠在占位符/文字上。
+   根因：主题基础 input 规则（theme-modern.css §7 的 :not 链、theme-modern-v2.css
+   的 .xdrawer 通配）优先级偏高，把各场景写的 padding-left 压成 8~10px。
+   此处统一兜底：只要输入框在图标 shell 里，就强制留出图标位（padding-left 28px）。
+   各场景已有更精细 padding-left 的（如 preview 的 25px）不受影响——它们的
+   规则在自身上下文里本就赢过主题基础规则。 */
+.theme-modern .keyword-shell > .command-input-keyword,
+.theme-modern .xdrawer .xdrawer-search-shell > input {
+  padding-left: 28px;
+}

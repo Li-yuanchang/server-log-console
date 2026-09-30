@@ -1,0 +1,217 @@
+/* align-s9-monitor.css — S9 工具抽屉（监控记录时序图）对齐原型（prototype.html s9:828-922）
+   隔离文件：仅由 S9 修复批次维护，最后加载。
+   排除项：字号体系（--fs-*）为用户有意调整，不回改。
+   全部规则加 `.theme-modern` 前缀：Drawer portal 已包壳，令牌/后代选择器恢复命中。 */
+
+/* ------------------------------------------------------------
+   0. 面板底色与内边距（原型 dbody：var(--panel) 白底、padding 12px 16px、gap 12）
+   实现侧 `.server-status-panel` 带蓝色径向渐变 + `.server-status-scroll` 12px 侧距，
+   原型为纯白底、16px 侧距；此处归位（令牌在 portal 壳内已可解析）。 */
+.theme-modern .server-status-panel {
+  background: var(--panel);
+  color: var(--ink);
+}
+.theme-modern .server-status-panel .server-status-scroll {
+  padding: 12px 16px 14px;
+}
+
+/* ------------------------------------------------------------
+   1. 关键信息禁省略号（原型 decision ⑥）：无缝滚动 marq
+   原型 79-81 行：容器 overflow hidden + nowrap + flex；子 span 内联块，
+   右 padding 28px，9s 线性循环 translateX(0 → -50%)（内容复制两遍实现无缝）。
+   实现侧此前无 .marq/@keyframes，这里补齐。 */
+@keyframes marq {
+  0%, 10% { transform: translateX(0); }
+  90%, 100% { transform: translateX(-50%); }
+}
+.theme-modern .marq {
+  display: flex;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.theme-modern .marq > span {
+  display: inline-block;
+  padding-right: 28px;
+  animation: marq 9s linear infinite;
+}
+
+/* ------------------------------------------------------------
+   2. 指标迷你卡（原型 880-887）：卡 padding 9px 11px 7px、r8（值字号保持实现侧 token）
+   卡片行直接排在滚动区内（无外层标题卡），故去掉原容器内边距、补卡间距。 */
+.theme-modern .server-status-trend-cards {
+  padding: 0;
+  margin-bottom: 10px;
+}
+.theme-modern .server-status-trend-card {
+  padding: 9px 11px 7px;
+}
+
+/* ------------------------------------------------------------
+   3. 「监控记录」时序图卡（原型 888-906）
+   卡：1px 描边 + r8 + overflow hidden + 白底 */
+.theme-modern .server-status-monitor {
+  flex: none;
+  margin-bottom: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-m);
+  background: var(--panel);
+  overflow: hidden;
+}
+
+/* 卡头：flex 单行（decision ⑤ 控件永不内部换行）；padding 8px 12px + 下边框 */
+.theme-modern .server-status-monitor-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.theme-modern .server-status-monitor-title {
+  flex: none;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+}
+/* 红色异常 chip：可收缩但不下沉省略号（内部走 marq 滚动） */
+.theme-modern .server-status-monitor-chip {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+.theme-modern .server-status-monitor-spacer { flex: 1 1 auto; }
+/* 时间范围分段（原型 .seg.lite：高 28、选中 accent-soft+accent，复用 v2 规则） */
+.theme-modern .server-status-monitor-range { flex: none; }
+
+/* 大图容器：padding 8px 10px 2px（原型 897） */
+.theme-modern .server-status-monitor-chart-wrap { padding: 8px 10px 2px; }
+.theme-modern .server-status-monitor-chart {
+  display: block;
+  width: 100%;
+  height: 150px;
+}
+.theme-modern .server-status-monitor-chart-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 150px;
+  font-size: var(--fs-2xs);
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+
+/* 图例行：flex gap 14、padding 2px 12px 8px（原型 899） */
+.theme-modern .server-status-monitor-legend {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 2px 12px 8px;
+  font-size: var(--fs-2xs);
+  color: var(--ink-soft);
+}
+.theme-modern .server-status-monitor-legend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+.theme-modern .server-status-monitor-legend .swatch {
+  width: 10px;
+  height: 2px;
+  border-radius: 1px;
+  flex: none;
+}
+.theme-modern .server-status-monitor-legend .swatch.accent { background: var(--accent); }
+.theme-modern .server-status-monitor-legend .swatch.green { background: var(--green); }
+.theme-modern .server-status-monitor-legend .dot.red {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--red);
+  flex: none;
+}
+.theme-modern .server-status-monitor-span {
+  flex: none;
+  font-family: var(--mono-font-family);
+  font-size: var(--fs-2xs);
+  color: var(--ink-muted);
+}
+
+/* ------------------------------------------------------------
+   4. 「进程 TOP 5」卡（原型 907-913）：等宽 4 行、右「按 CPU」 */
+.theme-modern .server-status-process-card { padding: 0; overflow: hidden; }
+.theme-modern .server-status-process-title {
+  margin: 0;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.theme-modern .server-status-process-title b {
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--ink);
+}
+.theme-modern .server-status-process-sort {
+  margin-left: auto;
+  font-family: var(--mono-font-family);
+  font-size: var(--fs-2xs);
+  font-weight: 400;
+  color: var(--ink-muted);
+}
+.theme-modern .server-status-process-rows {
+  padding: 6px 12px;
+  font-family: var(--mono-font-family);
+  font-size: var(--fs-2xs);
+  color: var(--ink-soft);
+  line-height: 2;
+}
+.theme-modern .server-status-process-row {
+  display: grid;
+  grid-template-columns: 84px 48px 56px minmax(0, 1fr);
+  gap: 8px;
+}
+.theme-modern .server-status-process-name { color: var(--ink-soft); }
+.theme-modern .server-status-process-cpu { color: var(--ink); }
+.theme-modern .server-status-process-mem { color: var(--ink-soft); }
+.theme-modern .server-status-process-args {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  color: var(--ink-soft);
+}
+
+/* ------------------------------------------------------------
+   5. 底部行（原型 914-916）：采样说明 + `pill on 自动` + `btn sm 刷新` */
+.theme-modern .server-status-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 2px;
+}
+.theme-modern .server-status-foot-note {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  font-size: var(--fs-2xs);
+  color: var(--ink-muted);
+}
+.theme-modern .server-status-foot-auto {
+  flex: none;
+  cursor: pointer;
+}
+.theme-modern .server-status-foot-auto:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+/* 原型 .btn.sm：高 24、padding 0 8、r5（特异性需压过 .ghost-button.slim-button 的 26px） */
+.theme-modern .ghost-button.server-status-foot-refresh {
+  flex: none;
+  height: 24px;
+  min-height: 24px;
+  padding: 0 8px;
+  border-radius: 5px;
+  font-size: var(--fs-2xs);
+  gap: 5px;
+}
