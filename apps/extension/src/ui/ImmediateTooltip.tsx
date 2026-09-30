@@ -1,8 +1,22 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { arrow, flip, offset, shift, useFloating } from "@floating-ui/react-dom";
 
 export function ImmediateTooltip({ ownerDocument }: { ownerDocument?: Document }) {
-  const [tip, setTip] = useState<{ t: string; x: number; y: number; b: boolean } | null>(null);
+  const [tip, setTip] = useState<{ t: string; ref: HTMLElement } | null>(null);
+  const arrowRef = useRef<HTMLDivElement | null>(null);
+  const { refs, floatingStyles, placement, middlewareData, update } = useFloating({
+    placement: "top",
+    middleware: [offset(5), flip({ padding: 8 }), shift({ padding: 8 }), arrow({ element: arrowRef, padding: 6 })],
+  });
+  const below = placement.startsWith("bottom");
+
+  useLayoutEffect(() => {
+    if (tip) {
+      refs.setReference(tip.ref);
+      update();
+    }
+  }, [tip, refs, update]);
 
   useEffect(() => {
     const d = ownerDocument ?? document;
@@ -30,9 +44,7 @@ export function ImmediateTooltip({ ownerDocument }: { ownerDocument?: Document }
         el.dataset.instantTip = t;
         el.removeAttribute("title");
       }
-      const r = el.getBoundingClientRect();
-      const b = r.top < 44;
-      setTip({ t, x: r.left + r.width / 2, y: b ? r.bottom + 8 : r.top - 8, b });
+      setTip({ t, ref: el });
     };
     const over = (e: MouseEvent) => {
       const el = find(e.target);
@@ -68,6 +80,27 @@ export function ImmediateTooltip({ ownerDocument }: { ownerDocument?: Document }
   }, [ownerDocument]);
 
   const d = ownerDocument ?? document;
-  if (!tip || !d.body) return null;
-  return createPortal(<div className={`instant-tooltip${tip.b ? " instant-tooltip-below" : ""}`} style={{ left: tip.x, top: tip.y }}>{tip.t}</div>, d.body);
+  // 主题变量定义在 .app-shell（.theme-modern）上，portal 到 body 拿不到，需挂进主题容器
+  const portalTarget = (d.querySelector(".app-shell") as HTMLElement | null) ?? d.body;
+  if (!tip || !portalTarget) return null;
+  const arrowX = middlewareData.arrow?.x;
+  const arrowY = middlewareData.arrow?.y;
+  return createPortal(
+    <div
+      ref={refs.setFloating}
+      className={`instant-tooltip${below ? " instant-tooltip-below" : ""}`}
+      style={floatingStyles}
+    >
+      {tip.t}
+      <div
+        ref={arrowRef}
+        className="instant-tooltip-arrow"
+        style={{
+          ...(arrowX != null ? { left: `${arrowX}px` } : {}),
+          ...(arrowY != null ? { top: `${arrowY}px` } : {}),
+        }}
+      />
+    </div>,
+    portalTarget,
+  );
 }
