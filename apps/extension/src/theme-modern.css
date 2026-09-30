@@ -1,4 +1,40 @@
 /* ============================================================
+   字号体系（统一收口）
+   全库原本 508 处硬编码 font-size、16 种取值 → 收敛为 7 档语义化 token。
+   定义在 :root 而非 .theme-modern —— 因为 styles-*.css 是经典/现代主题
+   共用的基础样式，若只在 .theme-modern 下定义，经典主题会因取不到值
+   而回退到浏览器默认 16px。
+   组件一律引用 token，禁止再写裸 px。
+   ============================================================ */
+:root {
+  --fs-2xs: 11px;    /* 极小：徽标、计数、时间戳、主机地址 */
+  --fs-xs: 12px;     /* 次要：辅助说明、表头 */
+  --fs-sm: 13px;     /* 小：分组标签、次要正文、服务器名 */
+  --fs-base: 14px;   /* 基准（系统字号） */
+  --fs-md: 15px;     /* 中：小标题 */
+  --fs-lg: 16px;     /* 大：区块标题 */
+  --fs-xl: 18px;     /* 特大：页面标题 */
+  --fs-title: 15px;  /* 兼容旧引用 */
+}
+
+/* ============================================================
+   控件几何刻度（统一收口）
+   按钮 / 输入框 / 下拉 / 分段 等表单控件统一走这套 token。
+   规范：组件引用 token，禁止再写裸 px（token 定义处允许字面值）。
+   刻度对齐原型 .btn / .input（prototype.html 45–59 行）
+   ============================================================ */
+:root {
+  --ctl-h: 28px;        /* 标准控件高度（原型 .btn / .input 28px） */
+  --ctl-h-sm: 24px;     /* 紧凑控件高度（原型 .btn.sm 24px） */
+  --ctl-radius: 6px;    /* 控件圆角（原型 --r-s） */
+  --ctl-pad-x: 11px;    /* 标准控件左右内边距（原型 .btn 0 11px） */
+  --ctl-pad-x-sm: 8px;  /* 紧凑控件左右内边距（原型 .btn.sm 0 8px） */
+  --ctl-icon-gap: 6px;  /* 图标与文字间距（原型 .btn gap 6px） */
+  --ctl-edge: 8px;      /* 控件之间的呼吸间距 */
+  --on-accent: #ffffff; /* 强调色底之上的前景色（主按钮文字/图标） */
+}
+
+/* ============================================================
    Modern Theme — Vercel + Cal.com 风格
    纯白底 + 黑白主调 + Vercel Blue 强调 + Geist 字体
    ============================================================ */
@@ -13,22 +49,40 @@
 }
 
 .theme-modern {
+  font-size: var(--fs-base);
   --bg: #fafafa;
   --panel: #ffffff;
   --panel-strong: #ffffff;
   --panel-muted: #f5f5f5;
   --ink: #171717;
   --ink-soft: #666666;
-  --ink-muted: #888888;
+  --ink-muted: #8f8f8f;
   --line: #eaeaea;
   --line-strong: #d4d4d4;
   --accent: #0070f3;
   --accent-strong: #0060df;
-  --accent-soft: rgba(0, 112, 243, 0.07);
+  --accent-soft: rgba(0, 112, 243, 0.08);
   --green: #0a7b3e;
+  /* 状态点 / 语义色（原型 :root 同名令牌，此前被引用却未定义，靠硬编码兜底） */
+  --green-dot: #22c55e;
+  --red: #d41313;
+  --red-soft: rgba(212, 19, 19, 0.07);
+  --amber: #b45309;
+  --amber-soft: rgba(180, 83, 9, 0.09);
+  --warning: #b45309;
+  /* 圆角刻度（原型 --r-s / --r-m / --r-l） */
+  --r-s: 6px;
+  --r-m: 8px;
+  --r-l: 10px;
+  /* 等宽字体：终端 / 日志 / 行号统一取此值 */
+  --mono: "Geist Mono", "SFMono-Regular", "Menlo", "Consolas", monospace;
+  --mono-font-family: var(--mono);
+  /* 轻量阴影（--shadow-pop 的收敛版，用于悬浮 pill / 小卡片） */
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.06);
   --shell: #0a0a0a;
   --shell-soft: #111111;
   --shell-ink: #e8e8e8;
+  --shell-mut: #5c6b7a;
   --sidebar-bg: #ffffff;
   --sidebar-line: #eaeaea;
   --app-font-family: "Geist", "Inter", -apple-system, "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
@@ -57,7 +111,11 @@
   --panel-muted: #edf6f8;
   --line: rgba(49, 95, 141, 0.16);
   --line-strong: rgba(49, 95, 141, 0.28);
-  --accent-soft: rgba(47, 128, 192, 0.1);
+  /* accent 三件套 + on-accent 随方案联动（主按钮/焦点色整体跟随主题） */
+  --accent: #31708f;
+  --accent-strong: #275a73;
+  --accent-soft: rgba(49, 112, 143, 0.1);
+  --on-accent: #ffffff;
   --sidebar-bg: rgba(248, 252, 253, 0.92);
   --sidebar-line: rgba(49, 95, 141, 0.16);
 }
@@ -69,7 +127,10 @@
   --panel-muted: #f2eadc;
   --line: rgba(120, 88, 48, 0.16);
   --line-strong: rgba(120, 88, 48, 0.28);
-  --accent-soft: rgba(120, 88, 48, 0.1);
+  --accent: #8a6a3f;
+  --accent-strong: #71552f;
+  --accent-soft: rgba(138, 106, 63, 0.12);
+  --on-accent: #ffffff;
   --sidebar-bg: rgba(255, 252, 244, 0.92);
   --sidebar-line: rgba(120, 88, 48, 0.16);
 }
@@ -295,28 +356,29 @@
   width: 28px;
   height: 28px;
   min-width: 28px;
-  border-radius: 6px;
+  border-radius: var(--r-m);
   border: 1px solid var(--line);
   background: var(--panel);
   color: var(--ink-soft);
-  transition: background 120ms ease;
+  transition: background 150ms ease, border-color 150ms ease, color 150ms ease, box-shadow 150ms ease;
   box-shadow: 0 1px 2px rgba(0,0,0,0.04);
 }
 
 .theme-modern .sidebar-head .icon-button:hover {
-  background: var(--panel-muted);
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 26%, transparent);
   color: var(--ink);
 }
 
 .theme-modern .topbar-title {
-  font-size: 14px;
+  font-size: var(--fs-base);
   font-weight: 600;
   color: var(--ink);
   letter-spacing: -0.02em;
 }
 
 .theme-modern .panel-head h2 {
-  font-size: 13px;
+  font-size: var(--fs-sm);
   font-weight: 600;
   color: var(--ink);
 }
@@ -334,7 +396,7 @@
 
 .theme-modern .pane-title,
 .theme-modern .pane-title-row strong {
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   font-weight: 500;
   color: var(--ink-soft);
   letter-spacing: 0;
@@ -342,17 +404,19 @@
 }
 
 .theme-modern .pane-title-row span {
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   color: var(--ink-muted);
 }
 
 .theme-modern .pane-section input {
-  font-size: 12px;
-  background: var(--panel-muted);
-  border: none;
+  font-size: var(--fs-xs);
+  /* recon S1-8：原型 .input = 白底 + 1px 边框 + 圆角 6（prototype.html 第 57 / 364 行） */
+  background: var(--panel);
+  border: 1px solid var(--line);
   color: var(--ink);
-  border-radius: 8px;
-  padding: 7px 12px;
+  border-radius: 6px;
+  padding: 0 10px;
+  height: 28px;
 }
 
 .theme-modern .pane-section input::placeholder {
@@ -360,8 +424,8 @@
 }
 
 .theme-modern .pane-section input:focus {
-  border: none;
-  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.12);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
   background: var(--panel);
 }
 
@@ -377,7 +441,7 @@
 .theme-modern .server-group { gap: 0; }
 
 .theme-modern .server-group-title {
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   font-weight: 500;
   color: var(--ink-muted);
   padding: 12px 8px 4px;
@@ -430,7 +494,7 @@
   border-color: transparent;
   background: transparent;
   color: var(--ink-muted);
-  font-size: 10px;
+  font-size: var(--fs-2xs);
   font-weight: 500;
   box-shadow: none;
 }
@@ -470,7 +534,7 @@
 }
 
 .theme-modern .server-item strong {
-  font-size: 13px;
+  font-size: var(--fs-sm);
   font-weight: 500;
   color: var(--ink);
   line-height: 1.4;
@@ -482,7 +546,7 @@
 }
 
 .theme-modern .server-item span {
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--ink-muted);
 }
 
@@ -490,7 +554,7 @@
   border-left: none;
   padding-left: 0;
   color: var(--ink-muted);
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   font-variant-numeric: tabular-nums;
   opacity: 0.7;
   transition: opacity 150ms ease;
@@ -561,7 +625,7 @@
 
 .theme-modern .compact-activity-panel .pane-title-row .pane-title {
   color: var(--ink-soft);
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   font-weight: 500;
   letter-spacing: 0;
   text-transform: none;
@@ -569,19 +633,19 @@
 
 .theme-modern .compact-activity-panel .pane-title-row span {
   color: var(--ink-muted);
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   line-height: 1;
 }
 
 .theme-modern .status-row { gap: 8px; }
 
 .theme-modern .status-row span {
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   color: var(--ink-muted);
 }
 
 .theme-modern .status-row strong {
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--ink);
 }
 
@@ -625,7 +689,7 @@
   align-items: baseline;
   gap: 6px;
   padding: 2px 10px;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   line-height: 1.5;
   color: var(--ink-soft);
   transition: background 100ms ease;
@@ -638,7 +702,7 @@
 .theme-modern .activity-log-time {
   flex-shrink: 0;
   font-family: "Geist Mono", "SFMono-Regular", "Consolas", monospace;
-  font-size: 10px;
+  font-size: var(--fs-2xs);
   color: var(--ink-muted);
   opacity: 0.6;
 }
@@ -649,70 +713,103 @@
   word-break: break-word;
 }
 
-/* --- 7. 输入框 --- */
-.theme-modern input,
+/* --- 7. 输入框 ---
+   统一走控件 token（--ctl-*）与主题色 token，禁止裸值。
+   对齐原型 .input（prototype.html 第 57 行）：高 28 / 白底 / 1px var(--line) / r6 / padding 0 10px。
+   排除特殊类型（滑杆 / 取色 / 复选 / 单选 / 文件 / 按钮型 input），
+   它们不是「文本框」，不应被套上高度与边框。
+   注意：排除列表必须包在 :where() 里——若直接写成 :not() 链，
+   每个属性选择器都会抬高优先级（合计约 0,9,1），把所有
+   「带前图标输入框留 padding-left」的场景规则全部压掉，导致图标与文字重叠。 */
+.theme-modern input:where(:not([type="range"], [type="color"], [type="checkbox"], [type="radio"], [type="file"], [type="image"], [type="submit"], [type="button"], [type="reset"])),
 .theme-modern select,
 .theme-modern textarea {
-  padding: 6px 10px;
-  border-radius: 6px;
+  height: var(--ctl-h);
+  padding: 0 10px;
+  border-radius: var(--ctl-radius);
   border: 1px solid var(--line);
   background: var(--panel);
   color: var(--ink);
-  font-size: 12px;
+  font-size: var(--fs-xs);
   transition: border-color 150ms ease, box-shadow 150ms ease;
 }
 
-.theme-modern input:focus,
+.theme-modern input:where(:not([type="range"], [type="color"], [type="checkbox"], [type="radio"], [type="file"], [type="image"], [type="submit"], [type="button"], [type="reset"])):focus,
 .theme-modern select:focus,
 .theme-modern textarea:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px rgba(0, 112, 243, 0.15);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+  outline: none;
+}
+
+.theme-modern textarea {
+  height: auto;
+  padding: 6px 10px;
 }
 
 .theme-modern .command-input { height: 32px; }
 
 .theme-modern .command-input-keyword {
-  font-size: 13px;
+  font-size: var(--fs-sm);
   font-weight: 400;
-  border: none !important;
-  background: var(--panel-muted) !important;
-  border-radius: 8px !important;
+  /* recon S1-22：原型工具栏搜索框 = .input（高 28 / 白底 / 1px 边框 / r6，
+     prototype.html 第 57 / 405 行），此前误做成灰底无边框 r8 高 30。 */
+  height: 28px;
+  border: 1px solid var(--line) !important;
+  background: var(--panel) !important;
+  border-radius: 6px !important;
 }
 
 .theme-modern .command-input-keyword:focus {
-  border: none !important;
-  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.12);
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 2px var(--accent-soft);
   background: var(--panel) !important;
 }
 
 .theme-modern .command-input-file {
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--ink-muted);
   background: var(--panel-muted);
 }
 
 .theme-modern label {
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   color: var(--ink-soft);
   gap: 4px;
 }
 
-/* --- 8. 按钮 --- */
-.theme-modern button {
-  border: none;
-  border-radius: 6px;
-  padding: 6px 14px;
-  background: #171717;
-  color: #ffffff;
+/* --- 8. 按钮 ---
+   默认按钮 = 原型 .btn（白底 + 1px 描边 + 深字），走 --ctl-* 与主题色 token。
+   ① 此前硬编码 background:#171717（黑底白字），使未定义样式的按钮全落成黑按钮，
+      与 accent 蓝主按钮并存 → 「有黑有蓝」。现改为跟随主题 token。
+   ② 选择器用 :where(.theme-modern) button（特异性 0,0,1），仅作「默认值」：
+      任何组件自己的类规则（.ghost-button / .archive-preview-row / …）都能覆盖它。
+      此前写死为 `.theme-modern button`（0,1,1），反而压过 .archive-preview-row 等
+      （0,1,0）扁平按钮规则，把整行按钮刷成默认色 —— 本次一并修正。 */
+:where(.theme-modern) button {
+  border: 1px solid var(--line);
+  border-radius: var(--ctl-radius);
+  height: var(--ctl-h);
+  padding: 0 var(--ctl-pad-x);
+  background: var(--panel);
+  color: var(--ink);
   font-weight: 500;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   cursor: pointer;
   transition: background 120ms ease, box-shadow 120ms ease, color 120ms ease, border-color 120ms ease;
   box-shadow: none;
 }
 
-.theme-modern button:hover:not(:disabled) {
-  filter: brightness(0.92);
+:where(.theme-modern) button:hover:not(:disabled) {
+  background: var(--panel-muted);
+}
+
+:where(.theme-modern) button:active:not(:disabled):not(.file-row) {
+  transform: none;
+}
+
+:where(.theme-modern) button:disabled {
+  opacity: 0.45;
 }
 
 .theme-modern button:active:not(:disabled):not(.file-row) {
@@ -720,7 +817,7 @@
 }
 
 .theme-modern button:disabled {
-  opacity: 0.35;
+  opacity: 0.45;
 }
 
 .theme-modern .ghost-button {
@@ -731,10 +828,8 @@
   box-shadow: none;
 }
 
-.theme-modern .ghost-button:hover:not(:disabled):not(.tab-active) {
-  background: var(--panel-muted);
-  border-color: var(--line-strong);
-}
+/* 旧 hover（panel-muted + line-strong）已废弃：统一收口到 theme-modern-v2.css §1
+   的 accent-soft / accent 26% 描边主题联动 hover，避免旧规则以更高优先级压住新规格。 */
 
 .theme-modern .secondary-button {
   background: var(--accent);
@@ -744,11 +839,13 @@
   background: var(--accent-strong);
 }
 
+/* 图标按钮统一规格（对齐原型 .btn.icon）：28×28 正方形 / 圆角 --r-m / 图标 14。
+   hover 跟随主题（accent-soft 底），文字加深；过渡与 .btn 一致 150ms。 */
 .theme-modern .icon-button {
   width: 28px;
   height: 28px;
   min-width: 28px;
-  border-radius: 6px;
+  border-radius: var(--r-m);
   padding: 0;
   display: inline-flex;
   align-items: center;
@@ -756,10 +853,11 @@
   background: transparent;
   color: var(--ink-soft);
   box-shadow: none;
+  transition: background 150ms ease, border-color 150ms ease, color 150ms ease, box-shadow 150ms ease;
 }
 
 .theme-modern .icon-button:hover:not(:disabled) {
-  background: rgba(0, 0, 0, 0.05);
+  background: var(--accent-soft);
   color: var(--ink);
 }
 
@@ -787,9 +885,10 @@
   stroke: currentColor;
 }
 
+/* 呼吸与统一按钮系统一致（0 12px），高度交由基础 28px 规格 */
 .theme-modern .slim-button {
   min-height: 28px;
-  padding: 0 10px;
+  padding: 0 12px;
 }
 
 /* Electron immersive titlebar: handled via inline styles in App.tsx */
@@ -844,7 +943,7 @@
   border-radius: 8px;
   background: transparent;
   color: var(--ink-soft);
-  font-size: 12px;
+  font-size: var(--fs-xs);
   font-weight: 600;
   cursor: pointer;
   pointer-events: auto;
@@ -894,16 +993,18 @@
 }
 
 .theme-modern .toolbar-action-button {
-  min-height: 32px;
-  padding: 0 14px;
-  font-size: 13px;
-  font-weight: 400;
-  border-radius: 999px;
+  /* 对齐统一按钮系统：高 28 / 呼吸 12 / 圆角 --r-m / 过渡 150ms 四属性。 */
+  min-height: 28px;
+  height: 28px;
+  padding: 0 12px;
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  border-radius: var(--r-m);
   border: 1px solid var(--line);
   background: var(--panel);
   color: var(--ink);
-  gap: 5px;
-  transition: background 120ms ease, border-color 120ms ease, color 120ms ease, box-shadow 120ms ease;
+  gap: 6px;
+  transition: background 150ms ease, border-color 150ms ease, color 150ms ease, box-shadow 150ms ease;
   box-shadow: none;
 }
 
@@ -935,7 +1036,7 @@
   border-radius: 999px;
   border: none;
   background: transparent;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   font-weight: 400;
   color: var(--ink-muted);
   box-shadow: none;
@@ -965,7 +1066,7 @@
   background: var(--panel);
   box-shadow: none;
   color: var(--ink-soft);
-  font-size: 12px;
+  font-size: var(--fs-xs);
   gap: 4px;
 }
 
@@ -977,7 +1078,7 @@
 
 .theme-modern .toolbar-hint,
 .theme-modern .toolbar-summary {
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   color: var(--ink-muted);
 }
 
@@ -1036,7 +1137,7 @@
 
 .theme-modern .result-tab-main {
   padding: 4px 10px;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   font-weight: 500;
   color: var(--ink-muted);
   border-radius: 8px;
@@ -1058,7 +1159,7 @@
   width: 22px;
   height: 22px;
   border-radius: 6px;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   cursor: pointer;
   transform: none;
   transition: none;
@@ -1084,7 +1185,7 @@
   border-radius: 0;
   border: none;
   background: var(--log-viewer-background);
-  font-size: 12px;
+  font-size: var(--fs-xs);
   line-height: 1.65;
   padding: 4px 0;
   box-shadow: none;
@@ -1095,7 +1196,7 @@
   border: none;
   border-top: none;
   background: var(--log-viewer-background);
-  font-size: 12px;
+  font-size: var(--fs-xs);
   line-height: 1.65;
   padding: 0;
   box-shadow: none;
@@ -1139,7 +1240,7 @@
   border-radius: 999px;
   background: #f59e0b;
   color: #1c1917;
-  font-size: 10px;
+  font-size: var(--fs-2xs);
   font-weight: 700;
   letter-spacing: 0.04em;
   vertical-align: middle;
@@ -1225,7 +1326,7 @@
 .theme-modern .reader-rail-badge {
   border-radius: 4px;
   background: var(--log-viewer-background, var(--shell));
-  font-size: 10px;
+  font-size: var(--fs-2xs);
   color: var(--shell-ink);
 }
 
@@ -1248,7 +1349,7 @@
   background: var(--log-viewer-background);
   color: var(--shell-ink);
   border-radius: 4px;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
 }
 
 /* --- 14. 搜索进度 --- */
@@ -1276,13 +1377,13 @@
 }
 
 .theme-modern .search-progress-summary strong {
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   color: #1f2f46;
 }
 
 .theme-modern .search-progress-summary span,
 .theme-modern .search-progress-meta span {
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   color: #475569;
 }
 
@@ -1320,7 +1421,7 @@
   border: none;
   border-radius: 0;
   padding: 4px 10px;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   box-shadow: none;
   border-top: 1px solid var(--line);
 }
@@ -1330,7 +1431,7 @@
   border: 1px solid var(--line);
   background: var(--panel-muted);
   padding: 6px 10px;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   color: var(--ink-soft);
   gap: 4px 10px;
   box-shadow: none;
@@ -1355,7 +1456,7 @@
 }
 
 .theme-modern .compact-meta {
-  font-size: 12px;
+  font-size: var(--fs-xs);
   padding: 8px 16px;
   border-bottom: 1px solid var(--line);
 }
@@ -1387,71 +1488,46 @@
 }
 
 .theme-modern .viewer-floating-header {
-  background: linear-gradient(180deg, rgba(7, 10, 15, 0.96), rgba(7, 10, 15, 0.84));
-  border-bottom: 1px solid rgba(126, 200, 227, 0.14);
+  /* 对齐原型 .pip .ph：主题面板色头部，不再黑色 */
+  background: var(--panel-muted);
+  border-bottom: 1px solid var(--line);
 }
 
 .theme-modern .viewer-floating-header-title strong {
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: var(--fs-sm);
   letter-spacing: -0.01em;
 }
 
 .theme-modern .viewer-floating-header-title span {
   font-family: var(--font-ui);
+  color: var(--ink-muted);
 }
 
+/* 按钮不再写死深色，直接走全局 ghost-button 主题样式（含 hover / tab-active） */
 .theme-modern .viewer-floating-header-actions .ghost-button {
-  background: rgba(19, 28, 40, 0.76);
-  border-color: rgba(148, 163, 184, 0.18);
-  color: #eef2f7;
-}
-
-.theme-modern .viewer-floating-header-actions .ghost-button:hover:not(:disabled) {
-  background: rgba(31, 41, 55, 0.92);
-  border-color: rgba(148, 163, 184, 0.28);
-  color: #f8fbff;
-  filter: none;
-}
-
-.theme-modern .viewer-floating-header-actions .ghost-button.tab-active {
-  background: rgba(34, 58, 94, 0.92);
-  border-color: rgba(126, 200, 227, 0.36);
-  color: #f8fbff;
-}
-
-.theme-modern .viewer-floating-header-actions .ghost-button:hover:not(:disabled) svg,
-.theme-modern .viewer-floating-header-actions .ghost-button.tab-active svg {
-  color: currentColor;
-  opacity: 1;
+  min-width: 28px;
+  width: 28px;
+  min-height: 24px;
+  height: 24px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r-s, 6px);
 }
 
 .theme-modern .viewer-floating-header-actions .btn-live-active,
 .theme-modern .viewer-floating-header-actions .btn-live-active:hover:not(:disabled) {
-  background: rgba(22, 163, 74, 0.22) !important;
-  border-color: rgba(22, 163, 74, 0.4) !important;
-  color: #4ade80 !important;
-  filter: none;
+  color: var(--green, #0a7b3e);
 }
 
 .theme-modern .viewer-floating-header-actions .btn-live-active svg {
-  color: currentColor;
-  opacity: 1;
-  filter: drop-shadow(0 0 4px rgba(74, 222, 128, 0.5));
-}
-
-.theme-modern .viewer-floating-header-actions .btn-highlight-active {
-  background: rgba(239, 68, 68, 0.2) !important;
-  border-color: rgba(248, 113, 113, 0.42) !important;
-  color: #fecaca !important;
-}
-
-.theme-modern .viewer-floating-header-actions .ghost-button.tab-active svg {
   opacity: 1;
 }
 
 .theme-modern .viewer-strip-label {
-  font-size: 12px;
+  font-size: var(--fs-xs);
   font-weight: 500;
   color: var(--ink-muted);
   white-space: nowrap;
@@ -1467,7 +1543,7 @@
   border-radius: 4px;
   background: var(--accent-soft);
   color: var(--accent);
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   font-weight: 600;
   padding: 2px 8px;
 }
@@ -1479,7 +1555,7 @@
   border: 1px solid var(--line);
   background: var(--panel);
   padding: 8px 12px;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   gap: 4px;
   box-shadow: none;
 }
@@ -1507,12 +1583,12 @@
 }
 
 .theme-modern .sidebar-empty-box strong {
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--ink);
 }
 
 .theme-modern .sidebar-empty-box span {
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   line-height: 1.5;
   color: var(--ink-muted);
 }
@@ -1601,7 +1677,7 @@
 .theme-modern .path-history-item {
   padding: 5px 14px;
   font-family: "Geist Mono", "SFMono-Regular", monospace;
-  font-size: 11.5px;
+  font-size: var(--fs-xs);
   background: var(--panel) !important;
   background-image: none !important;
   color: var(--ink) !important;
@@ -1619,11 +1695,17 @@
 
 .theme-modern .workspace-strip {
   gap: 8px;
-  padding: 14px 22px 8px;
+  /* 原型 .tbar：padding 8px 12px → 实测行高 47px（此前 14px 22px 8px 得 41px，偏矮） */
+  padding: 8px 12px;
   min-height: 40px;
   border-bottom: 1px solid var(--line);
   background: var(--panel);
 }
+
+/* 文件浏览工作区的工具行实际命中的是 .file-browser-workbench .workspace-strip。
+   该规则定义在 theme-modern-v2.css（本文件先于 v2 导入，同特异性下 v2 胜出），
+   其 padding/min-height 已对齐原型 .tbar（8px 12px / 47px），此处不再重复定义，
+   避免再出现跨文件提权覆盖。 */
 
 .theme-modern .workspace-session-strip {
   background: var(--panel);
@@ -1741,7 +1823,7 @@
   border: none;
   border-radius: 8px;
   background: var(--panel-muted);
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--ink);
   outline: none;
   transition: box-shadow 120ms ease, background 120ms ease;
@@ -1796,14 +1878,14 @@
 .theme-modern .drop-zone-label {
   color: var(--accent);
   background: var(--panel);
-  box-shadow: var(--shadow-sm, 0 1px 4px rgba(0, 0, 0, 0.06));
+  box-shadow: var(--shadow-sm);
 }
 
 .theme-modern .browser-column-head {
   padding: 10px 16px;
   border-bottom: 1px solid var(--line);
   background: var(--panel);
-  font-size: 12px;
+  font-size: var(--fs-xs);
   min-height: 40px;
   display: flex;
   align-items: center;
@@ -1813,7 +1895,7 @@
 }
 
 .theme-modern .browser-column-head strong {
-  font-size: 12px;
+  font-size: var(--fs-xs);
   font-weight: 500;
   color: var(--ink-soft);
   letter-spacing: 0;
@@ -1821,7 +1903,7 @@
 }
 
 .theme-modern .browser-column-head span {
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   color: var(--ink-muted);
 }
 
@@ -1847,7 +1929,7 @@
   color: var(--accent);
 }
 
-.theme-modern .tree-item strong { font-size: 12px; }
+.theme-modern .tree-item strong { font-size: var(--fs-sm); }
 
 /* Lucide-style icons via CSS mask */
 .theme-modern .entry-icon {
@@ -1932,21 +2014,18 @@
   opacity: 0;
 }
 
-/* Icon button sizing for modern theme */
-.theme-modern .icon-button {
-  width: 30px;
-  height: 30px;
-  min-width: 30px;
-  border-radius: 6px;
-}
-
+/* Icon button sizing for modern theme —— 与上方统一规格收口（旧 30px 覆写删除，仅保留图标 14） */
 .theme-modern .icon-button svg {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
 }
 
 .theme-modern .file-row {
-  padding: 6px 16px 6px 12px;
+  /* 原型 table.tbl td：padding 4px 12px + height 30px。
+     勾选态/非勾选态必须同高（行高由 theme-modern-v2.css 的
+     `.file-table .file-row` 兜底锁定 34px），这里左右内边距与原型一致、
+     上下留 0 由行高统一控制，避免勾选瞬间纵向抖动。 */
+  padding: 0 12px;
   border-radius: 0;
   border: none;
   border-bottom: 1px solid var(--line);
@@ -1979,7 +2058,7 @@
 }
 
 .theme-modern .file-row strong,
-.theme-modern .file-row span { font-size: 13px; }
+.theme-modern .file-row span { font-size: var(--fs-base); }
 
 .theme-modern .file-row-actions {
   background: transparent;
@@ -2031,14 +2110,14 @@
 .theme-modern .table-head-label {
   color: var(--ink-muted);
   font-family: "Geist Mono", "SFMono-Regular", monospace;
-  font-size: 12px;
+  font-size: var(--fs-xs);
 }
 
 .theme-modern .file-table-head {
   padding: 8px 16px 8px 12px;
   background: var(--panel);
   border-bottom: 1px solid var(--line);
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--ink-muted);
   top: 0;
   z-index: 2;
@@ -2081,7 +2160,7 @@
   color: var(--ink-muted);
   border: none;
   box-shadow: none;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   font-weight: 600;
   padding: 0;
   border-radius: 0;
@@ -2122,12 +2201,12 @@
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
-.theme-modern .terminal-panel-bar-info { font-size: 12px; }
+.theme-modern .terminal-panel-bar-info { font-size: var(--fs-xs); }
 
 .theme-modern .terminal-panel-bar-info strong { color: #e2e8f0; }
 
 .theme-modern .terminal-panel-bar-actions button {
-  font-size: 12px;
+  font-size: var(--fs-xs);
   padding: 3px 8px;
   border-radius: 4px;
   background: rgba(255, 255, 255, 0.08);
@@ -2140,7 +2219,7 @@
 }
 
 .theme-modern .terminal-toolbar-button {
-  font-size: 12px;
+  font-size: var(--fs-xs);
   padding: 3px 8px;
   border-radius: 6px;
   background: rgba(255, 255, 255, 0.08);
@@ -2377,14 +2456,16 @@
   margin: 0;
   border: none;
   border-radius: 0;
-  background: var(--log-viewer-background, var(--shell));
-  color: var(--shell-ink);
+  /* 占位区跟随主题底色（原强制深色导致「收回」按钮对比失衡） */
+  background: var(--bg, #fafafa);
+  color: var(--ink-muted);
 }
 
 .theme-modern.pip-standalone .main-panel,
 .theme-modern .pip-standalone .main-panel,
+.theme-modern.pip-standalone .workspace-panel,
 .theme-modern .pip-standalone .workspace-panel {
-  background: var(--log-viewer-background, var(--shell)) !important;
+  background: var(--bg, #fafafa) !important;
 }
 
 .theme-modern.pip-terminal-standalone .main-panel,
@@ -2497,13 +2578,13 @@
 }
 
 .theme-modern .viewer-empty-state strong {
-  font-size: 14px;
+  font-size: var(--fs-base);
   color: var(--ink);
   font-weight: 600;
 }
 
 .theme-modern .viewer-empty-state span {
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--ink-soft);
   line-height: 1.5;
 }
@@ -2518,11 +2599,11 @@
 }
 
 .theme-modern .workspace-placeholder strong {
-  font-size: 14px;
+  font-size: var(--fs-base);
   font-weight: 600;
 }
 
-.theme-modern .workspace-placeholder span { font-size: 12px; }
+.theme-modern .workspace-placeholder span { font-size: var(--fs-xs); }
 
 /* --- 22. 返回底部 --- */
 .theme-modern .live-back-to-bottom,
@@ -2571,12 +2652,12 @@
 }
 
 .theme-modern .search-match-line {
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   color: var(--ink-muted);
 }
 
 .theme-modern .search-match-preview {
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--ink);
 }
 
@@ -2590,10 +2671,10 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 
-.theme-modern .reader-preview-head { font-size: 11px; }
+.theme-modern .reader-preview-head { font-size: var(--fs-2xs); }
 
 .theme-modern .reader-preview-head strong {
-  font-size: 12px;
+  font-size: var(--fs-xs);
   font-weight: 600;
   color: var(--ink);
 }
@@ -2602,7 +2683,7 @@
   border-radius: 6px;
   background: var(--panel-muted);
   padding: 6px 8px;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
 }
 
 .theme-modern .reader-preview-floating {
@@ -2641,7 +2722,7 @@
 .theme-modern .preset-strip-advanced .ghost-button {
   min-height: 26px;
   padding: 0 10px;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   border-radius: 4px;
   flex-shrink: 0;
 }
@@ -2656,7 +2737,7 @@
 .theme-modern .advanced-row > label {
   flex: 1 1 120px;
   min-width: 80px;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   color: var(--ink-muted);
 }
 
@@ -2668,7 +2749,7 @@
 .theme-modern .advanced-row select {
   width: 100%;
   height: 30px;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   border-radius: 6px;
   border: 1px solid var(--line);
   background: var(--panel);
@@ -2697,7 +2778,7 @@
   gap: 4px 8px;
   padding: 6px 12px;
   border-bottom: 1px solid var(--line);
-  font-size: 11px;
+  font-size: var(--fs-2xs);
 }
 
 .theme-modern .file-tools-panel::-webkit-scrollbar {
@@ -2707,7 +2788,7 @@
 .theme-modern .file-tools-panel > span {
   flex-shrink: 0;
   color: var(--ink-muted);
-  font-size: 11px;
+  font-size: var(--fs-2xs);
 }
 
 .theme-modern .file-tools-panel > label {
@@ -2715,14 +2796,14 @@
   align-items: center;
   gap: 4px;
   flex-shrink: 0;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   color: var(--ink-muted);
 }
 
 .theme-modern .file-tools-panel > label select {
   min-width: auto;
   padding: 2px 6px;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   min-height: 24px;
 }
 
@@ -2736,12 +2817,12 @@
 }
 
 .theme-modern .reader-position-head {
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   display: flex;
   align-items: center;
   gap: 6px;
 }
-.theme-modern .reader-position-head strong { font-size: 11px; font-weight: 600; }
+.theme-modern .reader-position-head strong { font-size: var(--fs-2xs); font-weight: 600; }
 
 .theme-modern .file-tools-actions {
   flex-shrink: 0;
@@ -2759,7 +2840,7 @@
 .theme-modern .file-tools-actions > .ghost-button {
   min-height: 24px;
   padding: 0 8px;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   border-radius: 4px;
 }
 
@@ -2775,12 +2856,12 @@
 }
 
 .theme-modern .jumpserver-asset-item strong {
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--ink);
 }
 
 .theme-modern .jumpserver-asset-item span {
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   color: var(--ink-muted);
 }
 
@@ -2805,7 +2886,7 @@
   border: 1px solid var(--line);
   background: var(--panel);
   color: var(--ink-muted);
-  font-size: 12px;
+  font-size: var(--fs-xs);
   font-weight: 500;
   cursor: pointer;
   transition: background 120ms ease, border-color 120ms ease, color 120ms ease, box-shadow 120ms ease;
@@ -2848,12 +2929,12 @@
 }
 
 .theme-modern .workspace-startup-head strong {
-  font-size: 14px;
+  font-size: var(--fs-base);
   color: var(--ink);
   font-weight: 600;
 }
 
-.theme-modern .workspace-startup-head span { font-size: 11px; }
+.theme-modern .workspace-startup-head span { font-size: var(--fs-2xs); }
 
 /* --- 30. 跳板机终端 --- */
 .theme-modern .jump-terminal-surface {
@@ -2865,7 +2946,7 @@
 
 .theme-modern .jump-terminal-inline-input {
   padding: 8px 12px;
-  font-size: 13px;
+  font-size: var(--fs-sm);
 }
 
 /* --- 31. 滚动条 --- */
@@ -2884,13 +2965,44 @@
 
 .theme-modern ::-webkit-scrollbar-track { background: transparent; }
 
+/* 滚动条默认隐藏，悬停时显示（用户决策 2026-09-30）：
+   ① 指针直接落在滚动容器上时该容器 :hover，露出自己的滚动条；
+   ② 悬停「大区域」（侧栏/工具栏/工作区/抽屉/设置中心/命令面板）时，
+      该区域内所有后代滚动条一起露出。
+   对比度加深一档：纸感/雾面浅底上 rgba(0,0,0,.08) 几乎不可见。 */
 .theme-modern ::-webkit-scrollbar-thumb {
   border-radius: 999px;
-  background: rgba(0, 0, 0, 0.08);
+  background: transparent;
+}
+
+.theme-modern *:hover::-webkit-scrollbar-thumb,
+.theme-modern .sidebar-panel:hover ::-webkit-scrollbar-thumb,
+.theme-modern .toolbar-panel:hover ::-webkit-scrollbar-thumb,
+.theme-modern .workspace-panel:hover ::-webkit-scrollbar-thumb,
+.theme-modern .advanced-panel:hover ::-webkit-scrollbar-thumb,
+.theme-modern .xdrawer:hover ::-webkit-scrollbar-thumb,
+.theme-modern .settings-exclusive:hover ::-webkit-scrollbar-thumb,
+.theme-modern .palette-overlay:hover ::-webkit-scrollbar-thumb,
+.theme-modern .confirm-dialog:hover ::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.14);
 }
 
 .theme-modern ::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.15);
+  background: rgba(0, 0, 0, 0.24);
+}
+
+/* Firefox 等价行为 */
+.theme-modern * { scrollbar-color: transparent transparent; }
+.theme-modern *:hover,
+.theme-modern .sidebar-panel:hover,
+.theme-modern .toolbar-panel:hover,
+.theme-modern .workspace-panel:hover,
+.theme-modern .advanced-panel:hover,
+.theme-modern .xdrawer:hover,
+.theme-modern .settings-exclusive:hover,
+.theme-modern .palette-overlay:hover,
+.theme-modern .confirm-dialog:hover {
+  scrollbar-color: rgba(0, 0, 0, 0.14) transparent;
 }
 
 /* --- 32. Flex 流式：工作区高度分配 --- */
@@ -2990,13 +3102,20 @@
   gap: 0;
 }
 
-.theme-modern .browser-grid > .browser-column:first-child {
-  flex: 0 0 220px;
+.theme-modern .browser-grid > .browser-tree-column {
+  /* 树列宽度由 App 的拖拽状态驱动（FileBrowserGrid 写入 --browser-tree-width）。
+     用 :has 前的类名而非 :first-child，避免勾选态插入批量条后选错元素造成横向抖动 */
+  flex: 0 0 var(--browser-tree-width, 208px);
   min-width: 160px;
   overflow: auto;
 }
 
-.theme-modern .browser-grid > .browser-column:last-child {
+.theme-modern .browser-grid > .browser-resizer {
+  flex: 0 0 6px;
+  width: 6px;
+}
+
+.theme-modern .browser-grid > .browser-file-column {
   flex: 1 1 0%;
   min-width: 0;
   overflow: auto;
@@ -3035,7 +3154,7 @@
   background-image: none !important;
   color: var(--ink) !important;
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: var(--fs-sm);
   padding: 6px 16px;
   border-radius: 0;
 }
@@ -3079,7 +3198,7 @@
 .theme-modern .confirm-title {
   color: var(--ink);
   font-family: var(--font-ui);
-  font-size: 15px;
+  font-size: var(--fs-md);
 }
 
 .theme-modern .confirm-message {
@@ -3094,7 +3213,7 @@
   border: 1px solid var(--line);
   border-radius: 6px;
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: var(--fs-xs);
   font-weight: 500;
   line-height: 1;
   box-shadow: none;
@@ -3166,14 +3285,14 @@
 }
 
 .theme-modern .preview-meta {
-  color: #8ea0b8;
+  color: var(--ink-muted);
 }
 
 .theme-modern .preview-content {
-  background: #050607;
-  color: #d7dde5;
+  background: var(--panel);
+  color: var(--ink);
   font-family: "Geist Mono", "SFMono-Regular", monospace;
-  font-size: 12.5px;
+  font-size: var(--fs-sm);
 }
 
 .theme-modern .preview-dialog-maximized {
@@ -3187,20 +3306,20 @@
 
 .theme-modern .preview-dialog .preview-close,
 .theme-modern .preview-dialog .preview-maximize-btn {
-  background: transparent;
-  color: #8ea0b8;
-  border-color: transparent;
+  background: var(--panel);
+  color: var(--ink-soft);
+  border-color: var(--line);
 }
 
 .theme-modern .preview-dialog .preview-close:hover,
 .theme-modern .preview-dialog .preview-maximize-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: #e5e7eb;
+  background: var(--panel-muted);
+  color: var(--ink);
 }
 
 .theme-modern .preview-dialog .preview-close:hover {
-  background: rgba(239, 68, 68, 0.12);
-  color: #b91c1c;
+  background: var(--red-soft);
+  color: var(--red);
 }
 
 .theme-modern .preview-save-btn {
@@ -3231,38 +3350,38 @@
 }
 
 .theme-modern .preview-readonly-badge {
-  color: #9fb4cf;
-  background: rgba(148, 163, 184, 0.12);
+  color: var(--ink-muted);
+  background: var(--panel-muted);
 }
 
 .theme-modern .preview-dirty {
-  color: var(--warning, #d97706);
+  color: var(--warning);
 }
 
 .theme-modern .preview-dialog-archive {
-  background: #f7f9fc;
-  border-color: rgba(148, 163, 184, 0.3);
+  background: var(--panel-strong);
+  border-color: var(--line);
 }
 
 .theme-modern .preview-dialog-class {
-  background: #f7f9fc;
-  border-color: rgba(148, 163, 184, 0.3);
+  background: var(--panel-strong);
+  border-color: var(--line);
 }
 
 .theme-modern .preview-dialog-archive .preview-header,
 .theme-modern .preview-dialog-class .preview-header {
-  background: #ffffff;
-  border-bottom-color: #dce4ee;
+  background: var(--panel-muted);
+  border-bottom-color: var(--line);
 }
 
 .theme-modern .preview-dialog-archive .preview-title,
 .theme-modern .preview-dialog-class .preview-title {
-  color: #172033;
+  color: var(--ink);
 }
 
 .theme-modern .preview-dialog-archive .preview-meta,
 .theme-modern .preview-dialog-class .preview-meta {
-  color: #64748b;
+  color: var(--ink-muted);
 }
 
 .theme-modern .preview-dialog-archive .preview-readonly-badge {
@@ -3433,7 +3552,7 @@
 .theme-modern.ui-surface-custom.ui-custom-background-image .settings-modal-shell {
   background:
     radial-gradient(circle at 12% 8%, rgba(255, 255, 255, 0.22), transparent 34%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.48), rgba(255, 255, 255, 0.26));
+    linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.9));
   border-color: rgba(15, 23, 42, 0.14);
   box-shadow: 0 28px 72px rgba(15, 23, 42, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.56);
   backdrop-filter: blur(12px) saturate(1.08);
@@ -3471,7 +3590,7 @@
 .theme-modern .settings-note-box strong,
 .theme-modern .settings-workspace-empty strong {
   color: var(--ink-soft);
-  font-size: 12px;
+  font-size: var(--fs-xs);
   font-weight: 500;
   letter-spacing: 0;
 }
@@ -3479,7 +3598,7 @@
 .theme-modern .settings-note-box span,
 .theme-modern .settings-workspace-empty span {
   color: var(--ink-muted);
-  font-size: 12px;
+  font-size: var(--fs-xs);
   line-height: 1.55;
 }
 
@@ -3700,23 +3819,109 @@
 
 .theme-modern .directory-filter-bar .directory-filter-input {
   font-family: "Geist Mono", monospace;
-  font-size: 12px;
+  font-size: var(--fs-xs);
 }
 
 .theme-modern .settings-modal-shell .settings-workspace {
   padding: 0;
 }
 
-/* --- 37. 响应式 --- */
-@media (max-width: 1440px) {
-  .theme-modern .sidebar-panel { flex: 0 0 220px; }
+/* --- 37. 响应式 ---
+   原型 S15「窗口适配规范」三档（以 prototype.html 的 function s15() 为准）：
+     ≥ 1440        侧栏 240（常驻）
+     1024 – 1440   侧栏 200
+     800 – 1024    侧栏折叠为 56 图标列
+     < 800         侧栏保持 56 折叠态
+   注意断点边界：1440 属于「≥ 1440」档，所以小窗档必须写 1439.9px，
+   写 1440px 会让 1440 视口掉进小窗档（侧栏变 200，与原型不符）。 */
+@media (max-width: 1024px) {
+  .theme-modern .toolbar-commandbar { gap: 4px; }
+  .theme-modern .toolbar-action-button { padding: 0 8px; min-height: 28px; }
+}
+
+@media (max-width: 1439.9px) {
+  .theme-modern .sidebar-panel { flex: 0 0 200px; }
   .theme-modern .browser-grid > .browser-column:first-child { flex: 0 0 180px; }
 }
 
+/* 800 – 1024：侧栏折叠成 56px 图标列（服务器头像/状态点竖排，只留图标）。
+   用 max-width: 1024px 精确匹配原型「800 – 1024」档的上界（含 1024）。
+   类名以实际渲染的 DOM 为准（sidebar-head-title / pane-title-row /
+   server-item-main 等），隐藏一切文字型节点，保证 56px 内不横向溢出。 */
 @media (max-width: 1024px) {
-  .theme-modern .sidebar-panel { flex: 0 0 200px; }
-  .theme-modern .toolbar-commandbar { gap: 4px; }
-  .theme-modern .toolbar-action-button { padding: 0 8px; min-height: 28px; }
+  .theme-modern .sidebar-panel {
+    flex: 0 0 56px;
+    width: 56px;
+    overflow: hidden;
+  }
+  .theme-modern .sidebar-panel .sidebar-head,
+  .theme-modern .sidebar-panel .pane-section {
+    padding-left: 4px;
+    padding-right: 4px;
+  }
+  /* 只留图标：标题、计数、搜索框、分组标题全部隐藏 */
+  .theme-modern .sidebar-panel .sidebar-head-title,
+  .theme-modern .sidebar-panel .pane-title-row,
+  .theme-modern .sidebar-panel .server-group-title,
+  .theme-modern .sidebar-panel .pane-section > input {
+    display: none;
+  }
+  .theme-modern .sidebar-panel .sidebar-head-row {
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+  .theme-modern .sidebar-panel .sidebar-head-buttons {
+    flex-direction: column;
+    align-items: center;
+  }
+  /* 服务器项：只留状态点，名称、地址、端口与悬浮快捷操作都隐藏 */
+  .theme-modern .sidebar-panel .server-item-main,
+  .theme-modern .sidebar-panel .server-item-meta,
+  .theme-modern .sidebar-panel .server-item-host,
+  .theme-modern .sidebar-panel .server-item-quick-actions {
+    display: none;
+  }
+  .theme-modern .sidebar-panel .server-groups,
+  .theme-modern .sidebar-panel .server-list,
+  .theme-modern .sidebar-panel .server-item-wrap,
+  .theme-modern .sidebar-panel .server-item {
+    align-items: center;
+    justify-content: center;
+  }
+  .theme-modern .sidebar-panel .server-item-wrap {
+    width: 100%;
+  }
+  .theme-modern .sidebar-panel .server-item {
+    width: 40px;
+    min-width: 0;
+    padding-left: 0;
+    padding-right: 0;
+  }
+  /* 文件树在 <1024 隐藏（原型：目录改下拉） */
+  .theme-modern .browser-grid > .browser-tree-column,
+  .theme-modern .browser-grid > .browser-resizer {
+    display: none;
+  }
+}
+
+/* < 800：文件表隐藏「类型」列；工具栏搜索框收缩为 6px 图标。
+   注意：本文件后面还有一条同特异性的 .theme-modern .file-row 列模板规则，
+   媒体查询不加特异性，靠后那条会赢。故这里统一挂到 .file-table 上
+   （文件表行必然位于 .file-table 内）把特异性提到 0,3,0。 */
+@media (max-width: 799.9px) {
+  .theme-modern .file-table .file-table-head,
+  .theme-modern .file-table .file-row {
+    grid-template-columns: 28px minmax(0, 1fr) 90px 130px;
+  }
+  .theme-modern .file-table .file-table-head:has(.file-transfer-head-cell),
+  .theme-modern .file-table .file-row:has(.file-transfer-cell) {
+    grid-template-columns: 28px minmax(0, 1fr) 200px 90px 130px;
+  }
+  .theme-modern .file-table .file-table-head > :last-child,
+  .theme-modern .file-table .file-row > :last-child {
+    display: none;
+  }
 }
 
 body.extension-sidepanel .app-shell.theme-modern {
@@ -3965,12 +4170,12 @@ body.is-electron .settings-exclusive-head input {
 }
 
 .settings-exclusive-title strong {
-  font-size: 14px;
+  font-size: var(--fs-base);
   font-weight: 650;
 }
 
 .settings-exclusive-title span {
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--ink-muted);
 }
 
@@ -4010,7 +4215,7 @@ body.is-electron .settings-exclusive-head input {
   background: transparent;
   border: none;
   text-align: left;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   color: var(--ink-soft);
   border-radius: 6px;
   cursor: pointer;
@@ -4032,7 +4237,7 @@ body.is-electron .settings-exclusive-head input {
 .settings-rail-note {
   margin-top: auto;
   padding: 10px;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   color: var(--ink-muted);
   line-height: 1.6;
   border-top: 1px dashed var(--line);
@@ -4044,7 +4249,7 @@ body.is-electron .settings-exclusive-head input {
 
 .settings-rail-foot .settings-pill {
   display: block;
-  font-size: 10.5px;
+  font-size: var(--fs-2xs);
   color: var(--ink-soft);
   border: 1px solid var(--line);
   border-radius: 999px;
@@ -4067,6 +4272,9 @@ body.is-electron .settings-exclusive-head input {
 
 .conn-list-pane {
   flex: 0 0 268px;
+  /* recon S10-2：缺 min-width:0 时页脚 nowrap 文本（「27 台连接 · …」）
+     会把列撑到 312px，违反原型硬性 268px。 */
+  min-width: 0;
   display: flex;
   flex-direction: column;
   border-right: 1px solid var(--line);
@@ -4084,7 +4292,7 @@ body.is-electron .settings-exclusive-head input {
   height: 30px;
   padding: 0 10px;
   font: inherit;
-  font-size: 12.5px;
+  font-size: var(--fs-sm);
   color: var(--ink);
   background: var(--panel-strong);
   border: 1px solid var(--line);
@@ -4132,7 +4340,7 @@ body.is-electron .settings-exclusive-head input {
   align-items: center;
   gap: 6px;
   font-weight: 550;
-  font-size: 12.5px;
+  font-size: var(--fs-sm);
   color: var(--ink);
   white-space: nowrap;
   overflow: hidden;
@@ -4141,7 +4349,7 @@ body.is-electron .settings-exclusive-head input {
 
 .conn-server-current-tag {
   flex: 0 0 auto;
-  font-size: 9.5px;
+  font-size: var(--fs-2xs);
   font-weight: 550;
   color: var(--green);
   border: 1px solid color-mix(in srgb, var(--green) 30%, transparent);
@@ -4151,8 +4359,8 @@ body.is-electron .settings-exclusive-head input {
 
 .conn-server-host {
   display: block;
-  font-family: var(--mono-font-family, "Geist Mono", "SFMono-Regular", monospace);
-  font-size: 10.5px;
+  font-family: var(--mono-font-family);
+  font-size: var(--fs-2xs);
   color: var(--ink-muted);
   white-space: nowrap;
   overflow: hidden;
@@ -4161,7 +4369,7 @@ body.is-electron .settings-exclusive-head input {
 
 .conn-server-src {
   flex: 0 0 auto;
-  font-size: 9.5px;
+  font-size: var(--fs-2xs);
   color: var(--ink-muted);
   border: 1px solid var(--line);
   border-radius: 999px;
@@ -4172,13 +4380,13 @@ body.is-electron .settings-exclusive-head input {
   padding: 24px 12px;
   text-align: center;
   color: var(--ink-muted);
-  font-size: 12px;
+  font-size: var(--fs-xs);
 }
 
 .conn-list-foot {
   padding: 8px 12px;
   border-top: 1px solid var(--line);
-  font-size: 10.5px;
+  font-size: var(--fs-2xs);
   color: var(--ink-muted);
   white-space: nowrap;
   overflow: hidden;
@@ -4204,13 +4412,13 @@ body.is-electron .settings-exclusive-head input {
 }
 
 .conn-detail-head h2 {
-  font-size: 14.5px;
+  font-size: var(--fs-base);
   font-weight: 650;
 }
 
 .conn-detail-head p {
   margin-top: 1px;
-  font-size: 11.5px;
+  font-size: var(--fs-xs);
   color: var(--ink-muted);
 }
 
@@ -4263,7 +4471,7 @@ body.is-electron .settings-exclusive-head input {
 .settings-exclusive .ghost-button.settings-primary-action {
   background: var(--accent);
   border: 1px solid var(--accent);
-  color: #ffffff;
+  color: var(--on-accent);
   font-weight: 550;
 }
 
@@ -4271,7 +4479,8 @@ body.is-electron .settings-exclusive-head input {
 .settings-exclusive .ghost-button.settings-primary-action:hover:not(:disabled) {
   background: var(--accent-strong);
   border-color: var(--accent-strong);
-  color: #ffffff;
+  color: var(--on-accent);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 28%, transparent);
   filter: none;
 }
 
@@ -4285,14 +4494,14 @@ body.is-electron .settings-exclusive-head input {
   color: var(--ink-soft);
   border-radius: 999px;
   padding: 3px 12px;
-  font-size: 11.5px;
+  font-size: var(--fs-xs);
 }
 
 .settings-exclusive .settings-tool-chip-active,
 .settings-exclusive .settings-tool-chip-active:hover {
   background: var(--accent);
   border-color: var(--accent);
-  color: #ffffff;
+  color: var(--on-accent);
 }
 
 .settings-exclusive .settings-asset-row {
@@ -4317,12 +4526,12 @@ body.is-electron .settings-exclusive-head input {
 
 .settings-exclusive .slim-button {
   padding: 4px 10px;
-  font-size: 11.5px;
+  font-size: var(--fs-xs);
 }
 
 .settings-exclusive .settings-secondary-action {
   padding: 5px 11px;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   border: 1px solid var(--line);
   border-radius: 6px;
   background: var(--panel-strong);
@@ -4361,7 +4570,7 @@ body.is-electron .settings-exclusive-head input {
 }
 
 .settings-pref-anchor a {
-  font-size: 11.5px;
+  font-size: var(--fs-xs);
   color: var(--ink-soft);
   text-decoration: none;
   padding: 6px 10px;
@@ -4396,7 +4605,7 @@ body.is-electron .settings-exclusive-head input {
 
 .settings-pref-section .settings-card-kicker {
   display: block;
-  font-size: 10.5px;
+  font-size: var(--fs-2xs);
   font-weight: 650;
   letter-spacing: 0.07em;
   color: var(--ink-soft);
@@ -4449,13 +4658,13 @@ body.is-electron .settings-exclusive-head input {
 
 .settings-pref-label strong {
   display: block;
-  font-size: 12.5px;
+  font-size: var(--fs-sm);
   font-weight: 550;
   color: var(--ink);
 }
 
 .settings-pref-label span {
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   color: var(--ink-muted);
 }
 
@@ -4464,7 +4673,7 @@ body.is-electron .settings-exclusive-head input {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-size: 12.5px;
+  font-size: var(--fs-sm);
   color: var(--ink-soft);
 }
 
@@ -4472,7 +4681,7 @@ body.is-electron .settings-exclusive-head input {
   border: 1px solid var(--line);
   border-radius: 999px;
   padding: 2px 12px;
-  font-size: 11.5px;
+  font-size: var(--fs-xs);
   color: var(--ink);
   background: var(--panel-strong);
 }
@@ -4496,7 +4705,7 @@ body.is-electron .settings-exclusive-head input {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 10.5px;
+  font-size: var(--fs-2xs);
   font-weight: 600;
   color: var(--ink-muted);
   letter-spacing: 0.05em;
@@ -4510,8 +4719,8 @@ body.is-electron .settings-exclusive-head input {
 
 .conn-server-port {
   flex: 0 0 auto;
-  font-family: var(--mono-font-family, "Geist Mono", "SFMono-Regular", monospace);
-  font-size: 11px;
+  font-family: var(--mono-font-family);
+  font-size: var(--fs-2xs);
   color: var(--ink-soft);
 }
 
@@ -4542,7 +4751,7 @@ body.is-electron .settings-exclusive-head input {
 }
 .xdrawer-title {
   font-weight: 700;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   flex: 1;
   min-width: 0;
   white-space: nowrap;
@@ -4580,9 +4789,9 @@ body.is-electron .settings-exclusive-head input {
   height: 28px;
   padding: 0 10px 0 28px;
   font: inherit;
-  font-size: 12.5px;
+  font-size: var(--fs-sm);
   border: 1px solid var(--line);
-  border-radius: var(--r-s, 6px);
+  border-radius: var(--r-s);
   background: var(--panel);
   color: var(--ink);
   outline: none;
@@ -4592,7 +4801,7 @@ body.is-electron .settings-exclusive-head input {
 .xdrawer-live-block { border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--accent) 3%, transparent); }
 .xdrawer-live-label {
   padding: 7px 16px 0;
-  font-size: 10px;
+  font-size: var(--fs-2xs);
   font-weight: 650;
   letter-spacing: 0.08em;
   color: var(--accent);
@@ -4601,7 +4810,7 @@ body.is-electron .settings-exclusive-head input {
   padding: 48px 20px;
   text-align: center;
   color: var(--ink-muted);
-  font-size: 12px;
+  font-size: var(--fs-xs);
 }
 .xrow {
   display: flex;
@@ -4628,7 +4837,7 @@ body.is-electron .settings-exclusive-head input {
 .xrow-fn {
   display: block;
   font-weight: 550;
-  font-size: 12.5px;
+  font-size: var(--fs-sm);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -4638,8 +4847,8 @@ body.is-electron .settings-exclusive-head input {
   align-items: center;
   gap: 8px;
   margin-top: 2px;
-  font-family: var(--mono, monospace);
-  font-size: 10px;
+  font-family: var(--mono);
+  font-size: var(--fs-2xs);
   color: var(--ink-muted);
   overflow: hidden;
   white-space: nowrap;
@@ -4683,7 +4892,7 @@ body.is-electron .settings-exclusive-head input {
 }
 .search-history-cap {
   padding: 5px 10px 3px;
-  font-size: 10px;
+  font-size: var(--fs-2xs);
   font-weight: 650;
   letter-spacing: 0.06em;
   color: var(--ink-muted);
@@ -4697,7 +4906,7 @@ body.is-electron .settings-exclusive-head input {
   background: none;
   border-radius: 5px;
   font: inherit;
-  font-size: 12.5px;
+  font-size: var(--fs-sm);
   color: var(--ink);
   cursor: pointer;
   white-space: nowrap;
@@ -4705,38 +4914,31 @@ body.is-electron .settings-exclusive-head input {
   text-overflow: ellipsis;
 }
 .search-history-item:hover { background: var(--panel-muted); }
+/* 主按钮规格统一收口在 theme-modern-v2.css §1（accent 底 + var(--on-accent) 文字 + 统一呼吸），
+   此处只保留 search-run-button 特有字重，不再重复颜色/padding/hover。 */
 .theme-modern .search-run-button,
 .theme-modern .ghost-button.search-run-button {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #ffffff;
   font-weight: 550;
-  padding: 0 14px;
-}
-.theme-modern .search-run-button:hover:not(:disabled) {
-  background: var(--accent-strong, #0060df);
-  border-color: var(--accent-strong, #0060df);
-  color: #ffffff;
 }
 .btn-spinner {
   width: 11px;
   height: 11px;
-  border: 1.5px solid rgba(255, 255, 255, 0.4);
-  border-top-color: #ffffff;
+  border: 1.5px solid color-mix(in srgb, var(--on-accent) 40%, transparent);
+  border-top-color: var(--on-accent);
   border-radius: 50%;
   animation: slc-spin 0.7s linear infinite;
   flex: none;
 }
 @keyframes slc-spin { to { transform: rotate(360deg); } }
 .toolbar-summary .summary-nav { display: inline-flex; align-items: center; gap: 1px; }
-.toolbar-summary .summary-nav .ghost-button { width: 20px; height: 20px; padding: 0; font-size: 9px; color: var(--ink-muted); border: none; background: none; }
+.toolbar-summary .summary-nav .ghost-button { width: 20px; height: 20px; padding: 0; font-size: var(--fs-2xs); color: var(--ink-muted); border: none; background: none; }
 .toolbar-summary .summary-nav .ghost-button:hover { color: var(--ink); background: var(--panel-muted); }
-.toolbar-summary .summary-nav-count { font-family: var(--mono-font-family, "Geist Mono", "SFMono-Regular", monospace); font-size: 10.5px; color: var(--ink); min-width: 36px; text-align: center; }
+.toolbar-summary .summary-nav-count { font-family: var(--mono-font-family); font-size: var(--fs-2xs); color: var(--ink); min-width: 36px; text-align: center; }
 .summary-seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
 .summary-seg button {
   height: 22px;
   padding: 0 10px;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   border: none;
   background: var(--panel);
   color: var(--ink-soft);
@@ -4763,8 +4965,8 @@ body.is-electron .settings-exclusive-head input {
 }
 .slicebar-range {
   flex: none;
-  font-family: var(--mono-font-family, "Geist Mono", "SFMono-Regular", monospace);
-  font-size: 11px;
+  font-family: var(--mono-font-family);
+  font-size: var(--fs-2xs);
   color: var(--ink-soft);
 }
 .slicebar-range b {
@@ -4811,8 +5013,8 @@ body.is-electron .settings-exclusive-head input {
   flex: none;
   min-width: 36px;
   text-align: right;
-  font-family: var(--mono-font-family, "Geist Mono", "SFMono-Regular", monospace);
-  font-size: 11px;
+  font-family: var(--mono-font-family);
+  font-size: var(--fs-2xs);
   color: var(--ink);
 }
 .slicebar-tail { flex: none; }
@@ -4825,7 +5027,7 @@ body.is-electron .settings-exclusive-head input {
   border: 1px solid var(--line);
   border-radius: 999px;
   background: var(--panel);
-  font-size: 10.5px;
+  font-size: var(--fs-2xs);
   color: var(--ink-soft);
 }
 
@@ -4836,7 +5038,7 @@ body.is-electron .settings-exclusive-head input {
   flex: none;
   max-width: 62%;
   border: 1px solid var(--line);
-  border-radius: var(--r-s, 6px);
+  border-radius: var(--r-s);
   overflow: hidden;
   background: var(--panel);
 }
@@ -4848,7 +5050,7 @@ body.is-electron .settings-exclusive-head input {
   height: 26px;
   padding: 0 9px;
   font: inherit;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--ink-soft);
   background: var(--panel);
   border: none;
@@ -4891,7 +5093,7 @@ body.is-electron .settings-exclusive-head input {
 .server-status-trend {
   flex: none;
   border: 1px solid var(--line);
-  border-radius: var(--r-m, 8px);
+  border-radius: var(--r-m);
   background: var(--panel);
   overflow: hidden;
 }
@@ -4904,7 +5106,7 @@ body.is-electron .settings-exclusive-head input {
   border-bottom: 1px solid var(--line);
 }
 .server-status-trend-title {
-  font-size: 12px;
+  font-size: var(--fs-xs);
   font-weight: 600;
   color: var(--ink);
   white-space: nowrap;
@@ -4912,7 +5114,7 @@ body.is-electron .settings-exclusive-head input {
 .server-status-trend-note {
   flex: 1 1 0%;
   min-width: 0;
-  font-size: 10.5px;
+  font-size: var(--fs-2xs);
 }
 
 /* --- S6 文件操作提权：行悬浮快捷操作组 --- */
@@ -4945,13 +5147,22 @@ body.is-electron .settings-exclusive-head input {
   min-width: 24px;
 }
 
-/* --- S6 文件表传输进度列 --- */
-.theme-modern .file-table-head {
-  grid-template-columns: 48px minmax(0, 1fr) 180px 84px 138px 52px;
+/* --- S6 文件表传输进度列 ---
+   列模板必须与实际渲染列数一致：传输列仅在该行有活动传输时渲染，
+   否则多出的模板列会当空列占位，把「名称」推开并造成勾选前后横向抖动。
+   默认 5 列（选择/名称/大小/修改时间/类型），有活动传输时 6 列。 */
+.theme-modern .file-table-head,
+.theme-modern .file-row {
+  grid-template-columns: 28px minmax(0, 1fr) 90px 130px 56px;
 }
 
-.theme-modern .file-row {
-  grid-template-columns: 48px minmax(0, 1fr) 180px 84px 138px 52px;
+.theme-modern .file-table-head:has(.file-transfer-head-cell),
+.theme-modern .file-row:has(.file-transfer-cell) {
+  /* 6 列：选择 / 名称 / 传输 / 大小 / 修改时间 / 类型
+     轨道数必须与 FileBrowserTableRows 实际渲染的子元素数一致。
+     曾漏写末尾「类型」列 56px，导致第 6 个子元素落进隐式轨道、与选择列重叠；
+     修改时间列也须与默认态保持 130px 一致。 */
+  grid-template-columns: 28px minmax(0, 1fr) 200px 90px 130px 56px;
 }
 
 .theme-modern .file-transfer-head-cell {
@@ -4991,7 +5202,7 @@ body.is-electron .settings-exclusive-head input {
 
 .theme-modern .file-transfer-meta {
   font-family: "Geist Mono", "SFMono-Regular", monospace;
-  font-size: 9.5px;
+  font-size: var(--fs-2xs);
   color: var(--ink-muted);
   white-space: nowrap;
   overflow: hidden;
@@ -5002,14 +5213,14 @@ body.is-electron .settings-exclusive-head input {
   align-items: center;
   flex: none;
   border: 1px solid var(--line);
-  border-radius: var(--r-s, 6px);
+  border-radius: var(--r-s);
   overflow: hidden;
 }
 .server-status-trend-range button {
   height: 20px;
   padding: 0 8px;
   font: inherit;
-  font-size: 10.5px;
+  font-size: var(--fs-2xs);
   color: var(--ink-soft);
   background: var(--panel);
   border: none;
@@ -5041,7 +5252,7 @@ body.is-electron .settings-exclusive-head input {
   min-width: 0;
   padding: 8px 10px 7px;
   border: 1px solid var(--line);
-  border-radius: var(--r-m, 8px);
+  border-radius: var(--r-m);
   background: var(--panel);
 }
 .server-status-trend-card-head {
@@ -5051,20 +5262,20 @@ body.is-electron .settings-exclusive-head input {
   min-width: 0;
 }
 .server-status-trend-card-label {
-  font-size: 10.5px;
+  font-size: var(--fs-2xs);
   color: var(--ink-muted);
   white-space: nowrap;
 }
 .server-status-trend-card-win {
   margin-left: auto;
-  font-family: var(--mono-font-family, "Geist Mono", "SFMono-Regular", monospace);
-  font-size: 9.5px;
+  font-family: var(--mono-font-family);
+  font-size: var(--fs-2xs);
   color: var(--ink-muted);
   white-space: nowrap;
 }
 .server-status-trend-card-value {
   margin: 1px 0 4px;
-  font-size: 19px;
+  font-size: var(--fs-xl);
   font-weight: 700;
   line-height: 1.1;
   color: var(--ink);
@@ -5079,7 +5290,7 @@ body.is-electron .settings-exclusive-head input {
   align-items: center;
   justify-content: center;
   height: 26px;
-  font-size: 10px;
+  font-size: var(--fs-2xs);
   color: var(--ink-muted);
   white-space: nowrap;
 }
@@ -5095,7 +5306,7 @@ body.is-electron .settings-exclusive-head input {
   margin-left: auto;
   padding-left: 16px;
   font-family: "Geist Mono", "SFMono-Regular", monospace;
-  font-size: 10.5px;
+  font-size: var(--fs-2xs);
   color: var(--ink-muted);
 }
 
@@ -5135,7 +5346,7 @@ body.is-electron .settings-exclusive-head input {
   border-radius: 0;
   background: var(--panel);
   color: var(--ink-soft);
-  font-size: 12.5px;
+  font-size: var(--fs-sm);
   font-weight: 500;
   white-space: nowrap;
 }
@@ -5181,7 +5392,7 @@ body.is-electron .settings-exclusive-head input {
 }
 .theme-modern .toolbar-action-button {
   white-space: nowrap;
-  height: 30px;
+  height: 28px;
 }
 
 /* 摘要行 = rtools（完整占一行） */
@@ -5194,13 +5405,13 @@ body.is-electron .settings-exclusive-head input {
   flex-wrap: nowrap;
   min-width: 0;
   padding: 6px 2px 0;
-  font-size: 11.5px;
+  font-size: var(--fs-xs);
   color: var(--ink-soft);
 }
 .theme-modern .toolbar-summary > span:first-child {
   color: var(--ink-soft);
 }
-.theme-modern .toolbar-summary .summary-nav-count { font-size: 11px; }
+.theme-modern .toolbar-summary .summary-nav-count { font-size: var(--fs-2xs); }
 
 /* 高级条件条完整换行 */
 .theme-modern .toolbar-commandbar .advanced-strip {
@@ -5266,13 +5477,13 @@ body.is-electron .settings-exclusive-head input {
   background: #c8ccd2;
 }
 .sidebar-status-dot.on {
-  background: var(--green-dot, #22c55e);
+  background: var(--green-dot);
   box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.15);
 }
 .sidebar-status-sum {
   flex: 1;
   min-width: 0;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   color: var(--ink-soft);
   white-space: nowrap;
   overflow: hidden;
@@ -5283,7 +5494,7 @@ body.is-electron .settings-exclusive-head input {
 }
 .sidebar-status-toggle {
   flex: none;
-  font-size: 10px;
+  font-size: var(--fs-2xs);
   color: var(--ink-muted);
   border: 1px solid var(--line);
   border-radius: 999px;
@@ -5292,7 +5503,7 @@ body.is-electron .settings-exclusive-head input {
 .sidebar-status:hover .sidebar-status-toggle { color: var(--ink); border-color: var(--line-strong); }
 .sidebar-status .sidebar-status-collapse {
   margin-left: auto;
-  font-size: 10px;
+  font-size: var(--fs-2xs);
   color: var(--ink-muted);
   font-weight: 400;
 }
@@ -5318,8 +5529,8 @@ body.is-electron .settings-exclusive-head input {
   pointer-events: none;
 }
 .kbd {
-  font-family: var(--mono-font-family, "Geist Mono", "SFMono-Regular", monospace);
-  font-size: 9.5px;
+  font-family: var(--mono-font-family);
+  font-size: var(--fs-2xs);
   color: var(--ink-soft);
   border: 1px solid var(--line-strong);
   border-bottom-width: 2px;
@@ -5329,9 +5540,9 @@ body.is-electron .settings-exclusive-head input {
 }
 .theme-modern .toolbar-live-button { white-space: nowrap; }
 .theme-modern .toolbar-live-button.toolbar-live-on {
-  color: var(--red, #d41313);
-  border-color: color-mix(in srgb, var(--red, #d41313) 32%, transparent);
-  background: color-mix(in srgb, var(--red, #d41313) 6%, transparent);
+  color: var(--red);
+  border-color: color-mix(in srgb, var(--red) 32%, transparent);
+  background: color-mix(in srgb, var(--red) 6%, transparent);
   font-weight: 650;
 }
 .live-pulse { animation: slc-live-pulse 1.4s ease-in-out infinite; }
@@ -5344,7 +5555,7 @@ body.is-electron .settings-exclusive-head input {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 10.5px;
+  font-size: var(--fs-2xs);
   color: var(--ink-muted);
   padding-right: 6px;
   white-space: nowrap;
@@ -5385,7 +5596,7 @@ body.is-electron .settings-exclusive-head input {
   height: 38px;
   padding: 0 12px 0 34px;
   font: inherit;
-  font-size: 13.5px;
+  font-size: var(--fs-sm);
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel);
@@ -5396,7 +5607,7 @@ body.is-electron .settings-exclusive-head input {
 .palette-list { overflow-y: auto; padding: 0 8px 8px; min-height: 0; }
 .palette-cap {
   padding: 8px 10px 2px;
-  font-size: 10px;
+  font-size: var(--fs-2xs);
   font-weight: 650;
   color: var(--ink-muted);
   letter-spacing: 0.06em;
@@ -5411,13 +5622,13 @@ body.is-electron .settings-exclusive-head input {
   background: none;
   border-radius: 6px;
   font: inherit;
-  font-size: 12.5px;
+  font-size: var(--fs-sm);
   color: var(--ink);
   cursor: pointer;
   text-align: left;
 }
 .palette-item-sel { background: var(--accent-soft); }
 .palette-item-title { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.palette-item-sub { color: var(--ink-muted); font-size: 11.5px; }
-.palette-item-hint { flex: none; font-family: var(--mono-font-family, "Geist Mono", "SFMono-Regular", monospace); font-size: 9.5px; color: var(--ink-muted); }
-.palette-empty { padding: 28px 12px; text-align: center; color: var(--ink-muted); font-size: 12px; }
+.palette-item-sub { color: var(--ink-muted); font-size: var(--fs-xs); }
+.palette-item-hint { flex: none; font-family: var(--mono-font-family); font-size: var(--fs-2xs); color: var(--ink-muted); }
+.palette-empty { padding: 28px 12px; text-align: center; color: var(--ink-muted); font-size: var(--fs-xs); }
