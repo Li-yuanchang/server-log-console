@@ -1,10 +1,26 @@
-import { useRef, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { MoreHorizontal, Terminal, Trash2 } from "lucide-react";
 import type { JumpServerAssetOption, LogProfile, ServerConnectionKind, ServerCredentialStatus, ServerSummary } from "@server-log-console/shared";
 import { looksLikeJumpServer } from "./terminal-utils.js";
-import type { UiBackgroundMode, UiDensity, UiFontFamily, UiMotionMode, UiSurface } from "./useUiTheme.js";
+import { readDirectoryHistory } from "./storage.js";
+import { ThemedSelect } from "./ThemedSelect.js";
+import type { MonoFontFamily, UiBackgroundMode, UiDensity, UiFontFamily, UiMotionMode, UiSurface } from "./useUiTheme.js";
 
 export type SettingsWorkspaceView = "connections" | "preferences";
 export type SettingsConnectionPane = "detail" | "form";
+/** S14：水印作用范围（原型 1143-1168「日志/预览区 / 全局」） */
+export type WatermarkScope = "content" | "global";
+
+/** S14：水印默认内容模板（原型 1150 行） */
+export const DEFAULT_WATERMARK_TEMPLATE = "{用户} · {主机} · {时间} 内部资料";
+
+/** S14：背景方案 4 张缩略卡（原型 1109-1117：默认/雾面/纸感/自定义） */
+const SURFACE_OPTIONS: Array<{ value: UiSurface; label: string; background: string }> = [
+  { value: "plain", label: "默认", background: "linear-gradient(180deg,#ffffff,#fafafa)" },
+  { value: "mist", label: "雾面", background: "linear-gradient(180deg,#f4f6f8,#eceff3)" },
+  { value: "paper", label: "纸感", background: "linear-gradient(180deg,#faf7f0,#f3ede1)" },
+  { value: "custom", label: "自定义", background: "linear-gradient(135deg,#eef5ff,#fff7ed)" }
+];
 
 export interface ManualServerDraft {
   id: string;
@@ -41,7 +57,20 @@ interface Props {
     uiFontFamily: UiFontFamily;
     logFontSize: number;
     terminalFontSize: number;
+    /* S14：日志 / 终端字体族独立配置 */
+    logFontFamily: MonoFontFamily;
+    onLogFontFamilyChange: (family: MonoFontFamily) => void;
+    terminalFontFamily: MonoFontFamily;
+    onTerminalFontFamilyChange: (family: MonoFontFamily) => void;
     motionMode: UiMotionMode;
+    /* S14：图片背景遮罩亮度 / 模糊、水印、动态背景（最小补充字段） */
+    customImageOverlay: number;
+    customImageBlur: number;
+    dynamicBackground: boolean;
+    watermarkEnabled: boolean;
+    watermarkTemplate: string;
+    watermarkOpacity: number;
+    watermarkScope: WatermarkScope;
     errorHighlightEnabled: boolean;
     showPathHistory: boolean;
     showTransferHistory: boolean;
@@ -67,6 +96,13 @@ interface Props {
     onLogFontSizeChange: (size: number) => void;
     onTerminalFontSizeChange: (size: number) => void;
     onMotionModeChange: (mode: UiMotionMode) => void;
+    onCustomImageOverlayChange: (value: number) => void;
+    onCustomImageBlurChange: (value: number) => void;
+    onToggleDynamicBackground: () => void;
+    onToggleWatermark: () => void;
+    onWatermarkTemplateChange: (value: string) => void;
+    onWatermarkOpacityChange: (value: number) => void;
+    onWatermarkScopeChange: (scope: WatermarkScope) => void;
     onResetUiPreferences: () => void;
     onToggleErrorHighlight: () => void;
     onTogglePathHistory: () => void;
@@ -102,6 +138,13 @@ interface Props {
     onSaveDraft: () => void;
     onSelectServer: (serverId: string) => void;
     onEditManualServer: (server: ServerSummary) => void;
+    /* S10：危险区「删除此服务器」降为页脚红字行（原型 978-984） */
+    onDeleteServer: (server: ServerSummary) => void;
+    /* S10：按目标服务器维护凭证——不要求先连接 */
+    onFetchCredentialStatus: (serverId: string) => void;
+    onSaveCredentialFor: (serverId: string) => void;
+    onLoadCredentialSecretFor: (serverId: string) => void;
+    onClearCredentialFor: (serverId: string) => void;
   };
   currentServerSection: {
     selectedServer: ServerSummary | null;
@@ -117,7 +160,9 @@ interface Props {
     onLoadCredentialSecret: () => void;
     onClearCredential: () => void;
     onTestConnection: () => void;
-    onOpenTerminal: () => void;
+    /* S10：按清单选中服务器测凭证/开终端 */
+    onTestConnectionFor: (serverId: string) => void;
+    onOpenTerminal: (serverId: string) => void;
     availableBastions: ServerSummary[];
     preferredBastionId: string;
     jumpMode: "auto" | "jumpserver-search";
@@ -171,6 +216,14 @@ function backgroundModeLabel(value: UiBackgroundMode): string {
   return "渐变";
 }
 
+function monoFontFamilyLabel(value: MonoFontFamily): string {
+  if (value === "sf-mono") return "SF Mono";
+  if (value === "menlo") return "Menlo";
+  if (value === "consolas") return "Consolas";
+  if (value === "system-mono") return "系统等宽";
+  return "Geist Mono";
+}
+
 function fontFamilyLabel(value: UiFontFamily): string {
   if (value === "pingfang") return "苹方";
   if (value === "microsoft-yahei") return "微软雅黑";
@@ -192,9 +245,49 @@ const PREF_ANCHORS = [
   { id: "pref-advanced", label: "高级" },
 ];
 
+/** S14-4：水印内容模板占位符替换（{用户} / {主机} / {时间}）。 */
+export function resolveWatermarkText(template: string, values: { user: string; host: string; time: string }): string {
+  return template
+    .replaceAll("{用户}", values.user || "用户")
+    .replaceAll("{主机}", values.host || "主机")
+    .replaceAll("{时间}", values.time || "");
+}
+
+interface WatermarkOverlayProps {
+  enabled: boolean;
+  template: string;
+  opacity: number;
+  scope: WatermarkScope;
+  user: string;
+  host: string;
+  time: string;
+}
+
+/**
+ * S14-4 水印覆盖层（原型 1155-1166）：
+ * 斜向平铺文字，rotate(-22deg)、低透明度、pointer-events:none，叠加在内容区之上。
+ * 默认关闭（watermarkEnabled=false 时不渲染）。作用范围 global 时由外层决定挂载位置。
+ */
+export function WatermarkOverlay(props: WatermarkOverlayProps) {
+  if (!props.enabled || !props.template.trim()) return null;
+  const text = resolveWatermarkText(props.template, { user: props.user, host: props.host, time: props.time });
+  return (
+    <div
+      className={props.scope === "global" ? "slc-watermark slc-watermark-global" : "slc-watermark slc-watermark-content"}
+      aria-hidden="true"
+      style={{ "--wm-opacity": String(Math.max(0.01, Math.min(0.3, props.opacity / 100))) } as CSSProperties}
+    >
+      <div className="slc-watermark-grid">
+        {Array.from({ length: 24 }, (_, index) => (
+          <span key={index}>{text}</span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function ConnectionSettingsWorkspace(props: Props) {
-  const [showCredentialPassword, setShowCredentialPassword] = useState(false);
-  const [showCredentialPrivateKey, setShowCredentialPrivateKey] = useState(false);
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [listFilter, setListFilter] = useState("");
   const [pickedListId, setPickedListId] = useState("");
   const [detailPane, setDetailPane] = useState<SettingsConnectionPane | "import">("detail");
@@ -230,10 +323,6 @@ export function ConnectionSettingsWorkspace(props: Props) {
     && !looksLikeJumpServer(selectedServer)
     && (selectedServer.connectionKind === "bastion-target" || !selectedServer.connectionKind)
   );
-  const selectedCredentialLabel = credentialStatus?.hasUsableCredential
-    ? `${credentialStatus.source} · ${credentialStatus.hasPassword ? "密码" : ""}${credentialStatus.hasPassword && credentialStatus.hasPrivateKey ? " + " : ""}${credentialStatus.hasPrivateKey ? "私钥" : ""}`
-    : "未配置";
-
   const handlePickBackgroundImage = async (file: File | null) => {
     if (!file) return;
     const electronPath = (window as any).electronAPI?.getPathForFile?.(file);
@@ -270,6 +359,24 @@ export function ConnectionSettingsWorkspace(props: Props) {
   ) ?? null;
   const viewingCurrentServer = Boolean(activeListServer && selectedServer && activeListServer.id === selectedServer.id);
 
+  /* S10：清单选中任何服务器都读取其凭证状态——凭证编辑不再要求先连接 */
+  const activeListServerId = activeListServer?.id || "";
+  useEffect(() => {
+    if (activeListServerId) {
+      props.connectionSection.onFetchCredentialStatus(activeListServerId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeListServerId]);
+  /* S10-2：危险区「最近目录」（原型 979 行）。优先取该服务器本地浏览历史，
+     无历史时回落当前连接目录；最多展示 3 条，与原型一致。 */
+  const recentDirectoryLabel = (() => {
+    const serverId = activeListServer?.id || "";
+    const history = serverId ? readDirectoryHistory(serverId).filter(Boolean) : [];
+    const fallback = props.currentServerSection.connectionDirectory?.trim();
+    const merged = [...new Set([...history, ...(fallback ? [fallback] : [])])].slice(0, 3);
+    return merged.length ? merged.join(" · ") : "/";
+  })();
+
   const handlePrefScroll = () => {
     const container = prefScrollRef.current;
     if (!container) return;
@@ -289,6 +396,37 @@ export function ConnectionSettingsWorkspace(props: Props) {
       container.scrollTo({ top: target.offsetTop - 20, behavior: "smooth" });
     }
   };
+
+
+  /* S10：凭证卡 = 只读生效状态 + 「编辑凭证」展开编辑（危险动作「清除」仅在编辑态出现，且带确认框）。
+     当前连接与清单选中服务器共用；所有操作按目标 serverId 进行，不要求先连接。 */
+  /* S10：凭证卡 = 只读生效状态；「编辑凭证」与「编辑连接」共用同一表单（连接信息 + 密码/私钥一起维护） */
+  const openEditForm = () => {
+    if (!activeListServer) return;
+    props.connectionSection.onEditManualServer(activeListServer);
+    setDetailPane("form");
+  };
+
+  const renderCredentialCard = () => (
+    <section className="settings-card conn-credential-card">
+      <div className="settings-card-head">
+        <div>
+          <span className="settings-card-kicker">连接凭证</span>
+          {credentialStatus?.hasUsableCredential ? (
+            <span className="chip grn">已有可用凭证 · {credentialStatus.source || "本地"}</span>
+          ) : (
+            <span className="chip">尚未配置可用凭证</span>
+          )}
+        </div>
+        <button className="ghost-button" type="button" onClick={openEditForm}>编辑凭证</button>
+      </div>
+      <div className="credential-summary-line">
+        <span><span className="settings-info-key">认证方式</span>{credentialStatus?.hasPassword ? "密码 · 已保存" : credentialStatus?.hasPrivateKey ? "私钥 · 已保存" : "未配置"}</span>
+        <span><span className="settings-info-key">用户名</span><span className="mono">{credentialStatus?.username || activeListServer?.username || "--"}</span></span>
+        <span><span className="settings-info-key">私钥</span>{credentialStatus?.hasPrivateKey ? "已保存" : "未配置"}</span>
+      </div>
+    </section>
+  );
 
   return (
     <section className="settings-workspace settings-workspace-v2">
@@ -326,6 +464,18 @@ export function ConnectionSettingsWorkspace(props: Props) {
                 onChange={(event) => setListFilter(event.target.value)}
                 placeholder="搜索名称、主机或标签…"
               />
+              {/* S10：手动维护主入口——清单顶部常驻「＋ 新增」（原型 941 行） */}
+              <button
+                type="button"
+                className="ghost-button settings-primary-action conn-list-add"
+                title="手动新建连接（表单同「编辑」）"
+                onClick={() => {
+                  props.connectionSection.onStartCreate();
+                  setDetailPane("form");
+                }}
+              >
+                ＋ 新增
+              </button>
             </div>
             <div className="conn-server-list">
               {listGroups.map(([groupName, groupServers]) => (
@@ -340,6 +490,7 @@ export function ConnectionSettingsWorkspace(props: Props) {
                         className={isActive ? "conn-server-item conn-server-item-active" : "conn-server-item"}
                         onClick={() => {
                           setPickedListId(server.id);
+                          setMoreMenuOpen(false);
                           setDetailPane("detail");
                         }}
                       >
@@ -369,32 +520,56 @@ export function ConnectionSettingsWorkspace(props: Props) {
             <div className="conn-detail-head">
               <div>
                 <h2>{detailPane === "form" ? (props.connectionSection.draft.id ? "编辑连接" : "新增手动连接") : detailPane === "import" ? "导入来源" : activeListServer?.name || "连接管理"}</h2>
-                <p>
-                  {detailPane === "form"
-                    ? "保存后出现在左侧清单；凭证也可以稍后在详情里维护。"
-                    : detailPane === "import"
-                      ? "从 FinalShell / Xshell 自动读取本机连接配置并解密导入。"
-                      : "查看连接信息；当前连接的服务器可在此编辑凭证与堡垒机路由。"}
-                </p>
+                {detailPane === "detail" && activeListServer ? (
+                  <p className="conn-head-sub">
+                    <span className="chip">{sourceLabel(activeListServer.source)}</span>
+                    {viewingCurrentServer ? <span className="chip grn">当前连接</span> : null}
+                    <span className="mono">{activeListServer.username}@{activeListServer.host}:{activeListServer.port} · {activeListServer.basePath || "/"}</span>
+                  </p>
+                ) : (
+                  <p>
+                    {detailPane === "form"
+                      ? "连接信息与凭证在同一表单维护，保存后生效。"
+                      : detailPane === "import"
+                        ? "从 FinalShell / Xshell 自动读取本机连接配置并解密导入。"
+                        : "查看连接信息；在此维护凭证与堡垒机路由，无需先连接。"}
+                  </p>
+                )}
               </div>
               <div className="conn-head-actions">
-                <button
-                  type="button"
-                  className={detailPane === "import" ? "ghost-button tab-active" : "ghost-button"}
-                  onClick={() => setDetailPane((current) => current === "import" ? "detail" : "import")}
-                >
-                  导入来源
-                </button>
-                <button
-                  type="button"
-                  className="ghost-button settings-primary-action"
-                  onClick={() => {
-                    props.connectionSection.onStartCreate();
-                    setDetailPane("form");
-                  }}
-                >
-                  新增连接
-                </button>
+                {detailPane === "detail" && activeListServer ? (
+                  <>
+                    <button className="ghost-button" type="button" title="用已保存凭证测试这台服务器能否登录" onClick={() => props.currentServerSection.onTestConnectionFor(activeListServer.id)} disabled={props.isBusy}>重连测试</button>
+                    <button className="ghost-button" type="button" onClick={() => props.currentServerSection.onOpenTerminal(activeListServer.id)} disabled={props.isBusy}><Terminal size={12} strokeWidth={1.8} /> 打开终端</button>
+                    {/* S10：低频项收进 ⋯ 菜单（编辑连接/复制地址/导入来源），原型头部省略号按钮 */}
+                    <div className={moreMenuOpen ? "conn-more-wrap conn-more-wrap-open" : "conn-more-wrap"}>
+                      <button
+                        type="button"
+                        className="ghost-button conn-more-trigger"
+                        title="更多：编辑连接 · 复制地址 · 导入来源"
+                        onClick={() => setMoreMenuOpen((current) => !current)}
+                      >
+                        <MoreHorizontal size={14} strokeWidth={1.8} />
+                      </button>
+                      {moreMenuOpen ? (
+                        <div className="conn-more-menu" role="menu">
+                          <button type="button" role="menuitem" onClick={() => {
+                            setMoreMenuOpen(false);
+                            void navigator.clipboard?.writeText(`${activeListServer.username}@${activeListServer.host}:${activeListServer.port}`).catch(() => {});
+                          }}>复制地址</button>
+                          <button type="button" role="menuitem" className="conn-more-menu-danger" onClick={() => {
+                            setMoreMenuOpen(false);
+                            props.connectionSection.onClearCredentialFor(activeListServer.id);
+                          }} disabled={props.isBusy || !credentialStatus?.hasUsableCredential}>清除凭证</button>
+                          <button type="button" role="menuitem" onClick={() => {
+                            setMoreMenuOpen(false);
+                            setDetailPane((current) => current === "import" ? "detail" : "import");
+                          }}>导入来源</button>
+                        </div>
+                      ) : null}
+                    </div>
+                  </>
+                ) : null}
               </div>
             </div>
 
@@ -518,128 +693,44 @@ export function ConnectionSettingsWorkspace(props: Props) {
                 activeListServer ? (
                   viewingCurrentServer ? (
                     <div className="conn-detail-stack">
-                      <section className="settings-card settings-card-banner">
+                      {/* S10：详情默认只读——「连接信息」键值网格 + [编辑]（原型 946-957） */}
+                      <section className="settings-card">
                         <div className="settings-card-head">
                           <div>
-                            <span className="settings-card-kicker">当前连接</span>
+                            <span className="settings-card-kicker">连接信息</span>
                             <strong>{activeListServer.name}</strong>
                           </div>
                           <div className="settings-inline-actions">
-                            <button className="ghost-button" type="button" onClick={props.currentServerSection.onTestConnection} disabled={props.isBusy}>重连测试</button>
-                            <button className="ghost-button" type="button" onClick={props.currentServerSection.onOpenTerminal} disabled={props.isBusy}>打开终端</button>
+                            <button className="ghost-button" type="button" title={activeListServer.source === "manual" ? "编辑连接" : "导入服务器将以手动连接副本打开编辑"} onClick={() => {
+                              props.connectionSection.onEditManualServer(activeListServer);
+                              setDetailPane("form");
+                            }}>编辑</button>
                           </div>
                         </div>
-                        <div className="settings-meta-grid">
-                          <span>来源：{sourceLabel(activeListServer.source)}</span>
-                          <span>类型：{connectionKindLabel(activeListServer.connectionKind)}</span>
-                          <span>目录：{props.currentServerSection.connectionDirectory || "/"}</span>
-                          <span>说明：{activeListServer.connectionHint || "--"}</span>
-                        </div>
-                      </section>
-
-                      <section className="settings-card">
-                        <div className="settings-card-head">
-                          <div>
-                            <span className="settings-card-kicker">连接凭证</span>
-                            <strong>按服务器维度保存</strong>
-                            <p className="settings-card-note">
-                              可读取已保存的本地/导入凭证，也可以清除该服务器保存的密码和私钥；填写后保存会覆盖。
-                            </p>
-                          </div>
-                          <div className="settings-inline-actions">
-                            <button className="ghost-button" type="button" onClick={props.currentServerSection.onLoadCredentialSecret} disabled={props.isBusy || !credentialStatus?.hasUsableCredential}>读取已保存</button>
-                            <button className="ghost-button danger-button" type="button" onClick={props.currentServerSection.onClearCredential} disabled={props.isBusy || !credentialStatus?.hasUsableCredential}>清除凭证</button>
-                            <button className="ghost-button" type="button" onClick={props.currentServerSection.onTestConnection} disabled={props.isBusy}>重连</button>
-                            <button className="ghost-button settings-primary-action" type="button" onClick={props.currentServerSection.onSaveCredential} disabled={props.isBusy}>
-                              {props.isBusy ? "保存中..." : hasCredentialDraft ? "保存并覆盖" : "保存凭证"}
-                            </button>
-                          </div>
-                        </div>
-                        <div className="credential-status-panel">
-                          <div className="credential-status-main">
-                            <span className={`credential-status-dot ${credentialStatus?.hasUsableCredential ? "credential-status-dot-ok" : "credential-status-dot-warn"}`} />
-                            <div>
-                              <strong>{credentialStatus?.hasUsableCredential ? "已有可用凭证" : "尚未配置可用凭证"}</strong>
-                              <span>{credentialStatus?.message || "读取凭证状态后会显示保存来源和可用性。"}</span>
-                            </div>
-                          </div>
-                          <div className="credential-status-tags">
-                            <span>来源：{credentialStatus?.source || "--"}</span>
-                            <span>用户名：{credentialStatus?.username || activeListServer.username || "--"}</span>
-                            <span>凭证：{selectedCredentialLabel}</span>
-                            <span className={credentialStatus?.hasPassword ? "credential-tag-ok" : ""}>密码：{credentialStatus?.hasPassword ? "已保存" : "未配置"}</span>
-                            <span className={credentialStatus?.hasPrivateKey ? "credential-tag-ok" : ""}>私钥：{credentialStatus?.hasPrivateKey ? "已保存" : "未配置"}</span>
-                          </div>
-                        </div>
-                        <div className="settings-form-grid settings-form-grid-single">
-                          <label className="settings-field">
-                            <span>用户名</span>
-                            <input value={props.currentServerSection.credentialUsername} onChange={(event) => props.currentServerSection.onCredentialUsernameChange(event.target.value)} />
-                          </label>
-                          <label className="settings-field">
-                            <span>密码</span>
-                            <div className="settings-secret-field">
-                              <input
-                                type={showCredentialPassword ? "text" : "password"}
-                                value={props.currentServerSection.credentialPassword}
-                                onChange={(event) => props.currentServerSection.onCredentialPasswordChange(event.target.value)}
-                                placeholder={credentialStatus?.hasPassword ? "已保存，留空不覆盖" : "输入密码后保存"}
-                              />
-                              <button
-                                type="button"
-                                className="ghost-button slim-button"
-                                onClick={() => {
-                                  if (!props.currentServerSection.credentialPassword && credentialStatus?.hasPassword) {
-                                    props.currentServerSection.onLoadCredentialSecret();
-                                    setShowCredentialPassword(true);
-                                    return;
-                                  }
-                                  setShowCredentialPassword((current) => !current);
-                                }}
-                              >
-                                {showCredentialPassword ? "隐藏" : credentialStatus?.hasPassword && !props.currentServerSection.credentialPassword ? "查看" : "显示"}
-                              </button>
-                            </div>
-                          </label>
-                          <label className="settings-field">
-                            <span>私钥</span>
-                            <div className="settings-secret-field settings-secret-field-textarea">
-                              <textarea
-                                value={props.currentServerSection.credentialPrivateKey}
-                                onChange={(event) => props.currentServerSection.onCredentialPrivateKeyChange(event.target.value)}
-                                placeholder={credentialStatus?.hasPrivateKey ? "已保存，留空不覆盖；需要替换时粘贴新私钥" : "可直接粘贴私钥内容"}
-                                spellCheck={false}
-                                style={showCredentialPrivateKey ? undefined : { WebkitTextSecurity: "disc" } as CSSProperties}
-                              />
-                              <button
-                                type="button"
-                                className="ghost-button slim-button"
-                                onClick={() => {
-                                  if (!props.currentServerSection.credentialPrivateKey && credentialStatus?.hasPrivateKey) {
-                                    props.currentServerSection.onLoadCredentialSecret();
-                                    setShowCredentialPrivateKey(true);
-                                    return;
-                                  }
-                                  setShowCredentialPrivateKey((current) => !current);
-                                }}
-                              >
-                                {showCredentialPrivateKey ? "隐藏" : credentialStatus?.hasPrivateKey && !props.currentServerSection.credentialPrivateKey ? "查看" : "显示"}
-                              </button>
-                            </div>
-                          </label>
+                        <div className="settings-info-grid">
+                          <span><span className="settings-info-key">主机</span><span className="mono">{activeListServer.host}</span></span>
+                          <span><span className="settings-info-key">端口</span><span className="mono">{activeListServer.port}</span></span>
+                          <span><span className="settings-info-key">用户名</span><span className="mono">{activeListServer.username}</span></span>
+                          <span><span className="settings-info-key">类型</span><span>{connectionKindLabel(activeListServer.connectionKind)}</span></span>
+                          <span><span className="settings-info-key">目录</span><span className="mono">{props.currentServerSection.connectionDirectory || "/"}</span></span>
+                          <span><span className="settings-info-key">来源</span><span>{sourceLabel(activeListServer.source)}</span></span>
                         </div>
                       </section>
 
-                      <section className="settings-card">
-                        <div className="settings-card-head">
-                          <div>
-                            <span className="settings-card-kicker">连接入口</span>
-                            <strong>{canConfigureRoute ? "入口账号与 JumpServer 规则" : "当前无需额外入口设置"}</strong>
-                          </div>
-                          {canConfigureRoute ? <button className="ghost-button" type="button" onClick={props.currentServerSection.onSaveRoute} disabled={props.isBusy}>保存入口设置</button> : null}
-                        </div>
+                      {/* S10：凭证卡（当前连接 / 清单选中服务器共用；按目标 ID 维护，不要求先连接） */}
+                      {renderCredentialCard()}
+
+                      {/* S10：连接入口——直连时折叠为一行摘要，展开才见配置（原型 969-976） */}
+                      <section className="settings-card conn-entry-card">
                         {canConfigureRoute ? (
                           <>
+                            <div className="settings-card-head">
+                              <div>
+                                <span className="settings-card-kicker">连接入口</span>
+                                <strong>入口账号与 JumpServer 规则</strong>
+                              </div>
+                              <button className="ghost-button" type="button" onClick={props.currentServerSection.onSaveRoute} disabled={props.isBusy}>保存入口设置</button>
+                            </div>
                             {canPickEntry ? (
                               <label className="settings-field">
                                 <span>入口账号</span>
@@ -691,10 +782,17 @@ export function ConnectionSettingsWorkspace(props: Props) {
                             )}
                           </>
                         ) : (
-                          <div className="settings-note-box">
-                            <strong>当前服务器按直连处理</strong>
-                            <span>如果你希望它走堡垒机，请点上方「新增连接/编辑连接」把连接方式改成「经堡垒机目标机」。</span>
-                          </div>
+                          <details className="conn-entry-details">
+                            <summary>
+                              <span className="settings-card-kicker">连接入口</span>
+                              <span className="conn-entry-summary-text">当前服务器按直连处理</span>
+                              <span className="conn-entry-summary-toggle">展开配置堡垒机 ▾</span>
+                            </summary>
+                            <div className="settings-note-box conn-entry-note">
+                              <strong>如果你希望它走堡垒机</strong>
+                              <span>请点 ⋯ 菜单「编辑连接」把连接方式改成「经堡垒机目标机」。</span>
+                            </div>
+                          </details>
                         )}
                       </section>
                     </div>
@@ -734,20 +832,41 @@ export function ConnectionSettingsWorkspace(props: Props) {
                           </div>
                         ) : null}
                       </section>
-                      <div className="settings-note-box">
-                        <strong>凭证编辑需要先连接这台服务器</strong>
-                        <span>点击「连接此服务器」切换过去后，这里会展示凭证与堡垒机路由的完整编辑面板。</span>
-                      </div>
+                      {/* S10：凭证不再要求先连接——清单选中的服务器同样可直接维护 */}
+                      {renderCredentialCard()}
                     </div>
                   )
                 ) : (
-                  <div className="settings-workspace-empty">
-                    <strong>左侧还没有可选的服务器</strong>
-                    <span>点击右上角「新增连接」手动添加，或打开「导入来源」从 FinalShell / Xshell 导入。</span>
+                  <div className="settings-workspace-empty settings-empty-centered">
+                    <div className="settings-empty-icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>
+                    </div>
+                    <strong>选择左侧服务器查看连接详情</strong>
+                    <span>点击清单顶部「＋ 新增」手动添加，或经 ⋯ 菜单「导入来源」从 FinalShell / Xshell 导入。</span>
                   </div>
                 )
-              ) : null}
+                ) : null}
             </div>
+            {/* S10-2 必达：危险区「最近目录」+「删除此服务器」红字行，及其下 panel-muted 底 D9 页脚（原型 978-984）。
+                仅在有服务器的详情态出现；删除降为页脚红字，不做独立危险按钮。 */}
+            {detailPane === "detail" && activeListServer ? (
+              <>
+                <div className="conn-danger-strip">
+                  <span className="conn-danger-recent">
+                    最近目录：{recentDirectoryLabel}
+                  </span>
+                  <button
+                    type="button"
+                    className="ghost-button danger-button conn-danger-delete"
+                    onClick={() => props.connectionSection.onDeleteServer(activeListServer)}
+                    disabled={props.isBusy}
+                  >
+                    <Trash2 size={12} strokeWidth={1.8} />
+                    删除此服务器
+                  </button>
+                </div>
+              </>
+            ) : null}
           </div>
         </div>
       ) : (
@@ -787,40 +906,86 @@ export function ConnectionSettingsWorkspace(props: Props) {
                     </span>
                   </span>
                 </div>
-                <div className="settings-pref-row">
-                  <span className="settings-pref-label"><strong>背景方案</strong><span>默认 / 雾面 / 纸感 / 自定义</span></span>
-                  <span className="settings-pref-value">
-                    <select
-                      value={props.preferenceSection.uiSurface}
-                      onChange={(event) => props.preferenceSection.onUiSurfaceChange(event.target.value as UiSurface)}
-                    >
-                      <option value="plain">默认</option>
-                      <option value="mist">雾面</option>
-                      <option value="paper">纸感</option>
-                      <option value="custom">自定义</option>
-                    </select>
-                  </span>
+                {/* S14-1 必达：背景方案 4 张可视缩略卡（原型 1109-1117），
+                    原为 <select> 下拉。96×60 缩略卡，选中 accent 边框 + accent 文字。 */}
+                <div className="settings-pref-row settings-pref-row-wide">
+                  <span className="settings-pref-label"><strong>背景方案</strong><span>默认 / 雾面 / 纸感 / 自定义，点击缩略图直接切换</span></span>
+                  <div className="surface-thumb-row" role="radiogroup" aria-label="背景方案">
+                    {SURFACE_OPTIONS.map((option) => {
+                      const active = props.preferenceSection.uiSurface === option.value;
+                      return (
+                        <button
+                          key={option.value}
+                          type="button"
+                          role="radio"
+                          aria-checked={active}
+                          className={active ? "surface-thumb surface-thumb-active" : "surface-thumb"}
+                          onClick={() => props.preferenceSection.onUiSurfaceChange(option.value)}
+                        >
+                          <span className="surface-thumb-card" style={{ background: option.background }} aria-hidden="true">
+                            <i className="surface-thumb-line surface-thumb-line-1" />
+                            <i className="surface-thumb-line surface-thumb-line-2" />
+                            <i className="surface-thumb-line surface-thumb-line-3" />
+                            <i className="surface-thumb-line surface-thumb-line-4" />
+                          </span>
+                          <span className="surface-thumb-label">{option.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
                 {props.preferenceSection.uiSurface === "custom" ? (
                   <div className="settings-pref-row settings-pref-row-wide settings-theme-customizer">
                     <div className="settings-theme-customizer-head">
                       <div>
-                        <span>自定义主题</span>
+                        <span>自定义背景 · 图片模式</span>
                         <strong>
                           {backgroundModeLabel(props.preferenceSection.uiBackgroundMode)}
                           {" · "}
                           {fontFamilyLabel(props.preferenceSection.uiFontFamily)}
                         </strong>
                       </div>
-                      <select
-                        value={props.preferenceSection.uiBackgroundMode}
-                        onChange={(event) => props.preferenceSection.onUiBackgroundModeChange(event.target.value as UiBackgroundMode)}
-                      >
-                        <option value="solid">纯色背景</option>
-                        <option value="gradient">渐变背景</option>
-                        <option value="image">图片背景</option>
-                      </select>
+                      {/* S14-2：背景模式改为 fchip（原型 1123 行「纯色 / 渐变 / 图片」） */}
+                      <span className="bg-mode-chips">
+                        {(["solid", "gradient", "image"] as UiBackgroundMode[]).map((mode) => (
+                          <button
+                            key={mode}
+                            type="button"
+                            className={props.preferenceSection.uiBackgroundMode === mode ? "fchip fchip-on" : "fchip"}
+                            onClick={() => props.preferenceSection.onUiBackgroundModeChange(mode)}
+                          >
+                            {mode === "solid" ? "纯色" : mode === "gradient" ? "渐变" : "图片"}
+                          </button>
+                        ))}
+                      </span>
                     </div>
+                    {/* S14-2 必达：图片模式下的「遮罩亮度」「背景模糊」滑杆（原型 1125-1126 行） */}
+                    {props.preferenceSection.uiBackgroundMode === "image" ? (
+                      <div className="bg-image-sliders">
+                        <label className="bg-slider-field">
+                          <span>遮罩亮度</span>
+                          <input
+                            type="range"
+                            min={0}
+                            max={90}
+                            value={props.preferenceSection.customImageOverlay}
+                            onChange={(event) => props.preferenceSection.onCustomImageOverlayChange(Number(event.target.value))}
+                          />
+                          <code>{props.preferenceSection.customImageOverlay}%</code>
+                        </label>
+                        <label className="bg-slider-field">
+                          <span>背景模糊</span>
+                          <input
+                            type="range"
+                            min={0}
+                            max={24}
+                            value={props.preferenceSection.customImageBlur}
+                            onChange={(event) => props.preferenceSection.onCustomImageBlurChange(Number(event.target.value))}
+                          />
+                          <code>{props.preferenceSection.customImageBlur}px</code>
+                        </label>
+                      </div>
+                    ) : null}
                     <div className="settings-custom-theme-grid">
                       {props.preferenceSection.uiBackgroundMode === "solid" ? (
                         <label className="settings-color-field">
@@ -919,19 +1084,6 @@ export function ConnectionSettingsWorkspace(props: Props) {
                         />
                         <code>{props.preferenceSection.customTerminalBackgroundColor}</code>
                       </label>
-                      <label className="settings-image-field">
-                        <span>字体类型</span>
-                        <select
-                          value={props.preferenceSection.uiFontFamily}
-                          onChange={(event) => props.preferenceSection.onUiFontFamilyChange(event.target.value as UiFontFamily)}
-                        >
-                          <option value="geist">Geist</option>
-                          <option value="pingfang">苹方</option>
-                          <option value="microsoft-yahei">微软雅黑</option>
-                          <option value="simsun">宋体</option>
-                          <option value="system">系统字体</option>
-                        </select>
-                      </label>
                     </div>
                   </div>
                 ) : null}
@@ -945,13 +1097,191 @@ export function ConnectionSettingsWorkspace(props: Props) {
                   </span>
                 </div>
                 <div className="settings-pref-row">
-                  <span className="settings-pref-label"><strong>动效策略</strong><span>低性能机器可选减少动效</span></span>
+                  <span className="settings-pref-label"><strong>动效</strong><span>低性能机器可选减少动效</span></span>
                   <span className="settings-pref-value">
-                    <span className="settings-tool-switcher">
-                      <button type="button" className={props.preferenceSection.motionMode === "normal" ? "settings-tool-chip settings-tool-chip-active" : "settings-tool-chip"} onClick={() => props.preferenceSection.onMotionModeChange("normal")}>标准</button>
-                      <button type="button" className={props.preferenceSection.motionMode === "reduced" ? "settings-tool-chip settings-tool-chip-active" : "settings-tool-chip"} onClick={() => props.preferenceSection.onMotionModeChange("reduced")}>减少</button>
+                    {/* S14-5：动效 = .seg.lite（原型 1170「标准/减少」） */}
+                    <span className="seg lite">                      <button type="button" className={props.preferenceSection.motionMode === "normal" ? "on" : ""} onClick={() => props.preferenceSection.onMotionModeChange("normal")}>标准</button>
+                      <button type="button" className={props.preferenceSection.motionMode === "reduced" ? "on" : ""} onClick={() => props.preferenceSection.onMotionModeChange("reduced")}>减少</button>
                     </span>
                   </span>
+                </div>
+                <div className="settings-pref-row">
+                  <span className="settings-pref-label"><strong>动态背景（图片缓慢缩放）</strong><span>动效=减少 时强制停用</span></span>
+                  <span className="settings-pref-value">
+                    <button
+                      type="button"
+                      className={props.preferenceSection.dynamicBackground && props.preferenceSection.motionMode !== "reduced" ? "pill on" : "pill"}
+                      onClick={props.preferenceSection.onToggleDynamicBackground}
+                    >
+                      {props.preferenceSection.dynamicBackground ? "开启" : "关闭"}
+                    </button>
+                  </span>
+                </div>
+                {/* S14-3 必达：字体三处独立表（原型 1131-1142）——
+                    表格 作用区/字体族/字号，三行 = 界面 / 日志预览 / 终端；下方虚线「实时预览」行。 */}
+                <div className="settings-pref-row settings-pref-row-wide">
+                  <span className="settings-pref-label"><strong>字体（三处独立）</strong><span>界面 / 日志预览 / 终端各自独立，日志字体族为新增能力</span></span>
+                  <div className="font-matrix">
+                    <table className="font-matrix-table">
+                      <thead>
+                        <tr>
+                          <th>作用区</th>
+                          <th>字体族</th>
+                          <th>字号</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td>界面</td>
+                          <td>
+                            <ThemedSelect
+                              value={props.preferenceSection.uiFontFamily}
+                              onChange={(value) => props.preferenceSection.onUiFontFamilyChange(value as UiFontFamily)}
+                              ariaLabel="界面字体"
+                              options={[
+                                { value: "geist", label: "Geist（默认）" },
+                                { value: "pingfang", label: "苹方" },
+                                { value: "microsoft-yahei", label: "微软雅黑" },
+                                { value: "simsun", label: "宋体" },
+                                { value: "system", label: "系统字体" }
+                              ]}
+                            />
+                          </td>
+                          <td><span className="pill">跟随界面密度</span></td>
+                        </tr>
+                        <tr>
+                          <td>日志预览</td>
+                          <td>
+                            <ThemedSelect
+                              value={props.preferenceSection.logFontFamily}
+                              onChange={(value) => props.preferenceSection.onLogFontFamilyChange(value as MonoFontFamily)}
+                              ariaLabel="日志预览字体"
+                              options={[
+                                { value: "geist-mono", label: "Geist Mono" },
+                                { value: "sf-mono", label: "SF Mono" },
+                                { value: "menlo", label: "Menlo" },
+                                { value: "consolas", label: "Consolas" },
+                                { value: "system-mono", label: "系统等宽" }
+                              ]}
+                            />
+                          </td>
+                          <td>
+                            <input
+                              type="number"
+                              min={11}
+                              max={16}
+                              value={props.preferenceSection.logFontSize}
+                              onChange={(event) => props.preferenceSection.onLogFontSizeChange(Number(event.target.value))}
+                              aria-label="日志预览字号"
+                            />
+                          </td>
+                        </tr>
+                        <tr>
+                          <td>终端</td>
+                          <td>
+                            <ThemedSelect
+                              value={props.preferenceSection.terminalFontFamily}
+                              onChange={(value) => props.preferenceSection.onTerminalFontFamilyChange(value as MonoFontFamily)}
+                              ariaLabel="终端字体"
+                              options={[
+                                { value: "geist-mono", label: "Geist Mono" },
+                                { value: "sf-mono", label: "SF Mono" },
+                                { value: "menlo", label: "Menlo" },
+                                { value: "consolas", label: "Consolas" },
+                                { value: "system-mono", label: "系统等宽" }
+                              ]}
+                            />
+                          </td>
+                          <td>
+                            <input
+                              type="number"
+                              min={11}
+                              max={18}
+                              value={props.preferenceSection.terminalFontSize}
+                              onChange={(event) => props.preferenceSection.onTerminalFontSizeChange(Number(event.target.value))}
+                              aria-label="终端字号"
+                            />
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                    {/* 原型 1139-1141：虚线「实时预览」行 */}
+                    <div className="font-live-preview">
+                      实时预览 — 2026-09-29 09:02:11{" "}
+                      <span className="font-live-error">ERROR</span>{" "}
+                      c.e.task.SyncJob - sync failed: connection reset by peer
+                    </div>
+                  </div>
+                </div>
+                {/* S14-4 必达：水印块（原型 1143-1168）——
+                    标题「水印」+ chip 新增 + pill 开启；内容模板 / 透明度 range / 作用范围 fchip；
+                    右侧预览框显示斜向平铺水印。水印渲染层见 WatermarkOverlay（默认关闭）。 */}
+                <div className="settings-pref-row settings-pref-row-wide">
+                  <div className="watermark-block">
+                    <div className="watermark-main">
+                      <div className="watermark-head">
+                        <span className="watermark-title">水印<span className="chip">新增</span></span>
+                        <button
+                          type="button"
+                          className={props.preferenceSection.watermarkEnabled ? "pill on" : "pill"}
+                          onClick={props.preferenceSection.onToggleWatermark}
+                        >
+                          {props.preferenceSection.watermarkEnabled ? "开启" : "关闭"}
+                        </button>
+                      </div>
+                      <label className="watermark-field">
+                        <span>内容模板</span>
+                        <input
+                          value={props.preferenceSection.watermarkTemplate}
+                          onChange={(event) => props.preferenceSection.onWatermarkTemplateChange(event.target.value)}
+                          placeholder={DEFAULT_WATERMARK_TEMPLATE}
+                        />
+                      </label>
+                      <label className="watermark-field watermark-field-range">
+                        <span>透明度</span>
+                        <input
+                          type="range"
+                          min={1}
+                          max={20}
+                          value={props.preferenceSection.watermarkOpacity}
+                          onChange={(event) => props.preferenceSection.onWatermarkOpacityChange(Number(event.target.value))}
+                        />
+                        <code>{props.preferenceSection.watermarkOpacity}%</code>
+                      </label>
+                      <div className="watermark-scope">
+                        作用范围
+                        <button
+                          type="button"
+                          className={props.preferenceSection.watermarkScope === "content" ? "fchip fchip-on" : "fchip"}
+                          onClick={() => props.preferenceSection.onWatermarkScopeChange("content")}
+                        >
+                          日志/预览区
+                        </button>
+                        <button
+                          type="button"
+                          className={props.preferenceSection.watermarkScope === "global" ? "fchip fchip-on" : "fchip"}
+                          onClick={() => props.preferenceSection.onWatermarkScopeChange("global")}
+                        >
+                          全局
+                        </button>
+                      </div>
+                    </div>
+                    <div className="watermark-preview" aria-hidden="true">
+                      <div className="watermark-preview-lines">
+                        <div className="ll"><span className="t">09:02:11.001</span><span><span className="lv lv-e">ERROR</span> SyncJob - sync failed…</span></div>
+                        <div className="ll"><span className="t">09:02:12.110</span><span><span className="lv lv-i">INFO </span> SyncJob - retry scheduled</span></div>
+                        <div className="ll"><span className="t">09:02:15.771</span><span><span className="lv lv-w">WARN </span> UploadController - got 413</span></div>
+                      </div>
+                      <div
+                        className="watermark-preview-tiles"
+                        style={{ "--wm-opacity": String(props.preferenceSection.watermarkOpacity / 100) } as CSSProperties}
+                      >
+                        {Array.from({ length: 4 }, (_, index) => (
+                          <span key={index}>{props.preferenceSection.watermarkTemplate || DEFAULT_WATERMARK_TEMPLATE}</span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </section>
@@ -1000,6 +1330,7 @@ export function ConnectionSettingsWorkspace(props: Props) {
                     </select>
                   </span>
                 </div>
+                {/* S14-3：日志字号已并入「外观」的字体三处独立表 */}
               </div>
             </section>
 
@@ -1007,20 +1338,12 @@ export function ConnectionSettingsWorkspace(props: Props) {
               <div className="settings-card-kicker">终端</div>
               <div className="settings-pref-card">
                 <div className="settings-pref-row">
-                  <span className="settings-pref-label"><strong>终端字号</strong><span>更新后自动重新适配</span></span>
-                  <span className="settings-pref-value">
-                    <select
-                      value={String(props.preferenceSection.terminalFontSize)}
-                      onChange={(event) => props.preferenceSection.onTerminalFontSizeChange(Number(event.target.value))}
-                    >
-                      <option value="11">11px</option>
-                      <option value="12">12px</option>
-                      <option value="13">13px</option>
-                      <option value="14">14px</option>
-                      <option value="16">16px</option>
-                      <option value="18">18px</option>
-                    </select>
-                  </span>
+                  <span className="settings-pref-label"><strong>终端重排</strong><span>字体族 / 字号更新后 xterm 自动重排，避免列宽错位</span></span>
+                  <span className="settings-pref-value">{props.preferenceSection.terminalFontFamily === "geist-mono" ? "Geist Mono" : monoFontFamilyLabel(props.preferenceSection.terminalFontFamily)} · {props.preferenceSection.terminalFontSize}px</span>
+                </div>
+                <div className="settings-pref-row">
+                  <span className="settings-pref-label"><strong>终端选中复制</strong><span>选中即复制，右键粘贴</span></span>
+                  <span className="settings-pref-value">默认开启</span>
                 </div>
               </div>
             </section>
