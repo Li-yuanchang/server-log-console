@@ -76,12 +76,12 @@
 }
 
 .jumpserver-asset-item strong {
-  font-size: 10px;
+  font-size: var(--fs-2xs);
   font-weight: 500;
 }
 
 .jumpserver-asset-item span {
-  font-size: 10px;
+  font-size: var(--fs-2xs);
   color: var(--ink-muted);
 }
 
@@ -129,7 +129,7 @@
 }
 
 .import-tool-tabs .ghost-button {
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   padding: 2px 10px;
   border-radius: 3px;
 }
@@ -170,8 +170,8 @@
   border: 1px solid #15202b;
   white-space: pre-wrap;
   word-break: break-word;
-  font-family: "SFMono-Regular", "Consolas", monospace;
-  font-size: 11px;
+  font-family: var(--log-font-family, "SFMono-Regular", "Consolas", monospace);
+  font-size: var(--fs-2xs);
   line-height: 1.5;
 }
 
@@ -204,7 +204,8 @@
   white-space: pre-wrap;
   word-break: break-word;
   padding: 0 8px 0 6px;
-  font-family: "SFMono-Regular", "Consolas", "Liberation Mono", "Menlo", monospace;
+  /* S14：字体族改走变量（原为硬编码），由设置中心「日志字体族」驱动 */
+  font-family: var(--log-font-family, "SFMono-Regular", "Consolas", "Liberation Mono", "Menlo", monospace);
   font-size: var(--log-font-size, 12px);
   line-height: 1.5;
 }
@@ -289,7 +290,7 @@
 .log-bookmark-icon {
   display: inline-block;
   width: 14px;
-  font-size: 10px;
+  font-size: var(--fs-2xs);
   line-height: 1;
   vertical-align: middle;
   margin-right: 2px;
@@ -322,7 +323,7 @@
   border-left: 1px solid rgba(255, 255, 255, 0.08);
   overflow-y: auto;
   z-index: 10;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: rgba(226, 232, 240, 0.92);
   box-shadow: -12px 0 24px rgba(15, 23, 42, 0.22);
 }
@@ -341,7 +342,7 @@
   padding: 16px 12px;
   color: rgba(148, 163, 184, 0.9);
   text-align: center;
-  font-size: 12px;
+  font-size: var(--fs-xs);
 }
 
 .bookmark-panel-list {
@@ -443,19 +444,19 @@
 }
 
 .utility-workspace-eyebrow {
-  font-size: 10px;
+  font-size: var(--fs-2xs);
   letter-spacing: 0.18em;
   color: rgba(71, 85, 105, 0.7);
 }
 
 .utility-workspace-titleblock strong {
-  font-size: 16px;
+  font-size: var(--fs-lg);
   line-height: 1.1;
   color: #0f172a;
 }
 
 .utility-workspace-subtitle {
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   color: rgba(51, 65, 85, 0.76);
 }
 
@@ -558,14 +559,14 @@
 }
 
 .server-status-identity strong {
-  font-size: 14px;
+  font-size: var(--fs-base);
   line-height: 1.25;
 }
 
 .server-status-identity small {
   max-width: 260px;
   margin-top: 2px;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   color: #64748b;
 }
 
@@ -586,7 +587,7 @@
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.84);
   color: #475569;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   font-weight: 700;
   line-height: 1;
   white-space: nowrap;
@@ -633,7 +634,7 @@
   gap: 8px;
   padding: 0 12px 10px;
   color: #64748b;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
 }
 
 .server-status-error {
@@ -646,7 +647,7 @@
   border: 1px solid rgba(245, 158, 11, 0.26);
   background: rgba(255, 251, 235, 0.9);
   color: #92400e;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   line-height: 1.45;
 }
 
@@ -657,7 +658,7 @@
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.68);
   color: #526174;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   line-height: 1.35;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.66);
 }
@@ -711,7 +712,7 @@
 
 .server-status-hero-main span,
 .server-status-hero-meta span {
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   color: #64748b;
 }
 
@@ -722,7 +723,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   color: #0f172a;
 }
 
@@ -757,12 +758,12 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 10px;
+  font-size: var(--fs-2xs);
   color: #64748b;
 }
 
 .server-status-pill strong {
-  font-size: 15px;
+  font-size: var(--fs-md);
   line-height: 1.1;
   color: #0f172a;
 }
@@ -771,7 +772,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 9px;
+  font-size: var(--fs-2xs);
   color: #64748b;
 }
 
@@ -799,7 +800,7 @@
   align-items: center;
   gap: 7px;
   margin-bottom: 9px;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   font-weight: 700;
   color: #1e293b;
 }
@@ -807,7 +808,7 @@
 .server-status-card-title em {
   margin-left: auto;
   font-style: normal;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   font-weight: 600;
   color: #64748b;
 }
@@ -829,14 +830,14 @@
 
 .server-status-load-grid strong {
   display: block;
-  font-size: 16px;
+  font-size: var(--fs-lg);
   color: #0f172a;
 }
 
 .server-status-load-grid span {
   display: block;
   margin-top: 2px;
-  font-size: 10px;
+  font-size: var(--fs-2xs);
   color: #64748b;
 }
 
@@ -850,7 +851,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   color: #475569;
 }
 
@@ -885,7 +886,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 10px;
+  font-size: var(--fs-2xs);
   color: #64748b;
 }
 
@@ -895,7 +896,7 @@
   justify-content: space-between;
   gap: 10px;
   margin-top: 8px;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   color: #64748b;
 }
 
@@ -940,7 +941,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   color: #1e293b;
 }
 
@@ -949,7 +950,7 @@
 .server-status-disk-usage small {
   display: block;
   margin-top: 2px;
-  font-size: 10px;
+  font-size: var(--fs-2xs);
   color: #64748b;
 }
 
@@ -960,7 +961,7 @@
 .server-status-disk-usage > span,
 .server-status-process strong {
   display: block;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   color: #0f172a;
   font-weight: 700;
 }
@@ -990,7 +991,7 @@
   border-radius: 10px;
   background: #f8fafc;
   color: #64748b;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
 }
 
 .server-status-warning-list {
@@ -1005,33 +1006,12 @@
   border-radius: 10px;
   background: rgba(255, 251, 235, 0.86);
   color: #92400e;
-  font-size: 11px;
-}
-
-.server-status-skeleton {
-  display: grid;
-  gap: 10px;
-  padding: 0 12px 12px;
-}
-
-.server-status-skeleton span {
-  display: block;
-  height: 76px;
-  border-radius: 14px;
-  background: linear-gradient(90deg, rgba(226, 232, 240, 0.8), rgba(248, 250, 252, 0.92), rgba(226, 232, 240, 0.8));
-  background-size: 180% 100%;
-  animation: server-status-sheen 1.2s ease-in-out infinite;
+  font-size: var(--fs-2xs);
 }
 
 .server-status-spin {
   animation: server-status-spin 900ms linear infinite;
 }
-
-@keyframes server-status-sheen {
-  0% { background-position: 100% 0; }
-  100% { background-position: -100% 0; }
-}
-
 @keyframes server-status-spin {
   to { transform: rotate(360deg); }
 }
@@ -1043,7 +1023,7 @@
   flex: 1 1 0%;
   min-height: 0;
   overflow: hidden;
-  font-size: 12px;
+  font-size: var(--fs-xs);
 }
 
 .diff-compare-header {
@@ -1070,7 +1050,7 @@
   display: flex;
   justify-content: space-between;
   padding: 4px 10px;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   color: rgba(51, 65, 85, 0.76);
   border-bottom: 1px solid rgba(148, 163, 184, 0.1);
 }
@@ -1102,12 +1082,12 @@
 }
 
 .diff-compare-same-state strong {
-  font-size: 15px;
+  font-size: var(--fs-md);
   color: #0f172a;
 }
 
 .diff-compare-same-state span {
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: rgba(51, 65, 85, 0.76);
 }
 
@@ -1117,13 +1097,13 @@
   flex: 1 1 0%;
   min-height: 180px;
   padding: 24px;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: rgba(71, 85, 105, 0.76);
 }
 
 .diff-compare-path {
   padding: 4px 10px;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   color: rgba(71, 85, 105, 0.7);
   border-bottom: 1px solid rgba(148, 163, 184, 0.1);
   overflow: hidden;
@@ -1166,7 +1146,7 @@
 .local-file-size {
   flex-shrink: 0;
   color: rgba(100, 116, 139, 0.84);
-  font-size: 10px;
+  font-size: var(--fs-2xs);
 }
 
 .local-file-loading {
@@ -1184,7 +1164,7 @@
   border-left: none;
   overflow-y: auto;
   z-index: auto;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -1225,7 +1205,7 @@
   flex-shrink: 0;
   width: 60px;
   color: rgba(51, 65, 85, 0.76);
-  font-size: 11px;
+  font-size: var(--fs-2xs);
 }
 
 .ssh-tunnel-form-row input,
@@ -1237,7 +1217,7 @@
   border-radius: 3px;
   color: #0f172a;
   padding: 3px 6px;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
 }
 
 .ssh-tunnel-form-row input[type="number"] {
@@ -1271,12 +1251,12 @@
   flex-shrink: 0;
   font-weight: 600;
   color: #60a5fa;
-  font-size: 10px;
+  font-size: var(--fs-2xs);
 }
 
 .ssh-tunnel-status {
   flex-shrink: 0;
-  font-size: 10px;
+  font-size: var(--fs-2xs);
   padding: 1px 4px;
   border-radius: 3px;
 }
@@ -1301,7 +1281,7 @@
   padding: 12px 8px;
   color: rgba(100, 116, 139, 0.84);
   text-align: center;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
 }
 
 /* --- Batch Command Panel --- */
@@ -1313,7 +1293,7 @@
   border-left: none;
   overflow-y: auto;
   z-index: auto;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   display: flex;
   flex-direction: column;
   flex: 1 1 0%;
@@ -1346,7 +1326,7 @@
   align-items: center;
   gap: 6px;
   cursor: pointer;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   color: #334155;
 }
 
@@ -1377,7 +1357,7 @@
   border-radius: 3px;
   color: #0f172a;
   padding: 6px 8px;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   font-family: 'SFMono-Regular', 'Consolas', monospace;
   resize: vertical;
 }
@@ -1413,7 +1393,7 @@
 
 .batch-result-meta {
   flex-shrink: 0;
-  font-size: 10px;
+  font-size: var(--fs-2xs);
   color: rgba(100, 116, 139, 0.84);
 }
 
@@ -1426,7 +1406,7 @@
 
 .batch-result-stdout,
 .batch-result-stderr {
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   font-family: 'SFMono-Regular', 'Consolas', monospace;
   white-space: pre-wrap;
   word-break: break-all;
@@ -1448,7 +1428,7 @@
 }
 
 .batch-result-empty {
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   color: rgba(100, 116, 139, 0.76);
 }
 
@@ -1483,7 +1463,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   white-space: nowrap;
   overflow: hidden;
 }
@@ -1501,7 +1481,7 @@
   border-radius: 999px;
   background: rgba(245, 158, 11, 0.16);
   color: #92400e;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   font-weight: 600;
 }
 
@@ -1530,7 +1510,7 @@
 }
 
 .viewer-line-copy-main {
-  font-size: 12px;
+  font-size: var(--fs-xs);
   white-space: nowrap;
   overflow: hidden;
 }
@@ -1548,7 +1528,7 @@
   border-radius: 999px;
   background: rgba(59, 130, 246, 0.14);
   color: #1d4ed8;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   font-weight: 600;
 }
 
@@ -1589,14 +1569,14 @@
 }
 
 .search-match-line {
-  font-size: 10px;
+  font-size: var(--fs-2xs);
   color: #6e7d8c;
   white-space: nowrap;
 }
 
 .search-match-preview {
   min-width: 0;
-  font-size: 10px;
+  font-size: var(--fs-2xs);
   color: #233243;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1606,7 +1586,7 @@
 .activity-block {
   min-height: 46px;
   max-height: 64px;
-  font-size: 10px;
+  font-size: var(--fs-2xs);
   line-height: 1.45;
 }
 
@@ -1619,7 +1599,7 @@
   color: #4a5568 !important;
   border: 1px solid #e2e8f0;
   font-family: "SFMono-Regular", "Consolas", monospace;
-  font-size: 10.5px;
+  font-size: var(--fs-2xs);
   line-height: 1.6;
 }
 
@@ -1632,7 +1612,7 @@
 .activity-log-time {
   color: #90a4b8;
   margin-right: 6px;
-  font-size: 10px;
+  font-size: var(--fs-2xs);
 }
 
 .activity-log-msg {
@@ -1766,7 +1746,7 @@ body.is-resizing-activity-panel {
 
 .drop-zone-label {
   padding: 8px 16px;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   font-weight: 600;
   color: #3b82f6;
   background: rgba(255, 255, 255, 0.9);
@@ -1785,7 +1765,7 @@ body.is-resizing-activity-panel {
 }
 
 .browser-column-head strong {
-  font-size: 10px;
+  font-size: var(--fs-2xs);
   font-weight: 600;
   color: var(--ink-muted);
   letter-spacing: 0.03em;
@@ -1804,7 +1784,7 @@ body.is-resizing-activity-panel {
 }
 
 .browser-column-head span {
-  font-size: 10px;
+  font-size: var(--fs-2xs);
   color: var(--ink-muted);
   font-weight: 400;
 }

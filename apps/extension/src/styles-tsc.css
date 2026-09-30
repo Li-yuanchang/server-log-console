@@ -21,7 +21,7 @@
     0 8px 32px rgba(0, 0, 0, 0.42),
     0 6px 18px rgba(15, 23, 42, 0.32),
     inset 0 1px 0 rgba(255, 255, 255, 0.08);
-  font-size: 12px;
+  font-size: var(--fs-xs);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -57,7 +57,7 @@
   gap: 6px;
   color: rgba(248, 250, 252, 0.94);
   font-weight: 600;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   letter-spacing: 0.2px;
   min-width: 0;
 }
@@ -68,7 +68,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   color: rgba(191, 219, 254, 0.64);
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   font-weight: 500;
 }
 
@@ -77,7 +77,7 @@
 }
 
 .tsc-badge-unconfigured {
-  font-size: 9px;
+  font-size: var(--fs-2xs);
   font-weight: 500;
   color: #f59e0b;
   background: rgba(245,158,11,0.12);
@@ -131,7 +131,7 @@
 }
 
 .tsc-hdr-btn-chat span {
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   line-height: 1;
 }
 
@@ -151,7 +151,7 @@
   display: flex;
   align-items: center;
   margin: 10px 2px 6px;
-  font-size: 10px;
+  font-size: var(--fs-2xs);
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -200,7 +200,7 @@
   min-width: 0;
   color: rgba(226, 232, 240, 0.72);
   font-family: "SFMono-Regular", "Consolas", monospace;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -316,13 +316,13 @@
 .tsc-welcome-title {
   color: rgba(248,250,252,0.9);
   font-weight: 600;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   margin: 0 0 4px;
 }
 
 .tsc-welcome-desc {
   color: rgba(191,219,254,0.62);
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   margin: 0 0 16px;
   line-height: 1.4;
 }
@@ -335,7 +335,7 @@
 }
 
 .tsc-suggestion {
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   color: rgba(224,231,255,0.78);
   border: 1px solid rgba(129,140,248,0.18) !important;
   border-radius: 14px !important;
@@ -373,7 +373,7 @@
   border-radius: 10px 10px 2px 10px;
   max-width: 85%;
   text-align: left;
-  font-size: 12px;
+  font-size: var(--fs-xs);
 }
 
 .tsc-msg-ai {
@@ -382,7 +382,7 @@
 
 .tsc-msg-text {
   color: rgba(226,232,240,0.82);
-  font-size: 12px;
+  font-size: var(--fs-xs);
   line-height: 1.55;
   white-space: pre-wrap;
   word-break: break-word;
@@ -397,7 +397,7 @@
   align-items: center;
   gap: 6px;
   color: rgba(191,219,254,0.62);
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   padding: 8px 12px;
 }
 
@@ -436,7 +436,7 @@
   flex: 1;
   min-width: 0;
   font-family: 'SFMono-Regular', 'Consolas', monospace;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   color: rgba(241,245,249,0.84);
   white-space: nowrap;
   overflow: hidden;
@@ -469,7 +469,7 @@
   height: 16px;
   padding: 0 5px;
   border-radius: 999px;
-  font-size: 9px;
+  font-size: var(--fs-2xs);
   font-weight: 600;
   letter-spacing: 0.2px;
 }
@@ -534,7 +534,7 @@
   border-radius: 8px;
   background: rgba(15,23,42,0.22);
   color: rgba(248,250,252,0.9);
-  font-size: 12px;
+  font-size: var(--fs-xs);
   padding: 5px 10px;
   outline: none;
   line-height: 1.5;
@@ -589,7 +589,7 @@
 .tsc-settings-title {
   font-weight: 600;
   color: rgba(248,250,252,0.88);
-  font-size: 12px;
+  font-size: var(--fs-xs);
   margin-bottom: 2px;
 }
 
@@ -600,7 +600,7 @@
 }
 
 .tsc-settings-field > span {
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   color: rgba(191,219,254,0.6);
 }
 
@@ -610,7 +610,7 @@
   border-radius: 5px;
   background: rgba(15, 23, 42, 0.22);
   color: rgba(248, 250, 252, 0.9);
-  font-size: 12px;
+  font-size: var(--fs-xs);
   padding: 0 8px;
   outline: none;
   width: 100%;
@@ -625,7 +625,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: rgba(226,232,240,0.78);
   cursor: pointer;
 }
@@ -656,13 +656,13 @@
 }
 
 .tsc-preset-btn strong {
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   font-weight: 600;
   color: rgba(248,250,252,0.82);
 }
 
 .tsc-preset-btn span {
-  font-size: 9px;
+  font-size: var(--fs-2xs);
   color: rgba(191,219,254,0.5);
 }
 
@@ -692,7 +692,7 @@
   border-radius: 6px;
   background: rgba(99,102,241,0.2) !important;
   color: #ddd6fe;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   font-weight: 500;
   transition: background 80ms;
 }
@@ -706,7 +706,7 @@
   height: 28px;
   border-radius: 6px;
   color: rgba(226,232,240,0.68);
-  font-size: 12px;
+  font-size: var(--fs-xs);
 }
 
 .tsc-btn-cancel:hover {
@@ -739,7 +739,7 @@
     0 8px 32px rgba(0, 0, 0, 0.42),
     0 6px 18px rgba(15, 23, 42, 0.32),
     inset 0 1px 0 rgba(255, 255, 255, 0.08);
-  font-size: 12px;
+  font-size: var(--fs-xs);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -774,7 +774,7 @@
   gap: 6px;
   color: rgba(248, 250, 252, 0.94);
   font-weight: 600;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   letter-spacing: 0.2px;
 }
 
@@ -783,7 +783,7 @@
 }
 
 .tai-badge-unconfigured {
-  font-size: 9px;
+  font-size: var(--fs-2xs);
   font-weight: 500;
   color: #f59e0b;
   background: rgba(245, 158, 11, 0.12);
@@ -837,7 +837,7 @@
 }
 
 .tai-hdr-btn-chat span {
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   line-height: 1;
 }
 
@@ -880,13 +880,13 @@
 .tai-welcome-title {
   color: rgba(248, 250, 252, 0.9);
   font-weight: 600;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   margin: 0 0 4px;
 }
 
 .tai-welcome-desc {
   color: rgba(191, 219, 254, 0.62);
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   margin: 0 0 16px;
   line-height: 1.4;
 }
@@ -899,7 +899,7 @@
 }
 
 .tai-suggestion {
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   color: rgba(224, 231, 255, 0.78);
   border: 1px solid rgba(59, 130, 246, 0.18) !important;
   border-radius: 14px !important;
@@ -936,7 +936,7 @@
   border-radius: 10px 10px 2px 10px;
   max-width: 85%;
   text-align: left;
-  font-size: 12px;
+  font-size: var(--fs-xs);
 }
 
 .tai-msg-ai {
@@ -945,7 +945,7 @@
 
 .tai-msg-text {
   color: rgba(226, 232, 240, 0.82);
-  font-size: 12px;
+  font-size: var(--fs-xs);
   line-height: 1.55;
   white-space: pre-wrap;
   word-break: break-word;
@@ -960,7 +960,7 @@
   align-items: center;
   gap: 6px;
   color: rgba(191, 219, 254, 0.62);
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   padding: 8px 12px;
 }
 
@@ -1000,7 +1000,7 @@
   flex: 1;
   min-width: 0;
   font-family: "SFMono-Regular", "Consolas", monospace;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   color: rgba(241, 245, 249, 0.84);
   white-space: nowrap;
   overflow: hidden;
@@ -1033,7 +1033,7 @@
   height: 16px;
   padding: 0 5px;
   border-radius: 999px;
-  font-size: 9px;
+  font-size: var(--fs-2xs);
   font-weight: 600;
   letter-spacing: 0.2px;
 }
@@ -1097,7 +1097,7 @@
   border-radius: 8px;
   background: rgba(15, 23, 42, 0.22);
   color: rgba(248, 250, 252, 0.9);
-  font-size: 12px;
+  font-size: var(--fs-xs);
   padding: 5px 10px;
   outline: none;
   line-height: 1.5;
@@ -1151,7 +1151,7 @@
 .tai-settings-title {
   font-weight: 600;
   color: rgba(248, 250, 252, 0.88);
-  font-size: 12px;
+  font-size: var(--fs-xs);
   margin-bottom: 2px;
 }
 
@@ -1162,7 +1162,7 @@
 }
 
 .tai-settings-field > span {
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   color: rgba(191, 219, 254, 0.6);
 }
 
@@ -1172,7 +1172,7 @@
   border-radius: 5px;
   background: rgba(15, 23, 42, 0.22);
   color: rgba(248, 250, 252, 0.9);
-  font-size: 12px;
+  font-size: var(--fs-xs);
   padding: 0 8px;
   outline: none;
   width: 100%;
@@ -1187,7 +1187,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: rgba(226, 232, 240, 0.78);
   cursor: pointer;
 }
@@ -1218,13 +1218,13 @@
 }
 
 .tai-preset-btn strong {
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   font-weight: 600;
   color: rgba(248, 250, 252, 0.82);
 }
 
 .tai-preset-btn span {
-  font-size: 9px;
+  font-size: var(--fs-2xs);
   color: rgba(191, 219, 254, 0.5);
 }
 
@@ -1254,7 +1254,7 @@
   border-radius: 6px;
   background: rgba(59, 130, 246, 0.2) !important;
   color: #dbeafe;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   font-weight: 500;
   transition: background 80ms;
 }
@@ -1268,7 +1268,7 @@
   height: 28px;
   border-radius: 6px;
   color: rgba(226, 232, 240, 0.68);
-  font-size: 12px;
+  font-size: var(--fs-xs);
 }
 
 .tai-btn-cancel:hover {

@@ -25,14 +25,14 @@
 
 .confirm-title {
   margin: 0;
-  font-size: 16px;
+  font-size: var(--fs-lg);
   line-height: 1.3;
   font-weight: 600;
   color: var(--ink);
 }
 
 .confirm-message {
-  font-size: 12px;
+  font-size: var(--fs-xs);
   line-height: 1.6;
   color: var(--ink-soft);
   white-space: pre-wrap;
@@ -104,7 +104,7 @@
 }
 
 .rename-label {
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   color: var(--ink-muted);
 }
 
@@ -182,7 +182,7 @@
   min-width: 0;
   overflow: hidden;
   color: #1a2b3c;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   font-weight: 650;
   line-height: 1.35;
   text-overflow: ellipsis;
@@ -199,7 +199,7 @@
 
 .preview-meta {
   color: #6b7a8d;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
 }
 
 .preview-actions {
@@ -214,7 +214,7 @@
   margin-left: 8px;
   padding: 1px 7px;
   border-radius: 999px;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   font-weight: 600;
   vertical-align: middle;
 }
@@ -299,7 +299,7 @@
   border-radius: 999px;
   background: rgba(49, 95, 141, 0.1);
   color: #315f8d;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   font-weight: 750;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -308,7 +308,7 @@
 .structured-preview-hero h3 {
   margin: 0;
   color: #132033;
-  font-size: 20px;
+  font-size: var(--fs-xl);
   font-weight: 760;
   line-height: 1.25;
   overflow-wrap: anywhere;
@@ -317,7 +317,7 @@
 .structured-preview-hero p {
   margin: 8px 0 0;
   color: #64748b;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   line-height: 1.55;
 }
 
@@ -338,7 +338,7 @@
 .structured-preview-metric span {
   display: block;
   color: #708095;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   font-weight: 650;
 }
 
@@ -346,7 +346,7 @@
   display: block;
   margin-top: 6px;
   color: #172033;
-  font-size: 16px;
+  font-size: var(--fs-lg);
   font-weight: 760;
   line-height: 1.2;
   overflow: hidden;
@@ -361,7 +361,7 @@
   border-radius: 12px;
   background: rgba(254, 243, 199, 0.62);
   color: #92400e;
-  font-size: 12px;
+  font-size: var(--fs-xs);
 }
 
 .archive-preview-table,
@@ -397,7 +397,7 @@
   padding: 9px 12px;
   border-bottom: 1px solid rgba(226, 232, 240, 0.9);
   color: #334155;
-  font-size: 12px;
+  font-size: var(--fs-xs);
 }
 
 button.archive-preview-row {
@@ -448,7 +448,7 @@ button.archive-preview-row:disabled {
   z-index: 1;
   background: #eef4fa;
   color: #64748b;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   font-weight: 760;
 }
 
@@ -458,7 +458,7 @@ button.archive-preview-row:disabled {
   border-radius: 999px;
   background: rgba(49, 95, 141, 0.1);
   color: #315f8d;
-  font-size: 10px;
+  font-size: var(--fs-2xs);
   font-weight: 760;
   letter-spacing: 0.04em;
 }
@@ -509,7 +509,7 @@ button.archive-preview-row:disabled {
   place-items: center;
   padding: 22px;
   color: #708095;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   text-align: center;
 }
 
@@ -539,7 +539,7 @@ button.archive-preview-row:disabled {
   min-width: 0;
   overflow: hidden;
   color: #172033;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -547,7 +547,7 @@ button.archive-preview-row:disabled {
 .archive-entry-code-head span {
   flex: 0 0 auto;
   color: #708095;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
 }
 
 .archive-entry-code-card .code-editor-container,
@@ -615,7 +615,7 @@ button.archive-preview-row:disabled {
   border-bottom: 1px solid #dbe5ef !important;
   background: linear-gradient(180deg, #ffffff 0%, #f6f9fd 100%) !important;
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.82) inset, 0 6px 14px rgba(15, 23, 42, 0.05);
-  font-size: 12px;
+  font-size: var(--fs-xs);
 }
 
 .class-source-preview .code-editor-container .cm-panel.cm-search:not(:has(input[name="replace"])) {
@@ -676,7 +676,7 @@ button.archive-preview-row:disabled {
   height: 30px;
   margin: 0 !important;
   color: #64748b;
-  font-size: 12px !important;
+  font-size: var(--fs-xs) !important;
   font-weight: 600;
   white-space: nowrap;
 }
@@ -702,7 +702,7 @@ button.archive-preview-row:disabled {
   border-radius: 7px;
   background: transparent !important;
   color: #7a899b !important;
-  font-size: 18px !important;
+  font-size: var(--fs-xl) !important;
   line-height: 1;
   box-shadow: none !important;
 }
@@ -761,7 +761,7 @@ button.archive-preview-row:disabled {
   border-radius: 8px;
   background: #fff7ed;
   color: #9a5a06;
-  font-size: 12px;
+  font-size: var(--fs-xs);
 }
 
 .archive-browser-toolbar {
@@ -783,7 +783,7 @@ button.archive-preview-row:disabled {
   border-radius: 7px;
   background: linear-gradient(180deg, #ffffff 0%, #eef3f8 100%);
   color: #334155;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   font-weight: 650;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
 }
@@ -823,7 +823,7 @@ button.archive-preview-row:disabled {
   border-radius: 7px;
   background: #ffffff;
   color: #64748b;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 
@@ -892,7 +892,7 @@ button.archive-preview-row:disabled {
   color: #334155;
   box-shadow: none;
   font: inherit;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   font-weight: 500;
   text-align: left;
   cursor: pointer;
@@ -914,7 +914,7 @@ button.archive-preview-row:disabled {
 
 .archive-tree-caret {
   color: #8190a3;
-  font-size: 10px;
+  font-size: var(--fs-2xs);
   text-align: center;
 }
 
@@ -928,7 +928,7 @@ button.archive-preview-row:disabled {
 .archive-tree-empty {
   padding: 10px 8px;
   color: #94a3b8;
-  font-size: 12px;
+  font-size: var(--fs-xs);
 }
 
 .archive-file-panel {
@@ -951,7 +951,7 @@ button.archive-preview-row:disabled {
   min-width: 720px;
   padding: 8px 10px;
   color: #334155;
-  font-size: 12px;
+  font-size: var(--fs-xs);
 }
 
 .archive-manager-preview button.archive-preview-row,
@@ -988,7 +988,7 @@ button.archive-preview-row:disabled {
   border-bottom: 1px solid #d8e0ea;
   background: #eef3f8;
   color: #5f6f83;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   font-weight: 760;
 }
 
@@ -1074,7 +1074,7 @@ button.archive-preview-row:disabled {
   position: absolute;
   inset: -3px 0 0;
   color: #315f8d;
-  font-size: 16px;
+  font-size: var(--fs-lg);
   font-weight: 700;
 }
 
@@ -1088,7 +1088,7 @@ button.archive-preview-row:disabled {
   border-top: 1px solid #e2e8f0;
   background: #f8fafc;
   color: #64748b;
-  font-size: 12px;
+  font-size: var(--fs-xs);
 }
 
 .archive-detail-strip strong {
@@ -1159,13 +1159,13 @@ button.archive-preview-row:disabled {
 
 .class-ide-title strong {
   color: #172033;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   font-weight: 760;
 }
 
 .class-ide-title span {
   color: #64748b;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
 }
 
 .class-ide-icon {
@@ -1178,7 +1178,7 @@ button.archive-preview-row:disabled {
   border-radius: 7px;
   background: linear-gradient(180deg, #eef7ff 0%, #dbeaf8 100%);
   color: #315f8d;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   font-weight: 800;
 }
 
@@ -1204,7 +1204,7 @@ button.archive-preview-row:disabled {
   border-radius: 999px;
   background: #f8fafc;
   color: #5f6f83;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   font-weight: 650;
 }
 
@@ -1236,7 +1236,7 @@ button.archive-preview-row:disabled {
   background: transparent;
   color: #64748b;
   box-shadow: none;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   font-weight: 650;
   transform: none;
 }
@@ -1285,7 +1285,7 @@ button.archive-preview-row:disabled {
   display: block;
   margin: 0 0 5px;
   color: #7a899b;
-  font-size: 10px;
+  font-size: var(--fs-2xs);
   font-weight: 760;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -1310,7 +1310,7 @@ button.archive-preview-row:disabled {
   color: #334155;
   box-shadow: none;
   font: inherit;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   text-align: left;
 }
 
@@ -1341,13 +1341,13 @@ button.class-outline-row {
 
 .class-outline-row strong {
   color: #172033;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   font-weight: 650;
 }
 
 .class-outline-row span:last-child {
   color: #7a899b;
-  font-size: 10px;
+  font-size: var(--fs-2xs);
 }
 
 .class-outline-symbol {
@@ -1356,7 +1356,7 @@ button.class-outline-row {
   width: 18px;
   height: 18px;
   border-radius: 5px;
-  font-size: 10px;
+  font-size: var(--fs-2xs);
   font-weight: 800;
 }
 
@@ -1378,7 +1378,7 @@ button.class-outline-row {
 .class-outline-empty {
   padding: 7px;
   color: #94a3b8;
-  font-size: 12px;
+  font-size: var(--fs-xs);
 }
 
 .class-ide-main {
@@ -1446,13 +1446,13 @@ button.class-outline-row {
 
 .class-structure-message strong {
   color: #1f2f46;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   font-weight: 700;
 }
 
 .class-structure-message span {
   color: #64748b;
-  font-size: 12px;
+  font-size: var(--fs-xs);
 }
 
 .class-preview-summary {
@@ -1477,7 +1477,7 @@ button.class-outline-row {
 .class-preview-info-line span {
   display: block;
   color: #708095;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   font-weight: 650;
 }
 
@@ -1487,7 +1487,7 @@ button.class-outline-row {
   overflow: hidden;
   color: #172033;
   font-family: "SF Mono", "Menlo", "Consolas", monospace;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   font-weight: 650;
   line-height: 1.45;
   text-overflow: ellipsis;
@@ -1501,7 +1501,7 @@ button.class-outline-row {
 .class-preview-section h4 {
   margin: 0 0 8px;
   color: #273449;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   font-weight: 760;
 }
 
@@ -1514,7 +1514,7 @@ button.class-outline-row {
   padding: 9px 12px;
   border-bottom: 1px solid rgba(226, 232, 240, 0.9);
   font-family: "SF Mono", "Menlo", "Consolas", monospace;
-  font-size: 12px;
+  font-size: var(--fs-xs);
 }
 
 .class-member-row:last-child {
@@ -1544,7 +1544,7 @@ button.class-outline-row {
 .structured-preview-empty {
   padding: 22px;
   color: #708095;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   text-align: center;
 }
 
@@ -1597,7 +1597,7 @@ button.class-outline-row {
   color: #bfdbfe;
   background: rgba(96, 165, 250, 0.1);
   box-shadow: inset 0 0 0 1px rgba(147, 197, 253, 0.16);
-  font-size: 13px;
+  font-size: var(--fs-sm);
   line-height: 1;
   transition: background-color 120ms ease, color 120ms ease;
 }
@@ -1616,7 +1616,7 @@ button.class-outline-row {
   background: rgba(30, 41, 59, 0.88);
   color: #b8c7da;
   cursor: pointer;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   font-style: normal;
 }
 
@@ -1655,7 +1655,7 @@ button.class-outline-row {
   border-bottom: 1px solid rgba(148, 163, 184, 0.2) !important;
   background: linear-gradient(180deg, #151f2a 0%, #0e151d 100%) !important;
   box-shadow: 0 10px 22px rgba(0, 0, 0, 0.24);
-  font-size: 12px;
+  font-size: var(--fs-xs);
 }
 
 .code-editor-container .cm-panel.cm-search:not(:has(input[name="replace"])) {
@@ -1788,7 +1788,7 @@ button.class-outline-row {
   height: 31px;
   margin: 0 !important;
   color: #a8b7c9;
-  font-size: 12px !important;
+  font-size: var(--fs-xs) !important;
   font-weight: 600;
   white-space: nowrap;
 }
@@ -1826,7 +1826,7 @@ button.class-outline-row {
   border-radius: 8px;
   background: transparent !important;
   color: #91a1b6 !important;
-  font-size: 18px !important;
+  font-size: var(--fs-xl) !important;
   line-height: 1;
   box-shadow: none !important;
 }
@@ -1883,7 +1883,7 @@ button.class-outline-row {
   border-radius: 8px;
   background: #315f8d;
   color: #ffffff;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   font-weight: 650;
   transition: background 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
 }
@@ -1928,7 +1928,7 @@ button.class-outline-row {
   justify-content: center;
   gap: 12px;
   color: #6b7a8d;
-  font-size: 13px;
+  font-size: var(--fs-sm);
 }
 
 .preview-loading-spinner {
@@ -1982,7 +1982,7 @@ button.class-outline-row {
 }
 
 .transfer-history-head strong {
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: #31465a;
 }
 
@@ -1990,7 +1990,7 @@ button.class-outline-row {
   border: none;
   background: transparent;
   color: #6280a0;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   cursor: pointer;
 }
 
@@ -2029,7 +2029,7 @@ button.class-outline-row {
 
 .transfer-history-meta {
   flex-wrap: wrap;
-  font-size: 10.5px;
+  font-size: var(--fs-2xs);
   color: var(--ink-muted);
 }
 
@@ -2043,14 +2043,14 @@ button.class-outline-row {
 }
 
 .transfer-history-name {
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--ink);
   font-weight: 600;
 }
 
 .transfer-history-path,
 .transfer-history-extra {
-  font-size: 10.5px;
+  font-size: var(--fs-2xs);
   color: var(--ink-muted);
 }
 
@@ -2062,7 +2062,7 @@ button.class-outline-row {
   padding: 3px 9px;
   border-radius: 999px;
   border: 1px solid transparent;
-  font-size: 10px;
+  font-size: var(--fs-2xs);
   line-height: 1;
   font-weight: 600;
   color: var(--ink-soft);
@@ -2155,13 +2155,13 @@ button.class-outline-row {
   border: 1px solid rgba(49, 95, 141, 0.14);
   background: var(--accent-soft);
   color: var(--accent-strong);
-  font-size: 10px;
+  font-size: var(--fs-2xs);
   font-weight: 600;
   letter-spacing: 0.06em;
 }
 
 .transfer-history-dialog-subtitle {
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--ink-muted);
   line-height: 1.6;
   max-width: 760px;
@@ -2181,7 +2181,7 @@ button.class-outline-row {
   height: 30px;
   min-height: 30px;
   padding: 0;
-  border-radius: 999px;
+  border-radius: var(--r-m);
   border-color: var(--line);
   background: var(--panel-strong);
   color: var(--ink-soft);
@@ -2216,7 +2216,7 @@ button.class-outline-row {
 }
 
 .transfer-history-summary-card strong {
-  font-size: 18px;
+  font-size: var(--fs-xl);
   color: var(--ink);
   line-height: 1;
 }
@@ -2233,7 +2233,7 @@ button.class-outline-row {
 }
 
 .transfer-history-summary-label {
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   color: var(--ink-muted);
 }
 
@@ -2266,7 +2266,7 @@ button.class-outline-row {
   display: inline-flex;
   align-items: center;
   padding-left: 6px;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   color: var(--ink-muted);
   white-space: nowrap;
 }
@@ -2307,7 +2307,7 @@ button.class-outline-row {
 .transfer-history-filter-field {
   display: grid;
   gap: 5px;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   color: var(--ink-muted);
 }
 
@@ -2318,7 +2318,7 @@ button.class-outline-row {
   border-radius: 8px;
   background: var(--panel-strong);
   color: var(--ink);
-  font-size: 12px;
+  font-size: var(--fs-xs);
   padding: 0 10px;
 }
 
@@ -2337,7 +2337,7 @@ button.class-outline-row {
   border: 1px dashed var(--line-strong);
   border-radius: 10px;
   text-align: center;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--ink-muted);
   background: var(--panel-strong);
 }
@@ -2380,7 +2380,7 @@ button.class-outline-row {
   height: 30px;
   min-height: 30px;
   padding: 0;
-  border-radius: 999px;
+  border-radius: var(--r-m);
   border-color: transparent;
   background: var(--panel-muted);
   color: var(--ink-soft);
@@ -2388,8 +2388,8 @@ button.class-outline-row {
 }
 
 .transfer-history-card-icon-button:hover:not(:disabled) {
-  border-color: rgba(49, 95, 141, 0.16);
-  background: rgba(49, 95, 141, 0.1);
+  border-color: color-mix(in srgb, var(--accent) 26%, transparent);
+  background: var(--accent-soft);
   color: var(--accent-strong);
 }
 
@@ -2411,7 +2411,7 @@ button.class-outline-row {
 }
 
 .transfer-history-card .transfer-history-name {
-  font-size: 13px;
+  font-size: var(--fs-sm);
   line-height: 1.45;
   white-space: normal;
   overflow: visible;
@@ -2433,13 +2433,13 @@ button.class-outline-row {
 }
 
 .transfer-history-path-line label {
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   color: var(--ink-muted);
   padding-top: 2px;
 }
 
 .transfer-history-path-line code {
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   color: var(--ink);
   white-space: pre-wrap;
   word-break: break-word;
@@ -2451,7 +2451,7 @@ button.class-outline-row {
 }
 
 .transfer-history-note {
-  font-size: 11.5px;
+  font-size: var(--fs-xs);
   line-height: 1.6;
   padding: 9px 10px;
   border-radius: 12px;
