@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { X, Send, Settings, Play, Loader, AlertTriangle, Sparkles, Plus } from "lucide-react";
 import {
   readAIConfig,
@@ -16,7 +16,23 @@ interface TerminalAIProps {
   serverLabel: string;
   onExecute: (command: string) => void;
   onClose: () => void;
+  /* 原型 S5 第 585-588 行：AI 抽屉自动引用终端选中内容 */
+  selectionText?: string;
 }
+
+/* 原型 S5 第 583 行 chip 文案「GLM-4 · ⌘J」：把具体模型归一为模型族标签 */
+function modelChipLabel(model: string): string {
+  const normalized = (model || "").trim();
+  if (!normalized) return "GLM-4";
+  if (/glm/i.test(normalized)) return "GLM-4";
+  if (/deepseek/i.test(normalized)) return "DeepSeek";
+  if (/qwen/i.test(normalized)) return "Qwen";
+  if (/gpt/i.test(normalized)) return "GPT";
+  return normalized;
+}
+
+/* 原型 S5 第 598 行：输入框下方三个快捷追问 fchip */
+const QUICK_ASKS = ["解释错误", "给出修复命令", "找日志位置"] as const;
 
 function genId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
@@ -228,6 +244,20 @@ export function TerminalAI(props: TerminalAIProps) {
 
   const configured = config.enabled && !!config.apiKey && !!config.apiEndpoint;
   const canStartNewChat = messages.length > 0 || !!input || !!streamContent || isLoading;
+  /* 原型 S5 第 585-588 行：抽屉自动引用终端选中内容 */
+  const selectionText = (props.selectionText || "").trim();
+  const selectionLineCount = useMemo(
+    () => (selectionText ? selectionText.split(/\r?\n/).filter((line) => line.length > 0).length : 0),
+    [selectionText],
+  );
+  const selectionPreview = useMemo(() => {
+    if (!selectionText) return "";
+    const flat = selectionText.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).join(" ");
+    return flat.length > 90 ? `${flat.slice(0, 90)}…` : flat;
+  }, [selectionText]);
+  const inputPlaceholder = !configured
+    ? "请先点击右上⚙配置 AI"
+    : (selectionText ? "针对选中内容提问…" : "描述你想做的事…");
 
   useEffect(() => {
     if (showSettings) {
@@ -280,10 +310,17 @@ export function TerminalAI(props: TerminalAIProps) {
     setIsLoading(true);
     setStreamContent("");
 
+    /* 原型 S5 第 585-588 行：提问时把终端选中内容作为引用上下文带给模型 */
     const history: AIMessage[] = nextMessages.slice(-10).map((m) => ({
       role: m.role,
       content: m.content,
     }));
+    if (selectionText) {
+      history.unshift({
+        role: "user",
+        content: `【终端选中内容（已引用）】\n${selectionText}\n\n【问题】${text}`,
+      });
+    }
 
     try {
       const fullContent = await sendAIMessage(history, (chunk) => {
@@ -312,7 +349,7 @@ export function TerminalAI(props: TerminalAIProps) {
       setIsLoading(false);
       setStreamContent("");
     }
-  }, [configured, input, isLoading, messages]);
+  }, [configured, input, isLoading, messages, selectionText]);
 
   function handleExecute(command: string) {
     const assessment = assessCommand(command);
@@ -361,14 +398,15 @@ export function TerminalAI(props: TerminalAIProps) {
       onMouseDown={(event) => event.stopPropagation()}
       onClick={(event) => event.stopPropagation()}
     >
-      {/* Header */}
+      {/* Header —— 原型 S5 第 583 行：`终端 AI` + chip `GLM-4 · ⌘J` */}
       <div className="tai-header">
         <div className="tai-header-title">
           <Sparkles size={13} className="tai-sparkle" />
-          <span>AI 终端助手</span>
+          <span>终端 AI</span>
           {!configured && <span className="tai-badge-unconfigured">未配置</span>}
         </div>
         <div className="tai-header-actions">
+          <span className="chip tai-model-chip" title={config.model || "GLM-4"}>{modelChipLabel(config.model)} · ⌘J</span>
           <button
             type="button"
             className="tai-hdr-btn tai-hdr-btn-chat"
@@ -398,6 +436,13 @@ export function TerminalAI(props: TerminalAIProps) {
         <>
           {/* Messages */}
           <div ref={scrollRef} className="tai-messages">
+            {/* 原型 S5 第 585-588 行：引用卡「已引用选中 N 行」+ mono 预览 */}
+            {selectionText ? (
+              <div className="tai-quote-card">
+                <span className="chip tai-quote-chip">已引用选中 {selectionLineCount} 行</span>
+                <span className="tai-quote-preview">{selectionPreview}</span>
+              </div>
+            ) : null}
             {messages.length === 0 && !isLoading && (
               <div className="tai-welcome">
                 <Sparkles size={20} className="tai-welcome-icon" />
@@ -447,12 +492,12 @@ export function TerminalAI(props: TerminalAIProps) {
             )}
           </div>
 
-          {/* Input */}
+          {/* Input —— 原型 S5 第 597-598 行：输入框 + 3 个 fchip 快捷追问 */}
           <div className="tai-input-bar">
             <textarea
               ref={inputRef}
               className="tai-textarea"
-              placeholder={configured ? "描述你想做的事…" : "请先点击右上⚙配置 AI"}
+              placeholder={inputPlaceholder}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
@@ -468,6 +513,19 @@ export function TerminalAI(props: TerminalAIProps) {
             >
               {isLoading ? <Loader size={14} className="tai-spin" /> : <Send size={14} />}
             </button>
+            <div className="tai-quick-asks">
+              {QUICK_ASKS.map((ask) => (
+                <button
+                  key={ask}
+                  type="button"
+                  className="fchip tai-quick-ask"
+                  disabled={!configured || isLoading}
+                  onClick={() => setInput(ask)}
+                >
+                  {ask}
+                </button>
+              ))}
+            </div>
           </div>
         </>
       )}
