@@ -74,7 +74,7 @@
   border-top: 1px solid rgba(109, 125, 146, 0.22);
   color: var(--shell-ink);
   font-family: "SFMono-Regular", "Consolas", monospace;
-  font-size: 12px;
+  font-size: var(--fs-xs);
 }
 
 .jump-terminal-prompt {
@@ -193,7 +193,7 @@
   text-overflow: ellipsis;
   border-radius: 8px;
   font-weight: 500;
-  font-size: 10px;
+  font-size: var(--fs-2xs);
   cursor: pointer;
 }
 
@@ -205,7 +205,7 @@
   line-height: 1;
   border-radius: 999px;
   color: var(--ink-muted);
-  font-size: 10px;
+  font-size: var(--fs-2xs);
   cursor: pointer;
 }
 
@@ -227,11 +227,46 @@
 
 .viewer-empty-state strong {
   color: var(--ink);
-  font-size: 13px;
+  font-size: var(--fs-sm);
 }
 
 .viewer-empty-state span {
-  font-size: 12px;
+  font-size: var(--fs-xs);
+}
+
+/* S12 原型空态模板：图标 + 一句话 + 主按钮。
+   图标容器规格 .empty .ic = 44×44 / 圆角 12px / 1px 描边 / ink-muted 色。 */
+.empty-box-icon,
+.viewer-empty-state-icon {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  color: var(--ink-muted);
+  margin-bottom: 6px;
+}
+
+/* 空态整体排版：垂直居中、单行不换行提示 */
+.empty-box,
+.viewer-empty-state {
+  gap: 6px;
+  text-align: center;
+}
+
+.empty-box .empty-box-title,
+.viewer-empty-state .viewer-empty-state-title {
+  font-weight: 650;
+  font-size: var(--fs-base);
+}
+
+.empty-box .empty-box-hint {
+  font-size: var(--fs-xs);
+  color: var(--ink-muted);
+  margin-bottom: 10px;
 }
 
 .file-list,
@@ -272,7 +307,7 @@
 }
 
 .tree-item strong {
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   font-weight: 500;
 }
 
@@ -392,7 +427,7 @@
 }
 
 .file-batch-summary {
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   font-weight: 600;
   color: #4f6478;
 }
@@ -430,7 +465,7 @@
 .file-table-head {
   padding: 6px 8px;
   color: #5f6b7a;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   border-bottom: 1px solid #d9e0e8;
   position: sticky;
   top: -2px;
@@ -503,13 +538,13 @@
 }
 
 .file-row strong {
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   font-weight: 500;
 }
 
 .file-row span {
   color: var(--ink-muted);
-  font-size: 11px;
+  font-size: var(--fs-2xs);
 }
 
 .file-name-cell {
@@ -729,14 +764,14 @@
 }
 
 .directory-loading-state strong {
-  font-size: 12px;
+  font-size: var(--fs-xs);
   font-weight: 600;
   color: var(--ink);
 }
 
 .directory-loading-state span:last-child {
   max-width: min(420px, 80%);
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   line-height: 1.5;
   text-align: center;
   color: var(--ink-muted);
@@ -765,16 +800,16 @@
   justify-content: space-between;
   gap: 8px;
   color: var(--ink-soft);
-  font-size: 11px;
+  font-size: var(--fs-2xs);
 }
 
 .reader-position-head strong {
-  font-size: 10px;
+  font-size: var(--fs-2xs);
   font-weight: 500;
 }
 
 .reader-position-note {
-  font-size: 10px;
+  font-size: var(--fs-2xs);
   color: #6f7d8d;
 }
 
@@ -801,7 +836,7 @@
 
 .reader-rail-head strong {
   color: #334759;
-  font-size: 10px;
+  font-size: var(--fs-2xs);
   font-weight: 600;
 }
 
@@ -892,7 +927,7 @@
   border-radius: 3px;
   background: rgba(26, 35, 50, 0.82);
   color: rgba(200, 215, 230, 0.95);
-  font-size: 9px;
+  font-size: var(--fs-2xs);
   line-height: 1.45;
   text-align: center;
   pointer-events: none;
@@ -914,12 +949,12 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  font-size: 10px;
+  font-size: var(--fs-2xs);
   color: #617181;
 }
 
 .reader-preview-head strong {
-  font-size: 10px;
+  font-size: var(--fs-2xs);
   font-weight: 600;
   color: #344759;
 }
@@ -944,7 +979,7 @@
   background: #eef3f7;
   color: #233240;
   font-family: "SFMono-Regular", "Consolas", monospace;
-  font-size: 10px;
+  font-size: var(--fs-2xs);
   line-height: 1.45;
   white-space: pre-wrap;
   word-break: break-word;

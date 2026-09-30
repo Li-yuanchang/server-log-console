@@ -50,7 +50,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   color: #8ba4be;
   white-space: nowrap;
   overflow: hidden;
@@ -86,7 +86,7 @@
   border: none;
   color: #8ba4be;
   cursor: pointer;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   padding: 2px 6px;
   border-radius: 2px;
   white-space: nowrap;
@@ -234,7 +234,7 @@
 .workspace-session-strip-label {
   display: inline-flex;
   align-items: center;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   font-weight: 500;
   color: #64748b;
   white-space: nowrap;
@@ -243,7 +243,7 @@
 .workspace-session-strip-count {
   display: inline-flex;
   align-items: center;  
-  font-size: 10px;
+  font-size: var(--fs-2xs);
   color: #94a3b8;
   background: #f1f5f9;
   padding: 2px 6px;
@@ -294,7 +294,7 @@
   border: 0;
   background: transparent;
   color: #64748b;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
@@ -347,7 +347,7 @@
 }
 
 .workspace-session-tab-index {
-  font-size: 9px;
+  font-size: var(--fs-2xs);
   color: #94a3b8;
   background: #f1f5f9;
   padding: 1px 4px;
@@ -502,7 +502,7 @@
 
 .directory-filter-bar .directory-filter-input {
   flex: 1;
-  font-size: 11.5px;
+  font-size: var(--fs-xs);
   padding: 3px 8px;
 }
 
@@ -525,7 +525,7 @@
   text-align: left;
   padding: 4px 10px;
   flex-shrink: 0;
-  font-size: 11.5px;
+  font-size: var(--fs-xs);
   line-height: 1.5;
   border: none !important;
   background: #ffffff !important;
@@ -547,7 +547,7 @@
 .path-history-empty {
   display: block;
   padding: 8px 12px;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: #999;
 }
 
@@ -622,7 +622,7 @@
   gap: 6px;
   padding: 3px 8px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   flex-shrink: 0;
 }
 
@@ -646,7 +646,7 @@
   color: rgba(255, 255, 255, 0.5);
   cursor: pointer;
   padding: 2px 4px;
-  font-size: 10px;
+  font-size: var(--fs-2xs);
   border-radius: 3px;
   min-width: 28px;
   min-height: 28px;
