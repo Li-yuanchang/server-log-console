@@ -49,57 +49,67 @@ export function CommandPalette(props: { open: boolean; onClose: () => void; comm
 
   let lastGroup = "";
   return createPortal(
-    <div className="palette-overlay" role="presentation" onClick={props.onClose}>
-      <div className="palette-box" role="dialog" aria-label="命令面板" onClick={(e) => e.stopPropagation()}>
-        <div className="palette-input-row">
-          <CommandIcon size={15} strokeWidth={1.8} />
-          <input
-            ref={inputRef}
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Escape") {
-                event.preventDefault();
-                props.onClose();
-              } else if (event.key === "ArrowDown") {
-                event.preventDefault();
-                setIndex((v) => Math.min(v + 1, filtered.length - 1));
-              } else if (event.key === "ArrowUp") {
-                event.preventDefault();
-                setIndex((v) => Math.max(v - 1, 0));
-              } else if (event.key === "Enter") {
-                event.preventDefault();
-                filtered[index]?.run();
-              }
-            }}
-            placeholder="搜索服务器、文件、命令…"
-          />
-        </div>
-        <div className="palette-list">
-          {filtered.length === 0 ? <div className="palette-empty">没有匹配项</div> : null}
-          {filtered.map((command, i) => {
-            const showGroup = command.group !== lastGroup;
-            lastGroup = command.group;
-            const Icon = ICONS[command.icon];
-            return (
-              <div key={command.id}>
-                {showGroup ? <div className="palette-cap">{command.group}</div> : null}
-                <button
-                  type="button"
-                  className={`palette-item${i === index ? " palette-item-sel" : ""}`}
-                  onMouseEnter={() => setIndex(i)}
-                  onClick={() => command.run()}
-                >
-                  <Icon size={14} strokeWidth={1.7} />
-                  <span className="palette-item-title">
-                    {command.title}
-                    {command.sub ? <span className="palette-item-sub"> {command.sub}</span> : null}
-                  </span>
-                  {command.hint ? <span className="palette-item-hint">{command.hint}</span> : null}
-                </button>
-              </div>
-            );
-          })}
+    // R1：portal 到 document.body 会落在 .theme-modern 之外，命令面板底色/选中色
+    // 回落经典主题。补 display:contents 的壳恢复令牌作用域；类名复制自主界面
+    // .app-shell，确保 ui-surface-paper 等皮肤令牌同步（否则 --panel 回落纯白）。
+    <div
+      className={typeof document !== "undefined"
+        ? document.querySelector(".app-shell")?.className ?? "theme-modern"
+        : "theme-modern"}
+      style={{ display: "contents" }}
+    >
+      <div className="palette-overlay" role="presentation" onClick={props.onClose}>
+        <div className="palette-box" role="dialog" aria-label="命令面板" onClick={(e) => e.stopPropagation()}>
+          <div className="palette-input-row">
+            <CommandIcon size={15} strokeWidth={1.8} />
+            <input
+              ref={inputRef}
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  props.onClose();
+                } else if (event.key === "ArrowDown") {
+                  event.preventDefault();
+                  setIndex((v) => Math.min(v + 1, filtered.length - 1));
+                } else if (event.key === "ArrowUp") {
+                  event.preventDefault();
+                  setIndex((v) => Math.max(v - 1, 0));
+                } else if (event.key === "Enter") {
+                  event.preventDefault();
+                  filtered[index]?.run();
+                }
+              }}
+              placeholder="搜索服务器、文件、命令…"
+            />
+          </div>
+          <div className="palette-list">
+            {filtered.length === 0 ? <div className="palette-empty">没有匹配项</div> : null}
+            {filtered.map((command, i) => {
+              const showGroup = command.group !== lastGroup;
+              lastGroup = command.group;
+              const Icon = ICONS[command.icon];
+              return (
+                <div key={command.id}>
+                  {showGroup ? <div className="palette-cap">{command.group}</div> : null}
+                  <button
+                    type="button"
+                    className={`palette-item${i === index ? " palette-item-sel" : ""}`}
+                    onMouseEnter={() => setIndex(i)}
+                    onClick={() => command.run()}
+                  >
+                    <Icon size={14} strokeWidth={1.7} />
+                    <span className="palette-item-title">
+                      {command.title}
+                      {command.sub ? <span className="palette-item-sub"> {command.sub}</span> : null}
+                    </span>
+                    {command.hint ? <span className="palette-item-hint">{command.hint}</span> : null}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
     </div>,
