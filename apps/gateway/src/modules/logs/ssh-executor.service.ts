@@ -43,6 +43,17 @@ interface JumpServerAssetCandidate {
 
 function humanizeSshError(error: unknown, context: { username?: string; host?: string; port?: number }): string {
   const raw = error instanceof Error ? error.message : String(error);
+  return humanizeSshErrorText(raw, context);
+}
+
+/** sshd 的 MaxSessions（默认 10）耗尽或连接半死时，新通道会被远端拒绝。
+    识别这类错误以便上层踢掉整条连接重建，而不是在僵死连接上无限重试。 */
+function isChannelOpenFailureError(error: unknown): boolean {
+  const raw = error instanceof Error ? error.message : String(error);
+  return /channel open failure|open failed|all sessions|too many sessions|session open/i.test(raw);
+}
+
+function humanizeSshErrorText(raw: string, context: { username?: string; host?: string; port?: number }): string {
   const target = `${context.username || "?"}@${context.host || "?"}:${context.port || 22}`;
 
   if (/All configured authentication methods failed/i.test(raw)) {
@@ -297,6 +308,19 @@ export class SshExecutorService {
   }
 
   async exec(serverId: string, command: string, timeoutMs = 45000): Promise<string> {
+    try {
+      return await this.execOnce(serverId, command, timeoutMs);
+    } catch (error) {
+      if (!isChannelOpenFailureError(error)) throw error;
+      // 远端拒绝打开新通道：当前连接的会话已耗尽或半死。
+      // 踢掉该服务器的全部连接池（含 SFTP），用全新连接重试一次。
+      this.evictExec(serverId);
+      this.evictSftp(serverId);
+      return await this.execOnce(serverId, command, timeoutMs);
+    }
+  }
+
+  private async execOnce(serverId: string, command: string, timeoutMs = 45000): Promise<string> {
     await this.acquireExecConnection(serverId, timeoutMs);
     const cached = this.execCache.get(serverId);
     try {
