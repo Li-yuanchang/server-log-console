@@ -1,0 +1,350 @@
+/* align-s5-terminal.css — S5 终端工作台对齐原型（prototype.html s5(): 559-610）
+   隔离文件：仅由 S5 修复批次维护，最后加载以覆盖旧规则。
+   排除项：字号体系（--fs-*）为用户有意调整，不回改。
+
+   覆盖策略：选择器统一加 `.theme-modern ` 前缀提高特异性（0,2,0）。
+   需要压过 `styles-terminal-workspace.css` 里 (0,1,1) 的 `.terminal-panel-bar-actions button`
+   或 `styles-tsc.css` 里带 !important 的 `.tai-*` 规则时，用同等特异性 + !important，
+   并在规则旁注释原因。 */
+
+/* ---------- 1. 工具行：状态 chip（原型 565）+ 会话计数（原型 566） ---------- */
+/* 原型第 76-77 行 .dot / .dot.on / .dot.off —— 全库此前无该类，chip 内的绿点需要它 */
+.theme-modern .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+  display: inline-block;
+}
+.theme-modern .dot.on {
+  background: var(--green-dot);
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.15);
+}
+.theme-modern .dot.off {
+  background: #c8ccd2;
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.05);
+}
+/* 原型 565 行 chip 内联 5px 点（略小于独立 .dot 的 7px） */
+.theme-modern .terminal-status-chip .dot {
+  width: 5px;
+  height: 5px;
+}
+/* 原型 565 行 chip.grn 为 padding 1px 8px（无固定高，随行高自然撑到 19px）。
+   v2 的 .terminal-conn-chip 曾写死 height:24px；这里改回自然高度以贴合原型。 */
+.theme-modern .terminal-status-chip {
+  height: auto;
+  padding: 1px 8px;
+}
+/* 未连接时退回中性 chip 外观（原型只给绿态；断开是本次补的对照态） */
+.theme-modern .terminal-status-chip.terminal-status-chip-off {
+  color: var(--ink-muted);
+  border-color: var(--line);
+  background: transparent;
+}
+.theme-modern .terminal-status-chip.terminal-status-chip-off .dot {
+  box-shadow: none;
+}
+/* 原型 566 行 <span class="mut">会话 1/2</span> */
+.theme-modern .terminal-bar-session {
+  font-size: var(--fs-2xs);
+  color: var(--ink-muted);
+}
+
+/* 工具行按钮：图标 + 文字（原型 568-571，均为 .btn.sm = 24px 高 / padding 0 8px /
+   radius var(--r-s)=6px）。styles-terminal-workspace.css 的
+   `.terminal-panel-bar-actions button`(0,1,1) 设了 min-width:30px / min-height:28px，
+   v2 只给了 height:26px 覆盖不到 min-height，此处显式复位。 */
+.theme-modern .terminal-panel-bar-actions {
+  /* 原型 .tbar gap:8px，按钮之间同间距 */
+  gap: 8px;
+}
+.theme-modern .terminal-panel-bar-actions .terminal-toolbar-button {
+  min-width: 0;
+  min-height: 0;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: var(--r-s);
+  gap: 6px;
+}
+/* 纯图标按钮（快捷命令 / 重连 / 收起）：原型 571 行 .btn.icon.sm = 24×24 方按钮。
+   同样压过上面的 30px min-width，否则出现方形留白。 */
+.theme-modern .terminal-panel-bar-actions .terminal-toolbar-button-icon {
+  width: 24px;
+  min-width: 24px;
+  padding: 0;
+  gap: 0;
+  justify-content: center;
+}
+/* 原型 570 行「AI 助手」为 accent 色 */
+.theme-modern .terminal-toolbar-button.terminal-toolbar-button-accent {
+  color: var(--accent);
+}
+.theme-modern .terminal-toolbar-button.terminal-toolbar-button-accent:hover:not(:disabled) {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+/* 原型 565-571 工具行高 41px（v2 为 40px，差 1px） */
+.theme-modern .terminal-panel-bar {
+  min-height: 41px;
+}
+
+/* ---------- 2. 终端内容区 padding + 底部操作提示（原型 161 / 580） ---------- */
+/* 让 xterm 与提示行上下排布：主壳改为纵向 flex，提示行占固定高度不遮挡终端 */
+.theme-modern .terminal-main-shell {
+  flex-direction: column;
+}
+/* 主壳转纵向后，body 由 height:100% 改为弹性填充，避免与提示行争夺高度 */
+.theme-modern .terminal-main-shell .terminal-panel-body {
+  flex: 1 1 0%;
+  height: auto;
+  min-height: 0;
+}
+/* 原型 .term padding:12px 16px；styles-terminal-workspace.css 的
+   `.terminal-panel-body .xterm-container`(0,2,0) 为 2px 4px，此处用 (0,3,0) 覆盖。
+   必须加在 `.xterm` 元素（terminal.element）上而不是容器上：
+   @xterm/addon-fit 的 proposeDimensions() 读 parentElement 的 computed 高宽，
+   只减去 terminal.element 自身的 padding；padding 落在容器上不会被减去 → 终端溢出。
+   放在 `.xterm` 上既符合 FitAddon 计算，也不影响基于 containerRef 的选中菜单坐标。 */
+.theme-modern .terminal-panel-body .xterm-container {
+  padding: 0;
+}
+.theme-modern .terminal-panel-body .xterm-container .xterm {
+  padding: 12px 16px;
+}
+/* 底部提示行对齐终端文字左边距（同 .term 的 16px） */
+.theme-modern .terminal-hint-bar {
+  flex: none;
+  padding: 2px 16px 4px;
+  color: var(--shell-mut);
+  font-family: var(--mono-font-family);
+  font-size: var(--fs-2xs);
+  line-height: 1.8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  user-select: none;
+}
+
+/* ---------- 3. AI 抽屉（原型 582-600） ---------- */
+/* 头部模型 chip「GLM-4 · ⌘J」（原型 583 = .chip，透明底无 padding 高度限定） */
+.theme-modern .tai-model-chip {
+  height: auto;
+  padding: 1px 8px;
+  background: transparent;
+  color: var(--ink-muted);
+}
+/* 引用卡（原型 585-588：1px 描边 + radius --r-m + padding 9px 11px + dim 正文；
+   原型容器 padding 12px 14px，故卡片左右内缩 14px） */
+.theme-modern .tai-quote-card {
+  margin: 4px 14px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-m);
+  padding: 9px 11px;
+  font-size: var(--fs-xs);
+  line-height: 1.7;
+  color: var(--ink-soft);
+  background: var(--panel);
+}
+.theme-modern .tai-quote-card .tai-quote-chip {
+  margin-bottom: 5px;
+}
+.theme-modern .tai-quote-preview {
+  display: block;
+  font-family: var(--mono-font-family);
+  font-size: var(--fs-2xs);
+  color: var(--ink-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* 输入框下方 3 个 fchip 快捷追问（原型 598）：在输入行内换行到第二行 */
+.theme-modern .tai-input-bar {
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 14px;
+}
+.theme-modern .tai-quick-asks {
+  flex: 0 0 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.theme-modern .tai-quick-ask {
+  font-size: var(--fs-2xs);
+}
+.theme-modern .tai-quick-ask:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+/* styles-tsc.css 的 .tai-suggestion 用 border-radius:14px !important 且未被 v2 覆盖，
+   原型 fchip 为 999px 全圆角；这里同等 !important 压过它（S5-11）。 */
+.theme-modern .tai-suggestion {
+  border-radius: 999px !important;
+}
+
+/* ============================================================
+   3. 浅色 chrome 还原（用户 2026-09-30：终端 UI 对齐原型 S5）
+   ------------------------------------------------------------
+   原型 S5（prototype.html 559-610）里，工具行（.tbar）与底部快捷命令行
+   都是浅色 chrome（白底 + var(--line) 描边 + --ink 文字），只有 xterm
+   内容区是深色。旧实现把整块 terminal-bottom-panel 铺 --terminal-background
+   （黑），工具行/快捷行跟着变黑 —— 本段整体还原为浅色。 */
+.theme-modern .terminal-bottom-panel,
+.theme-modern .workspace-panel .terminal-bottom-panel,
+.theme-modern.pip-terminal-standalone .terminal-bottom-panel,
+.theme-modern .pip-terminal-standalone .terminal-bottom-panel,
+.pip-terminal-standalone .terminal-bottom-panel {
+  background: var(--panel);
+}
+/* xterm 内容区单独保持深色（面板变浅后，终端面自己兜底） */
+.theme-modern .terminal-main-shell {
+  background: var(--terminal-background, var(--shell));
+}
+.theme-modern .terminal-panel-bar {
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+}
+.theme-modern .terminal-panel-bar-info {
+  color: var(--ink-muted);
+}
+.theme-modern .terminal-panel-bar-info strong {
+  color: var(--ink);
+}
+/* 工具行按钮 = 原型 .btn.sm（prototype 54 行）：24px 高 / padding 0 8 / 字号 11 /
+   1px var(--line) 描边白底 / 圆角 var(--r-s) / --ink 字。字号走 --fs-2xs(11px) token。
+   须显式复位 theme-modern.css 2214-2237 深色块的白 8% 填充与 shell-ink 字。 */
+.theme-modern .terminal-panel-bar-actions button,
+.theme-modern .terminal-panel-bar-actions .terminal-toolbar-button {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  font-size: var(--fs-2xs);
+}
+.theme-modern .terminal-panel-bar-actions button:hover:not(:disabled),
+.theme-modern .terminal-panel-bar-actions .terminal-toolbar-button:hover:not(:disabled) {
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 26%, transparent);
+  color: var(--ink);
+}
+/* 激活态（快捷命令面板 / AI 抽屉展开）：accent-soft 底 + accent 字（浅色版） */
+.theme-modern .terminal-panel-bar-actions .terminal-toolbar-button.terminal-shortcuts-toggle-active,
+.theme-modern .terminal-panel-bar-actions .terminal-toolbar-button.tai-toggle-active {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 28%, transparent);
+}
+/* 底部快捷命令行（原型 603-607：label mut + .fchip 胶囊 + 右侧提示） */
+.theme-modern .terminal-quick-bar {
+  background: var(--panel);
+  border-top: 1px solid var(--line);
+}
+.theme-modern .terminal-quick-bar-label {
+  color: var(--ink-muted);
+}
+.theme-modern .terminal-quick-bar-hint {
+  color: var(--ink-muted);
+}
+/* 快捷命令 chip = 原型 .fchip：1px --line 描边胶囊、--ink-soft 字、hover 加深 */
+.theme-modern .terminal-quick-chip {
+  border: 1px solid var(--line);
+  color: var(--ink-soft);
+  background: var(--panel);
+}
+.theme-modern .terminal-quick-chip:hover {
+  border-color: var(--line-strong);
+  background: var(--panel);
+  color: var(--ink);
+}
+
+/* ---------- 4. 分屏工作区条（深色表面）上的按钮 hover 护栏 ---------- */
+/* 分屏后 .terminal-workarea-bar 在深色终端上方，统一按钮系统的 hover
+   （accent-soft 底 + var(--ink) 字）在这里会「黑上黑」看不见。
+   深色表面一律用白色系：白 10% 底 + --shell-ink 字（与 align-controls §1 同语义）。 */
+.theme-modern .terminal-workarea-bar .ghost-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--shell-ink) 10%, transparent);
+  border-color: color-mix(in srgb, var(--shell-ink) 24%, transparent);
+  color: var(--shell-ink, var(--ink));
+}
+
+/* ---------- 5. 快捷命令管理面板（tsc-*）主题 token 化 ----------
+   styles-tsc.css 的 .tsc-* 与 tai-* 一样是独立深色硬编码主题，
+   在浅色 chrome 里是突兀黑块。参照 v2 §29（tai 适配）整体改走 token，
+   深色硬编码用同等/更高特异性 + !important 压过。 */
+.theme-modern .tsc-dropdown {
+  background: var(--panel) !important;
+  color: var(--ink) !important;
+  border: 1px solid var(--line) !important;
+  border-radius: var(--v2-radius-m);
+  box-shadow: var(--v2-shadow-pop);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.theme-modern .tsc-header {
+  border-bottom: 1px solid var(--line) !important;
+  background: var(--panel) !important;
+}
+.theme-modern .tsc-header-title { color: var(--ink) !important; }
+.theme-modern .tsc-header-subtitle { color: var(--ink-muted) !important; }
+.theme-modern .tsc-hdr-btn {
+  border: 1px solid var(--line) !important;
+  background: var(--panel) !important;
+  color: var(--ink-soft) !important;
+}
+.theme-modern .tsc-hdr-btn:hover:not(:disabled) {
+  background: var(--accent-soft) !important;
+  border-color: color-mix(in srgb, var(--accent) 26%, transparent) !important;
+  color: var(--ink) !important;
+}
+.theme-modern .tsc-scroll { background: transparent !important; }
+.theme-modern .tsc-section-label { color: var(--ink-muted) !important; }
+.theme-modern .tsc-row { color: var(--ink) !important; }
+.theme-modern .tsc-row:hover { background: var(--accent-soft) !important; }
+.theme-modern .tsc-row-arrow { color: var(--ink-muted) !important; }
+.theme-modern .tsc-row-label { color: var(--ink) !important; }
+.theme-modern .tsc-row-cmd {
+  color: var(--ink-muted) !important;
+  font-family: var(--mono-font-family);
+}
+.theme-modern .tsc-input,
+.theme-modern .tsc-input-mono {
+  background: var(--panel-muted) !important;
+  border: 1px solid var(--line) !important;
+  color: var(--ink) !important;
+}
+.theme-modern .tsc-input::placeholder { color: var(--ink-muted); }
+.theme-modern .tsc-input:focus { border-color: var(--accent) !important; box-shadow: 0 0 0 2px var(--accent-soft); }
+.theme-modern .tsc-btn {
+  border: 1px solid var(--line) !important;
+  background: var(--panel) !important;
+  color: var(--ink-soft) !important;
+}
+.theme-modern .tsc-btn:hover:not(:disabled) {
+  background: var(--accent-soft) !important;
+  border-color: color-mix(in srgb, var(--accent) 26%, transparent) !important;
+  color: var(--ink) !important;
+}
+.theme-modern .tsc-btn-ok {
+  background: var(--accent) !important;
+  border-color: var(--accent) !important;
+  color: var(--on-accent) !important;
+}
+.theme-modern .tsc-btn-del { color: var(--red) !important; }
+.theme-modern .tsc-add-trigger {
+  border: 1px dashed color-mix(in srgb, var(--accent) 34%, transparent) !important;
+  background: transparent !important;
+  color: var(--accent) !important;
+}
+.theme-modern .tsc-add-trigger:hover:not(:disabled) {
+  background: var(--accent-soft) !important;
+  border-color: var(--accent) !important;
+  color: var(--accent) !important;
+}
+.theme-modern .tsc-add-form { border-top: 1px solid var(--line) !important; background: var(--panel) !important; }
+
+/* AI 助手保持 accent 字色（原型 570 行）——须排在第 3 节通配颜色之后 */
+.theme-modern .terminal-panel-bar-actions .terminal-toolbar-button.terminal-toolbar-button-accent {
+  color: var(--accent);
+}
+.theme-modern .terminal-panel-bar-actions .terminal-toolbar-button.terminal-toolbar-button-accent:hover:not(:disabled) {
+  color: var(--accent);
+}

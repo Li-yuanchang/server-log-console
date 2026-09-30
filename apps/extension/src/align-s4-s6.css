@@ -1,0 +1,336 @@
+/* align-s4-s6.css — S4 切片+实时的 rtools 状态带 / S6 文件浏览对齐原型
+   （prototype.html s4: 524-556；s6: 613-692）隔离文件，最后加载。
+   排除项：文件表勾选/批量条、字号体系（--fs-*）为用户有意调整，不回改。
+
+   ⚠️ 字号统一走 --fs-* token（系统 base=14px，故意不同于原型 12.5px 基准），
+      本文件不写任何裸 font-size 数值。 */
+
+/* ================= S4：实时状态带 .rtools（原型 536-546；
+   CSS 原型 126-131 .rtools / .liveb / .liveb i / .liveb.retry / @keyframes pl） ============ */
+.theme-modern .rtools {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--line);
+  font-size: var(--fs-2xs);
+  color: var(--ink-soft);
+  flex: none;
+  background: var(--panel);
+}
+.theme-modern .rtools .rt-note {
+  color: var(--ink-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.theme-modern .rtools .rt-spacer { flex: 1; min-width: 8px; }
+
+/* LIVE 脉冲徽标（原型 128-131：无固定高，padding 1px 9px → 实测 19px） */
+.theme-modern .liveb {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--fs-2xs);
+  font-weight: 700;
+  color: var(--red);
+  border: 1px solid color-mix(in srgb, var(--red) 32%, transparent);
+  border-radius: 999px;
+  padding: 1px 9px;
+  background: transparent;
+  white-space: nowrap;
+}
+.theme-modern .liveb i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--red);
+  flex: none;
+  animation: rt-live-pulse 1.4s infinite;
+}
+.theme-modern .liveb.retry {
+  color: var(--amber);
+  border-color: color-mix(in srgb, var(--amber) 35%, transparent);
+}
+.theme-modern .liveb.retry i {
+  background: var(--amber);
+  animation: rt-live-spin 1s linear infinite;
+}
+/* 未开启实时：中性灰，避免误导成「正在 LIVE」 */
+.theme-modern .liveb.idle {
+  color: var(--ink-muted);
+  border-color: var(--line-strong);
+}
+.theme-modern .liveb.idle i { background: var(--ink-muted); animation: none; }
+.theme-modern .liveb:disabled { opacity: 0.5; cursor: not-allowed; }
+@keyframes rt-live-pulse { 50% { opacity: 0.3; } }
+@keyframes rt-live-spin { to { transform: rotate(360deg); } }
+
+/* 实时过滤框（原型 540-543：170×24、放大镜前缀、默认 ERROR） */
+.theme-modern .rtools .rt-filter {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+}
+.theme-modern .rtools .rt-filter > svg {
+  position: absolute;
+  left: 9px;
+  color: var(--ink-muted);
+  pointer-events: none;
+}
+.theme-modern .rtools .rt-filter-input {
+  width: 170px;
+  height: 24px;
+  padding: 0 10px 0 28px;
+  font-size: var(--fs-2xs);
+  border: 1px solid var(--line);
+  border-radius: var(--v2-radius-s, 6px);
+  background: var(--panel);
+  color: var(--ink);
+  outline: none;
+}
+.theme-modern .rtools .rt-filter-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+.theme-modern .rtools .rt-filter-input::placeholder { color: var(--ink-muted); }
+
+/* 暂停 pill（原型 544）+ 断开（原型 545 .btn.sm = 高 24） */
+.theme-modern .rtools .pill {
+  height: 22px;
+  font-size: var(--fs-2xs);
+  cursor: pointer;
+}
+.theme-modern .rtools .pill:disabled { opacity: 0.5; cursor: not-allowed; }
+.theme-modern .rtools .rt-disconnect {
+  height: 24px;
+  padding: 0 8px;
+  font-size: var(--fs-2xs);
+}
+
+/* 窄屏：过滤框让位，避免挤压文件名说明 */
+@media (max-width: 900px) {
+  .theme-modern .rtools .rt-filter-input { width: 120px; }
+}
+
+/* S4-7/8/9/10：切片条几何对齐原型（原型 132：gap12 / padding 8px 14px；
+   原型 533「跳到尾部」= .btn.sm 高 24）。theme-modern.css 原为 gap10 / 7px 14px / 28px。 */
+.theme-modern .slicebar {
+  gap: 12px;
+  padding: 8px 14px;
+}
+.theme-modern .slicebar .ghost-button.slim-button.slicebar-tail {
+  height: 24px;
+  padding: 0 8px;
+}
+/* S4-11：状态 chip 高 19（原型内联 chip 随行高自然撑到 19；实现写死 18） */
+.theme-modern .slicebar-chip {
+  height: 19px;
+}
+
+/* ================= S6：文件浏览（原型 s6() 613-692） ============ */
+
+/* S6-20/21：工具行 = 常驻过滤输入框（原型 632：150×24）+ 上传/刷新/更多（原型 633-635）
+   返回上级按钮已移除（导航归面包屑/目录树），过滤由常驻输入框承担。 */
+.theme-modern .file-browser-workbench .workspace-actions .fb-filter-input {
+  width: 150px;
+  height: 24px;
+  padding: 0 10px;
+  font-size: var(--fs-2xs);
+  border: 1px solid var(--line);
+  border-radius: var(--v2-radius-s, 6px);
+  background: var(--panel);
+  color: var(--ink);
+  outline: none;
+}
+.theme-modern .file-browser-workbench .workspace-actions .fb-filter-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+.theme-modern .file-browser-workbench .workspace-actions .fb-filter-input::placeholder { color: var(--ink-muted); }
+/* 原型工具行图标按钮 = .btn.icon.sm（28 宽 × 24 高）。
+   基础 .theme-modern .icon-button 有 min-width:30px（theme-modern.css:1990），
+   须一并压掉否则宽度被锁 30。 */
+.theme-modern .file-browser-workbench .workspace-actions .icon-button {
+  width: 28px;
+  min-width: 28px;
+  height: 24px;
+}
+
+/* S6-18 选中行底色 = var(--accent-soft)（原型 155：rgba(0,112,243,.08)，
+   实现误用 #3b82f6 色相）。 */
+.theme-modern .file-table .file-row.file-row-selected,
+.theme-modern .file-table .file-row.file-row-selected:nth-child(2n) {
+  background: var(--accent-soft) !important;
+}
+.theme-modern .file-table .file-row.file-row-selected:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 13%, transparent) !important;
+}
+
+/* S6-19 行 hover = ink 3% 淡灰（原型 156），非 accent 淡蓝 */
+.theme-modern .file-table .file-row:hover:not(:disabled):not(.file-row-selected):not(.file-row-active) {
+  background: color-mix(in srgb, var(--ink) 3%, transparent);
+}
+
+/* S6-8：表头与数据行末三列对齐（原型表头/行同模板）。
+   实现表头右侧 padding 16px、行 12px → 末三列（大小/修改时间/类型）错位 4px。
+   收齐为 12px，与 .file-row 的 `padding: 0 12px` 一致。 */
+.theme-modern .file-table-head {
+  padding-right: 12px;
+}
+
+/* S6-13/15/16：右键菜单几何（原型 166-170）
+   min-width 180 / 项 padding 6px 10px + gap 9 / 分隔线 margin 4px 6px。 */
+.theme-modern .context-menu {
+  min-width: 180px;
+  padding: 5px;
+  border-radius: var(--r-m, 8px);
+}
+.theme-modern .context-menu-item {
+  gap: 9px;
+  padding: 6px 10px;
+  border-radius: 5px;
+}
+.theme-modern .context-menu-separator {
+  margin: 4px 6px;
+}
+
+/* ================= S4 二轮（2026-09-30）：切片条吸收分页 =================
+   一行式阅读进度条：‹ 翻页 | 字节区间 | 进度槽(拖拽=跳转) | %（尾页=100） | › | 跳到尾部/回头部
+   调试信息（偏移/边界/切片大小）收进「更多工具」面板；状态 chip 移除。 */
+.theme-modern .slicebar .slicebar-nav {
+  flex: none;
+  width: 22px;
+  min-width: 22px;
+  height: 22px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r-s, 6px);
+}
+.theme-modern .slicebar-percent {
+  min-width: 44px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- S4 二轮补：动作组入状态条 + 选中复制 pill ---- */
+/* 高频动作组（警告高亮/上下文/下载/书签/小窗/更多工具）挂在 log-view-bar 右端 */
+.theme-modern .log-view-bar > .rtools { margin-left: auto; }
+.theme-modern .viewer-action-group {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0;
+}
+.theme-modern .viewer-action-group .ghost-button.icon-button {
+  width: 24px;
+  min-width: 24px;
+  height: 22px;
+  padding: 0;
+  border-radius: var(--r-s, 6px);
+}
+
+/* 选中复制：带文字 pill（图标按钮不可发现） */
+.selection-copy-menu button,
+.terminal-sel-menu button {
+  width: auto;
+  min-width: 0;
+  height: 26px;
+  padding: 0 10px;
+  gap: 5px;
+  font-size: var(--fs-2xs, 11px);
+  font-weight: 550;
+}
+.selection-copy-menu button span { display: inline-flex; align-items: center; }
+
+/* ---- 主题化下拉（ThemedSelect）：原型 .input 形态 + 自绘菜单 ---- */
+.theme-modern .themed-select-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  height: 28px;
+  padding: 0 8px 0 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--v2-radius-s, 6px);
+  background: var(--panel);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--fs-sm);
+  min-width: 0;
+  cursor: pointer;
+}
+.theme-modern .themed-select-trigger:hover:not(:disabled) {
+  border-color: var(--line-strong);
+}
+.theme-modern .themed-select-trigger.themed-select-open,
+.theme-modern .themed-select-trigger:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+.theme-modern .themed-select-trigger:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+}
+.theme-modern .themed-select-value {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+.theme-modern .themed-select-chevron {
+  flex: none;
+  color: var(--ink-muted);
+  transition: transform 0.14s ease;
+}
+.theme-modern .themed-select-open .themed-select-chevron {
+  transform: rotate(180deg);
+}
+.theme-modern .themed-select-menu {
+  position: fixed;
+  display: flex;
+  flex-direction: column;
+  max-height: min(320px, 60vh);
+  overflow-y: auto;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-m, 8px);
+  background: var(--panel-strong);
+  box-shadow: var(--v2-shadow-pop, 0 12px 32px rgba(15, 23, 42, 0.18));
+}
+.theme-modern .themed-select-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 28px;
+  padding: 5px 10px;
+  border: none;
+  border-radius: var(--r-s, 6px);
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: var(--fs-sm);
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.theme-modern .themed-select-item:hover:not(:disabled) {
+  background: var(--panel-muted);
+  color: var(--ink);
+}
+.theme-modern .themed-select-item-selected {
+  color: var(--accent);
+  font-weight: 550;
+}
+.theme-modern .themed-select-item:disabled {
+  opacity: 0.45;
+  cursor: default;
+}

@@ -1,0 +1,810 @@
+/* align-s10-s14.css — S10 设置中心 / S12 空态 / S14 外观主题 对齐原型
+   （prototype.html s10:925-990 / s12:1027-1051 / s14:1091-1178）隔离文件，最后加载。
+   排除项：字号体系（--fs-*）为用户有意调整，不回改。 */
+
+/* ============================================================
+   S10 设置中心
+   ============================================================ */
+
+/* S10-2 兜底：清单列 268 溢出修复（根因缺 min-width:0，主线程已在 theme-modern.css 补；
+   这里以同等约束再压一层，防止内容（nowrap 页脚 + 长主机名）再次把列撑宽）。 */
+.theme-modern .settings-exclusive .conn-list-pane {
+  min-width: 0;
+  overflow: hidden;
+}
+.theme-modern .settings-exclusive .conn-list-pane .conn-server-list,
+.theme-modern .settings-exclusive .conn-list-pane .conn-list-foot {
+  min-width: 0;
+}
+.theme-modern .settings-exclusive .conn-list-pane .conn-server-list {
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+/* S10-2：危险区「最近目录 + 删除此服务器」行 + D9 panel-muted 页脚（原型 978-984） */
+.theme-modern .settings-exclusive .conn-danger-strip {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--line);
+  background: var(--panel);
+}
+.theme-modern .settings-exclusive .conn-danger-recent {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--fs-2xs);
+  color: var(--ink-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.theme-modern .settings-exclusive .conn-danger-delete {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 10px;
+  font-size: var(--fs-xs);
+}
+.theme-modern .settings-exclusive .conn-defect-foot {
+  flex: none;
+  padding: 8px 20px;
+  background: var(--panel-muted);
+  border-top: 1px solid var(--line);
+  font-size: var(--fs-2xs);
+  color: var(--ink-muted);
+  line-height: 1.6;
+}
+
+/* S10-4：凭证标题行右侧 chip grn；凭证字段行内组（原型 958-969） */
+.theme-modern .settings-exclusive .credential-head-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+/* 凭证字段行内布局：标签左（44px）、输入框+按钮右（原型 961-969） */
+.theme-modern .settings-exclusive .credential-inline-field {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 8px;
+}
+/* 凭证卡头：kicker 与状态 chip 同行（原型 958-959） */
+.theme-modern .settings-exclusive .conn-credential-card .settings-card-head > div:first-child {
+  flex-direction: row;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+/* 私钥框压成单行（原型 967-968 为单行输入框 + 粘贴导入） */
+.theme-modern .settings-exclusive .conn-credential-card .settings-secret-field-textarea textarea {
+  min-height: 30px;
+  height: 30px;
+  padding: 0 10px;
+  resize: none;
+  line-height: 28px;
+  white-space: nowrap;
+  overflow-x: auto;
+}
+.theme-modern .settings-exclusive .credential-inline-label {
+  flex: 0 0 44px;
+  font-size: var(--fs-2xs);
+  color: var(--ink-muted);
+}
+.theme-modern .settings-exclusive .credential-inline-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+/* 凭证输入行铺满：行容器占满除标签外的宽度，输入框占满行 */
+.theme-modern .settings-exclusive .credential-inline-field > .credential-inline-row {
+  flex: 1;
+}
+.theme-modern .settings-exclusive .credential-inline-row > input,
+.theme-modern .settings-exclusive .credential-inline-row > textarea {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+}
+/* 密码/私钥的行内小眼睛（密码框模式，替代「查看/隐藏」文字按钮） */
+.theme-modern .settings-exclusive .secret-input-wrap {
+  position: relative;
+}
+.theme-modern .settings-exclusive .secret-input-wrap > input,
+.theme-modern .settings-exclusive .secret-input-wrap > textarea {
+  padding-right: 32px;
+}
+.theme-modern .settings-exclusive .secret-eye {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  background: none;
+  border-radius: 5px;
+  color: var(--ink-muted, #8a8a8a);
+  cursor: pointer;
+}
+.theme-modern .settings-exclusive .secret-eye:hover {
+  background: color-mix(in srgb, var(--ink, #222) 6%, transparent);
+  color: var(--ink, #222);
+}
+.theme-modern .settings-exclusive .credential-inline-field-top {
+  align-items: flex-start;
+}
+.theme-modern .settings-exclusive .credential-inline-field-top .credential-inline-label {
+  padding-top: 7px;
+}
+/* 私钥：明文单行，文字垂直居中（line-height 覆盖全局 textarea 样式） */
+.theme-modern .settings-exclusive .conn-credential-card .settings-secret-field-textarea textarea {
+  min-height: 30px;
+  height: 30px;
+  padding: 0 10px !important;
+  margin: 0;
+  resize: none;
+  line-height: 28px !important;
+  white-space: pre;
+  overflow-x: auto;
+  overflow-y: hidden;
+  transition: height .12s ease;
+}
+.theme-modern .settings-exclusive .conn-credential-card .settings-secret-field-textarea textarea:focus {
+  height: 76px;
+  line-height: 1.5 !important;
+  white-space: pre-wrap;
+  overflow-y: auto;
+}
+/* 选中框收敛：1px 描边 + 2px 浅色光环（覆盖全局粗环，设置中心所有输入框统一） */
+.theme-modern .settings-exclusive input:focus,
+.theme-modern .settings-exclusive textarea:focus,
+.theme-modern .settings-exclusive select:focus {
+  border-width: 1px;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent, #8a6d3b) 14%, transparent);
+}
+.theme-modern .settings-exclusive .credential-inline-row > input {
+  flex: 1;
+  min-width: 0;
+}
+.theme-modern .settings-exclusive .credential-inline-row > button {
+  flex: none;
+}
+
+/* ============================================================
+   S12 空态与错误
+   ============================================================ */
+
+/* S12：目录空态模板（图标 + 一句话 + 副文案 + 主按钮，原型 1040-1046）。
+   .empty-box 在 theme-modern 里是「描边卡片」，目录空态要的是居中模板，故覆写。 */
+.theme-modern .empty-box.empty-state-template {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  text-align: center;
+  padding: 32px 16px;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+}
+.theme-modern .empty-box.empty-state-template .empty-box-icon {
+  margin-bottom: 6px;
+}
+.theme-modern .empty-box.empty-state-template .empty-box-title {
+  font-weight: 650;
+  font-size: var(--fs-base);
+  color: var(--ink);
+  margin-bottom: 3px;
+}
+.theme-modern .empty-box.empty-state-template .empty-box-hint {
+  max-width: 320px;
+  margin-bottom: 12px;
+  font-size: var(--fs-xs);
+  color: var(--ink-muted);
+  line-height: 1.6;
+}
+
+/* ============================================================
+   S14 外观 · 主题背景 · 字体 · 水印 · 动效
+   ============================================================ */
+
+/* S14-1：背景方案 4 张可视缩略卡（原型 1109-1117） */
+.theme-modern .surface-thumb-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding: 2px 0 4px;
+}
+.theme-modern .surface-thumb {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  /* 全局 :where(.theme-modern) button { height: var(--ctl-h) } 会把按钮限高 28px，
+     纵向 flex 里 96×60 卡片（flex-shrink 默认 1）被压成 2px 细线 —— 复位高度。 */
+  height: auto;
+}
+.theme-modern .surface-thumb-card {
+  position: relative;
+  display: block;
+  flex: none;
+  width: 96px;
+  height: 60px;
+  border-radius: 8px;
+  border: 2px solid var(--line);
+  overflow: hidden;
+  transition: border-color 0.12s;
+}
+.theme-modern .surface-thumb-card i {
+  position: absolute;
+  left: 8px;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(23, 23, 23, 0.12);
+}
+.theme-modern .surface-thumb-card .surface-thumb-line-1 {
+  top: 8px;
+  width: 34px;
+  height: 5px;
+  border-radius: 3px;
+  background: rgba(23, 23, 23, 0.25);
+  right: auto;
+}
+.theme-modern .surface-thumb-card .surface-thumb-line-2 { top: 18px; right: 8px; }
+.theme-modern .surface-thumb-card .surface-thumb-line-3 { top: 27px; right: 18px; }
+.theme-modern .surface-thumb-card .surface-thumb-line-4 { top: 36px; right: 28px; }
+.theme-modern .surface-thumb-label {
+  font-size: var(--fs-2xs);
+  color: var(--ink-soft);
+  font-weight: 400;
+}
+.theme-modern .surface-thumb:hover .surface-thumb-card {
+  border-color: var(--line-strong);
+}
+.theme-modern .surface-thumb-active .surface-thumb-card {
+  border-color: var(--accent);
+}
+.theme-modern .surface-thumb-active .surface-thumb-label {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* S14-2：背景模式 fchip + 遮罩亮度 / 背景模糊滑杆（原型 1123-1126） */
+.theme-modern .bg-mode-chips {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.theme-modern .settings-theme-customizer-head .fchip,
+.theme-modern .watermark-scope .fchip {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 11px;
+  font-size: var(--fs-2xs);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel-strong);
+  color: var(--ink-soft);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.theme-modern .settings-theme-customizer-head .fchip:hover,
+.theme-modern .watermark-scope .fchip:hover {
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+.theme-modern .settings-theme-customizer-head .fchip.fchip-on,
+.theme-modern .watermark-scope .fchip.fchip-on {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+  font-weight: 550;
+}
+.theme-modern .bg-image-sliders {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 22px;
+  align-items: center;
+  padding-top: 4px;
+}
+.theme-modern .bg-slider-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--fs-2xs);
+  color: var(--ink-soft);
+}
+.theme-modern .bg-slider-field input[type="range"] {
+  width: 110px;
+  accent-color: var(--accent);
+}
+.theme-modern .bg-slider-field code {
+  font-family: var(--mono-font-family);
+  font-size: var(--fs-2xs);
+  color: var(--ink-muted);
+  min-width: 34px;
+}
+
+/* S14-3：字体三处独立表（原型 1131-1142） */
+.theme-modern .font-matrix {
+  width: 100%;
+  max-width: 860px;
+  padding-top: 4px;
+}
+.theme-modern .font-matrix-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-sm);
+}
+.theme-modern .font-matrix-table th {
+  text-align: left;
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+  color: var(--ink-soft);
+  padding: 6px 12px;
+  background: var(--panel-muted);
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+.theme-modern .font-matrix-table th:nth-child(2) { width: 190px; }
+.theme-modern .font-matrix-table th:nth-child(3) { width: 150px; }
+.theme-modern .font-matrix-table td {
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink);
+  vertical-align: middle;
+}
+.theme-modern .font-matrix-table select,
+.theme-modern .font-matrix-table input[type="number"] {
+  width: 100%;
+  height: 26px;
+  min-width: 0;
+  padding: 0 8px;
+  font: inherit;
+  font-size: var(--fs-xs);
+  color: var(--ink);
+  background: var(--panel-strong);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.theme-modern .font-matrix-table input[type="number"] { width: 76px; }
+.theme-modern .font-live-preview {
+  margin-top: 10px;
+  padding: 8px 14px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 8px;
+  font-family: var(--log-font-family, var(--mono-font-family));
+  font-size: var(--fs-xs);
+  color: var(--ink-soft);
+}
+.theme-modern .font-live-preview .font-live-error { color: var(--red); }
+
+/* S14-4：水印块（原型 1143-1168） */
+.theme-modern .watermark-block {
+  display: flex;
+  gap: 28px;
+  width: 100%;
+  min-width: 0;
+}
+.theme-modern .watermark-main {
+  flex: 1;
+  min-width: 0;
+  max-width: 460px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.theme-modern .watermark-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.theme-modern .watermark-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-2xs);
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  color: var(--ink-soft);
+}
+.theme-modern .watermark-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--fs-xs);
+  color: var(--ink-soft);
+}
+.theme-modern .watermark-field > span { flex: 0 0 auto; }
+.theme-modern .watermark-field > input[type="text"],
+.theme-modern .watermark-field > input:not([type]) {
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  padding: 0 10px;
+  font: inherit;
+  font-size: var(--fs-xs);
+  color: var(--ink);
+  background: var(--panel-strong);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.theme-modern .watermark-field-range input[type="range"] {
+  width: 110px;
+  accent-color: var(--accent);
+}
+.theme-modern .watermark-field code {
+  font-family: var(--mono-font-family);
+  font-size: var(--fs-2xs);
+  color: var(--ink-muted);
+  min-width: 34px;
+}
+.theme-modern .watermark-scope {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-xs);
+  color: var(--ink-soft);
+}
+.theme-modern .watermark-preview {
+  flex: 1;
+  min-width: 0;
+  min-height: 120px;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+}
+.theme-modern .watermark-preview-lines {
+  padding: 8px 0;
+}
+.theme-modern .watermark-preview-lines .ll {
+  display: flex;
+  padding: 1px 14px;
+  font-family: var(--mono-font-family);
+  font-size: var(--fs-2xs);
+  line-height: 1.65;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+.theme-modern .watermark-preview-lines .ll .t {
+  flex: 0 0 108px;
+  color: var(--ink-muted);
+}
+.theme-modern .watermark-preview-lines .ll .lv { font-weight: 650; }
+.theme-modern .watermark-preview-lines .ll .lv-e { color: var(--red); }
+.theme-modern .watermark-preview-lines .ll .lv-w { color: var(--amber); font-weight: 600; }
+.theme-modern .watermark-preview-tiles {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-content: center;
+  justify-content: center;
+  gap: 8px 26px;
+  transform: rotate(-22deg) scale(1.35);
+  pointer-events: none;
+  overflow: hidden;
+}
+.theme-modern .watermark-preview-tiles span {
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  white-space: nowrap;
+  color: rgba(23, 23, 23, 0.07);
+  opacity: calc(var(--wm-opacity, 0.05) / 0.05);
+}
+
+/* S14-4：水印渲染覆盖层（默认关闭） */
+.slc-watermark {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  overflow: hidden;
+}
+.slc-watermark-global {
+  position: fixed;
+  z-index: 900;
+}
+.slc-watermark-grid {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-content: space-around;
+  justify-content: space-around;
+  transform: rotate(-22deg) scale(1.5);
+  transform-origin: center;
+}
+.slc-watermark-grid span {
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  white-space: nowrap;
+  color: rgba(23, 23, 23, 0.07);
+  opacity: calc(var(--wm-opacity, 0.05) / 0.05);
+  letter-spacing: 0.04em;
+}
+
+/* S14-5：动效 .seg.lite / 动态背景 pill（原型 1170-1173） */
+.theme-modern .settings-exclusive .settings-pref-value .seg.lite {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--panel-strong);
+}
+.theme-modern .settings-exclusive .settings-pref-value .seg.lite > button {
+  height: 28px;
+  padding: 0 11px;
+  font-size: var(--fs-xs);
+  color: var(--ink-soft);
+  background: transparent;
+  border: none;
+  border-right: 1px solid var(--line);
+  cursor: pointer;
+}
+.theme-modern .settings-exclusive .settings-pref-value .seg.lite > button:last-child {
+  border-right: none;
+}
+.theme-modern .settings-exclusive .settings-pref-value .seg.lite > button.on {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+.theme-modern .settings-exclusive .settings-pref-value button.pill {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 11px;
+  font-size: var(--fs-2xs);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel-strong);
+  color: var(--ink);
+  cursor: pointer;
+}
+.theme-modern .settings-exclusive .settings-pref-value button.pill.on {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+  font-weight: 550;
+}
+
+/* S14-2：图片背景遮罩亮度驱动——白纱强度绑定滑杆（App 写入 --custom-image-overlay-alpha 0..1）
+   S14-5：背景模糊绑定 --custom-image-blur */
+.theme-modern.ui-surface-custom.ui-custom-background-image {
+  --custom-shell-background:
+    linear-gradient(135deg, rgba(255, 255, 255, var(--custom-image-overlay-alpha, 0.3)), rgba(255, 255, 255, calc(var(--custom-image-overlay-alpha, 0.3) * 0.6))),
+    var(--custom-background-image),
+    linear-gradient(135deg, var(--custom-gradient-start), var(--custom-gradient-end));
+  --panel: rgba(255, 255, 255, calc(0.46 + var(--custom-image-overlay-alpha, 0.3) * 0.3));
+  --panel-strong: rgba(255, 255, 255, calc(0.62 + var(--custom-image-overlay-alpha, 0.3) * 0.25));
+  --panel-muted: rgba(255, 255, 255, calc(0.34 + var(--custom-image-overlay-alpha, 0.3) * 0.3));
+}
+.theme-modern.ui-surface-custom.ui-custom-background-image .shell-layout,
+.theme-modern.ui-surface-custom.ui-custom-background-image .main-panel {
+  backdrop-filter: blur(var(--custom-image-blur, 0px));
+  -webkit-backdrop-filter: blur(var(--custom-image-blur, 0px));
+}
+
+/* S14-5：动态背景（Ken Burns，动效=减少时 class 不挂载） */
+.theme-modern.ui-surface-custom.ui-custom-background-image.ui-dynamic-background .shell-layout {
+  animation: slc-dyn-bg 26s ease-in-out infinite alternate;
+}
+@keyframes slc-dyn-bg {
+  from { background-size: 102% auto; background-position: center 45%; }
+  to { background-size: 116% auto; background-position: center 55%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .theme-modern .shell-layout {
+    animation: none !important;
+  }
+}
+
+/* ============================================================
+   S10 详情分层（本轮）：只读详情 + 编辑态切换（原型 s10 详情区新版）
+   —— 连接信息网格 / 头部 ⋯ 菜单 / 凭证只读态+编辑面板 / 连接入口折叠 / 清单＋新增
+   ============================================================ */
+
+/* 清单顶部「＋ 新增」主按钮（原型 941 行：搜索框右侧） */
+.theme-modern .settings-exclusive .conn-list-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.theme-modern .settings-exclusive .conn-list-search input {
+  flex: 1;
+  min-width: 0;
+}
+.theme-modern .settings-exclusive .conn-list-search .conn-list-add {
+  flex: none;
+  height: 24px;
+  padding: 0 9px;
+  font-size: 11px;
+}
+
+/* 头部 ⋯ 菜单（原型头部省略号按钮） */
+.theme-modern .settings-exclusive .conn-more-wrap {
+  position: relative;
+  display: inline-flex;
+}
+.theme-modern .settings-exclusive .conn-more-trigger {
+  width: 26px;
+  padding: 0;
+}
+.theme-modern .settings-exclusive .conn-more-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 30;
+  min-width: 128px;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel, #fff);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+}
+.theme-modern .settings-exclusive .conn-more-menu button {
+  height: 26px;
+  padding: 0 10px;
+  font-size: 12px;
+  text-align: left;
+  color: var(--ink, #222);
+  background: none;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.theme-modern .settings-exclusive .conn-more-menu button:hover {
+  background: color-mix(in srgb, var(--ink, #222) 5%, transparent);
+}
+
+/* 「连接信息」只读键值网格（原型：两列 grid，键淡色、值等宽） */
+.theme-modern .settings-exclusive .settings-info-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px 24px;
+  font-size: 11.5px;
+}
+.theme-modern .settings-exclusive .settings-info-grid .settings-info-key {
+  color: var(--ink-muted, #8a8a8a);
+  margin-right: 8px;
+}
+.theme-modern .settings-exclusive .settings-info-grid .mono,
+.theme-modern .settings-exclusive .credential-summary-line .mono {
+  font-family: var(--mono-font-family);
+  font-size: 11px;
+}
+
+/* 凭证只读态一行摘要（认证方式 / 用户名 / 私钥） */
+.theme-modern .settings-exclusive .credential-summary-line {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  font-size: 11.5px;
+}
+.theme-modern .settings-exclusive .credential-summary-line .settings-info-key {
+  color: var(--ink-muted, #8a8a8a);
+  margin-right: 8px;
+}
+
+/* S10 头部副行：chips + mono 地址行（原型头部「root@host:22 · /data/logs/eos」） */
+.theme-modern .settings-exclusive .conn-head-sub {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 2px 0 0;
+}
+.theme-modern .settings-exclusive .conn-head-sub .mono {
+  font-family: var(--mono-font-family);
+  font-size: 10.5px;
+  color: var(--ink-muted, #8a8a8a);
+}
+
+/* S10 空态：居中模板（对齐 S12「图标 + 一句话 + 副文案」），不再贴左上角 */
+.theme-modern .settings-exclusive .settings-empty-centered {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 72px auto 0;
+  max-width: 420px;
+  padding: 32px 28px;
+  text-align: center;
+  background: none;
+}
+.theme-modern .settings-exclusive .settings-empty-centered .settings-empty-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  margin-bottom: 4px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  color: var(--ink-muted, #8a8a8a);
+  background: color-mix(in srgb, var(--panel, #fff) 60%, transparent);
+}
+.theme-modern .settings-exclusive .settings-empty-centered strong {
+  font-size: 12.5px;
+}
+.theme-modern .settings-exclusive .settings-empty-centered span {
+  font-size: 11px;
+  line-height: 1.7;
+}
+
+/* 设置中心按钮：svg 与文字垂直居中（.ghost-button 基础规则无 inline-flex，图标落在基线上） */
+.theme-modern .settings-exclusive .ghost-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.theme-modern .settings-exclusive .ghost-button > svg {
+  flex: none;
+}
+
+/* ⋯ 触发器图标显式居中 */
+.theme-modern .settings-exclusive .conn-more-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+/* ⋯ 菜单危险项 */
+.theme-modern .settings-exclusive .conn-more-menu .conn-more-menu-danger {
+  color: var(--red, #c0392b);
+}
+
+/* 连接入口：直连时折叠为一行摘要（details/summary） */
+.theme-modern .settings-exclusive .conn-entry-card {
+  padding: 0;
+}
+.theme-modern .settings-exclusive .conn-entry-details > summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 20px;
+  cursor: pointer;
+  list-style: none;
+  font-size: 11.5px;
+}
+.theme-modern .settings-exclusive .conn-entry-details > summary::-webkit-details-marker {
+  display: none;
+}
+.theme-modern .settings-exclusive .conn-entry-summary-text {
+  color: var(--ink-muted, #8a8a8a);
+}
+.theme-modern .settings-exclusive .conn-entry-summary-toggle {
+  margin-left: auto;
+  font-size: 10.5px;
+  color: var(--ink-muted, #8a8a8a);
+}
+.theme-modern .settings-exclusive .conn-entry-details[open] .conn-entry-summary-toggle {
+  visibility: hidden;
+}
+.theme-modern .settings-exclusive .conn-entry-note {
+  margin: 0 20px 12px;
+}

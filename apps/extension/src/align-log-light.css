@@ -1,0 +1,113 @@
+/* align-log-light.css — 内嵌日志/切片查看区改浅色，对齐原型 S1/S3/S4
+   （prototype.html：body 背景 --bg；#viewport 背景 --panel(#fff)；日志行 .ll 119-125：
+   文字 --ink-soft、时间列 --ink-muted、ERROR --red/650、WARN --amber/600、hit 行 accent-soft+左蓝条）。
+
+   背景：现实现把 `--log-viewer-background` 定为深色渐变（theme-modern.css:81），
+   导致内嵌日志区整体深色，与原型（浅色）不符（用户截图确认；亦为总账 R4）。
+
+   ⚠️ 作用域只限 `.theme-modern .pip-viewer-wrap, .theme-modern .pip-viewer-root`（= 内嵌视图）。
+   以下三处原型本就是深色，**不受影响**：
+     · PiP / 独立窗口 `.pip-viewer-root` 现与内嵌视图同样应用本亮色方案（用户决策 2026-09-30）
+     · S7 模态预览弹窗 → `.preview-dialog`（见 align-s7-s8.css）
+     · 终端 → `.terminal-*`
+   排除项：字号体系（--fs-*）为用户有意调整，不回改。 */
+
+/* ============ 1. 日志/切片控制台：浅底 + 深字 ============ */
+.theme-modern .pip-viewer-wrap, .theme-modern .pip-viewer-root{
+  /* 内嵌视图的日志底色改浅（原型 #viewport = var(--panel) 白） */
+  --log-viewer-background: var(--panel);
+}.theme-modern .pip-viewer-wrap  .console-block, .theme-modern .pip-viewer-wrap .viewer-console, .theme-modern .pip-viewer-root .viewer-console, .theme-modern .pip-viewer-root  .console-block, .theme-modern .pip-viewer-wrap .viewer-console, .theme-modern .pip-viewer-root .viewer-console{
+  background: var(--panel) !important;
+  color: var(--ink-soft);
+  /* 原型 .content 无边框（原实现带 1px #15202b 深边，浅底下突兀） */
+  border-color: transparent !important;
+}.theme-modern .pip-viewer-wrap  .viewer-console-markup, .theme-modern .pip-viewer-root  .viewer-console-markup{ color: var(--ink-soft); }
+
+/* 日志行文字：原型 .ll{color:var(--ink-soft)}*/
+.theme-modern .pip-viewer-wrap  .log-line, .theme-modern .pip-viewer-root  .log-line{ color: var(--ink-soft); }
+/* 时间戳列：原型 .ll .t{color:var(--ink-muted)}（原实现 --shell-mut 为深色主题值） */
+.theme-modern .pip-viewer-wrap  .log-line .log-line-time, .theme-modern .pip-viewer-root  .log-line .log-line-time{
+  color: var(--ink-muted);
+}/* ============ 2. 级别色：原型仅着色文字，无底色 ============ */
+.theme-modern .pip-viewer-wrap  .log-line-level-error, .theme-modern .pip-viewer-wrap .log-line-level-fatal, .theme-modern .pip-viewer-root .log-line-level-fatal, .theme-modern .pip-viewer-root  .log-line-level-error, .theme-modern .pip-viewer-wrap .log-line-level-fatal, .theme-modern .pip-viewer-root .log-line-level-fatal{
+  color: var(--red);
+  font-weight: 650;
+  background: transparent;
+  box-shadow: none;
+}.theme-modern .pip-viewer-wrap  .log-line-level-warning, .theme-modern .pip-viewer-root  .log-line-level-warning{
+  color: var(--amber);
+  font-weight: 600;
+  background: transparent;
+  box-shadow: none;
+}.theme-modern .pip-viewer-wrap  .log-line-level-exception, .theme-modern .pip-viewer-root  .log-line-level-exception{
+  color: var(--amber);
+  font-weight: 600;
+  background: transparent;
+  box-shadow: none;
+}.theme-modern .pip-viewer-wrap  .log-line-clickable.log-line-level-error:hover, .theme-modern .pip-viewer-wrap .log-line-clickable.log-line-level-warning:hover, .theme-modern .pip-viewer-root .log-line-clickable.log-line-level-warning:hover, .theme-modern .pip-viewer-wrap .log-line-clickable.log-line-level-warning:hover, .theme-modern .pip-viewer-root .log-line-clickable.log-line-level-exception:hover, .theme-modern .pip-viewer-wrap .log-line-clickable.log-line-level-warning:hover, .theme-modern .pip-viewer-root .log-line-clickable.log-line-level-fatal:hover, .theme-modern .pip-viewer-root  .log-line-clickable.log-line-level-error:hover, .theme-modern .pip-viewer-wrap .log-line-clickable.log-line-level-warning:hover, .theme-modern .pip-viewer-root .log-line-clickable.log-line-level-warning:hover, .theme-modern .pip-viewer-wrap .log-line-clickable.log-line-level-warning:hover, .theme-modern .pip-viewer-root .log-line-clickable.log-line-level-exception:hover, .theme-modern .pip-viewer-wrap .log-line-clickable.log-line-level-warning:hover, .theme-modern .pip-viewer-root .log-line-clickable.log-line-level-fatal:hover{
+  background: var(--accent-soft);
+}/* ============ 3. 切片条：原型浅色（transparent 底 + --line 边 + ink 文字） ============ */
+.theme-modern .pip-viewer-wrap  .slicebar, .theme-modern .pip-viewer-root  .slicebar{
+  background: transparent !important;
+  border-bottom: 1px solid var(--line) !important;
+}.theme-modern .pip-viewer-wrap  .slicebar .mono, .theme-modern .pip-viewer-wrap .slicebar-range, .theme-modern .pip-viewer-root .slicebar-range, .theme-modern .pip-viewer-wrap .slicebar-range, .theme-modern .pip-viewer-root .slicebar-range b, .theme-modern .pip-viewer-wrap .slicebar-range, .theme-modern .pip-viewer-root .slicebar-percent, .theme-modern .pip-viewer-root  .slicebar .mono, .theme-modern .pip-viewer-wrap .slicebar-range, .theme-modern .pip-viewer-root .slicebar-range, .theme-modern .pip-viewer-wrap .slicebar-range, .theme-modern .pip-viewer-root .slicebar-range b, .theme-modern .pip-viewer-wrap .slicebar-range, .theme-modern .pip-viewer-root .slicebar-percent{
+  color: var(--ink-soft);
+}.theme-modern .pip-viewer-wrap  .slicebar-range b, .theme-modern .pip-viewer-root  .slicebar-range b{ color: var(--ink); }.theme-modern .pip-viewer-wrap  .slicebar-chip, .theme-modern .pip-viewer-root  .slicebar-chip{
+  background: var(--panel) !important;
+  border-color: var(--line) !important;
+  color: var(--ink-soft) !important;
+}.theme-modern .pip-viewer-wrap  .slicebar-strack, .theme-modern .pip-viewer-root  .slicebar-strack{ background: var(--panel-muted); }.theme-modern .pip-viewer-wrap  .slicebar .ghost-button.slicebar-tail, .theme-modern .pip-viewer-root  .slicebar .ghost-button.slicebar-tail{
+  background: var(--panel);
+  border-color: var(--line);
+  color: var(--ink);
+}/* ============ 4. 预览标题条（viewer-actions-strip）：原型浅色 ============ */
+.theme-modern .pip-viewer-wrap  .viewer-actions-strip, .theme-modern .pip-viewer-root  .viewer-actions-strip{
+  background: var(--panel) !important;
+  border-bottom: 1px solid var(--line) !important;
+}.theme-modern .pip-viewer-wrap  .viewer-strip-label, .theme-modern .pip-viewer-root  .viewer-strip-label{
+  color: var(--ink) !important;
+  font-weight: 600;
+}.theme-modern .pip-viewer-wrap  .workspace-actions .icon-button, .theme-modern .pip-viewer-wrap .workspace-actions .ghost-button, .theme-modern .pip-viewer-root .workspace-actions .ghost-button, .theme-modern .pip-viewer-root  .workspace-actions .icon-button, .theme-modern .pip-viewer-wrap .workspace-actions .ghost-button, .theme-modern .pip-viewer-root .workspace-actions .ghost-button{
+  color: var(--ink-soft);
+  background: var(--panel);
+  border-color: var(--line);
+}.theme-modern .pip-viewer-wrap  .workspace-actions .icon-button:hover, .theme-modern .pip-viewer-wrap .workspace-actions .ghost-button:hover, .theme-modern .pip-viewer-root .workspace-actions .ghost-button:hover, .theme-modern .pip-viewer-root  .workspace-actions .icon-button:hover, .theme-modern .pip-viewer-wrap .workspace-actions .ghost-button:hover, .theme-modern .pip-viewer-root .workspace-actions .ghost-button:hover{
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 26%, transparent);
+  color: var(--ink);
+}/* ============ 5. 日志视图条合并（用户要求：1+2 合并、3+4 合并） ============ */
+/* 行1+行2 合并：查看器标题条改为 flex 单行（文件名 + 摘要 + 命中导航 + 动作组），
+   不再使用旧 grid 两列，也不再单独渲染「结果摘要行」。 */
+.theme-modern .pip-viewer-wrap  .viewer-actions-strip, .theme-modern .pip-viewer-root  .viewer-actions-strip{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  grid-template-columns: none;
+}.theme-modern .pip-viewer-wrap  .viewer-strip-summary, .theme-modern .pip-viewer-root  .viewer-strip-summary{
+  font-size: var(--fs-2xs);
+  color: var(--ink-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}.theme-modern .pip-viewer-wrap  .viewer-strip-spacer, .theme-modern .pip-viewer-root  .viewer-strip-spacer{ flex: 1 1 auto; min-width: 8px; }/* 行3+行4 合并：切片条 + 实时状态带 合成一行 */
+.theme-modern .pip-viewer-wrap  .log-view-bar, .theme-modern .pip-viewer-root  .log-view-bar{
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+  flex: none;
+  min-width: 0;
+  white-space: nowrap;
+}/* 内层两条去掉各自的独立边框/底/内边距，融入同一行 */
+.theme-modern .pip-viewer-wrap  .log-view-bar > .slicebar, .theme-modern .pip-viewer-wrap .log-view-bar > .rtools, .theme-modern .pip-viewer-root .log-view-bar > .rtools, .theme-modern .pip-viewer-root  .log-view-bar > .slicebar, .theme-modern .pip-viewer-wrap .log-view-bar > .rtools, .theme-modern .pip-viewer-root .log-view-bar > .rtools{
+  border-bottom: none !important;
+  background: transparent !important;
+  padding: 0 !important;
+  min-width: 0;
+}/* 切片条占据弹性空间；实时带保持自然宽度靠右 */
+.theme-modern .pip-viewer-wrap  .log-view-bar > .slicebar, .theme-modern .pip-viewer-root  .log-view-bar > .slicebar{ flex: 1 1 auto; }.theme-modern .pip-viewer-wrap  .log-view-bar > .rtools, .theme-modern .pip-viewer-root  .log-view-bar > .rtools{ flex: 0 1 auto; }/* 只有一条时占满整行 */
+.theme-modern .pip-viewer-wrap  .log-view-bar > :only-child, .theme-modern .pip-viewer-root  .log-view-bar > :only-child{ flex: 1 1 auto; }/* 合并行内不用 rtools 的内部 spacer（改由两段之间的 gap 控制间距） */
+.theme-modern .pip-viewer-wrap  .log-view-bar > .rtools .rt-spacer, .theme-modern .pip-viewer-root  .log-view-bar > .rtools .rt-spacer{ flex: 0 0 0; min-width: 0; }

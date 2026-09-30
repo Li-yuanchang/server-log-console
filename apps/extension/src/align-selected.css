@@ -1,0 +1,126 @@
+/* ============================================================
+   align-selected.css — 选中态统一（用户决策 2026-09-30）
+   ------------------------------------------------------------
+   规则：选中态一律「无实底 + accent 强调文字」，全部引用主题 token
+        （--accent / --accent-soft / --line），不写死任何色值。
+   范围：仅 tab / 分段控件(.seg) / 胶囊 chip(.pill/.fchip/regex-pill)。
+        **不含**行高亮：表格选中行、文件树行、命令面板项、侧栏服务器行。
+   排除：S7 深色预览弹窗（.preview-dialog 是深色表面，其选中态属深色体系，
+        此处不改；其规则特异性也高于本文件通用规则，天然不受影响）。
+   加载顺序：main.tsx 末尾（在 theme-modern*.css / align-*.css 之后），
+        以同特异性 + !important + 靠后 覆盖旧规则。
+   ============================================================ */
+
+/* ---------- 1. 分段控件 .seg 系列（视图切换 / 主档 / lite 档） ---------- */
+.theme-modern .seg > button.on,
+.theme-modern .toolbar-view-switch-btn.is-active,
+.theme-modern .toolbar-view-switch-btn.is-active:hover:not(:disabled),
+.theme-modern .summary-seg button.on,
+.theme-modern .tool-drawer-seg button.on,
+.theme-modern .tool-drawer-seg > button.on,
+.theme-modern .server-status-trend-range button.on,
+.theme-modern .seg.lite > button.on,
+.theme-modern .summary-seg.lite > button.on,
+.theme-modern .result-tab-strip.lite > button.on {
+  background: transparent !important;
+  color: var(--accent) !important;
+  font-weight: 600 !important;
+  box-shadow: none !important;
+}
+
+/* 禁用态压过选中态：无服务器时「文件目录」等页签既 is-active 又 disabled，
+   不能残留 accent 蓝（用户反馈 2026-09-30），退为灰字。 */
+.theme-modern .seg > button.on:disabled,
+.theme-modern .toolbar-view-switch-btn.is-active:disabled,
+.theme-modern .summary-seg button.on:disabled,
+.theme-modern .tool-drawer-seg button.on:disabled,
+.theme-modern .tool-drawer-seg > button.on:disabled,
+.theme-modern .server-status-trend-range button.on:disabled,
+.theme-modern .seg.lite > button.on:disabled,
+.theme-modern .summary-seg.lite > button.on:disabled,
+.theme-modern .result-tab-strip.lite > button.on:disabled {
+  background: transparent !important;
+  color: var(--ink-muted) !important;
+  box-shadow: none !important;
+}
+
+/* 设置中心里的 lite 分段（.settings-pref-value）特异性更高，单独列出 */
+.theme-modern .settings-pref-value .seg.lite > button.on {
+  background: transparent !important;
+  color: var(--accent) !important;
+  font-weight: 600 !important;
+}
+
+/* ---------- 2. 顶部工具条页签（.toolbar-tabs） ---------- */
+.theme-modern .toolbar-tabs .tab-active,
+.theme-modern .toolbar-tabs .tab-active:hover:not(:disabled) {
+  background: transparent !important;
+  color: var(--accent) !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+/* ---------- 3. 结果页签 chip（.result-tab-chip） ---------- */
+.theme-modern .result-tab-chip-active,
+.theme-modern .result-tab-chip-active:hover:not(:disabled) {
+  background: transparent !important;
+  border-color: var(--accent) !important;
+  box-shadow: none !important;
+}
+.theme-modern .result-tab-chip-active .result-tab-main {
+  color: var(--accent) !important;
+}
+.theme-modern .result-tab-chip-active .result-tab-close {
+  color: var(--accent) !important;
+}
+
+/* ---------- 4. 胶囊 chip：.pill / .fchip / regex-pill ---------- */
+.theme-modern .pill.on,
+.theme-modern .fchip.on,
+.theme-modern .fchip-on,
+.theme-modern .regex-pill-active,
+.theme-modern .regex-pill-active:hover:not(:disabled),
+.theme-modern .advanced-strip-drawer .regex-pill-active,
+.theme-modern .advanced-strip.advanced-strip-drawer .regex-pill-active,
+.theme-modern .settings-pref-value button.pill.on {
+  background: transparent !important;
+  border-color: var(--accent) !important;
+  color: var(--accent) !important;
+  font-weight: 550 !important;
+  box-shadow: none !important;
+}
+
+/* ---------- 5. 设置中心 chip / 导航项（含此前实心 accent 的选中态） ---------- */
+.theme-modern .settings-nav-btn-active,
+.theme-modern .settings-tool-chip-active,
+.theme-modern .settings-asset-row-active,
+.theme-modern .settings-exclusive .settings-tool-chip-active,
+.theme-modern .settings-exclusive .settings-tool-chip-active:hover {
+  background: transparent !important;
+  border-color: var(--accent) !important;
+  color: var(--accent) !important;
+  box-shadow: none !important;
+}
+
+/* ---------- 6. 工作区会话页签（.wtab 形态：下划线 + 文字，无底） ---------- */
+.theme-modern .workspace-session-tab-active,
+.theme-modern .workspace-session-tab-active:hover:not(:disabled) {
+  background: transparent !important;
+  border-color: transparent !important;
+  border-bottom-color: var(--accent) !important;
+  box-shadow: none !important;
+}
+.theme-modern .workspace-session-tab-active .workspace-session-tab-trigger,
+.theme-modern .workspace-session-tab-active .workspace-session-tab-index {
+  color: var(--accent) !important;
+}
+
+/* ---------- 7. 其它浅色 tab（class 预览 / 工具工作区） ---------- */
+.theme-modern .class-ide-tabs .class-ide-tab-active,
+.theme-modern .utility-workspace-tab-active,
+.theme-modern .utility-workspace-tab-active:hover:not(:disabled) {
+  background: transparent !important;
+  border-color: var(--accent) !important;
+  color: var(--accent) !important;
+  box-shadow: none !important;
+}

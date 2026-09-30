@@ -1,0 +1,410 @@
+/* align-s7-s8.css — S7 文件预览 / S8 传输抽屉对齐原型（prototype.html s7:695-744 / s8:747-825）
+   隔离文件：仅由 S7/S8 修复批次维护，最后加载（在 theme-modern-v2.css 之后）以覆盖旧规则。
+   排除项：字号体系（--fs-*，base=14px 为有意）与文件表勾选/批量条 不回改。
+   约定：所有规则前缀 .theme-modern（S7 弹窗在 .theme-modern 内；S8 抽屉经 Drawer 的
+   display:contents 壳恢复到同一作用域）。 */
+
+/* ============================================================
+   S7 文件预览：跟随主题（用户决策 2026-09-30：不再做独立深色弹窗，
+   头/脚/表单/内容区全部走主题令牌，与主界面同源；代码内容区为浅色底） */
+.theme-modern .preview-dialog,
+.theme-modern .preview-dialog-archive,
+.theme-modern .preview-dialog-class {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel-strong);
+  box-shadow: var(--v2-shadow-pop, 0 24px 70px rgba(15, 23, 42, 0.28));
+  color: var(--ink);
+}
+
+/* 头部：主题面板色 + 主题分隔线 */
+.theme-modern .preview-dialog .preview-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 49px;
+  padding: 9px 16px;
+  background: var(--panel-muted);
+  border-bottom: 1px solid var(--line);
+}
+.theme-modern .preview-dialog .preview-title {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 44%;
+  color: var(--ink);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.theme-modern .preview-header-spacer { flex: 1 1 auto; min-width: 0; }
+
+/* 徽标 chip：金黄=预览 / 灰=只读（用 amber/red 令牌做淡底） */
+.theme-modern .preview-dialog .preview-chip-gold {
+  flex: none;
+  color: var(--amber, #b45309);
+  border: 1px solid color-mix(in srgb, var(--amber, #b45309) 35%, transparent);
+  background: color-mix(in srgb, var(--amber, #b45309) 8%, transparent);
+}
+.theme-modern .preview-dialog .preview-chip-muted {
+  flex: none;
+  color: var(--ink-muted);
+  border: 1px solid var(--line);
+  background: transparent;
+}
+.theme-modern .preview-dialog .preview-loading-badge {
+  flex: none;
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.theme-modern .preview-dialog .preview-dirty {
+  flex: none;
+  color: var(--warning, var(--amber, #b45309));
+  background: var(--amber-soft, rgba(180, 83, 9, 0.09));
+}
+
+/* 分段控件：主题描边 + 选中 accent */
+.theme-modern .preview-dialog .seg.preview-view-seg {
+  flex: none;
+  background: var(--panel);
+  border-color: var(--line);
+  border-radius: 6px;
+}
+.theme-modern .preview-dialog .seg.preview-view-seg > button {
+  height: 28px;
+  padding: 0 10px;
+  background: transparent !important;
+  color: var(--ink-soft) !important;
+  border-right-color: var(--line) !important;
+  border-left-color: var(--line) !important;
+  font-size: var(--fs-xs);
+}
+.theme-modern .preview-dialog .seg.preview-view-seg > button.on {
+  background: var(--accent-soft) !important;
+  color: var(--accent) !important;
+  font-weight: 600;
+}
+.theme-modern .preview-dialog .seg.preview-view-seg > button[aria-disabled="true"] {
+  cursor: default;
+  opacity: 1;
+}
+
+/* 头部图标按钮组：主题 ghost 形态 */
+.theme-modern .preview-dialog .preview-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex: none;
+}
+.theme-modern .preview-dialog .preview-icon-btn {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--ink-soft);
+  cursor: pointer;
+  font: inherit;
+  line-height: 1;
+}
+.theme-modern .preview-dialog .preview-icon-btn:hover {
+  background: var(--panel-muted);
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+.theme-modern .preview-dialog .preview-icon-btn.preview-close-icon:hover {
+  background: var(--red-soft, rgba(212, 19, 19, 0.07));
+  border-color: color-mix(in srgb, var(--red) 40%, transparent);
+  color: var(--red);
+}
+/* 「⋯」菜单：低频功能（保存 ⌘S）收纳 */
+.theme-modern .preview-dialog .preview-more { position: relative; display: inline-flex; }
+.theme-modern .preview-dialog .preview-more-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 20;
+  min-width: 132px;
+  padding: 5px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-strong);
+  box-shadow: var(--v2-shadow-pop, 0 12px 40px rgba(15, 23, 42, 0.2));
+}
+.theme-modern .preview-dialog .preview-more-item {
+  display: block;
+  width: 100%;
+  padding: 6px 10px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--fs-xs);
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.theme-modern .preview-dialog .preview-more-item:hover:not(:disabled) { background: var(--panel-muted); }
+.theme-modern .preview-dialog .preview-more-item:disabled { opacity: 0.45; cursor: default; }
+
+/* 文件内搜索行：主题面板色 */
+.theme-modern .preview-dialog .preview-searchbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  background: var(--panel-muted);
+  border-bottom: 1px solid var(--line);
+  flex: none;
+}
+.theme-modern .preview-dialog .preview-search-shell {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 0 0 240px;
+  color: var(--ink-muted);
+}
+.theme-modern .preview-dialog .preview-search-shell > svg {
+  position: absolute;
+  left: 8px;
+  pointer-events: none;
+}
+.theme-modern .preview-dialog .preview-search-shell input {
+  width: 100%;
+  height: 24px;
+  padding: 0 8px 0 25px;
+  font: inherit;
+  font-size: var(--fs-2xs);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--ink);
+  outline: none;
+}
+.theme-modern .preview-dialog .preview-search-shell input::placeholder { color: var(--ink-muted); }
+.theme-modern .preview-dialog .preview-search-shell input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+.theme-modern .preview-dialog .preview-search-count {
+  flex: none;
+  min-width: 58px;
+  font-family: var(--v2-mono);
+  font-size: var(--fs-2xs);
+  color: var(--ink-soft);
+}
+.theme-modern .preview-dialog .preview-search-nav {
+  width: 28px;
+  height: 24px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--ink);
+  cursor: pointer;
+}
+.theme-modern .preview-dialog .preview-search-nav:hover:not(:disabled) { background: var(--panel-muted); }
+.theme-modern .preview-dialog .preview-search-nav:disabled { opacity: 0.4; cursor: default; }
+.theme-modern .preview-dialog .preview-search-spacer { flex: 1 1 auto; }
+.theme-modern .preview-dialog .preview-search-range {
+  flex: none;
+  font-family: var(--v2-mono);
+  font-size: var(--fs-2xs);
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+
+/* 内容区：代码底随主题（浅色），行号列用 panel-muted */
+.theme-modern .preview-dialog .code-editor-container { background: var(--panel) !important; }
+.theme-modern .preview-dialog .code-editor-container .cm-editor,
+.theme-modern .preview-dialog .code-editor-container .cm-scroller { background: var(--panel) !important; }
+.theme-modern .preview-dialog .code-editor-container .cm-content { color: var(--ink) !important; }
+.theme-modern .preview-dialog .code-editor-container .cm-gutters {
+  background: var(--panel-muted) !important;
+  color: var(--ink-muted) !important;
+  border-right: 1px solid var(--line) !important;
+}
+.theme-modern .preview-dialog .code-editor-container .cm-activeLineGutter {
+  background: color-mix(in srgb, var(--ink) 5%, transparent) !important;
+  color: var(--ink) !important;
+}
+.theme-modern .preview-dialog .code-editor-container .cm-cursor { border-left-color: var(--ink) !important; }
+.theme-modern .preview-dialog .code-editor-container .cm-selectionBackground,
+.theme-modern .preview-dialog .code-editor-container .cm-focused .cm-selectionBackground {
+  background: var(--accent-soft) !important;
+}
+/* 结构化预览（归档/Class）同用主题面板 */
+.theme-modern .preview-dialog .structured-preview {
+  background: var(--panel);
+  color: var(--ink);
+}
+.theme-modern .preview-dialog-archive,
+.theme-modern .preview-dialog-class {
+  background: var(--panel-strong);
+  border-color: var(--line);
+}
+
+/* 命中高亮 */
+.theme-modern .preview-dialog .cm-panels.cm-panels-top { display: none !important; }
+.theme-modern .preview-dialog .cm-searchMatch {
+  background: color-mix(in srgb, var(--amber, #b45309) 22%, transparent) !important;
+  outline: 1px solid color-mix(in srgb, var(--amber, #b45309) 45%, transparent);
+  border-radius: 2px;
+}
+.theme-modern .preview-dialog .cm-searchMatch-selected {
+  background: var(--accent-soft) !important;
+  outline-color: color-mix(in srgb, var(--accent) 55%, transparent);
+}
+.theme-modern .preview-dialog .cm-selectionMatch {
+  background: var(--accent-soft) !important;
+}
+
+/* 页脚 */
+.theme-modern .preview-dialog .preview-footer {
+  gap: 14px;
+  min-height: 30px;
+  padding: 7px 16px;
+  background: var(--panel-muted);
+  border-top: 1px solid var(--line);
+  color: var(--ink-muted);
+  font-family: var(--app-font-family);
+  font-size: var(--fs-2xs);
+}
+.theme-modern .preview-dialog .preview-footer-note {
+  flex: none;
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+.theme-modern .preview-dialog .preview-footer-meta {
+  flex: none;
+  font-family: var(--v2-mono);
+  font-size: var(--fs-2xs);
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+/* 旧页脚元素在原型中已不存在：隐藏本批次未再渲染的残留（防御性） */
+.theme-modern .preview-dialog .preview-footer-sep { background: var(--line); }
+/* ============================================================
+   S8 传输记录抽屉（原型 s8 782-821）
+   ============================================================ */
+
+/* 头部：padding 11px 14px（原型 dhead 144 行）。S8/S9 原型同值，故统一到 14px 侧距。 */
+.theme-modern .xdrawer-head { padding: 11px 14px; }
+/* 头部图标按钮：28×24 ghost（原型 786-787 / S9 877）
+   base .theme-modern .icon-button 设了 min-width:30px，须一并压掉否则宽度被锁 30。 */
+.theme-modern .xdrawer-head .ghost-button.icon-button {
+  width: 28px;
+  min-width: 28px;
+  height: 24px;
+  flex: none;
+}
+
+/* 筛选 chips 行：padding 10px 16px（原型 789，去掉多余的 4px 下间距）+ 下边框 */
+.theme-modern .xdrawer-chip-row {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--line);
+}
+/* 失败 chip 红字（原型 793）：F0 已补 .fchip-red，这里确保选中态不吞掉红色语义 */
+.theme-modern .xdrawer-chip-row .fchip-red:not(.fchip-on) {
+  color: var(--red);
+  border-color: color-mix(in srgb, var(--red) 30%, transparent);
+}
+.theme-modern .xdrawer-chip-row .fchip-red .fchip-count,
+.theme-modern .xdrawer-chip-row .fchip-red .n { color: var(--red); }
+
+/* 传输行（原型 796-819 xfer）：图标块 26×26 / up accent-soft+accent / dn 绿 / err 红
+   token 现已在 .theme-modern 作用域内解析（Drawer 壳），补齐 err 底色与文件名色。 */
+.theme-modern .xdrawer .xrow-ic-up { background: var(--accent-soft); color: var(--accent); }
+.theme-modern .xdrawer .xrow-ic-dn { background: color-mix(in srgb, var(--green) 8%, transparent); color: var(--green); }
+.theme-modern .xdrawer .xrow-ic-err { background: var(--red-soft); color: var(--red); }
+.theme-modern .xdrawer .xrow-fn { color: var(--ink); font-weight: 550; }
+
+/* 页脚「清空本服务器」：原型 .btn sm（高 24） */
+.theme-modern .xdrawer-foot .ghost-button.slim-button { height: 24px; }
+
+/* ============================================================
+   S8 toast 卡（原型 774-779）：右上角浮卡（白底/边框/r8/阴影）
+   组件仍复用通用 toast；此处仅按原型收敛位置与形态。
+   ============================================================ */
+.theme-modern .toast-container {
+  top: 14px;
+  right: 14px;
+  bottom: auto;
+  left: auto;
+  transform: none;
+  align-items: flex-end;
+  flex-direction: column;
+  width: auto;
+  max-width: min(520px, calc(100vw - 28px));
+}
+.theme-modern .toast-item {
+  width: auto;
+  min-height: 0;
+  padding: 9px 12px;
+  gap: 10px;
+  border-radius: var(--r-m);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  box-shadow: var(--v2-shadow-pop);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  color: var(--ink);
+  font-size: var(--fs-sm);
+}
+@keyframes toast-card-in {
+  from { opacity: 0; transform: translateX(16px); }
+}
+.theme-modern .toast-item { animation: toast-card-in 0.2s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.theme-modern .toast-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  background: transparent;
+}
+.theme-modern .toast-dismiss { color: var(--ink-muted); }
+
+/* ============================================================
+   S7 补充（2026-09-30 二轮）：压制全局深色 CodeMirror 残留。
+   styles-dialogs-transfer.css 的 .code-editor-container 全局深色规则
+   （cm-foldGutter #050607 黑竖条等）会漏进预览弹窗，这里按弹窗作用域翻成主题色。
+   ============================================================ */
+.theme-modern .preview-dialog .code-editor-container .cm-foldGutter {
+  background: transparent !important;
+}
+.theme-modern .preview-dialog .code-editor-container .cm-gutterElement {
+  color: inherit;
+}
+.theme-modern .preview-dialog .code-editor-container .cm-fold-marker {
+  color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 16%, transparent);
+}
+.theme-modern .preview-dialog .code-editor-container .cm-foldGutter .cm-gutterElement:hover .cm-fold-marker {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 42%, transparent);
+}
+.theme-modern .preview-dialog .code-editor-container .cm-foldPlaceholder {
+  border-color: var(--line-strong);
+  background: var(--panel-muted);
+  color: var(--ink-soft);
+}
+.theme-modern .preview-dialog .code-editor-container .cm-matchingBracket {
+  background: var(--accent-soft) !important;
+  outline-color: color-mix(in srgb, var(--accent) 40%, transparent) !important;
+  color: var(--ink) !important;
+}
+.theme-modern .preview-dialog .code-editor-container .cm-nonmatchingBracket {
+  background: var(--red-soft) !important;
+  outline-color: color-mix(in srgb, var(--red) 45%, transparent) !important;
+  color: var(--red) !important;
+}
