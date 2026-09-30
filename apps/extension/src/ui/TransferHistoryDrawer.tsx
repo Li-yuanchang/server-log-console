@@ -88,14 +88,18 @@ export function TransferHistoryDrawer(props: Props) {
   );
   const hasActive = Boolean(uploadActive || downloadActive);
 
+  // 原型 S8 第 790-793 行仅 4 枚筛选 chip：全部 / 上传 / 下载 / 失败（红）
   const chips: Array<{ key: FilterKey; label: string; count: number; red?: boolean }> = [
     { key: "all", label: "全部", count: props.entries.length },
     { key: "upload", label: "上传", count: summary.uploads },
     { key: "download", label: "下载", count: summary.downloads },
-    { key: "success", label: "成功", count: summary.success },
     { key: "error", label: "失败", count: summary.error, red: true },
-    { key: "canceled", label: "取消", count: summary.canceled },
   ];
+
+  const headSample = props.entries[0];
+  const headContextLabel = headSample
+    ? `${headSample.serverLabel} · ${getParentDirectoryPath(headSample.filePath)}`
+    : undefined;
 
   return (
     <Drawer
@@ -103,7 +107,21 @@ export function TransferHistoryDrawer(props: Props) {
       onClose={props.onClose}
       title="传输记录"
       width={420}
-      headExtra={props.entries[0]?.serverLabel ? <span className="chip">{props.entries[0].serverLabel}</span> : undefined}
+      headExtra={
+        <>
+          {headContextLabel ? <span className="chip" title={headContextLabel}>{headContextLabel}</span> : null}
+          <button
+            type="button"
+            className="ghost-button icon-button"
+            title="清空当前服务器记录"
+            aria-label="清空当前服务器记录"
+            onClick={props.onClear}
+            disabled={!props.entries.length}
+          >
+            <Trash2 size={13} strokeWidth={1.85} />
+          </button>
+        </>
+      }
       footer={
         <>
           <span className="mut" style={{ fontSize: 10.5, flex: 1 }}>
@@ -194,8 +212,22 @@ export function TransferHistoryDrawer(props: Props) {
         ) : null}
 
         {!filteredEntries.length ? (
-          <div className="xdrawer-empty">
-            {props.entries.length ? "没有符合当前筛选条件的记录" : "当前服务器暂无传输记录"}
+          /* S12 原型空态模板：图标 + 一句话 + 副文案 + 主按钮「打开文件目录」（原型 1041 行） */
+          <div className="empty-box empty-state-template xdrawer-empty">
+            <span className="empty-box-icon" aria-hidden="true">
+              <Download size={18} strokeWidth={1.8} />
+            </span>
+            <strong className="empty-box-title">
+              {props.entries.length ? "没有符合当前筛选条件的记录" : "当前服务器暂无传输记录"}
+            </strong>
+            <span className="empty-box-hint">
+              {props.entries.length ? "调整筛选条件后再试" : "上传或下载文件后会显示在这里"}
+            </span>
+            {props.entries.length ? null : (
+              <button type="button" className="ghost-button" onClick={() => props.onBrowsePath("/")}>
+                打开文件目录
+              </button>
+            )}
           </div>
         ) : (
           filteredEntries.map((entry) => {

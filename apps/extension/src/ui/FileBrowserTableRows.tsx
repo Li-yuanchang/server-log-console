@@ -1,4 +1,4 @@
-import { Ellipsis } from "lucide-react";
+import { ChevronRight, Download, Ellipsis, Pencil, Search, FolderOpen } from "lucide-react";
 import type { LogFileEntry } from "@server-log-console/shared";
 import type { DownloadProgressState, UploadProgressState } from "./FeedbackOverlays.js";
 import { ToolIcon } from "./ToolIcon.js";
@@ -54,7 +54,15 @@ function resolveRowTransferProgress(
 
 export function FileBrowserTableRows(props: Props) {
   if (!props.entries.length) {
-    return <div className={`empty-box table-empty${props.emptyClassName ? ` ${props.emptyClassName}` : ""}`}>{props.emptyLabel || "当前目录为空"}</div>;
+    // S12 原型空态模板：44×44 描边图标 + 一句话（原为纯文字）
+    return (
+      <div className={`empty-box table-empty${props.emptyClassName ? ` ${props.emptyClassName}` : ""}`}>
+        <span className="empty-box-icon" aria-hidden="true">
+          <FolderOpen size={18} strokeWidth={1.8} />
+        </span>
+        <span className="empty-box-hint">{props.emptyLabel || "当前目录为空"}</span>
+      </div>
+    );
   }
   const hasSelection = props.selectedFilePathSet.size > 0;
 
@@ -144,15 +152,18 @@ export function FileBrowserTableRows(props: Props) {
             <span className={`entry-icon ${entry.kind === "directory" ? "entry-icon-dir" : "entry-icon-file"}`} aria-hidden="true" />
             <strong>{entry.name}</strong>
             <span className="file-row-actions" onClick={(event) => event.stopPropagation()} onMouseDown={(event) => event.stopPropagation()}>
-              <button
-                type="button"
-                className="file-action-icon"
-                title={openLabel}
-                aria-label={`${openLabel} ${entry.name}`}
-                onClick={(event) => { event.stopPropagation(); props.onOpenEntry(entry); }}
-              >
-                <ToolIcon theme={props.uiTheme} kind={entry.kind === "directory" ? "open" : "search"} />
-              </button>
+              {/* S6：目录行去掉冗余「打开」按钮（单击行即进入，图标与「移动」重复）；文件保留预览(搜索) */}
+              {entry.kind === "file" ? (
+                <button
+                  type="button"
+                  className="file-action-icon"
+                  title={openLabel}
+                  aria-label={`${openLabel} ${entry.name}`}
+                  onClick={(event) => { event.stopPropagation(); props.onOpenEntry(entry); }}
+                >
+                  <Search size={13} strokeWidth={1.8} />
+                </button>
+              ) : null}
               {entry.kind === "file" ? (
                 <button
                   type="button"
@@ -161,7 +172,7 @@ export function FileBrowserTableRows(props: Props) {
                   aria-label={`下载 ${entry.name}`}
                   onClick={(event) => { event.stopPropagation(); props.onDownload(entry.path); }}
                 >
-                  <ToolIcon theme={props.uiTheme} kind="download" />
+                  <Download size={13} strokeWidth={1.8} />
                 </button>
               ) : null}
               <button
@@ -171,7 +182,7 @@ export function FileBrowserTableRows(props: Props) {
                 aria-label={`重命名 ${entry.name}`}
                 onClick={(event) => { event.stopPropagation(); props.onRename(entry); }}
               >
-                <ToolIcon theme={props.uiTheme} kind="edit" />
+                <Pencil size={13} strokeWidth={1.8} />
               </button>
               <button
                 type="button"
@@ -180,7 +191,7 @@ export function FileBrowserTableRows(props: Props) {
                 aria-label={`移动 ${entry.name}`}
                 onClick={(event) => { event.stopPropagation(); props.onMove(entry); }}
               >
-                <ToolIcon theme={props.uiTheme} kind="folder-move" />
+                <ChevronRight size={13} strokeWidth={1.8} />
               </button>
               <button
                 type="button"
@@ -197,28 +208,25 @@ export function FileBrowserTableRows(props: Props) {
               </button>
             </span>
           </span>
-          {props.uiTheme === "modern" ? (
+          {/* S6：传输列非常驻——仅该行有活动传输时渲染，占位与表头同步 */}
+          {props.uiTheme === "modern" && rowTransfer ? (
             <span className="file-transfer-cell">
-              {rowTransfer ? (
-                <>
-                  <span
-                    className="file-transfer-track"
-                    role="progressbar"
-                    aria-valuemin={0}
-                    aria-valuemax={100}
-                    aria-valuenow={rowTransfer.percent}
-                    aria-label={`${entry.name} 传输进度`}
-                  >
-                    <span className="file-transfer-fill" style={{ transform: `scaleX(${rowTransfer.percent / 100})` }} />
-                  </span>
-                  <span className="file-transfer-meta">{rowTransfer.label}</span>
-                </>
-              ) : null}
+              <span
+                className="file-transfer-track"
+                role="progressbar"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={rowTransfer.percent}
+                aria-label={`${entry.name} 传输进度`}
+              >
+                <span className="file-transfer-fill" style={{ transform: `scaleX(${rowTransfer.percent / 100})` }} />
+              </span>
+              <span className="file-transfer-meta">{rowTransfer.label}</span>
             </span>
           ) : null}
-          <span>{entry.kind === "file" && typeof entry.size === "number" ? props.formatBytes(entry.size) : "--"}</span>
-          <span>{props.formatDateTime(entry.modifiedTime)}</span>
-          <span>{entry.kind === "directory" ? "目录" : "文件"}</span>
+          <span className="file-size-cell">{entry.kind === "file" && typeof entry.size === "number" ? props.formatBytes(entry.size) : "--"}</span>
+          <span className="file-mtime-cell">{props.formatDateTime(entry.modifiedTime)}</span>
+          <span className="file-kind-cell">{entry.kind === "directory" ? "目录" : "文件"}</span>
         </div>
         );
       })}

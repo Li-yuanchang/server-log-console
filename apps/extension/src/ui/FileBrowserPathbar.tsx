@@ -51,7 +51,8 @@ export function FileBrowserPathbar(props: Props) {
         const isLast = index === props.breadcrumbItems.length - 1;
         return (
           <div className="pathbar-breadcrumb-node" key={item.path}>
-            {index > 1 ? <span className="pathbar-breadcrumb-separator">/</span> : null}
+            {/* S6 原型：面包屑段间用 › 分隔（首段之后每段都有） */}
+            {index > 0 ? <span className="pathbar-breadcrumb-separator">›</span> : null}
             {/* D1: 面包屑跳转是只读导航，忙碌期间保持可用 */}
             <button
               type="button"
@@ -84,13 +85,12 @@ export function buildBreadcrumbItems(value: string): BreadcrumbItem[] {
   const trimmed = normalized.length > 1 ? normalized.replace(/\/+$/, "") : normalized;
   const absolutePath = trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
   const segments = absolutePath.split("/").filter(Boolean);
-  let currentPath = "";
 
-  return [
-    { label: "/", path: "/" },
-    ...segments.map((segment) => {
-      currentPath += `/${segment}`;
-      return { label: segment, path: currentPath };
-    }),
-  ];
+  // S6 原型（628-630）：面包屑为 `/data › logs › eos`，首段整体带前导斜杠，
+  // 不额外拆出一个独立的根段「/」。
+  let currentPath = "";
+  return segments.map((segment, index) => {
+    currentPath += `/${segment}`;
+    return { label: index === 0 ? currentPath : segment, path: currentPath };
+  });
 }
