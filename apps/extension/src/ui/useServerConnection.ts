@@ -19,6 +19,12 @@ export type ServerConnectionAPI = {
   saveCredentialForServer: () => Promise<void>;
   loadCredentialSecretForServer: () => Promise<void>;
   clearCredentialForServer: () => Promise<void>;
+  /* S10：设置中心按目标服务器维护凭证（不要求先连接该服务器） */
+  fetchCredentialStatusById: (targetServerId: string) => Promise<void>;
+  saveCredentialToServer: (targetServerId: string) => Promise<void>;
+  loadCredentialSecretOfServer: (targetServerId: string) => Promise<void>;
+  clearCredentialOfServer: (targetServerId: string) => Promise<void>;
+  testServerCredentialById: (targetServerId: string) => Promise<void>;
   saveServerRouteForServer: () => Promise<void>;
   searchJumpServerAssets: () => Promise<void>;
   testServerConnection: (targetDirectoryPath?: string, options?: { auto?: boolean }) => Promise<void>;
@@ -79,6 +85,7 @@ export function useServerConnection(deps: {
     setIsBusy,
     setActionStatus,
     pushActivity,
+    showToast,
     setCredentialStatus,
     setCredentialPassword,
     setCredentialPrivateKey,
@@ -151,6 +158,95 @@ export function useServerConnection(deps: {
       pushActivity(`读取二跳配置失败：${error instanceof Error ? error.message : "未知错误"}`);
     }
   }, [setServerRouteConfig, setBastionId, setJumpMode, setJumpSearchKeyword, setJumpAssetId, setJumpAssetOptions, jumpAssetAutoSearchKeyRef, pushActivity]);
+
+  const applyCredentialStatus = useCallback((payload: ServerCredentialStatus) => {
+    setCredentialStatus(payload);
+    setCredentialUsername(payload.username || "");
+    setCredentialPassword("");
+    setCredentialPrivateKey("");
+  }, [setCredentialStatus, setCredentialUsername, setCredentialPassword, setCredentialPrivateKey]);
+
+  /* S10：设置中心用的按目标 ID 变体——不经过 serverIdRef 门禁，清单里任何服务器都能直接读/存/清凭证 */
+  const fetchCredentialStatusById = useCallback(async (targetServerId: string) => {
+    try {
+      const payload = await apiGetCredentialStatus(targetServerId);
+      applyCredentialStatus(payload);
+    } catch (error) {
+      setCredentialStatus(null);
+      pushActivity(`读取连接凭证状态失败：${error instanceof Error ? error.message : "未知错误"}`);
+    }
+  }, [applyCredentialStatus, pushActivity]);
+
+  /* S10：只测凭证可用性——不做目录读取、不切工作区，结果走 toast */
+  const testServerCredentialById = useCallback(async (targetServerId: string) => {
+    if (!targetServerId) {
+      return;
+    }
+    await withBusy("正在测试连接凭证...", async () => {
+      const payload = await apiTestConnection(targetServerId, "/");
+      if (payload.connected) {
+        showToast("success", `凭证可用：${payload.serverName}（${payload.message}）`);
+        pushActivity(`凭证测试通过：${payload.serverName}`);
+      } else {
+        showToast("error", `凭证不可用：${payload.serverName}（${payload.message}）`);
+        pushActivity(`凭证测试失败：${payload.serverName}，${payload.message}`);
+      }
+      setActionStatus(`凭证测试${payload.connected ? "通过" : "失败"}：${payload.serverName}`);
+    });
+  }, [withBusy, showToast, pushActivity, setActionStatus]);
+
+  const saveCredentialToServer = useCallback(async (targetServerId: string) => {
+    if (!targetServerId) {
+      return;
+    }
+    const willUpdatePassword = Boolean(credentialPassword);
+    const willUpdatePrivateKey = Boolean(credentialPrivateKey);
+    await withBusy("正在保存连接凭证...", async () => {
+      const payload = await apiSaveCredential(targetServerId, {
+        username: credentialUsername.trim() || undefined,
+        password: credentialPassword || undefined,
+        privateKey: credentialPrivateKey || undefined
+      });
+      applyCredentialStatus(payload);
+      const updatedSecrets = [
+        willUpdatePassword ? "密码" : "",
+        willUpdatePrivateKey ? "私钥" : ""
+      ].filter(Boolean).join("、");
+      const detail = updatedSecrets ? `已更新${updatedSecrets}` : "未填写新密码/私钥，继续沿用已有密钥信息";
+      setActionStatus(`连接凭证已保存：${payload.serverName}（${detail}）`);
+      pushActivity(`已保存连接凭证：${payload.serverName}，${detail}。`);
+      await fetchServers();
+    }, "连接凭证已保存");
+  }, [credentialUsername, credentialPassword, credentialPrivateKey, withBusy, applyCredentialStatus, setActionStatus, pushActivity, fetchServers]);
+
+  const loadCredentialSecretOfServer = useCallback(async (targetServerId: string) => {
+    if (!targetServerId) {
+      return;
+    }
+    await withBusy("正在读取已保存凭证...", async () => {
+      const payload = await apiGetCredentialSecret(targetServerId);
+      setCredentialUsername(payload.username || "");
+      setCredentialPassword(payload.password || "");
+      setCredentialPrivateKey(payload.privateKey || "");
+      setActionStatus(payload.hasPassword || payload.hasPrivateKey
+        ? `已读取 ${payload.serverName} 的保存凭证，可查看、复制或覆盖。`
+        : `${payload.serverName} 当前没有保存密码或私钥。`);
+      pushActivity(`已读取连接凭证明文：${payload.serverName}（来源：${payload.source}）`);
+    });
+  }, [withBusy, setCredentialUsername, setCredentialPassword, setCredentialPrivateKey, setActionStatus, pushActivity]);
+
+  const clearCredentialOfServer = useCallback(async (targetServerId: string) => {
+    if (!targetServerId) {
+      return;
+    }
+    await withBusy("正在清除连接凭证...", async () => {
+      const payload = await apiClearCredential(targetServerId);
+      applyCredentialStatus(payload);
+      await fetchServers();
+      setActionStatus(`已清除连接凭证：${payload.serverName}`);
+      pushActivity(`已清除连接凭证：${payload.serverName}`);
+    }, "连接凭证已清除");
+  }, [withBusy, applyCredentialStatus, fetchServers, setActionStatus, pushActivity]);
 
   const saveCredentialForServer = useCallback(async () => {
     if (!serverId) {
@@ -385,6 +481,11 @@ export function useServerConnection(deps: {
     saveCredentialForServer,
     loadCredentialSecretForServer,
     clearCredentialForServer,
+    fetchCredentialStatusById,
+    saveCredentialToServer,
+    loadCredentialSecretOfServer,
+    clearCredentialOfServer,
+    testServerCredentialById,
     saveServerRouteForServer,
     searchJumpServerAssets,
     testServerConnection: testServerConnectionLocal,
