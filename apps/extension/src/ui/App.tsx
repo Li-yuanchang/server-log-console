@@ -4,7 +4,6 @@ import { FeedbackOverlays, type DownloadProgressState, type UploadProgressState 
 import { FileContextMenu, type FileContextMenuState } from "./FileContextMenu.js";
 import { FileBrowserActions } from "./FileBrowserActions.js";
 import { FileBrowserContentColumn } from "./FileBrowserContentColumn.js";
-import { FileBrowserFilterBar } from "./FileBrowserFilterBar.js";
 import { FileBrowserGrid } from "./FileBrowserGrid.js";
 import { FileBrowserHistoryDropdown } from "./FileBrowserHistoryDropdown.js";
 import { FileBrowserPathbar, buildBreadcrumbItems } from "./FileBrowserPathbar.js";
@@ -14,7 +13,7 @@ import { FileBrowserTreeColumn } from "./FileBrowserTreeColumn.js";
 import { looksLikeJumpServer } from "./terminal-utils.js";
 import type { PreviewDialogState } from "./FilePreviewDialog.js";
 import type { ConfirmDialogState } from "./ModalDialogs.js";
-import { ConnectionSettingsWorkspace, type ManualServerDraft, type SettingsWorkspaceView } from "./ConnectionSettingsWorkspace.js";
+import { ConnectionSettingsWorkspace, WatermarkOverlay, type ManualServerDraft, type SettingsWorkspaceView } from "./ConnectionSettingsWorkspace.js";
 import { SearchQueryPanel } from "./SearchQueryPanel.js";
 import { SearchProgressPanel } from "./SearchProgressPanel.js";
 import { SshTunnelPanel } from "./SshTunnelPanel.js";
@@ -40,7 +39,7 @@ import type {
   ServerSystemProfileResponse,
   ServerSummary
 } from "@server-log-console/shared";
-import { ArrowDown, ArrowLeft, Radio, Wrench, Download, Copy, PictureInPicture2, Bug, Bookmark, X } from "lucide-react";
+import { ArrowDown, ArrowLeft, Settings, Download, Copy, Bug, Bookmark, X, AlertTriangle, Search, Folder } from "lucide-react";
 import { TerminalPanel } from "./TerminalWorkspace.js";
 import { ToolIcon } from "./ToolIcon.js";
 
@@ -68,7 +67,7 @@ import { useLocalService } from "./useLocalService.js";
 import { useSearchTimer } from "./useSearchTimer.js";
 import { usePanelResize } from "./usePanelResize.js";
 import { useElectronEnv } from "./useElectronEnv.js";
-import { useUiTheme } from "./useUiTheme.js";
+import { useUiTheme, monoFontFamilyValue } from "./useUiTheme.js";
 import { useWorkspaceTabDrag } from "./useWorkspaceTabDrag.js";
 import { useTransferHistory } from "./useTransferHistory.js";
 import { useFileBrowserComputed } from "./useFileBrowserComputed.js";
@@ -129,6 +128,20 @@ import {
   writeActivityPanelHeight,
   writeBrowserTreeWidth,
 } from "./storage.js";
+
+
+// 原型 S11「弹出独立小窗」图标（prototype.html ic("expand")，四向外扩箭头），
+// 取代 lucide PictureInPicture2（矩形套矩形，与原型不符）。
+function PipExpandIcon({ size = 14, strokeWidth = 1.8 }: { size?: number; strokeWidth?: number }) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="m15 15 6 6" />
+      <path d="m8 9-6-6" />
+      <path d="m21 9-6-6" />
+      <path d="m3 21 6-6" />
+    </svg>
+  );
+}
 
 
 // Detect PiP mode from URL params (Electron BrowserWindow PiP)
@@ -292,8 +305,26 @@ export function App() {
     setLogFontSize,
     terminalFontSize,
     setTerminalFontSize,
+    logFontFamily,
+    setLogFontFamily,
+    terminalFontFamily,
+    setTerminalFontFamily,
     motionMode,
     setMotionMode,
+    customImageOverlay,
+    setCustomImageOverlay,
+    customImageBlur,
+    setCustomImageBlur,
+    dynamicBackground,
+    setDynamicBackground,
+    watermarkEnabled,
+    setWatermarkEnabled,
+    watermarkTemplate,
+    setWatermarkTemplate,
+    watermarkOpacity,
+    setWatermarkOpacity,
+    watermarkScope,
+    setWatermarkScope,
     activityPanelVisible,
     setActivityPanelVisible,
     resetUiPreferences,
@@ -325,7 +356,8 @@ export function App() {
   const [errorHighlightEnabled, setErrorHighlightEnabled] = useState(() => pipUrlParams.get("errorHighlight") === "1");
   const [resultContextMode, setResultContextMode] = useState(false);
   const [showKeywordBar, setShowKeywordBar] = useState(true);
-  const [showDirectoryFilter, setShowDirectoryFilter] = useState(false);
+  // S4 实时状态带：实时过滤关键字（原型 540-543 的过滤框，默认空=不过滤）
+  const [liveFilterInput, setLiveFilterInput] = useState("");
   const [showPathHistory, setShowPathHistory] = useState(false);
   const [transferHistory, setTransferHistory] = useState<TransferHistoryEntry[]>(() => readTransferHistory());
   const [directoryInput, setDirectoryInput] = useState("");
@@ -1502,6 +1534,11 @@ export function App() {
     saveCredentialForServer,
     loadCredentialSecretForServer,
     clearCredentialForServer,
+    fetchCredentialStatusById,
+    saveCredentialToServer,
+    loadCredentialSecretOfServer,
+    clearCredentialOfServer,
+    testServerCredentialById,
     saveServerRouteForServer,
     searchJumpServerAssets,
     testServerConnection,
@@ -1576,6 +1613,7 @@ export function App() {
     preserveSessionOnDispose: isStandaloneTerminalWindow,
     onSelectionMenu: setTermSelMenu,
     terminalFontSize,
+    terminalFontFamily: monoFontFamilyValue(terminalFontFamily),
     terminalBackgroundColor: customTerminalBackgroundColor,
   });
 
@@ -1623,6 +1661,28 @@ export function App() {
     pip,
   });
 
+  /* S10：设置中心「打开终端」——目标是清单里选中的服务器：先切换工作区，等 serverId 落地后再拉起终端 */
+  const pendingTerminalForServerRef = useRef(false);
+  const openTerminalForServer = useCallback((targetServerId: string) => {
+    if (!targetServerId || targetServerId === serverId) {
+      openTerminalView();
+      closeSettingsWorkspace();
+      return;
+    }
+    if (!selectServerById(targetServerId)) {
+      return;
+    }
+    closeSettingsWorkspace();
+    pendingTerminalForServerRef.current = true;
+  }, [serverId, selectServerById, openTerminalView, closeSettingsWorkspace]);
+
+  useEffect(() => {
+    if (pendingTerminalForServerRef.current && serverId) {
+      pendingTerminalForServerRef.current = false;
+      openTerminalView();
+    }
+  }, [serverId, openTerminalView]);
+
   useEffect(() => {
     jumpAssetAutoSearchKeyRef.current = "";
   }, [
@@ -1652,6 +1712,12 @@ export function App() {
     activityLines,
   });
   // S6 文件树懒加载目标：堡垒机 SFTP 走 bastionId，其余走 serverId（与目录列表主链路保持一致）
+  const selectedFileBytes = useMemo(
+    () => selectedFileEntries.reduce((sum, entry) => sum + (entry.kind === "file" && typeof entry.size === "number" ? entry.size : 0), 0),
+    [selectedFileEntries],
+  );
+  // S6：传输列非常驻——目录内存在活动上传/下载时才显示该列
+  const hasActiveFileTransfers = Boolean(uploadProgress || downloadProgress);
   const treeListingTarget = useMemo(() => {
     if (!serverId) {
       return null;
@@ -1701,10 +1767,25 @@ export function App() {
     dragging: readerPositionDragging,
     draft: readerPositionDraft
   });
+  // 阅读位置百分比 = 当前窗口末尾在整份文件中的位置；读到文件尾时恒为 100%
+  //（旧行为用窗口起点，最后一页永远停在 90%+，与直觉不符）。
+  const viewerPositionPercent = useMemo(() => {
+    if (readerPositionDragging) {
+      return readerPositionDraft;
+    }
+    if (!sliceData || !fileMeta?.size || sliceData.filePath !== filePath) {
+      return sliceProgress?.start ?? 0;
+    }
+    if (sliceData.isEnd) {
+      return 100;
+    }
+    return clampPercent((Math.min(sliceData.nextOffset, fileMeta.size) / fileMeta.size) * 100);
+  }, [fileMeta, filePath, readerPositionDraft, readerPositionDragging, sliceData, sliceProgress?.start]);
+  const atFileTail = Boolean(sliceData?.isEnd);
   const readerPreviewLabel = canDragReaderPosition
-    ? `${formatPercent(readerPositionDragging ? readerPositionDraft : (sliceProgress?.start ?? 0))}`
+    ? `${formatPercent(readerPositionDragging ? readerPositionDraft : viewerPositionPercent)}`
     : readerPositionLabel;
-  const readerRailIndicatorTop = Math.max(2, Math.min(98, readerPositionDragging ? readerPositionDraft : (sliceProgress?.start ?? 0)));
+  const readerRailIndicatorTop = Math.max(2, Math.min(100, readerPositionDragging ? readerPositionDraft : viewerPositionPercent));
   // S4: 文件预览的切片定位条渲染条件（原竖向定位条复用此条件，现用于一行式切片条）
   const showReaderRail = activeLogView === "search" && activeViewerTabId === "file" && Boolean(filePath);
 
@@ -2060,6 +2141,8 @@ export function App() {
   }, [resultTabs]);
   const showingLogPreview = activeLogView === "search";
   const showingFileDirectory = activeLogView === "files";
+  // S5: 终端 = 工作区内容区视图（嵌入单屏/分屏态占满内容区；独立窗口不占用）
+  const terminalAsWorkspaceView = (terminalPanelOpen && !terminalDetached) || terminalSplitMode;
   const viewerTabs = useMemo(() => {
     const items: Array<{ id: string; label: string; kind: "file" | "result" }> = filePath
       ? [{ id: "file", label: selectedFileName || "当前文件", kind: "file" as const }]
@@ -2089,9 +2172,15 @@ export function App() {
       resultTabs: resultTabs.length,
     });
     if (!serverId) return;
-    if (activeLogView === "search") {
+    if (activeLogView === "search" && !terminalAsWorkspaceView) {
       setActionStatus("已在日志预览。");
       return;
+    }
+    if (terminalPanelOpen && !terminalDetached) {
+      // 终端正占用内容区：先收回终端（保持会话），再回日志视图
+      closeTerminalOverlay();
+      setTerminalPanelOpen(false);
+      setTerminalSplitMode(false);
     }
     setActionStatus("正在切换到日志预览...");
     setActiveLogView("search");
@@ -2111,9 +2200,14 @@ export function App() {
       fileEntries: fileEntries.length,
     });
     if (!serverId) return;
-    if (activeLogView === "files") {
+    if (activeLogView === "files" && !terminalAsWorkspaceView) {
       setActionStatus("已在文件目录。");
       return;
+    }
+    if (terminalPanelOpen && !terminalDetached) {
+      closeTerminalOverlay();
+      setTerminalPanelOpen(false);
+      setTerminalSplitMode(false);
     }
     setActionStatus("正在切换到文件目录...");
     setActiveLogView("files");
@@ -2127,6 +2221,13 @@ export function App() {
     if (!trimmed || trimmed === "/") return "/";
     const absolute = trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
     return absolute.replace(/\/+$/, "") || "/";
+  }
+
+  /** S12 空态主按钮「查看检索示例」：回到检索视图并聚焦关键字框。 */
+  function handleViewerEmptyPrimary() {
+    setActiveLogView("search");
+    setShowKeywordBar(true);
+    window.setTimeout(() => keywordInputRef.current?.focus(), 0);
   }
 
   async function browseDirectoryWithNav(path: string, options?: { replace?: boolean; silent?: boolean }) {
@@ -2215,6 +2316,19 @@ export function App() {
   }
 
   const hasDirectoryConnectionError = isFileMode && connectionTestStatus !== null && !connectionTestStatus.connected;
+  /* S12-3：横幅粗体标题对齐原型 1032 行「连接失败 · 认证被拒绝」。
+     service 返回的 message 若含认证失败特征则补「认证被拒绝」，否则用通用「连接失败」。 */
+  const connectionErrorReason = (() => {
+    const raw = connectionTestStatus?.message || "";
+    if (/permission denied|publickey|password|auth|认证|拒绝|denied/i.test(raw)) return "认证被拒绝";
+    return "";
+  })();
+  /* S14-4：水印 {时间} 占位符——分钟级，避免每帧变化 */
+  const watermarkTimeLabel = (() => {
+    const date = new Date();
+    const pad = (value: number) => String(value).padStart(2, "0");
+    return `${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  })();
   const isConnectingWorkspace =
     isFileMode && !hasDirectoryConnectionError && (!selectedServer || (!connectionTestStatus?.connected && !fileEntries.length));
   const hasFileWorkspaceEntries = fileEntries.length > 0;
@@ -2223,7 +2337,10 @@ export function App() {
     && isDirectoryLoading;
   const showServiceOfflineState = localServiceState === "offline";
   const showNoServerState = localServiceState === "online" && !servers.length && !isBusy;
-  const showViewerEmptyState = activeLogView === "search" && !hasSearchContent && !filePath.trim() && !resultTabs.length && !fileLoadingName;
+  // 空态兜底：文件已选中但内容尚未加载（sliceData 为空 / HMR 状态残留 / live ws 断开）时，
+  // 不再渲染空 console 黑洞，显示空态提示。
+  const showViewerEmptyState = activeLogView === "search" && !hasSearchContent && !resultTabs.length && !fileLoadingName
+    && (!filePath.trim() || !currentLogContent);
   const showCompactViewerChrome = pip.isPip || isStandaloneViewerWindow;
 
   useEffect(() => {
@@ -2441,10 +2558,13 @@ export function App() {
   const viewerOverviewLabel = viewerOverviewTotalLines
     ? `${formatNumber(viewerOverviewCurrentLine)}/${formatNumber(viewerOverviewTotalLines)}`
     : "--";
-  const viewerEmptyTitle = "还没有日志内容";
-  const viewerEmptyHint = !filePath
-    ? "先在目录中选择日志文件，系统会自动打开尾部片段。"
-    : "输入关键字后回车搜索，或在右下角使用回到底部。";
+  /* S12 空态文案对齐原型 1037 行：检索「还没有检索结果」+「输入关键字回车，或用 /关键字 语法」+「查看检索示例」。 */
+  const viewerEmptyTitle = "还没有检索结果";
+  const viewerEmptyHint = liveFollowEnabled && filePath.trim()
+    ? "实时跟随已开启，等待新日志写入…"
+    : !filePath
+      ? "输入关键字回车，或用 /关键字 语法"
+      : "输入关键字后回车搜索，或在右下角使用回到底部。";
   const liveStrategyLabel =
     searchTask?.strategyLabel ||
     activeViewerStrategyLabel ||
@@ -2462,7 +2582,7 @@ export function App() {
   const searchProgressMatchLabel = searchTask ? `命中 ${formatNumber(searchTask.matchCount)} 条` : "--";
   const isSearchView = activeLogView === "search";
   const activeSearchResultCount = activeViewerTabId === "file" ? (results?.matches.length ?? 0) : activeViewerMatchCount;
-  const activeHighlightSummary = highlightCount ? `${Math.min(activeHighlightIndex + 1, highlightCount)}/${highlightCount}` : "";
+  const activeHighlightSummary = highlightCount ? `${Math.min(activeHighlightIndex + 1, highlightCount)} / ${highlightCount}` : "";
   const toolbarSummaryLabel = activeViewerTabId === "file"
     ? (activeHighlightSummary ? `${activeHighlightSummary} 当前片段命中` : (selectedFileName || "--"))
     : (activeHighlightSummary ? `${activeHighlightSummary} 命中` : (activeSearchResultCount ? `${formatNumber(activeSearchResultCount)} 条命中` : ""));
@@ -2494,9 +2614,18 @@ export function App() {
       return;
     }
     if (filePath.trim()) {
-      startLiveFollow(filePath, selectedFileName || filePath);
+      // 开启时带上 rtools 过滤框中的关键字（与原型「过滤框 + LIVE」同一语义）
+      startLiveFollow(filePath, selectedFileName || filePath, { keyword: liveFilterInput.trim() || undefined });
     }
-  }, [liveFollowEnabled, filePath, selectedFileName, startLiveFollow, stopLiveFollow]);
+  }, [liveFollowEnabled, filePath, selectedFileName, liveFilterInput, startLiveFollow, stopLiveFollow]);
+  // S4 实时状态带（原型 536-546）：过滤框变更时以关键字重启实时跟随（网关 buildTailCommand 支持 keyword）
+  const applyLiveFilter = useCallback((nextKeyword: string) => {
+    setLiveFilterInput(nextKeyword);
+    if (liveFollowEnabled && filePath.trim()) {
+      startLiveFollow(filePath, selectedFileName || filePath, { isReconnect: true, keyword: nextKeyword.trim() || undefined });
+    }
+  }, [liveFollowEnabled, filePath, selectedFileName, startLiveFollow]);
+  const toggleLivePause = useCallback(() => setLiveFollowPaused((current) => !current), [setLiveFollowPaused]);
   const toggleTerminalPanelToolbar = useCallback(() => {
     if (terminalPanelOpen || terminalDetached) {
       setTerminalPanelOpen(false);
@@ -2780,11 +2909,14 @@ export function App() {
     void openEntry(entry);
   };
 
-  const appShellClassName = `app-shell${uiTheme === "modern" ? " theme-modern" : ""} ui-density-${uiDensity} ui-surface-${uiSurface}${uiSurface === "custom" ? ` ui-custom-background-${uiBackgroundMode}` : ""} ui-motion-${motionMode}${isElectron ? " electron-immersive" : ""}${isElectron && isMacOS ? " electron-macos-immersive" : ""}`;
+  const appShellClassName = `app-shell${uiTheme === "modern" ? " theme-modern" : ""} ui-density-${uiDensity} ui-surface-${uiSurface}${uiSurface === "custom" ? ` ui-custom-background-${uiBackgroundMode}` : ""} ui-motion-${motionMode}${dynamicBackground && motionMode !== "reduced" ? " ui-dynamic-background" : ""}${isElectron ? " electron-immersive" : ""}${isElectron && isMacOS ? " electron-macos-immersive" : ""}`;
   const appShellStyle = {
     "--log-font-size": `${logFontSize}px`,
     "--terminal-font-size": `${terminalFontSize}px`,
     "--app-font-family": fontFamilyValue(uiFontFamily),
+    /* S14：日志 / 终端字体族独立（原型：字体三处独立，日志字体族是原缺失能力） */
+    "--log-font-family": monoFontFamilyValue(logFontFamily),
+    "--terminal-font-family": monoFontFamilyValue(terminalFontFamily),
     "--custom-background-color": customBackgroundColor,
     "--custom-gradient-start": customGradientStart,
     "--custom-gradient-end": customGradientEnd,
@@ -2792,6 +2924,11 @@ export function App() {
     "--custom-text-color": customTextColor,
     "--custom-log-background-color": customLogBackgroundColor,
     "--custom-terminal-background-color": customTerminalBackgroundColor,
+    /* S14-2：图片背景遮罩亮度 / 模糊由设置滑杆驱动（原型 1125-1126）。
+       -overlay 为展示用百分比，-overlay-alpha 为 rgba 计算用 0..1。 */
+    "--custom-image-overlay": `${customImageOverlay}%`,
+    "--custom-image-overlay-alpha": String(Math.max(0, Math.min(0.9, customImageOverlay / 100))),
+    "--custom-image-blur": `${customImageBlur}px`,
   } as CSSProperties;
 
   if (isStandaloneTerminalWindow) {
@@ -2878,7 +3015,7 @@ export function App() {
   ) : null;
 
   return (
-    <main className={`${appShellClassName}${isStandalonePipWindow ? " pip-standalone" : ""}`} style={appShellStyle}>
+    <main className={`${appShellClassName}${isStandalonePipWindow ? " pip-standalone" : ""}${showTransferHistory || showUtilityWorkspace ? " v2-drawer-push" : ""}`} style={appShellStyle}>
       <section className="shell-layout">
         <SidebarPanel
           uiTheme={uiTheme}
@@ -2907,7 +3044,7 @@ export function App() {
           onActivityPanelResizeStart={handleActivityPanelResizeStart}
         />
 
-      <section className={`main-panel ${isFileMode ? "main-panel-files" : ""}${(terminalPanelOpen || terminalDetached) ? " main-panel-with-terminal" : ""}`}>
+      <section className={`main-panel ${isFileMode ? "main-panel-files" : ""}`}>
           {!isStandalonePipWindow && workspaceSessions.length > 0 ? (
             <WorkspaceSessionTabs
               workspaceSessions={workspaceSessions}
@@ -2932,8 +3069,8 @@ export function App() {
               <div className="toolbar-view-switch" aria-label="内容视图切换">
                 <button
                   type="button"
-                  className={showingLogPreview ? "toolbar-view-switch-btn is-active" : "toolbar-view-switch-btn"}
-                  aria-pressed={showingLogPreview}
+                  className={showingLogPreview && !terminalAsWorkspaceView ? "toolbar-view-switch-btn is-active" : "toolbar-view-switch-btn"}
+                  aria-pressed={showingLogPreview && !terminalAsWorkspaceView}
                   onClick={switchToLogPreviewView}
                   disabled={!serverId}
                   title={filePath.trim() ? "查看日志预览" : (hasSearchResults ? "查看日志结果" : "暂无日志结果")}
@@ -2942,8 +3079,8 @@ export function App() {
                 </button>
                 <button
                   type="button"
-                  className={showingFileDirectory ? "toolbar-view-switch-btn is-active" : "toolbar-view-switch-btn"}
-                  aria-pressed={showingFileDirectory}
+                  className={showingFileDirectory && !terminalAsWorkspaceView ? "toolbar-view-switch-btn is-active" : "toolbar-view-switch-btn"}
+                  aria-pressed={showingFileDirectory && !terminalAsWorkspaceView}
                   onClick={switchToFileDirectoryView}
                   disabled={!canSwitchToDocumentContent}
                   title={canSwitchToDocumentContent ? "查看文件目录" : "先选择服务器"}
@@ -2957,7 +3094,7 @@ export function App() {
                     aria-pressed={terminalPanelOpen || terminalDetached}
                     onClick={toggleTerminalPanelToolbar}
                     disabled={!serverId}
-                    title={terminalPanelOpen || terminalDetached ? "收起终端" : "打开终端"}
+                    title={terminalPanelOpen || terminalDetached ? "收起终端" : "查看终端"}
                   >
                     终端
                   </button>
@@ -3002,7 +3139,8 @@ export function App() {
               onKeywordInputChange={setKeywordInput}
               onRunSearch={() => { void runSearch(); }}
               onClearKeyword={() => setKeywordInput("")}
-              showSummary={showSearchSummary}
+              /* 1+2 合并：结果摘要行并入 viewer-actions-strip（避免与「文件预览 · xxx」标题行重复） */
+              showSummary={false}
               toolbarSummaryLabel={toolbarSummaryLabel}
               toolbarMetaLabel={toolbarMetaLabel}
               settings={{
@@ -3042,6 +3180,11 @@ export function App() {
               filePattern={filePattern}
               onFilePatternChange={setFilePattern}
               searching={Boolean(searchStartedAt)}
+              /* 原型 S13 第 02 段：检索进度内联在按钮上（如 340MB/1.2GB），不锁界面。
+                 字节数据来自 LogSearchTaskResponse 的 scannedBytes / totalBytes。 */
+              searchProgressLabel={searchTask && searchTask.totalBytes > 0
+                ? `${formatBytes(searchTask.scannedBytes)}/${formatBytes(searchTask.totalBytes)}`
+                : ""}
               highlightSummary={activeHighlightSummary}
               onHighlightPrev={() => focusHighlight("prev")}
               onHighlightNext={() => focusHighlight("next")}
@@ -3068,7 +3211,7 @@ export function App() {
             ) : null}
           </section>
 
-          <section className={`workspace-panel ${isFileMode ? "workspace-panel-files" : ""}`}>
+          <section className={`workspace-panel ${isFileMode ? "workspace-panel-files" : ""}${terminalAsWorkspaceView ? " workspace-panel-terminal" : ""}`}>
             <WorkspaceStartupCards
               showServiceOfflineState={showServiceOfflineState}
               showNoServerState={showNoServerState}
@@ -3078,7 +3221,66 @@ export function App() {
               onImportFinalShell={importFromFinalShell}
               onRefreshServers={fetchServers}
             />
-            {!showServiceOfflineState && !showNoServerState && (
+            {!showServiceOfflineState && !showNoServerState && ((terminalPanelOpen && !terminalDetached) || (terminalSplitMode && serverId)) ? (
+              terminalSplitMode ? (
+                <div className="terminal-workarea-split">
+                  <div className="terminal-workarea-bar">
+                    <span className={`terminal-status-dot ${terminalSession.connected ? "terminal-status-dot-connected" : ""}`} />
+                    <strong>{selectedServer?.name || "终端"}</strong>
+                    <span className="terminal-workarea-bar-meta">分屏模式</span>
+                    <span className="terminal-workarea-bar-spacer" />
+                    <button type="button" className="ghost-button" onClick={() => setTerminalSplitMode(false)}>单屏</button>
+                    <button type="button" className="ghost-button" onClick={() => { closeTerminalOverlay(); setTerminalPanelOpen(false); setTerminalDetached(false); }} title="关闭终端"><X size={13} /></button>
+                  </div>
+                  <TerminalSplitView
+                    serverId={serverId}
+                    selectedServer={selectedServer}
+                    preferredBastionId={preferredBastionId}
+                    isBusy={isBusy}
+                    cwd={terminalWorkingDirectory}
+                    onStatus={setActionStatus}
+                    onActivity={pushActivity}
+                  />
+                </div>
+              ) : (
+                <TerminalPanel
+                  popupMode="embedded"
+                  server={selectedServer}
+                  connected={terminalSession.connected}
+                  isBusy={isBusy}
+                  serverId={serverId}
+                  statusText={terminalPanelStatusText}
+                  subtitleText={terminalConnectionLabel}
+                  detached={terminalDetached}
+                  terminalOverlay={terminalOverlay}
+                  containerRef={terminalSession.containerRef}
+                  onReconnect={() => openTerminalView()}
+                  onClose={() => {
+                    if (terminalDetached) {
+                      void closeDetachedTerminalWindow();
+                    }
+                    closeTerminalOverlay();
+                    setTerminalPanelOpen(false);
+                    setTerminalDetached(false);
+                  }}
+                  onCloseTerminalOverlay={closeTerminalOverlay}
+                  onFocus={() => terminalSession.focusTerminal()}
+                  onDetach={() => { void openDetachedTerminalWindow(); }}
+                  onAttach={() => { void closeDetachedTerminalWindow(); }}
+                  onFit={() => terminalSession.fitTerminal()}
+                  selMenu={termSelMenu}
+                  getSelectionText={() => terminalSession.getSelection()}
+                  clearSelection={() => terminalSession.clearSelection()}
+                  pasteToTerminal={(text) => terminalSession.pasteToTerminal(text)}
+                  onToggleTerminalOverlay={toggleTerminalOverlay}
+                  onDismissMenu={() => setTermSelMenu(null)}
+                  onSplitMode={() => {
+                    closeTerminalOverlay();
+                    setTerminalSplitMode(true);
+                  }}
+                />
+              )
+            ) : !showServiceOfflineState && !showNoServerState && (
               <>
                 {(!isFileMode || pip.isPip) ? (
                 <>
@@ -3089,7 +3291,7 @@ export function App() {
                 <div style={isFileMode ? { display: "none" } : { display: "contents" }}>
                 {pip.isPip && !isFileMode && (
                   <div className="viewer-pip-placeholder">
-                    <PictureInPicture2 size={24} strokeWidth={1.5} />
+                    <PipExpandIcon size={24} strokeWidth={1.5} />
                     <strong>日志查看器已弹出到独立小窗</strong>
                     <button className="ghost-button" onClick={() => void pip.togglePip()}>收回</button>
                   </div>
@@ -3098,6 +3300,42 @@ export function App() {
                 <div className={showCompactViewerChrome ? "pip-viewer-root" : "pip-viewer-wrap"}>
                 {showCompactViewerChrome ? (
                   <>
+                  {pip.isPip ? (
+                  /* 原型 S11 .pip .ph：live 图标 + 文件名 + LIVE 徽标 + 回主窗 + 关闭，1:1 */
+                  <div className="viewer-floating-header viewer-pip-header">
+                    <svg className="pip-header-live-icon" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <circle cx="12" cy="12" r="2" />
+                      <path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9" />
+                      <path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5" />
+                      <circle cx="12" cy="12" r="10" />
+                      <path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5" />
+                      <path d="M19.1 4.9C23 8.8 23 15.2 19.1 19.1" />
+                    </svg>
+                    <strong className="pip-header-name">{compactViewerTitle}</strong>
+                    <span className={`liveb${liveFollowEnabled ? (liveFollowConnected ? "" : " retry") : " idle"}`} aria-label="实时追踪状态">
+                      <i aria-hidden="true" />
+                      {liveFollowEnabled ? (liveFollowConnected ? "LIVE" : "重连中 ⟳") : "未开启"}
+                    </span>
+                    <button
+                      type="button"
+                      className="ghost-button icon-button"
+                      onClick={() => void pip.togglePip()}
+                      title="回到主窗口"
+                      aria-label="回到主窗口"
+                    >
+                      <PipExpandIcon size={13} />
+                    </button>
+                    <button
+                      type="button"
+                      className="ghost-button icon-button"
+                      onClick={() => void pip.togglePip()}
+                      title="关闭小窗"
+                      aria-label="关闭小窗"
+                    >
+                      <X size={13} strokeWidth={1.8} />
+                    </button>
+                  </div>
+                  ) : (
                   <div className={`viewer-floating-header${isStandaloneViewerWindow ? " viewer-floating-header-standalone" : ""}`}>
                     <div className="viewer-floating-header-spacer" />
                     <div className="viewer-floating-header-title">
@@ -3140,23 +3378,13 @@ export function App() {
                           </div>
                         ) : null}
                       </div>
-                      {filePath && activeLogView === "search" && activeViewerTabId === "file" ? (
-                        <button
-                          className={liveFollowEnabled ? "ghost-button icon-button btn-live-active" : "ghost-button icon-button"}
-                          onClick={() => liveFollowEnabled ? stopLiveFollow({ keepContent: true }) : startLiveFollow(filePath, selectedFileName)}
-                          disabled={!filePath.trim()}
-                          title={liveFollowEnabled ? "停止实时跟随" : "开启实时跟随"}
-                        >
-                          <Radio size={14} strokeWidth={1.8} />
-                        </button>
-                      ) : null}
                       <button
                         className={errorHighlightEnabled ? "ghost-button icon-button btn-highlight-active" : "ghost-button icon-button"}
                         onClick={toggleErrorHighlight}
                         disabled={!canToggleErrorHighlight}
                         title={errorHighlightEnabled ? "关闭异常/告警高亮" : "开启异常/告警高亮"}
                       >
-                        <ToolIcon theme={uiTheme} kind="highlight" />
+                        <AlertTriangle size={14} strokeWidth={1.8} />
                       </button>
                       {canToggleResultContext ? (
                         <button
@@ -3187,82 +3415,34 @@ export function App() {
                           onClick={() => void pip.togglePip()}
                           title={pip.isPip ? "收回小窗" : "弹出独立小窗"}
                         >
-                          <PictureInPicture2 size={14} strokeWidth={1.8} />
+                          <PipExpandIcon size={14} />
                         </button>
                       ) : null}
                     </div>
                   </div>
+                  )}
                   </>
                 ) : (
                 <div className="workspace-strip viewer-actions-strip">
                   <span className="viewer-strip-label">{viewerStripLabel}</span>
-                  <div className="toolbar-inline workspace-actions compact-actions">
-                    {filePath && activeLogView === "search" && activeViewerTabId === "file" ? (
-                      <button
-                        className={liveFollowEnabled ? "ghost-button icon-button btn-live-active" : "ghost-button icon-button"}
-                        onClick={() => liveFollowEnabled ? stopLiveFollow({ keepContent: true }) : startLiveFollow(filePath, selectedFileName)}
-                        disabled={!filePath.trim()}
-                        title={liveFollowEnabled ? "停止实时跟随" : "开启实时跟随"}
-                      >
-                        <Radio size={14} strokeWidth={1.8} />
+                  {/* 1+2 合并：原「结果摘要行」（toolbar-summary）与「查看器标题条」重复显示文件名，
+                      合并为一条：文件名 + 摘要 + 命中导航 + 动作组。 */}
+                  {showSearchSummary && toolbarMetaLabel ? (
+                    <span className="viewer-strip-summary">{toolbarMetaLabel}</span>
+                  ) : null}
+                  <span className="viewer-strip-spacer" />
+                  {activeHighlightSummary ? (
+                    <span className="summary-nav">
+                      <button type="button" className="ghost-button icon-button" title="上一处命中" aria-label="上一处命中" onClick={() => focusHighlight("prev")}>
+                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m12 19-7-7 7-7" /><path d="M19 12H5" /></svg>
                       </button>
-                    ) : null}
-                    {filePath && activeLogView === "search" && activeViewerTabId === "file" ? (
-                      <button className={showFileTools ? "ghost-button icon-button tab-active" : "ghost-button icon-button"} onClick={() => setShowFileTools((current) => !current)} title="更多工具">
-                        <Wrench size={14} strokeWidth={1.8} />
+                      <span className="mono summary-nav-count">{activeHighlightSummary}</span>
+                      <button type="button" className="ghost-button icon-button" title="下一处命中" aria-label="下一处命中" onClick={() => focusHighlight("next")}>
+                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg>
                       </button>
-                    ) : null}
-                    <button
-                      className={errorHighlightEnabled ? "ghost-button icon-button btn-highlight-active" : "ghost-button icon-button"}
-                      onClick={toggleErrorHighlight}
-                      disabled={!canToggleErrorHighlight}
-                      title={errorHighlightEnabled ? "关闭异常/告警高亮" : "开启异常/告警高亮"}
-                    >
-                      <ToolIcon theme={uiTheme} kind="highlight" />
-                    </button>
-                    {canToggleResultContext ? (
-                      <button
-                        className={resultContextMode ? "ghost-button icon-button tab-active" : "ghost-button icon-button"}
-                        onClick={toggleResultContext}
-                        title={resultContextMode ? "切换到仅命中" : "切换到含上下文"}
-                      >
-                        <ToolIcon theme={uiTheme} kind="context" />
-                      </button>
-                    ) : null}
-                    {activeLogView === "search" ? (
-                      <button className="ghost-button icon-button" onClick={exportCurrentResults} disabled={!activeResultTab && !results} title="下载结果">
-                        <Download size={14} strokeWidth={1.8} />
-                      </button>
-                    ) : null}
-                    {activeLogView === "search" && activeResultTab ? (
-                      <button
-                        className={showBookmarkPanel ? "ghost-button icon-button tab-active" : "ghost-button icon-button"}
-                        onClick={() => setShowBookmarkPanel((current) => !current)}
-                        title={showBookmarkPanel ? "隐藏书签" : "显示书签"}
-                      >
-                        <Bookmark size={14} strokeWidth={1.8} />
-                      </button>
-                    ) : null}
-                    {activeViewerCommandPreview ? (
-                      <button
-                        className="ghost-button icon-button"
-                        onClick={() => {
-                          void copyText(activeViewerCommandPreview).then(() => setActionStatus("搜索命令已复制到剪贴板。"));
-                        }}
-                        title="复制命令"
-                      >
-                        <Copy size={14} strokeWidth={1.8} />
-                      </button>
-                    ) : null}
-                    <button
-                      className={pip.isPip ? "ghost-button icon-button tab-active" : "ghost-button icon-button"}
-                      onClick={() => void pip.togglePip()}
-                      title={pip.isPip ? "收回小窗" : "弹出独立小窗"}
-                    >
-                      <PictureInPicture2 size={14} strokeWidth={1.8} />
-                    </button>
+                    </span>
+                  ) : null}
                   </div>
-                </div>
                 )}
 
                 <div className="viewer-shell">
@@ -3283,8 +3463,21 @@ export function App() {
                   </div>
                 ) : <div />}
 
-                {showReaderRail && !showCompactViewerChrome ? (
+                {/* 3+4 合并：切片条与实时状态带并成一行（原型此二处本就相邻） */}
+                {!showCompactViewerChrome && (showReaderRail || (activeLogView === "search" && Boolean(filePath || liveFollowEnabled))) ? (
+                  <div className="log-view-bar" aria-label="日志视图状态">
+                  {showReaderRail ? (
                   <div className="slicebar" aria-label="大文件切片定位">
+                    <button
+                      type="button"
+                      className="ghost-button icon-button slicebar-nav"
+                      onClick={() => void navigateSlice("prev")}
+                      disabled={sliceOffset === 0 || sliceData?.isStart || isBusy}
+                      title="上一页"
+                      aria-label="上一页"
+                    >
+                      <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
+                    </button>
                     <span className="slicebar-range">
                       <b>{formatBytes(activeSliceData?.actualOffset)}</b> / {formatBytes(activeFileMeta?.size)}
                     </span>
@@ -3292,6 +3485,7 @@ export function App() {
                       ref={sliceTrackRef}
                       className={`slicebar-strack${canDragReaderPosition ? "" : " slicebar-strack-disabled"}`}
                       onPointerDown={startSlicebarDrag}
+                      title="拖拽跳转到指定位置"
                     >
                       <span className="slicebar-fill" style={{ width: `${readerRailIndicatorTop}%` }} />
                       <span
@@ -3299,17 +3493,128 @@ export function App() {
                         style={{ left: `${readerRailIndicatorTop}%` }}
                       />
                     </div>
-                    <span className="slicebar-percent">{formatPercent(readerPositionDragging ? readerPositionDraft : (sliceProgress?.start ?? 0))}</span>
+                    <span className="slicebar-percent">{formatPercent(readerPositionDragging ? readerPositionDraft : viewerPositionPercent)}</span>
+                    <button
+                      type="button"
+                      className="ghost-button icon-button slicebar-nav"
+                      onClick={() => void navigateSlice("next")}
+                      disabled={sliceData?.isEnd || isBusy}
+                      title="下一页"
+                      aria-label="下一页"
+                    >
+                      <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg>
+                    </button>
                     <button
                       type="button"
                       className="ghost-button slim-button slicebar-tail"
-                      onClick={() => { void loadTailSlice(); }}
+                      onClick={() => { if (atFileTail) void loadHeadSlice(); else void loadTailSlice(); }}
                       disabled={isBusy || !filePath.trim()}
-                      title="跳到文件末尾"
+                      title={atFileTail ? "回到文件开头" : "跳到文件末尾"}
                     >
-                      跳到尾部
+                      {atFileTail ? "回到头部" : "跳到尾部"}
                     </button>
-                    <span className="slicebar-chip">{canDragReaderPosition ? "整行裁切 · 邻页已预热" : "已整片加载 · 拖拽定位关闭"}</span>
+                  </div>
+                  ) : null}
+                  {/* S4 实时状态带（原型 536-546）：脉冲徽标 + 文件说明 + 过滤框 + 暂停/断开
+                      仅在已打开具体日志文件（可 tail -F）时出现，避免空态下误导 */}
+                  {activeLogView === "search" && Boolean(filePath || liveFollowEnabled) ? (
+                  <div className="rtools" aria-label="实时状态">
+                    <span
+                      className={`liveb${liveFollowEnabled ? (liveFollowConnected ? "" : " retry") : " idle"}`}
+                      aria-label={liveFollowEnabled ? (liveFollowConnected ? "实时追踪已连接" : "实时追踪重连中") : "实时追踪未开启"}
+                    >
+                      <i aria-hidden="true" />
+                      {liveFollowEnabled ? (liveFollowConnected ? "LIVE" : "重连中 ⟳") : "未开启"}
+                    </span>
+                    <span className="rt-note">
+                      {selectedFileName || "eos-server.log"} · tail -F · 自动重连
+                    </span>
+                    <span className="rt-spacer" />
+                    <span className="rt-filter">
+                      <ToolIcon theme={uiTheme} kind="filter" />
+                      <input
+                        className="rt-filter-input"
+                        value={liveFilterInput}
+                        onChange={(event) => applyLiveFilter(event.target.value)}
+                        placeholder="ERROR"
+                        disabled={!canToolbarLive}
+                        aria-label="实时过滤关键字"
+                      />
+                    </span>
+                    <button
+                      type="button"
+                      className={liveFollowPaused ? "pill on" : "pill"}
+                      onClick={toggleLivePause}
+                      disabled={!liveFollowEnabled}
+                      title={liveFollowPaused ? "恢复自动滚动" : "暂停自动滚动"}
+                    >
+                      <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                        <rect x="14" y="4" width="4" height="16" rx="1" />
+                        <rect x="6" y="4" width="4" height="16" rx="1" />
+                      </svg>
+                      {liveFollowPaused ? "继续" : "暂停"}
+                    </button>
+                  </div>
+                  ) : null}
+                  {/* 高频动作组（自标题行融合而来）：警告高亮 / 命中上下文 / 下载 / 书签 / 小窗 / 更多工具 */}
+                  {activeLogView === "search" ? (
+                  <div className="toolbar-inline viewer-action-group" aria-label="视图动作">
+                    <button
+                      className={errorHighlightEnabled ? "ghost-button icon-button btn-highlight-active" : "ghost-button icon-button"}
+                      onClick={toggleErrorHighlight}
+                      disabled={!canToggleErrorHighlight}
+                      title={errorHighlightEnabled ? "关闭异常/告警高亮" : "开启异常/告警高亮"}
+                    >
+                      <AlertTriangle size={14} strokeWidth={1.8} />
+                    </button>
+                    {canToggleResultContext ? (
+                      <button
+                        className={resultContextMode ? "ghost-button icon-button tab-active" : "ghost-button icon-button"}
+                        onClick={toggleResultContext}
+                        title={resultContextMode ? "切换到仅命中" : "切换到含上下文"}
+                      >
+                        <ToolIcon theme={uiTheme} kind="context" />
+                      </button>
+                    ) : null}
+                    <button className="ghost-button icon-button" onClick={exportCurrentResults} disabled={!activeResultTab && !results} title="下载结果">
+                      <Download size={14} strokeWidth={1.8} />
+                    </button>
+                    {activeResultTab ? (
+                      <button
+                        className={showBookmarkPanel ? "ghost-button icon-button tab-active" : "ghost-button icon-button"}
+                        onClick={() => setShowBookmarkPanel((current) => !current)}
+                        title={showBookmarkPanel ? "隐藏书签" : "显示书签"}
+                      >
+                        <Bookmark size={14} strokeWidth={1.8} />
+                      </button>
+                    ) : null}
+                    {activeViewerCommandPreview ? (
+                      <button
+                        className="ghost-button icon-button"
+                        onClick={() => {
+                          void copyText(activeViewerCommandPreview).then(() => setActionStatus("搜索命令已复制到剪贴板。"));
+                        }}
+                        title="复制命令"
+                      >
+                        <Copy size={14} strokeWidth={1.8} />
+                      </button>
+                    ) : null}
+                    {!isStandaloneViewerWindow ? (
+                      <button
+                        className={pip.isPip ? "ghost-button icon-button tab-active" : "ghost-button icon-button"}
+                        onClick={() => void pip.togglePip()}
+                        title={pip.isPip ? "收回小窗" : "弹出独立小窗"}
+                      >
+                        <PipExpandIcon size={14} />
+                      </button>
+                    ) : null}
+                    {filePath && activeViewerTabId === "file" ? (
+                      <button className={showFileTools ? "ghost-button icon-button tab-active" : "ghost-button icon-button"} onClick={() => setShowFileTools((current) => !current)} title="更多工具">
+                        <Settings size={14} strokeWidth={1.8} />
+                      </button>
+                    ) : null}
+                  </div>
+                  ) : null}
                   </div>
                 ) : null}
 
@@ -3448,6 +3753,17 @@ export function App() {
                         followOutput={liveFollowEnabled && !liveFollowPaused}
                         className="console-block viewer-console viewer-console-markup"
                       />
+                      {/* S14-4：水印覆盖层（默认关闭）。作用范围=日志/预览区时挂在内容区之上，
+                          斜向平铺低透明度文字，pointer-events:none 不挡交互。 */}
+                      <WatermarkOverlay
+                        enabled={watermarkEnabled && watermarkScope === "content"}
+                        template={watermarkTemplate}
+                        opacity={watermarkOpacity}
+                        scope="content"
+                        user={credentialUsername || selectedServer?.username || "用户"}
+                        host={selectedServer?.name || selectedServer?.host || "主机"}
+                        time={watermarkTimeLabel}
+                      />
                       {viewerSelMenu ? (
                         <div
                           className="selection-copy-menu viewer-selection-menu"
@@ -3460,14 +3776,15 @@ export function App() {
                         >
                           <button
                             type="button"
-                            title="复制"
+                            title="复制选中文本"
                             onMouseDown={(event) => {
                               event.preventDefault();
                               event.stopPropagation();
                             }}
                             onClick={() => void handleCopyViewerSelection()}
                           >
-                            <Copy size={14} />
+                            <Copy size={12} />
+                            <span>复制</span>
                           </button>
                         </div>
                       ) : null}
@@ -3533,11 +3850,19 @@ export function App() {
                   </>
                 ) : (
                   <div className="viewer-empty-state">
+                    {/* S12 原型空态模板：44×44 描边图标 + 一句话 + 副文案 + 主按钮，整体居中。
+                        按钮文案对齐原型 1037 行「查看检索示例」/「打开文件目录」。 */}
+                    <span className="viewer-empty-state-icon" aria-hidden="true">
+                      <Search size={18} strokeWidth={1.8} />
+                    </span>
                     <strong>{viewerEmptyTitle}</strong>
                     <span>{viewerEmptyHint}</span>
                     <div className="toolbar-inline">
-                      <button className="ghost-button" onClick={() => setActiveLogView("files")}>
-                        去选文件
+                      <button className="ghost-button" type="button" onClick={() => { void handleViewerEmptyPrimary(); }}>
+                        查看检索示例
+                      </button>
+                      <button className="ghost-button" type="button" onClick={() => setActiveLogView("files")}>
+                        打开文件目录
                       </button>
                       {filePath ? (
                         <button className="ghost-button" onClick={() => { void loadTailSlice(); }} disabled={isBusy}>
@@ -3575,9 +3900,10 @@ export function App() {
                     uiTheme={uiTheme}
                     hasServer={!!serverId}
                     isBusy={isBusy}
+                    filterValue={fileFilter}
                     showPathHistory={showPathHistory}
                     showTransferHistory={showTransferHistory}
-                    showDirectoryFilter={showDirectoryFilter}
+                    onFilterChange={setFileFilter}
                     onBrowseParent={() => { void browseDirectoryWithNav(getParentDirectoryPath(directoryPath || directoryInput || "/")); }}
                     onTogglePathHistory={() => {
                       setShowTransferHistory(false);
@@ -3587,15 +3913,12 @@ export function App() {
                       setShowPathHistory(false);
                       setShowTransferHistory((c) => !c);
                     }}
-                    onToggleDirectoryFilter={() => setShowDirectoryFilter((current) => !current)}
                     onMkdir={() => setMkdirDialog({ parentDir: directoryPath || "/", dirName: "" })}
                     onUploadFiles={() => { void uploadFiles(); }}
                     onUploadDirectory={() => { void uploadDirectory(); }}
                     onRefresh={() => browseLogFiles(directoryPath || "/")}
                   />}
-                  filterBar={showDirectoryFilter ? (
-                    <FileBrowserFilterBar value={fileFilter} hasServer={!!serverId} onChange={setFileFilter} />
-                  ) : null}
+                  filterBar={null}
                   historyDropdown={showPathHistory ? (
                     <FileBrowserHistoryDropdown
                       historyPaths={serverId ? readDirectoryHistory(serverId).filter((p) => p !== directoryPath) : []}
@@ -3628,17 +3951,29 @@ export function App() {
                     ) : null}
                   </div>
                 ) : hasDirectoryConnectionError ? (
-                  <div className="workspace-placeholder workspace-placeholder-error">
-                    <strong>连接失败</strong>
-                    <span>{connectionTestStatus?.message || "无法连接到服务器，请检查网络、凭证或服务器状态。"}</span>
-                    <div className="toolbar-inline">
-                      <button className="ghost-button" onClick={() => testServerConnection(selectedServer?.basePath?.trim() || "/")} disabled={isBusy}>
-                        重新连接
-                      </button>
-                      <button className="ghost-button" onClick={() => openSettingsWorkspace("connections")}>
-                        当前服务器
-                      </button>
-                    </div>
+                  /* S12 原型：连接错误用内容区顶部横幅（不挡内容），
+                     含图标 + 中文原因 + 主机上下文 + [重连][连接设置] */
+                  <div className="connection-error-banner" role="alert">
+                    <span className="connection-error-banner-icon" aria-hidden="true">
+                      <AlertTriangle size={15} strokeWidth={1.9} />
+                    </span>
+                    <span className="connection-error-banner-msg">
+                      <b>连接失败{connectionErrorReason ? ` · ${connectionErrorReason}` : ""}</b>
+                      <span>
+                        {" — "}
+                        {connectionTestStatus?.message || "无法连接到服务器，请检查网络、凭证或服务器状态。"}
+                        {selectedServer ? ` · ${selectedServer.username}@${selectedServer.host}:${selectedServer.port}` : ""}
+                      </span>
+                      <span className="connection-error-banner-hint">
+                        凭证可能已过期；导入的密码可在设置中心重新获取。
+                      </span>
+                    </span>
+                    <button className="ghost-button" onClick={() => testServerConnection(selectedServer?.basePath?.trim() || "/")} disabled={isBusy}>
+                      重连
+                    </button>
+                    <button className="ghost-button confirm-btn-primary" onClick={() => openSettingsWorkspace("connections")}>
+                      连接设置
+                    </button>
                   </div>
                 ) : hasFileWorkspaceEntries ? (
                   <FileBrowserGrid
@@ -3647,6 +3982,8 @@ export function App() {
                     onAuxClick={handleFileBrowserMouseNavigation}
                     onMouseDown={handleFileBrowserMouseNavigation}
                   >
+                    {/* 批量条作为 batchBar 传入文件列表头槽位，与「N 项」摘要互斥共用一行：
+                        高度恒定 → 勾选/取消不抖动、不留空白、不遮挡表头 */}
                     <FileBrowserTreeColumn
                       title="目录树"
                       summary={`${formatNumber(directoryEntries.length)} 个目录`}
@@ -3668,35 +4005,40 @@ export function App() {
                       onDrop={handleFileDrop}
                       summary={<span>{formatNumber(tableEntries.length)} 项</span>}
                       batchBar={selectedFileEntries.length ? (
-                        <div className="toolbar-inline file-batch-actions file-batch-actions-compact">
-                          <span className="file-batch-summary" title="批量操作仅作用于当前目录列表里已勾选的项目">已选 {selectedFileEntries.length} / {tableEntries.length} 项</span>
+                        <div className="file-batch-actions file-batch-actions-compact">
+                          <b className="file-batch-title">已选 {selectedFileEntries.length} 项</b>
+                          <span className="file-batch-mut">· {formatBytes(selectedFileBytes)}</span>
                           <button
                             type="button"
-                            className="ghost-button icon-button file-batch-action-button"
+                            className="ghost-button file-batch-text-button"
                             onClick={() => openBatchMoveDialog()}
                             disabled={isBusy}
                             title="批量移动"
                           >
                             <ToolIcon theme={uiTheme} kind="folder-move" />
+                            移动到…
                           </button>
                           <button
                             type="button"
-                            className="ghost-button icon-button file-batch-action-button"
+                            className="ghost-button file-batch-text-button file-batch-danger"
                             onClick={() => confirmDeleteSelectedFiles()}
                             disabled={isBusy}
                             title="批量删除"
                           >
                             <ToolIcon theme={uiTheme} kind="delete" />
+                            删除
                           </button>
                           <button
                             type="button"
-                            className="ghost-button icon-button file-batch-action-button"
+                            className="ghost-button file-batch-text-button"
                             onClick={() => clearSelectedFiles()}
                             disabled={isBusy}
                             title="清空选择"
                           >
-                            <ToolIcon theme={uiTheme} kind="undo" />
+                            清空选择
                           </button>
+                          <span className="file-batch-spacer" />
+                          <span className="file-batch-hint">Esc 清空 · 双击进入 · 拖拽移动</span>
                         </div>
                       ) : null}
                       tableHead={<>
@@ -3713,7 +4055,8 @@ export function App() {
                         <button type="button" className="table-head-button" onClick={() => toggleFileSort("name")}>
                           {renderSortLabel("name", "名称")}
                         </button>
-                        {uiTheme === "modern" ? <span className="file-transfer-head-cell">传输进度</span> : null}
+                        {/* S6：传输列非常驻——仅在目录内有活动传输时出现，避免空占一列 */}
+                        {uiTheme === "modern" && hasActiveFileTransfers ? <span className="file-transfer-head-cell">传输进度</span> : null}
                         <button type="button" className="table-head-button" onClick={() => toggleFileSort("size")}>
                           {renderSortLabel("size", "大小")}
                         </button>
@@ -3738,6 +4081,7 @@ export function App() {
                           selectedFilePathSet={selectedFilePathSet}
                           isBusy={isBusy}
                           uiTheme={uiTheme}
+                          emptyLabel="目录为空"
                           formatBytes={formatBytes}
                           formatDateTime={formatDateTime}
                           uploadProgress={uploadProgress}
@@ -3791,7 +4135,22 @@ export function App() {
                           <span>{actionStatus || "正在读取远程目录，请稍候..."}</span>
                         </div>
                       ) : (
-                        <div className="empty-box table-empty table-empty-large">当前目录为空</div>
+                        /* S12 原型 1039 行目录空态：图标 + 「目录为空」+ 副文案 + 主按钮「返回上一级」 */
+                        <div className="empty-box table-empty table-empty-large empty-state-template">
+                          <span className="empty-box-icon" aria-hidden="true">
+                            <Folder size={18} strokeWidth={1.8} />
+                          </span>
+                          <strong className="empty-box-title">目录为空</strong>
+                          <span className="empty-box-hint">回到上一级，或切换其他服务器</span>
+                          <button
+                            type="button"
+                            className="ghost-button"
+                            onClick={() => { void browseParentDirectory(); }}
+                            disabled={isBusy}
+                          >
+                            返回上一级
+                          </button>
+                        </div>
                       )}
                     </FileBrowserContentColumn>
                   </FileBrowserGrid>
@@ -3805,80 +4164,10 @@ export function App() {
 
           {terminalDetached ? (
             <div className="viewer-pip-placeholder">
-              <PictureInPicture2 size={24} strokeWidth={1.5} />
+              <PipExpandIcon size={24} strokeWidth={1.5} />
               <strong>终端已弹出到独立小窗</strong>
               <button className="ghost-button" type="button" onClick={() => void restoreEmbeddedTerminalWindow()}>收回</button>
             </div>
-          ) : terminalPanelOpen ? (
-            terminalSplitMode ? (
-              <div className="terminal-bottom-panel" style={{ flex: "0 0 auto", maxHeight: "35vh", minHeight: "120px" }}>
-                <div className="terminal-panel-bar">
-                  <div className="terminal-panel-bar-info">
-                    <span className={`terminal-status-dot ${terminalSession.connected ? "terminal-status-dot-connected" : ""}`} />
-                    <strong>{selectedServer?.name || "终端"}</strong>
-                    <span>分屏模式</span>
-                  </div>
-                  <div className="terminal-panel-bar-actions">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setTerminalSplitMode(false);
-                      }}
-                      title="切回单终端"
-                    >
-                      单屏
-                    </button>
-                    <button type="button" onClick={() => { closeTerminalOverlay(); setTerminalPanelOpen(false); setTerminalDetached(false); }} title="关闭终端"><X size={13} /></button>
-                  </div>
-                </div>
-                <TerminalSplitView
-                  serverId={serverId}
-                  selectedServer={selectedServer}
-                  preferredBastionId={preferredBastionId}
-                  isBusy={isBusy}
-                  cwd={terminalWorkingDirectory}
-                  onStatus={setActionStatus}
-                  onActivity={pushActivity}
-                />
-              </div>
-            ) : (
-            <TerminalPanel
-              popupMode="embedded"
-              server={selectedServer}
-              connected={terminalSession.connected}
-              isBusy={isBusy}
-              serverId={serverId}
-              statusText={terminalPanelStatusText}
-              subtitleText={terminalConnectionLabel}
-              detached={terminalDetached}
-              terminalOverlay={terminalOverlay}
-              containerRef={terminalSession.containerRef}
-              onReconnect={() => openTerminalView()}
-              onClose={() => {
-                if (terminalDetached) {
-                  void closeDetachedTerminalWindow();
-                }
-                closeTerminalOverlay();
-                setTerminalPanelOpen(false);
-                setTerminalDetached(false);
-              }}
-              onCloseTerminalOverlay={closeTerminalOverlay}
-              onFocus={() => terminalSession.focusTerminal()}
-              onDetach={() => { void openDetachedTerminalWindow(); }}
-              onAttach={() => { void closeDetachedTerminalWindow(); }}
-              onFit={() => terminalSession.fitTerminal()}
-              selMenu={termSelMenu}
-              getSelectionText={() => terminalSession.getSelection()}
-              clearSelection={() => terminalSession.clearSelection()}
-              pasteToTerminal={(text) => terminalSession.pasteToTerminal(text)}
-              onToggleTerminalOverlay={toggleTerminalOverlay}
-              onDismissMenu={() => setTermSelMenu(null)}
-              onSplitMode={() => {
-                closeTerminalOverlay();
-                setTerminalSplitMode(true);
-              }}
-            />
-            )
           ) : null}
 
         </section>
@@ -3905,7 +4194,18 @@ export function App() {
                 uiFontFamily,
                 logFontSize,
                 terminalFontSize,
+                logFontFamily,
+                onLogFontFamilyChange: setLogFontFamily,
+                terminalFontFamily,
+                onTerminalFontFamilyChange: setTerminalFontFamily,
                 motionMode,
+                customImageOverlay,
+                customImageBlur,
+                dynamicBackground,
+                watermarkEnabled,
+                watermarkTemplate,
+                watermarkOpacity,
+                watermarkScope,
                 errorHighlightEnabled,
                 showPathHistory,
                 showTransferHistory,
@@ -3931,6 +4231,13 @@ export function App() {
                 onLogFontSizeChange: setLogFontSize,
                 onTerminalFontSizeChange: setTerminalFontSize,
                 onMotionModeChange: setMotionMode,
+                onCustomImageOverlayChange: setCustomImageOverlay,
+                onCustomImageBlurChange: setCustomImageBlur,
+                onToggleDynamicBackground: () => setDynamicBackground(!dynamicBackground),
+                onToggleWatermark: () => setWatermarkEnabled(!watermarkEnabled),
+                onWatermarkTemplateChange: setWatermarkTemplate,
+                onWatermarkOpacityChange: setWatermarkOpacity,
+                onWatermarkScopeChange: setWatermarkScope,
                 onResetUiPreferences: resetUiPreferences,
                 onToggleErrorHighlight: () => setErrorHighlightEnabled((current) => !current),
                 onTogglePathHistory: () => {
@@ -3975,6 +4282,21 @@ export function App() {
                   closeSettingsWorkspace();
                 },
                 onEditManualServer: editManualServerDraft,
+                onDeleteServer: requestDeleteServer,
+                /* S10：按目标服务器维护凭证——不要求先连接（清除带确认框） */
+                onFetchCredentialStatus: (targetServerId) => { void fetchCredentialStatusById(targetServerId); },
+                onSaveCredentialFor: (targetServerId) => { void saveCredentialToServer(targetServerId); },
+                onLoadCredentialSecretFor: (targetServerId) => { void loadCredentialSecretOfServer(targetServerId); },
+                onClearCredentialFor: (targetServerId) => {
+                  const targetServer = servers.find((server) => server.id === targetServerId);
+                  if (!targetServer) return;
+                  setConfirmDialog({
+                    title: "清除连接凭证",
+                    message: `确定清除"${targetServer.name}"保存的密码/私钥？\n清除后再次连接需要重新录入或重新导入。`,
+                    danger: true,
+                    onConfirm: () => { void clearCredentialOfServer(targetServerId); }
+                  });
+                },
               }}
               currentServerSection={{
                 selectedServer,
@@ -3998,7 +4320,8 @@ export function App() {
                   });
                 },
                 onTestConnection: () => { void testServerConnection(currentConnectionDirectory); },
-                onOpenTerminal: () => openTerminalView(),
+                onTestConnectionFor: (targetServerId) => { void testServerCredentialById(targetServerId); },
+                onOpenTerminal: (targetServerId) => openTerminalForServer(targetServerId),
                 availableBastions,
                 preferredBastionId,
                 jumpMode,
@@ -4158,6 +4481,16 @@ export function App() {
       {toolDrawerNode}
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} commands={paletteCommands} />
       <ImmediateTooltip />
+      {/* S14-4：水印作用范围=全局时，整屏平铺（默认关闭） */}
+      <WatermarkOverlay
+        enabled={watermarkEnabled && watermarkScope === "global"}
+        template={watermarkTemplate}
+        opacity={watermarkOpacity}
+        scope="global"
+        user={credentialUsername || selectedServer?.username || "用户"}
+        host={selectedServer?.name || selectedServer?.host || "主机"}
+        time={watermarkTimeLabel}
+      />
     </main>
   );
 }
