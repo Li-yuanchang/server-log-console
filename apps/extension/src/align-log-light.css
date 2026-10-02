@@ -76,6 +76,68 @@
   border-color: color-mix(in srgb, var(--accent) 26%, transparent);
   color: var(--ink);
 }/* ============ 5. 日志视图条合并（用户要求：1+2 合并、3+4 合并） ============ */
+/* 融合工具行（.viewer-toolbar-row）：结果页签 + 标识 + 统计 + 命中导航 + 动作组合成一行。
+   原三行（标题行 / 结果页签行 / 动作行）各自占一行、均大片留白且文件名重复，用户要求融合。 */
+.theme-modern .pip-viewer-wrap  .viewer-toolbar-row, .theme-modern .pip-viewer-root  .viewer-toolbar-row{
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 10px;
+  padding: 6px 12px;
+  min-width: 0;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+  flex: none;
+}
+/* 行内页签条去掉独立外边距/内边距，融入同一行 */
+.theme-modern .pip-viewer-wrap  .viewer-toolbar-row > .result-tab-strip, .theme-modern .pip-viewer-root  .viewer-toolbar-row > .result-tab-strip{
+  flex: 0 1 auto;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+}
+/* 命中导航与动作组靠右；标识/统计保持自然宽度可省略 */
+.theme-modern .pip-viewer-wrap  .viewer-toolbar-row > .summary-nav, .theme-modern .pip-viewer-root  .viewer-toolbar-row > .summary-nav,
+.theme-modern .pip-viewer-wrap  .viewer-toolbar-row > .viewer-action-group, .theme-modern .pip-viewer-root  .viewer-toolbar-row > .viewer-action-group{
+  flex: none;
+}
+/* 命中导航原有「flex 居中」规则写在 .toolbar-summary 作用域下（见 theme-modern.css / v2）。
+   移入新融合行后不再命中，导致箭头按钮与计数只按基线排列、垂直不居中。
+   此处为 .viewer-toolbar-row 上下文补齐同一套几何（容器 inline-flex 居中 + 计数行高居中）。 */
+.theme-modern .pip-viewer-wrap  .viewer-toolbar-row .summary-nav, .theme-modern .pip-viewer-root  .viewer-toolbar-row .summary-nav{
+  display: inline-flex;
+  align-items: center;
+  /* 箭头按钮与中间数值之间留呼吸间距（原 1px 太挤，用户要求：按钮 ⇄ 数值 分开） */
+  gap: 8px;
+}
+.theme-modern .pip-viewer-wrap  .viewer-toolbar-row .summary-nav .ghost-button, .theme-modern .pip-viewer-root  .viewer-toolbar-row .summary-nav .ghost-button{
+  width: 28px;
+  height: var(--ctl-h);
+  min-width: 28px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--panel);
+  color: var(--ink-soft);
+}
+.theme-modern .pip-viewer-wrap  .viewer-toolbar-row .summary-nav .ghost-button svg, .theme-modern .pip-viewer-root  .viewer-toolbar-row .summary-nav .ghost-button svg{
+  width: 12px;
+  height: 12px;
+}
+.theme-modern .pip-viewer-wrap  .viewer-toolbar-row .summary-nav-count, .theme-modern .pip-viewer-root  .viewer-toolbar-row .summary-nav-count{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  font-family: var(--v2-mono, var(--mono-font-family));
+  font-size: var(--fs-2xs);
+  color: var(--ink);
+  min-width: 36px;
+  text-align: center;
+}
 /* 行1+行2 合并：查看器标题条改为 flex 单行（文件名 + 摘要 + 命中导航 + 动作组），
    不再使用旧 grid 两列，也不再单独渲染「结果摘要行」。 */
 .theme-modern .pip-viewer-wrap  .viewer-actions-strip, .theme-modern .pip-viewer-root  .viewer-actions-strip{
@@ -111,3 +173,35 @@
 .theme-modern .pip-viewer-wrap  .log-view-bar > .slicebar, .theme-modern .pip-viewer-root  .log-view-bar > .slicebar{ flex: 1 1 auto; }.theme-modern .pip-viewer-wrap  .log-view-bar > .rtools, .theme-modern .pip-viewer-root  .log-view-bar > .rtools{ flex: 0 1 auto; }/* 只有一条时占满整行 */
 .theme-modern .pip-viewer-wrap  .log-view-bar > :only-child, .theme-modern .pip-viewer-root  .log-view-bar > :only-child{ flex: 1 1 auto; }/* 合并行内不用 rtools 的内部 spacer（改由两段之间的 gap 控制间距） */
 .theme-modern .pip-viewer-wrap  .log-view-bar > .rtools .rt-spacer, .theme-modern .pip-viewer-root  .log-view-bar > .rtools .rt-spacer{ flex: 0 0 0; min-width: 0; }
+
+/* ============ 5. 小窗日志区铺满（用户反馈 2026-09-30） ============
+   去掉 console 四周的边框/光圈/圆角/灰色留白，日志区直接铺满整个小窗，
+   与窗口头部连为一体；窗口底色与日志底色统一为 --panel。 */
+.pip-viewer-root {
+  background: var(--panel, #ffffff);
+}
+.pip-viewer-root .viewer-console,
+.pip-viewer-root .console-block {
+  border: none !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  margin: 0 !important;
+  padding: 10px 14px !important;
+}
+.pip-viewer-root .viewer-shell,
+.pip-viewer-root .viewer-content-shell {
+  border: none !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  gap: 0 !important;
+  background: var(--panel, #ffffff) !important;
+}
+
+/* 小窗头部背景与日志区统一（用户反馈：标题背景色找方案让其统一）。
+   头部改用 --panel（与日志区同色），仅保留一条主题分隔线作为区分。 */
+.pip-viewer-root .viewer-pip-header {
+  background: var(--panel, #ffffff);
+  border-bottom: 1px solid var(--line, #eaeaea);
+}

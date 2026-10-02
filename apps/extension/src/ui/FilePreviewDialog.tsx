@@ -247,13 +247,6 @@ export function FilePreviewDialog(props: FilePreviewDialogProps) {
   }
   const readonlyLabel = dialog.previewLabel || (dialog.fileName.endsWith(".record.log") ? "录制预览" : "尾部预览");
   const previewClassName = `dialog-shell preview-dialog${dialog.maximized ? " dialog-shell-maximized preview-dialog-maximized" : ""}${dialog.previewKind && dialog.previewKind !== "text" ? ` preview-dialog-${dialog.previewKind}` : ""}`;
-  const archiveCount = dialog.archiveInfo?.entryCount ?? dialog.archiveEntries?.length ?? 0;
-  const activeKind = dialog.previewKind ?? "text";
-  const segmentItems: Array<{ key: string; label: string; active: boolean }> = [
-    { key: "text", label: "源码", active: activeKind === "text" },
-    { key: "archive", label: `归档 · ${archiveCount} 项`, active: activeKind === "archive" },
-    { key: "class", label: "Class", active: activeKind === "class" },
-  ];
   const eol = dialog.content.includes("\r\n") ? "CRLF" : "LF";
 
   return (
@@ -296,22 +289,6 @@ export function FilePreviewDialog(props: FilePreviewDialogProps) {
           ) : null}
           {dialog.loading ? <span className="preview-loading-badge">加载中…</span> : null}
           <span className="preview-header-spacer" />
-          <div className="seg preview-view-seg" role="tablist" aria-label="预览视图">
-            {segmentItems.map((item) => (
-              <button
-                key={item.key}
-                type="button"
-                role="tab"
-                aria-selected={item.active}
-                aria-disabled={!item.active}
-                tabIndex={item.active ? 0 : -1}
-                className={item.active ? "on" : undefined}
-                title={item.active ? item.label : `${item.label}（当前文件不支持）`}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
           <div className="preview-actions">
             <button type="button" className="preview-icon-btn" title="下载" aria-label="下载" onClick={onDownload}>
               <Download size={14} strokeWidth={1.9} />

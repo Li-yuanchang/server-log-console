@@ -305,6 +305,87 @@ export function buildPreviewSearchCommand(server: ServerSummary, request: LogSea
   return `bash -lc ${shellEscape(script)}`;
 }
 
+/**
+ * grep → awk 组装器：把 `grep -b -n [-C ctx]` 的输出转成网关流式协议。
+ *
+ * 为什么要有它：全文扫描若用 awk 逐行 `index()/~` 匹配，等于让解释器扫完整个文件
+ * （几百 MB 的 catalina.out 要等很久）。grep 的定长串/正则在 C 层做了优化
+ * （Boyer-Moore / DFA），快一个数量级以上；awk 只负责"只对命中行+上下文"做协议组装，
+ * 复杂度从 O(文件行数) 降到 O(命中数)。
+ *
+ * 输入格式（GNU/BSD grep -b -n）：
+ *   命中行：`<行号>:<字节偏移>:<内容>`
+ *   上下文：`<行号>-<字节偏移>-<内容>`
+ *   分组分隔：`--`
+ * 输出：`__MATCH__` / `__CTX__` / `__PROGRESS__`（与消费端一致）。
+ */
+const GREP_ASSEMBLER_AWK = [
+  "BEGIN { lastReported = -1; reportStep = 262144; tb = total_bytes + 0; }",
+  "function emitProgress(by, ln) {",
+  "  if (lastReported < 0 || by - lastReported >= reportStep) {",
+  "    printf \"__PROGRESS__\\t%d\\t%d\\n\", by, ln;",
+  "    fflush();",
+  "    lastReported = by;",
+  "  }",
+  "}",
+  "{",
+  "  if ($0 == \"--\") next;",
+  "  if (match($0, /^[0-9]+:[0-9]+:/)) {",
+  "    hdr = substr($0, RSTART, RLENGTH - 1);",
+  "    rest = substr($0, RSTART + RLENGTH);",
+  "    split(hdr, a, \":\");",
+  "    ln = a[1] + 0; by = a[2] + 0;",
+  "    printf \"__MATCH__\\t%d\\t%s\\n\", ln, rest;",
+  "    fflush();",
+  "    emitProgress(by, ln);",
+  "  } else if (match($0, /^[0-9]+-[0-9]+-/)) {",
+  "    hdr = substr($0, RSTART, RLENGTH - 1);",
+  "    rest = substr($0, RSTART + RLENGTH);",
+  "    gsub(/-/, \" \", hdr);",
+  "    split(hdr, a, \" \");",
+  "    ln = a[1] + 0; by = a[2] + 0;",
+  "    printf \"__CTX__\\t%d\\t%s\\n\", ln, rest;",
+  "    emitProgress(by, ln);",
+  "  }",
+  "}",
+  "END { printf \"__PROGRESS__\\t%d\\t%d\\n\", tb, 0; fflush(); }"
+].join("\n");
+
+/**
+ * 判断能否用 grep 快路径：需要单次扫描即可判定命中（无时间范围、无排除、非 all 多词）。
+ * - 时间范围：需解析时间戳比较，grep 无法表达 → 回落 awk
+ * - 排除词：需在命中前二次过滤，grep -v 会打乱字节偏移语义 → 回落 awk
+ * - all 多词：需同一行的 AND，grep 单次扫描无法表达（链式 grep 会丢原始偏移）→ 回落 awk
+ */
+function canUseGrepFastScan(request: LogSearchRequest, normalizedTerms: string[], excludeTerms: string[]): boolean {
+  if (excludeTerms.length > 0) return false;
+  const { rangeStart, rangeEnd } = toIsoRange(request);
+  if (rangeStart || rangeEnd) return false;
+  if (normalizedTerms.length === 0 || normalizedTerms.length > 12) return false;
+  if ((request.keywordMode || "phrase") === "all" && normalizedTerms.length > 1) return false;
+  return true;
+}
+
+function buildGrepScanCommand(
+  filePath: string,
+  normalizedTerms: string[],
+  useRegex: boolean,
+  context: number,
+  totalBytes: number,
+  tailBytes?: number
+): string {
+  // -a 视作文本（避免 binary-file 提示）、-b 字节偏移（用于进度）、-n 行号、--line-buffered 边扫边吐
+  const grepParts = ["LC_ALL=C grep", "-a", "-b", "-n", "--line-buffered", useRegex ? "-E" : "-F"];
+  if (context > 0) grepParts.push(`-C ${Math.max(0, context)}`);
+  for (const term of normalizedTerms) grepParts.push(`-e ${shellEscape(term)}`);
+  const grepCmd = grepParts.join(" ");
+  const pipe = grepCmd + (tailBytes ? "" : ` -- ${shellEscape(filePath)}`);
+  const awkCmd = `awk -v total_bytes=${shellEscape(String(tailBytes || totalBytes || 0))} '${GREP_ASSEMBLER_AWK}'`;
+  const pipeline = `${pipe} | ${awkCmd}`;
+  const script = tailBytes ? `tail -c ${tailBytes} ${shellEscape(filePath)} | ${pipeline}` : pipeline;
+  return `bash -lc ${shellEscape(script)}`;
+}
+
 export function buildStreamingSearchCommand(server: ServerSummary, request: LogSearchRequest, totalBytes = 0, options?: { tailBytes?: number }): string {
   const context = Number.isFinite(request.contextLines) ? Math.max(0, request.contextLines ?? 0) : 0;
   const filePath = request.filePath || `${server.basePath}/catalina.out`;
@@ -315,6 +396,19 @@ export function buildStreamingSearchCommand(server: ServerSummary, request: LogS
 
   const excludeTerms = (request.excludeTerms?.filter((item) => item.trim()) ?? []).map((item) => item.trim());
   const hasExcludes = excludeTerms.length > 0;
+
+  // 快路径：单次可判定命中（无时间范围/排除/all 多词）时用 grep 预筛，避免 awk 全文件逐行匹配。
+  // 关键词/正则同样保留完整语义，只是把匹配下推到 grep 的 C 层实现。
+  if (canUseGrepFastScan(request, normalizedTerms, excludeTerms)) {
+    return buildGrepScanCommand(
+      filePath,
+      normalizedTerms,
+      Boolean(request.useRegex),
+      context,
+      options?.tailBytes || totalBytes,
+      options?.tailBytes
+    );
+  }
 
   const currentYear = new Date().getFullYear().toString();
   const awkVariables = [
