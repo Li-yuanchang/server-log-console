@@ -27,6 +27,14 @@ export type WorkspaceSession = {
   serverGroup?: string;
 };
 
+/** 终端内多标签（对应方案 §3 会话模型升级）：tabId 形如 tt-<随机>，sessionId 复用 createTerminalSessionId */
+export interface TerminalTabState {
+  tabId: string;
+  sessionId: string;
+  kind: "server" | "asset";
+  assetKeyword?: string;
+}
+
 export type WorkspaceSessionState = {
   serverId: string;
   filePath: string;
@@ -75,7 +83,11 @@ export type WorkspaceSessionState = {
   terminalPanelOpen: boolean;
   terminalDetached: boolean;
   terminalOverlay: "none" | "shortcuts" | "ai";
+  /** 旧单会话字段：仅作迁移来源与弹窗协议（openPipWindow）兼容保留，新代码读写 terminalTabs */
   terminalSessionId: string;
+  /** 终端内多标签组（每工作区独立，随上层工作区整套切换）；分屏布局不持久化（内存态） */
+  terminalTabs: TerminalTabState[];
+  activeTerminalTabId: string;
   recordingSession: LogRecordingSessionResponse | null;
   liveFollowEnabled: boolean;
   liveFollowPaused: boolean;
