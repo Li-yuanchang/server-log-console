@@ -5,6 +5,7 @@ import {
   pushTransferHistory,
   readTransferHistory,
 } from "./storage.js";
+import type { ConfirmDialogState } from "./ModalDialogs.js";
 import { copyText } from "./utils.js";
 
 export type TransferHistoryAPI = {
@@ -25,7 +26,7 @@ export function useTransferHistory(deps: {
   setActionStatus: (status: string) => void;
   pushActivity: (activity: string) => void;
   showToast: (type: "success" | "error" | "loading", message: string) => string | number;
-  setConfirmDialog: (dialog: { title: string; message: string; danger: boolean; onConfirm: () => void } | null) => void;
+  setConfirmDialog: (dialog: ConfirmDialogState | null) => void;
   setShowTransferHistory: (show: boolean) => void;
   browseLogFiles: (path: string, options?: { manual?: boolean; silent?: boolean }) => Promise<unknown>;
   isElectron: boolean;
@@ -82,8 +83,9 @@ export function useTransferHistory(deps: {
     }
     setConfirmDialog({
       title: "清空传输记录",
-      message: `确定清空当前服务器的 ${currentServerTransferHistory.length} 条传输记录？`,
+      message: `确定清空当前服务器的 ${currentServerTransferHistory.length} 条传输记录？此操作不可撤销。`,
       danger: true,
+      confirmText: "清空",
       onConfirm: () => handleClearTransferHistory(),
     });
   }, [currentServerTransferHistory.length, handleClearTransferHistory, setConfirmDialog]);

@@ -36,7 +36,8 @@
   font-weight: 700;
   color: var(--red);
   border: 1px solid color-mix(in srgb, var(--red) 32%, transparent);
-  border-radius: 999px;
+  /* 统一到按钮系统圆角（用户反馈：小窗 LIVE 需与主界面 LIVE 按钮一致） */
+  border-radius: var(--r-m, 8px);
   padding: 1px 9px;
   background: transparent;
   white-space: nowrap;
@@ -82,7 +83,7 @@
 }
 .theme-modern .rtools .rt-filter-input {
   width: 170px;
-  height: 24px;
+  height: var(--ctl-h);
   padding: 0 10px 0 28px;
   font-size: var(--fs-2xs);
   border: 1px solid var(--line);
@@ -91,21 +92,19 @@
   color: var(--ink);
   outline: none;
 }
-.theme-modern .rtools .rt-filter-input:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px var(--accent-soft);
-}
 .theme-modern .rtools .rt-filter-input::placeholder { color: var(--ink-muted); }
 
 /* 暂停 pill（原型 544）+ 断开（原型 545 .btn.sm = 高 24） */
+/* 暂停/继续 = 与同行控件统一：高度走标准控件 --ctl-h（原 24 比同行过滤框矮，用户反馈"太小气"）、圆角走主题 token。 */
 .theme-modern .rtools .pill {
-  height: 22px;
+  height: var(--ctl-h);
+  border-radius: var(--v2-radius-s, 6px);
   font-size: var(--fs-2xs);
   cursor: pointer;
 }
 .theme-modern .rtools .pill:disabled { opacity: 0.5; cursor: not-allowed; }
 .theme-modern .rtools .rt-disconnect {
-  height: 24px;
+  height: var(--ctl-h);
   padding: 0 8px;
   font-size: var(--fs-2xs);
 }
@@ -122,21 +121,25 @@
   padding: 8px 14px;
 }
 .theme-modern .slicebar .ghost-button.slim-button.slicebar-tail {
-  height: 24px;
+  height: var(--ctl-h);
   padding: 0 8px;
+  /* 圆角走主题 token（原继承 .ghost-button 的 999px 全圆角胶囊，与同行过滤框/暂停按钮不一致） */
+  border-radius: var(--v2-radius-s, 6px);
 }
-/* S4-11：状态 chip 高 19（原型内联 chip 随行高自然撑到 19；实现写死 18） */
+/* S4-11：状态 chip = 紧凑 chip；高度对齐同行控件节奏（随行高自然撑开） */
 .theme-modern .slicebar-chip {
-  height: 19px;
+  height: 22px;
 }
 
 /* ================= S6：文件浏览（原型 s6() 613-692） ============ */
 
 /* S6-20/21：工具行 = 常驻过滤输入框（原型 632：150×24）+ 上传/刷新/更多（原型 633-635）
-   返回上级按钮已移除（导航归面包屑/目录树），过滤由常驻输入框承担。 */
+   返回上级按钮已移除（导航归面包屑/目录树），过滤由常驻输入框承担。
+   注：高度统一到设计系统标准 --ctl-h（原型 24px 是按 12.5px 基准；本应用 base 更大，
+      24px 输入框与相邻 28px 按钮落差明显，用户反馈"太小气"，故对齐标准控件高度）。 */
 .theme-modern .file-browser-workbench .workspace-actions .fb-filter-input {
-  width: 150px;
-  height: 24px;
+  width: 170px;
+  height: var(--ctl-h);
   padding: 0 10px;
   font-size: var(--fs-2xs);
   border: 1px solid var(--line);
@@ -145,18 +148,14 @@
   color: var(--ink);
   outline: none;
 }
-.theme-modern .file-browser-workbench .workspace-actions .fb-filter-input:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px var(--accent-soft);
-}
 .theme-modern .file-browser-workbench .workspace-actions .fb-filter-input::placeholder { color: var(--ink-muted); }
 /* 原型工具行图标按钮 = .btn.icon.sm（28 宽 × 24 高）。
    基础 .theme-modern .icon-button 有 min-width:30px（theme-modern.css:1990），
-   须一并压掉否则宽度被锁 30。 */
+   须一并压掉否则宽度被锁 30。高度对齐标准控件 28px，与过滤框一致。 */
 .theme-modern .file-browser-workbench .workspace-actions .icon-button {
   width: 28px;
   min-width: 28px;
-  height: 24px;
+  height: var(--ctl-h);
 }
 
 /* S6-18 选中行底色 = var(--accent-soft)（原型 155：rgba(0,112,243,.08)，
@@ -200,25 +199,44 @@
 /* ================= S4 二轮（2026-09-30）：切片条吸收分页 =================
    一行式阅读进度条：‹ 翻页 | 字节区间 | 进度槽(拖拽=跳转) | %（尾页=100） | › | 跳到尾部/回头部
    调试信息（偏移/边界/切片大小）收进「更多工具」面板；状态 chip 移除。 */
+/* 翻页箭头 = 原型 .btn.icon.sm 形态（1px solid var(--line) / radius --r-s / --panel 底）。
+   高度统一到标准控件 --ctl-h，与同行实时过滤框（同为 --ctl-h）齐平；
+   否则一行里 24/28 混排、显矮（用户反馈"太小气"）。 */
 .theme-modern .slicebar .slicebar-nav {
   flex: none;
-  width: 22px;
-  min-width: 22px;
-  height: 22px;
+  width: 28px;
+  min-width: 28px;
+  height: var(--ctl-h);
   padding: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  border: 1px solid var(--line);
   border-radius: var(--r-s, 6px);
+  background: var(--panel);
+  color: var(--ink-soft);
+}
+.theme-modern .slicebar .slicebar-nav svg {
+  width: 12px;
+  height: 12px;
+}
+.theme-modern .slicebar .slicebar-nav:hover:not(:disabled) {
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 26%, transparent);
+  color: var(--ink);
+}
+.theme-modern .slicebar .slicebar-nav:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 .theme-modern .slicebar-percent {
   min-width: 44px;
   font-variant-numeric: tabular-nums;
 }
 
-/* ---- S4 二轮补：动作组入状态条 + 选中复制 pill ---- */
-/* 高频动作组（警告高亮/上下文/下载/书签/小窗/更多工具）挂在 log-view-bar 右端 */
-.theme-modern .log-view-bar > .rtools { margin-left: auto; }
+/* ---- S4 二轮补：动作组（融合工具行右端） ---- */
+/* 高频动作组（警告高亮/上下文/下载/书签/小窗/更多工具）现挂在 .viewer-toolbar-row 右端。
+   图标按钮尺寸与同行命中导航统一为 28×28（标准 --ctl-h），原 24×22 偏矮、与同行不齐。 */
 .theme-modern .viewer-action-group {
   flex: none;
   display: inline-flex;
@@ -227,9 +245,9 @@
   padding: 0;
 }
 .theme-modern .viewer-action-group .ghost-button.icon-button {
-  width: 24px;
-  min-width: 24px;
-  height: 22px;
+  width: 28px;
+  min-width: 28px;
+  height: var(--ctl-h);
   padding: 0;
   border-radius: var(--r-s, 6px);
 }
@@ -333,4 +351,79 @@
 .theme-modern .themed-select-item:disabled {
   opacity: 0.45;
   cursor: default;
+}
+
+/* 选中复制 pill：覆盖 theme-modern 的 28px 图标按钮限宽（特异性对齐） */
+.theme-modern .selection-copy-menu button,
+.theme-modern .terminal-sel-menu button {
+  width: auto;
+  min-width: 0;
+  height: 26px;
+  min-height: 26px;
+  padding: 0 12px;
+  gap: 5px;
+  white-space: nowrap;
+  font-size: var(--fs-2xs, 11px);
+  font-weight: 550;
+}
+.theme-modern .selection-copy-menu button span {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* 选中复制 pill 1:1 原型：单层扁平（去掉外层气泡 + 内层灰按钮的双层结构）
+   原型：border 1px var(--line) / radius 8 / bg var(--panel) / 10.5px / 小投影 */
+.theme-modern .selection-copy-menu.viewer-selection-menu {
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  gap: 0;
+}
+.theme-modern .selection-copy-menu.viewer-selection-menu button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: auto;
+  min-height: 0;
+  min-width: 0;
+  width: auto;
+  padding: 3px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 10.5px;
+  font-weight: 500;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.14);
+  white-space: nowrap;
+}
+.theme-modern .selection-copy-menu.viewer-selection-menu button:hover {
+  background: var(--panel-muted);
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+.theme-modern .selection-copy-menu.viewer-selection-menu button svg {
+  stroke: currentColor !important;
+  color: inherit !important;
+  opacity: 0.9;
+}
+
+/* .liveb 现同时用作可点击开关（小窗头部）：复位原生 button 默认样式，
+   并对齐主题的 hover/cursor（原规则按 <span> 设计）。 */
+button.theme-modern.liveb,
+.theme-modern button.liveb {
+  font: inherit;
+  font-size: var(--fs-2xs);
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: none;
+}
+.theme-modern button.liveb:hover:not(:disabled) {
+  background: color-mix(in srgb, currentColor 10%, transparent);
+}
+.theme-modern button.liveb:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }

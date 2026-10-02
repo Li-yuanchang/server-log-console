@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { ReactNode } from "react";
+import type { MouseEventHandler, ReactNode } from "react";
 import { ChevronDown, ChevronRight, Folder } from "lucide-react";
 import { apiListSubdirectories } from "./api.js";
 import type { DirectoryListingTarget } from "./api.js";
@@ -24,6 +24,10 @@ type Props = {
   listingTarget: DirectoryListingTarget | null;
   onBrowse: (path: string) => void;
   onOpenContextMenu: (entry: TreeColumnContextEntry, clientX: number, clientY: number) => void;
+  /* 批量条提示 ③：拖拽移动 —— 文件行拖到树节点上时回调（paths=被拖的绝对路径，targetDir=目标目录） */
+  onDropMove: (paths: string[], targetDir: string) => void;
+  /* 空白处右键菜单（树行右键自行 stopPropagation，不会触发到这里） */
+  onBlankContextMenu?: MouseEventHandler<HTMLElement>;
 };
 
 const ROOT_PATH = "/";
@@ -140,6 +144,21 @@ export function FileBrowserTreeColumn(props: Props) {
 
   const currentPath = normalizeDirectoryPath(directoryPath);
 
+  /* 拖拽移动：当前悬停的树节点（高亮用，批量条提示 ③） */
+  const [dropTargetPath, setDropTargetPath] = useState<string | null>(null);
+
+  /* 拖拽在树列外释放/被取消（dragend 不冒泡到行）时清除残留高亮 */
+  useEffect(() => {
+    if (!dropTargetPath) return;
+    const clear = () => setDropTargetPath(null);
+    window.addEventListener("dragend", clear);
+    window.addEventListener("drop", clear);
+    return () => {
+      window.removeEventListener("dragend", clear);
+      window.removeEventListener("drop", clear);
+    };
+  }, [dropTargetPath]);
+
   const renderNodeRows = (): ReactNode[] => {
     const rows: ReactNode[] = [];
     const walk = (path: string, depth: number) => {
@@ -150,8 +169,33 @@ export function FileBrowserTreeColumn(props: Props) {
       rows.push(
         <div
           key={path}
-          className={path === currentPath ? "tree-row tree-row-current" : "tree-row"}
+          className={`tree-row${path === currentPath ? " tree-row-current" : ""}${dropTargetPath === path ? " tree-row-drop-target" : ""}`}
           style={{ paddingLeft: `${8 + depth * 16}px` }}
+          onDragOver={(event) => {
+            /* 仅接受文件行发起的移动拖拽（自定义 MIME），外部文件拖拽不拦截 */
+            if (!event.dataTransfer.types.includes("application/x-slcc-move")) return;
+            event.preventDefault();
+            event.dataTransfer.dropEffect = "move";
+            event.stopPropagation();
+            if (dropTargetPath !== path) setDropTargetPath(path);
+          }}
+          onDragLeave={(event) => {
+            event.stopPropagation();
+            if (dropTargetPath === path) setDropTargetPath(null);
+          }}
+          onDrop={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            setDropTargetPath(null);
+            const raw = event.dataTransfer.getData("application/x-slcc-move");
+            if (!raw) return;
+            try {
+              const paths = JSON.parse(raw) as string[];
+              if (Array.isArray(paths) && paths.length) props.onDropMove(paths, path);
+            } catch {
+              /* 非本应用发起的拖拽数据，忽略 */
+            }
+          }}
           onContextMenu={(event) => {
             event.preventDefault();
             event.stopPropagation();
@@ -200,7 +244,7 @@ export function FileBrowserTreeColumn(props: Props) {
         <strong>{props.title}</strong>
         {props.summary ? <span>{props.summary}</span> : null}
       </div>
-      <div className="tree-list">
+      <div className="tree-list" onContextMenu={props.onBlankContextMenu}>
         {renderNodeRows()}
       </div>
     </section>

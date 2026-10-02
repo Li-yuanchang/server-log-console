@@ -1,4 +1,4 @@
-import { AlertCircle, Check, Download, Loader2, UploadCloud, X } from "lucide-react";
+import { AlertCircle, Check, Download, Loader2, X } from "lucide-react";
 
 export interface UploadProgressState {
   current: number;
@@ -34,7 +34,6 @@ export interface ToastState {
 
 interface FeedbackOverlaysProps {
   downloadProgress: DownloadProgressState | null;
-  uploadProgress: UploadProgressState | null;
   toasts: ToastState[];
   onDismissToast: (id: string) => void;
 }
@@ -57,24 +56,8 @@ function formatDuration(seconds?: number): string {
   return `${hours} 小时 ${minuteRest} 分`;
 }
 
-function stageLabel(stage?: UploadProgressState["stage"]): string {
-  if (stage === "preparing") return "准备上传";
-  if (stage === "finishing") return "正在收尾";
-  if (stage === "completed") return "上传完成";
-  return "正在上传";
-}
-
-function formatRemainingFiles(progress: UploadProgressState): string {
-  if (!progress.totalFiles || progress.totalFiles <= 1) {
-    return progress.transferMode === "local" ? "本地直传" : `${progress.total} 个任务`;
-  }
-  const remaining = Math.max(0, progress.remainingFiles ?? progress.totalFiles - (progress.fileIndex || 0));
-  const chunkText = progress.totalChunks ? ` · 分片 ${progress.chunkIndex || 0}/${progress.totalChunks}` : "";
-  return `剩余 ${remaining} 个文件${chunkText}`;
-}
-
 export function FeedbackOverlays(props: FeedbackOverlaysProps) {
-  const { downloadProgress, uploadProgress, toasts, onDismissToast } = props;
+  const { downloadProgress, toasts, onDismissToast } = props;
   const downloadEtaSeconds = downloadProgress && downloadProgress.fileSize > 0 && downloadProgress.speed > 0
     ? Math.max(0, (downloadProgress.fileSize - downloadProgress.bytesDownloaded) / downloadProgress.speed)
     : undefined;
@@ -112,30 +95,8 @@ export function FeedbackOverlays(props: FeedbackOverlaysProps) {
         </div>
       ) : null}
 
-      {uploadProgress ? (
-        <div
-          className={`upload-progress-bar upload-progress-card${uploadProgress.stage === "completed" ? " upload-progress-card-complete" : ""}`}
-          style={downloadProgress ? { bottom: 170 } : undefined}
-        >
-          <div className="upload-progress-card-head">
-            <span className="upload-progress-icon"><UploadCloud size={16} strokeWidth={2.2} /></span>
-            <div className="upload-progress-title-block">
-              <span className="upload-progress-kicker">{stageLabel(uploadProgress.stage)}</span>
-              <span className="upload-progress-text" title={uploadProgress.fileName}>{uploadProgress.fileName}</span>
-            </div>
-            <strong className="upload-progress-percent">{uploadProgress.current}%</strong>
-          </div>
-          <div className="upload-progress-track">
-            <div className="upload-progress-fill" style={{ transform: `scaleX(${uploadProgress.current / 100})` }} />
-          </div>
-          <div className="upload-progress-detail-grid">
-            <span>{formatTransferSize(uploadProgress.bytesUploaded)} / {formatTransferSize(uploadProgress.fileSize)}</span>
-            <span>{uploadProgress.speed > 0 ? `${formatTransferSize(uploadProgress.speed)}/s` : "计算速率中"}</span>
-            <span>{uploadProgress.etaSeconds ? `预计 ${formatDuration(uploadProgress.etaSeconds)}` : "预计时间计算中"}</span>
-            <span>{formatRemainingFiles(uploadProgress)}</span>
-          </div>
-        </div>
-      ) : null}
+      {/* 上传进度不再用悬浮气泡（用户反馈 2026-09-30：遮挡视线）——
+          进行中进度见传输记录抽屉「进行中」区与文件表传输列；上传开始即自动打开抽屉 */}
 
       {toasts.length > 0 ? (
         <div className="toast-container">

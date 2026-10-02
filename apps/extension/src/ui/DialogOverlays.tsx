@@ -53,6 +53,11 @@ export type DialogOverlaysProps = {
   onTransferHistoryRevealLocalPath: (path: string) => void;
   onTransferHistoryClear: () => void;
   onTransferHistoryClose: () => void;
+  /* 上传流程控制（进行中上传行的 暂停 / 继续 / 取消） */
+  uploadPaused: boolean;
+  onPauseUpload: () => void;
+  onResumeUpload: () => void;
+  onCancelUpload: () => void;
 };
 
 export function DialogOverlays(props: DialogOverlaysProps) {
@@ -104,6 +109,10 @@ export function DialogOverlays(props: DialogOverlaysProps) {
     onTransferHistoryRevealLocalPath,
     onTransferHistoryClear,
     onTransferHistoryClose,
+    uploadPaused,
+    onPauseUpload,
+    onResumeUpload,
+    onCancelUpload,
   } = props;
 
   return (
@@ -214,6 +223,10 @@ export function DialogOverlays(props: DialogOverlaysProps) {
         onRevealLocalPath={onTransferHistoryRevealLocalPath}
         onClear={onTransferHistoryClear}
         onClose={onTransferHistoryClose}
+        uploadPaused={uploadPaused}
+        onPauseUpload={onPauseUpload}
+        onResumeUpload={onResumeUpload}
+        onCancelUpload={onCancelUpload}
       />
 
       <ConfirmDialog dialog={confirmDialog} onClose={onConfirmDialogClose} />

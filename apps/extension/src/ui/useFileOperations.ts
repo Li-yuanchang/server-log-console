@@ -105,8 +105,10 @@ export function useFileOperations(deps: {
       : directoryPath;
     setConfirmDialog({
       title: `删除${targetLabel}`,
-      message: entry.kind === "directory" ? `确定删除远程目录及其内容？\n${entry.path}` : `确定删除远程文件？\n${entry.path}`,
+      message: entry.kind === "directory" ? "确定删除远程目录及其全部内容？此操作不可撤销。" : "确定删除远程文件？此操作不可撤销。",
+      target: entry.path,
       danger: true,
+      confirmText: "删除",
       onConfirm: () => {
         void withBusy(`正在删除${targetLabel} ${fileName}...`, async () => {
           await apiDeleteFile(serverId, entry.path);
@@ -179,8 +181,10 @@ export function useFileOperations(deps: {
       : `${fileCount > 0 ? `${fileCount} 个文件` : ""}${fileCount > 0 && directoryCount > 0 ? "，" : ""}${directoryCount > 0 ? `${directoryCount} 个目录` : ""}`;
     setConfirmDialog({
       title: targetCount === 1 ? `删除${entries[0].kind === "directory" ? "目录" : "文件"}` : `批量删除 ${targetCount} 项`,
-      message: targetCount === 1 ? `确定删除？\n${entries[0].path}` : `确定批量删除以下内容？\n${summary}`,
+      message: targetCount === 1 ? "确定删除？此操作不可撤销。" : "确定批量删除以下内容？此操作不可撤销。",
+      target: targetCount === 1 ? entries[0].path : summary,
       danger: true,
+      confirmText: "删除",
       onConfirm: () => {
         void deleteRemoteEntries(entries);
       }
@@ -241,7 +245,9 @@ export function useFileOperations(deps: {
         try {
           await apiRenameFile(serverId, entry.path, newPath);
         } catch (error) {
-          const detail = error instanceof Error ? error.message : "未知错误";
+          const raw = error instanceof Error ? error.message : "未知错误";
+          /* 服务端错误码人话化：SFTP rename 目标已存在时报 target-exists */
+          const detail = raw === "target-exists" ? `目标目录已存在同名文件：${entry.name}` : raw;
           throw new Error(`${detail}（已完成 ${index}/${moveTargets.length}）`);
         }
       }
@@ -346,6 +352,8 @@ export function useFileOperations(deps: {
       setConfirmDialog({
         title: "大文件预览",
         message: `文件较大（${formatBytes(sizeBytes)}），将以只读模式显示尾部内容。`,
+        target: entry.path,
+        confirmText: "继续预览",
         onConfirm: () => void doLoadFile(entry),
       });
       return;
@@ -355,6 +363,8 @@ export function useFileOperations(deps: {
       setConfirmDialog({
         title: "大文件编辑",
         message: `文件较大（${formatBytes(sizeBytes)}），加载可能需要较长时间，是否继续？`,
+        target: entry.path,
+        confirmText: "继续编辑",
         onConfirm: () => void doLoadFile(entry),
       });
       return;
