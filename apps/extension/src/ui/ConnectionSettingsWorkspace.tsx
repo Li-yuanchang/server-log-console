@@ -4,7 +4,7 @@ import type { JumpServerAssetOption, LogProfile, ServerConnectionKind, ServerCre
 import { looksLikeJumpServer } from "./terminal-utils.js";
 import { readDirectoryHistory } from "./storage.js";
 import { ThemedSelect } from "./ThemedSelect.js";
-import type { MonoFontFamily, UiBackgroundMode, UiDensity, UiFontFamily, UiMotionMode, UiSurface } from "./useUiTheme.js";
+import type { MonoFontFamily, UiBackgroundLayer, UiDensity, UiFontFamily, UiMotionMode, UiThemePreset, UiToneMode, ThemePreset, TerminalColorScheme, TerminalColorSchemeId } from "./useUiTheme.js";
 
 export type SettingsWorkspaceView = "connections" | "preferences";
 export type SettingsConnectionPane = "detail" | "form";
@@ -13,14 +13,6 @@ export type WatermarkScope = "content" | "global";
 
 /** S14：水印默认内容模板（原型 1150 行） */
 export const DEFAULT_WATERMARK_TEMPLATE = "{用户} · {主机} · {时间} 内部资料";
-
-/** S14：背景方案 4 张缩略卡（原型 1109-1117：默认/雾面/纸感/自定义） */
-const SURFACE_OPTIONS: Array<{ value: UiSurface; label: string; background: string }> = [
-  { value: "plain", label: "默认", background: "linear-gradient(180deg,#ffffff,#fafafa)" },
-  { value: "mist", label: "雾面", background: "linear-gradient(180deg,#f4f6f8,#eceff3)" },
-  { value: "paper", label: "纸感", background: "linear-gradient(180deg,#faf7f0,#f3ede1)" },
-  { value: "custom", label: "自定义", background: "linear-gradient(135deg,#eef5ff,#fff7ed)" }
-];
 
 export interface ManualServerDraft {
   id: string;
@@ -45,16 +37,23 @@ interface Props {
   preferenceSection: {
     uiTheme: "classic" | "modern";
     uiDensity: UiDensity;
-    uiSurface: UiSurface;
-    uiBackgroundMode: UiBackgroundMode;
-    customBackgroundColor: string;
-    customGradientStart: string;
-    customGradientEnd: string;
+    uiThemePreset: UiThemePreset;
+    uiToneMode: UiToneMode;
+    resolvedThemeId: UiThemePreset;
+    resolvedThemeName: string;
+    systemDark: boolean;
+    uiBackground: UiBackgroundLayer;
+    uiImgOverlay: number;
+    uiImgBlur: number;
     customBackgroundImage: string;
-    customTextColor: string;
-    customLogBackgroundColor: string;
-    customTerminalBackgroundColor: string;
+    uiTerminalScheme: TerminalColorSchemeId;
+    uiAccentOverride: string | null;
+    themePresetOptions: ThemePreset[];
+    backgroundOptions: Array<{ id: UiBackgroundLayer; name: string; desc: string }>;
+    terminalSchemeOptions: TerminalColorScheme[];
     uiFontFamily: UiFontFamily;
+    /* 界面字号（--fs-* 梯度基准，12~18）：驱动全套界面字号 token */
+    uiFontSize: number;
     logFontSize: number;
     terminalFontSize: number;
     /* S14：日志 / 终端字体族独立配置 */
@@ -63,9 +62,6 @@ interface Props {
     terminalFontFamily: MonoFontFamily;
     onTerminalFontFamilyChange: (family: MonoFontFamily) => void;
     motionMode: UiMotionMode;
-    /* S14：图片背景遮罩亮度 / 模糊、水印、动态背景（最小补充字段） */
-    customImageOverlay: number;
-    customImageBlur: number;
     dynamicBackground: boolean;
     watermarkEnabled: boolean;
     watermarkTemplate: string;
@@ -83,21 +79,19 @@ interface Props {
     onToggleActivityPanelVisible: () => void;
     onUiThemeChange: (theme: "classic" | "modern") => void;
     onUiDensityChange: (density: UiDensity) => void;
-    onUiSurfaceChange: (surface: UiSurface) => void;
-    onUiBackgroundModeChange: (mode: UiBackgroundMode) => void;
-    onCustomBackgroundColorChange: (value: string) => void;
-    onCustomGradientStartChange: (value: string) => void;
-    onCustomGradientEndChange: (value: string) => void;
+    onUiThemePresetChange: (preset: UiThemePreset) => void;
+    onUiToneModeChange: (mode: UiToneMode) => void;
+    onUiBackgroundChange: (layer: UiBackgroundLayer) => void;
+    onUiImgOverlayChange: (value: number) => void;
+    onUiImgBlurChange: (value: number) => void;
     onCustomBackgroundImageChange: (value: string) => void;
-    onCustomTextColorChange: (value: string) => void;
-    onCustomLogBackgroundColorChange: (value: string) => void;
-    onCustomTerminalBackgroundColorChange: (value: string) => void;
+    onUiTerminalSchemeChange: (scheme: TerminalColorSchemeId) => void;
+    onUiAccentOverrideChange: (accent: string | null) => void;
     onUiFontFamilyChange: (fontFamily: UiFontFamily) => void;
+    onUiFontSizeChange: (size: number) => void;
     onLogFontSizeChange: (size: number) => void;
     onTerminalFontSizeChange: (size: number) => void;
     onMotionModeChange: (mode: UiMotionMode) => void;
-    onCustomImageOverlayChange: (value: number) => void;
-    onCustomImageBlurChange: (value: number) => void;
     onToggleDynamicBackground: () => void;
     onToggleWatermark: () => void;
     onWatermarkTemplateChange: (value: string) => void;
@@ -203,19 +197,6 @@ function serviceTone(state: Props["localServiceState"]) {
   return "neutral";
 }
 
-function surfaceLabel(value: UiSurface): string {
-  if (value === "custom") return "自定义";
-  if (value === "mist") return "雾面";
-  if (value === "paper") return "纸感";
-  return "默认";
-}
-
-function backgroundModeLabel(value: UiBackgroundMode): string {
-  if (value === "solid") return "纯色";
-  if (value === "image") return "图片";
-  return "渐变";
-}
-
 function monoFontFamilyLabel(value: MonoFontFamily): string {
   if (value === "sf-mono") return "SF Mono";
   if (value === "menlo") return "Menlo";
@@ -244,6 +225,185 @@ const PREF_ANCHORS = [
   { id: "pref-overlay", label: "浮层" },
   { id: "pref-advanced", label: "高级" },
 ];
+
+/** 高级 · 强调色覆盖预设（低饱和克制色；跟随主题之外的一组快捷覆盖） */
+const ACCENT_OVERRIDES = [
+  "#0070f3", "#2563eb", "#0d9488", "#5e6ad2", "#d97706", "#8a6a3f", "#d6396f", "#18181b"
+];
+
+/* 主题卡缩略：真实界面迷你渲染（顶栏/侧栏/工具行/日志行），用主题真实 token 上色 */
+function MiniThemeWindow({ preset }: { preset: ThemePreset }) {
+  const v = preset.v;
+  const nav = [
+    { c: v.accent, w: "70%", on: true },
+    { c: v.ink, w: "52%" },
+    { c: v.ink, w: "62%" },
+    { c: v.ink, w: "44%" }
+  ];
+  const lines = [
+    { lv: "ERROR", lc: preset.sem.red, m: "sync failed: reset" },
+    { lv: "INFO", lc: v.soft, m: "retry 1/3 in 5s" },
+    { lv: "ERROR", lc: preset.sem.red, m: "failed again, giving up" },
+    { lv: "WARN", lc: preset.sem.amber, m: "mark #4821 FAILED" }
+  ];
+  return (
+    <span
+      className="slc-mini"
+      style={{
+        backgroundColor: v.bg,
+        backgroundImage: `radial-gradient(120% 100% at 14% 0%, color-mix(in srgb, ${v.accent} 14%, transparent), transparent 52%), radial-gradient(100% 80% at 96% 8%, color-mix(in srgb, #8b5cf6 8%, transparent), transparent 50%)`
+      }}
+    >
+      <span className="slc-mini-top" style={{ background: v.panel, borderColor: v.line }}>
+        <i style={{ background: v.accent }} />
+        <i style={{ background: v.lineS }} />
+        <i style={{ background: v.lineS }} />
+        <b style={{ color: v.soft }}>127.38</b>
+        <em style={{ background: preset.sem.red }}>LIVE</em>
+      </span>
+      <span className="slc-mini-main">
+        <span className="slc-mini-nav" style={{ background: v.muted, borderColor: v.line }}>
+          {nav.map((n, i) => (
+            <span key={i} className="slc-mini-navrow">
+              <i style={{ background: n.on ? v.accent : v.ink, opacity: n.on ? 1 : 0.28 }} />
+              <span style={{ width: n.w, background: n.c, opacity: n.on ? 0.8 : 0.3 }} />
+            </span>
+          ))}
+        </span>
+        <span className="slc-mini-body">
+          <span className="slc-mini-tools">
+            <i style={{ borderColor: v.line, background: v.panel }} />
+            <b style={{ background: v.accent }} />
+          </span>
+          {lines.map((l, i) => (
+            <span key={i} className="slc-mini-line">
+              <u style={{ color: v.mut }}>{`09:0${2 + (i > 1 ? 1 : 0)}`}</u>
+              <b style={{ color: l.lc }}>{l.lv}</b>
+              <span style={{ color: v.soft }}>{l.m}</span>
+            </span>
+          ))}
+        </span>
+      </span>
+    </span>
+  );
+}
+
+/** 背景层预览样式（内联复刻 theme-modern.css 的 .ui-bg-*，设置弹窗内可独立预览） */
+function previewBgStyle(preset: ThemePreset, layer: UiBackgroundLayer) {
+  const v = preset.v;
+  const ink = v.ink;
+  const a = v.accent;
+  const mix = (c: string, pct: number) => `color-mix(in srgb, ${c} ${pct}%, transparent)`;
+  const grid = `linear-gradient(${mix(ink, 9)} 1px, transparent 1px), linear-gradient(90deg, ${mix(ink, 9)} 1px, transparent 1px)`;
+  const noise = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='0.06'/%3E%3C/svg%3E")`;
+  switch (layer) {
+    case "aurora":
+      return { image: `radial-gradient(120% 90% at 14% 0%, ${mix(a, 14)}, transparent 52%), radial-gradient(100% 80% at 96% 6%, color-mix(in srgb, #8b5cf6 10%, transparent), transparent 50%)`, size: undefined };
+    case "linear":
+      return { image: `linear-gradient(135deg, color-mix(in srgb, ${a} 12%, ${v.bg}), color-mix(in srgb, ${a} 4%, ${v.bg}) 55%, ${v.bg})`, size: undefined };
+    case "grid":
+      return { image: grid, size: "22px 22px" };
+    case "dots":
+      return { image: `radial-gradient(${mix(ink, 14)} 1.4px, transparent 1.4px)`, size: "15px 15px" };
+    case "diag":
+      return { image: `repeating-linear-gradient(45deg, ${mix(ink, 7)} 0 1px, transparent 1px 13px)`, size: undefined };
+    case "noise":
+      return { image: noise, size: undefined };
+    default:
+      return { image: "none", size: undefined };
+  }
+}
+
+/** 外观节右侧实时预览：用所选主题 token + 背景层渲染的迷你工作区（弹窗不透明，故内置预览） */
+function AppearanceLivePreview({ preset, bgLayer, imgOverlay, imgBlur, bgImage }: {
+  preset: ThemePreset;
+  bgLayer: UiBackgroundLayer;
+  imgOverlay: number;
+  imgBlur: number;
+  bgImage: string;
+}) {
+  const v = preset.v;
+  const fancy = bgLayer !== "solid";
+  const solid = bgLayer === "image" || bgLayer === "solid";
+  const bg = previewBgStyle(preset, bgLayer);
+  const panePercent = fancy ? 62 : 100;
+  const pane = (base: string) => `color-mix(in srgb, ${base} ${panePercent}%, transparent)`;
+  const fallbackImg = `linear-gradient(135deg, color-mix(in srgb, ${v.accent} 34%, ${v.bg}), color-mix(in srgb, #8b5cf6 24%, ${v.bg}))`;
+  const imgUrl = bgImage ? `url("${bgImage}")` : fallbackImg;
+  const logs = [
+    { t: "09:02:11", lv: "ERROR", lc: preset.sem.red, m: "sync failed: connection reset" },
+    { t: "09:02:12", lv: "INFO", lc: v.soft, m: "retry 1/3 scheduled in 5s" },
+    { t: "09:02:16", lv: "WARN", lc: preset.sem.amber, m: "mark job #4821 as FAILED" }
+  ];
+  const dim = (pct: number) => `color-mix(in srgb, ${v.shellInk} ${pct}%, transparent)`;
+  return (
+    <div
+      className={`slc-pv-frame${fancy ? " ui-bg-fancy" : ""}`}
+      style={solid ? { backgroundColor: v.bg } : { backgroundColor: v.bg, backgroundImage: bg.image, backgroundSize: bg.size }}
+    >
+      {bgLayer === "image" ? (
+        <>
+          <div className="slc-pv-bg" style={{ backgroundImage: imgUrl, filter: `blur(${imgBlur}px)` }} />
+          <div className="slc-pv-veil" style={{ background: preset.tone === "dark" ? "#0a0a0c" : "#f8fafc", opacity: imgOverlay / 100 }} />
+        </>
+      ) : null}
+      <div className="slc-pv-top slc-pv-pane" style={{ background: pane(v.panel), borderColor: v.line }}>
+        <i style={{ background: v.accent }} />
+        <i style={{ background: v.lineS }} />
+        <i style={{ background: v.lineS }} />
+        <b style={{ color: v.soft, marginLeft: 3 }}>日志控制台 · 127.38</b>
+      </div>
+      <div className="slc-pv-main">
+        <div className="slc-pv-side slc-pv-pane" style={{ background: pane(v.muted), borderColor: v.line }}>
+          <span style={{ width: "78%", background: v.accent, opacity: 0.9 }} />
+          <span style={{ width: "60%", background: v.ink, opacity: 0.26 }} />
+          <span style={{ width: "70%", background: v.ink, opacity: 0.26 }} />
+          <span style={{ width: "50%", background: v.ink, opacity: 0.26 }} />
+        </div>
+        <div className="slc-pv-right">
+          <div className="slc-pv-tools slc-pv-pane" style={{ background: pane(v.panel), borderBottom: `1px solid ${v.line}`, padding: "6px 8px" }}>
+            <span className="s" style={{ borderColor: v.line, background: solid ? v.panel : "transparent" }} />
+            <span className="b" style={{ background: v.accent }} />
+          </div>
+          <div className="slc-pv-log" style={{ background: v.shell }}>
+            {logs.map((l, i) => (
+              <span key={i} style={{ display: "flex", gap: 6 }}>
+                <u style={{ textDecoration: "none", color: dim(42) }}>{l.t}</u>
+                <b style={{ color: l.lc }}>{l.lv}</b>
+                <span style={{ color: dim(80), overflow: "hidden", textOverflow: "ellipsis" }}>{l.m}</span>
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** 终端配色真实预览：用 scheme.theme 上色的迷你终端（替代纯渐变条） */
+function TerminalPreview({ scheme }: { scheme: TerminalColorScheme }) {
+  const t = scheme.theme;
+  return (
+    <span className="slc-term-preview" style={{ background: t.background, color: t.foreground }}>
+      <span style={{ color: t.brightBlack }}>Last login: Tue Sep 29 09:41</span>
+      <span>
+        <span style={{ color: t.green }}>root@127.38</span> systemctl status eos-server
+      </span>
+      <span>
+        <span style={{ color: t.green }}>● </span>eos-server.service <span style={{ color: t.cyan }}>active (running)</span>
+      </span>
+      <span>
+        <span style={{ color: t.red }}>09:02:11 ERROR</span> sync failed
+      </span>
+      <span>
+        <span style={{ color: t.yellow }}>09:02:16 WARN </span> mark #4821 FAILED
+      </span>
+      <span>
+        <span style={{ color: t.green }}>root@127.38</span>&nbsp;<span className="cursor" style={{ background: t.cursor }} />
+      </span>
+    </span>
+  );
+}
 
 /** S14-4：水印内容模板占位符替换（{用户} / {主机} / {时间}）。 */
 export function resolveWatermarkText(template: string, values: { user: string; host: string; time: string }): string {
@@ -655,19 +815,23 @@ export function ConnectionSettingsWorkspace(props: Props) {
                     </label>
                     <label className="settings-field">
                       <span>日志模式</span>
-                      <select value={props.connectionSection.draft.profile} onChange={(event) => props.connectionSection.onChangeDraft({ profile: event.target.value as LogProfile })}>
-                        <option value="custom">自定义</option>
-                        <option value="nginx">Nginx</option>
-                        <option value="system">系统日志</option>
-                      </select>
+                      <ThemedSelect value={props.connectionSection.draft.profile} onChange={(value) => props.connectionSection.onChangeDraft({ profile: value as LogProfile })} ariaLabel="日志模式"
+                        options={[
+                          { value: "custom", label: "自定义" },
+                          { value: "nginx", label: "Nginx" },
+                          { value: "system", label: "系统日志" }
+                        ]}
+                      />
                     </label>
                     <label className="settings-field">
                       <span>连接方式</span>
-                      <select value={props.connectionSection.draft.connectionKind} onChange={(event) => props.connectionSection.onChangeDraft({ connectionKind: event.target.value as ServerConnectionKind })}>
-                        <option value="direct">普通直连</option>
-                        <option value="bastion">堡垒机入口</option>
-                        <option value="bastion-target">经堡垒机目标机</option>
-                      </select>
+                      <ThemedSelect value={props.connectionSection.draft.connectionKind} onChange={(value) => props.connectionSection.onChangeDraft({ connectionKind: value as ServerConnectionKind })} ariaLabel="连接方式"
+                        options={[
+                          { value: "direct", label: "普通直连" },
+                          { value: "bastion", label: "堡垒机入口" },
+                          { value: "bastion-target", label: "经堡垒机目标机" }
+                        ]}
+                      />
                     </label>
                     <label className="settings-field">
                       <span>标签</span>
@@ -734,12 +898,12 @@ export function ConnectionSettingsWorkspace(props: Props) {
                             {canPickEntry ? (
                               <label className="settings-field">
                                 <span>入口账号</span>
-                                <select value={props.currentServerSection.preferredBastionId} onChange={(event) => props.currentServerSection.onPreferredBastionChange(event.target.value)}>
-                                  <option value="">自动尝试</option>
-                                  {props.currentServerSection.availableBastions.map((server) => (
-                                    <option key={server.id} value={server.id}>{server.name} · {server.username}@{server.host}:{server.port}</option>
-                                  ))}
-                                </select>
+                                <ThemedSelect value={props.currentServerSection.preferredBastionId} onChange={(value) => props.currentServerSection.onPreferredBastionChange(value)} ariaLabel="首选堡垒机"
+                                  options={[
+                                    { value: "", label: "自动尝试" },
+                                    ...props.currentServerSection.availableBastions.map((server) => ({ value: server.id, label: `${server.name} · ${server.username}@${server.host}:${server.port}` }))
+                                  ]}
+                                />
                               </label>
                             ) : null}
 
@@ -747,10 +911,12 @@ export function ConnectionSettingsWorkspace(props: Props) {
                               <div className="settings-form-grid settings-form-grid-single">
                                 <label className="settings-field">
                                   <span>JumpServer 模式</span>
-                                  <select value={props.currentServerSection.jumpMode} onChange={(event) => props.currentServerSection.onJumpModeChange(event.target.value as "auto" | "jumpserver-search")}>
-                                    <option value="auto">自动推断</option>
-                                    <option value="jumpserver-search">按关键字搜索资产</option>
-                                  </select>
+                                  <ThemedSelect value={props.currentServerSection.jumpMode} onChange={(value) => props.currentServerSection.onJumpModeChange(value as "auto" | "jumpserver-search")} ariaLabel="跳转模式"
+                                    options={[
+                                      { value: "auto", label: "自动推断" },
+                                      { value: "jumpserver-search", label: "按关键字搜索资产" }
+                                    ]}
+                                  />
                                 </label>
                                 <label className="settings-field">
                                   <span>搜索关键字</span>
@@ -898,195 +1064,156 @@ export function ConnectionSettingsWorkspace(props: Props) {
               <div className="settings-card-kicker">外观</div>
               <div className="settings-pref-card">
                 <div className="settings-pref-row">
-                  <span className="settings-pref-label"><strong>主题</strong><span>现代浅色 / 经典紧凑</span></span>
+                  <span className="settings-pref-label"><strong>主题</strong><span>{props.preferenceSection.resolvedThemeName} · 强调色随主题；「跟随系统」在同族内切明暗</span></span>
                   <span className="settings-pref-value">
                     <span className="settings-tool-switcher">
-                      <button type="button" className={props.preferenceSection.uiTheme === "modern" ? "settings-tool-chip settings-tool-chip-active" : "settings-tool-chip"} onClick={() => props.preferenceSection.onUiThemeChange("modern")}>现代</button>
-                      <button type="button" className={props.preferenceSection.uiTheme === "classic" ? "settings-tool-chip settings-tool-chip-active" : "settings-tool-chip"} onClick={() => props.preferenceSection.onUiThemeChange("classic")}>经典</button>
+                      {(["system", "light", "dark"] as UiToneMode[]).map((mode) => (
+                        <button
+                          key={mode}
+                          type="button"
+                          className={props.preferenceSection.uiToneMode === mode ? "settings-tool-chip settings-tool-chip-active" : "settings-tool-chip"}
+                          onClick={() => props.preferenceSection.onUiToneModeChange(mode)}
+                        >
+                          {mode === "system" ? "跟随系统" : mode === "light" ? "浅色" : "深色"}
+                        </button>
+                      ))}
                     </span>
                   </span>
                 </div>
-                {/* S14-1 必达：背景方案 4 张可视缩略卡（原型 1109-1117），
-                    原为 <select> 下拉。96×60 缩略卡，选中 accent 边框 + accent 文字。 */}
-                <div className="settings-pref-row settings-pref-row-wide">
-                  <span className="settings-pref-label"><strong>背景方案</strong><span>默认 / 雾面 / 纸感 / 自定义，点击缩略图直接切换</span></span>
-                  <div className="surface-thumb-row" role="radiogroup" aria-label="背景方案">
-                    {SURFACE_OPTIONS.map((option) => {
-                      const active = props.preferenceSection.uiSurface === option.value;
+                <div className="slc-appearance-cols">
+                <div className="slc-appearance-main">
+                <div className="slc-theme-grid" role="radiogroup" aria-label="内置主题">
+                  {props.preferenceSection.themePresetOptions
+                    .filter((preset) => props.preferenceSection.uiToneMode === "system" || preset.tone === props.preferenceSection.uiToneMode)
+                    .map((preset) => {
+                      const active = props.preferenceSection.resolvedThemeId === preset.id;
                       return (
                         <button
-                          key={option.value}
+                          key={preset.id}
                           type="button"
                           role="radio"
                           aria-checked={active}
-                          className={active ? "surface-thumb surface-thumb-active" : "surface-thumb"}
-                          onClick={() => props.preferenceSection.onUiSurfaceChange(option.value)}
+                          className={active ? "slc-theme-card slc-theme-card-active" : "slc-theme-card"}
+                          title={preset.desc}
+                          onClick={() => props.preferenceSection.onUiThemePresetChange(preset.id)}
                         >
-                          <span className="surface-thumb-card" style={{ background: option.background }} aria-hidden="true">
-                            <i className="surface-thumb-line surface-thumb-line-1" />
-                            <i className="surface-thumb-line surface-thumb-line-2" />
-                            <i className="surface-thumb-line surface-thumb-line-3" />
-                            <i className="surface-thumb-line surface-thumb-line-4" />
+                          <MiniThemeWindow preset={preset} />
+                          <span className="slc-theme-name">
+                            <b>{preset.name}</b>
+                            <span className={preset.tone === "dark" ? "slc-tone slc-tone-dark" : "slc-tone"}>{preset.tone === "light" ? "浅" : "深"}</span>
                           </span>
-                          <span className="surface-thumb-label">{option.label}</span>
                         </button>
                       );
                     })}
+                </div>
+                <div className="settings-pref-row settings-pref-row-wide">
+                  <span className="settings-pref-label"><strong>工作区背景</strong><span>独立于主题的一层；非纯色下面板转半透明 + 毛玻璃</span></span>
+                  <div className="slc-bg-chips" role="radiogroup" aria-label="工作区背景">
+                    {props.preferenceSection.backgroundOptions.map((layer) => (
+                      <button
+                        key={layer.id}
+                        type="button"
+                        role="radio"
+                        aria-checked={props.preferenceSection.uiBackground === layer.id}
+                        title={layer.desc}
+                        className={props.preferenceSection.uiBackground === layer.id ? "fchip fchip-on" : "fchip"}
+                        onClick={() => props.preferenceSection.onUiBackgroundChange(layer.id)}
+                      >
+                        {layer.name}
+                      </button>
+                    ))}
                   </div>
                 </div>
-                {props.preferenceSection.uiSurface === "custom" ? (
+                {props.preferenceSection.uiBackground === "image" ? (
                   <div className="settings-pref-row settings-pref-row-wide settings-theme-customizer">
                     <div className="settings-theme-customizer-head">
                       <div>
-                        <span>自定义背景 · 图片模式</span>
-                        <strong>
-                          {backgroundModeLabel(props.preferenceSection.uiBackgroundMode)}
-                          {" · "}
-                          {fontFamilyLabel(props.preferenceSection.uiFontFamily)}
-                        </strong>
+                        <span>图片背景 · 磨砂</span>
+                        <strong>遮罩与模糊实时生效</strong>
                       </div>
-                      {/* S14-2：背景模式改为 fchip（原型 1123 行「纯色 / 渐变 / 图片」） */}
-                      <span className="bg-mode-chips">
-                        {(["solid", "gradient", "image"] as UiBackgroundMode[]).map((mode) => (
-                          <button
-                            key={mode}
-                            type="button"
-                            className={props.preferenceSection.uiBackgroundMode === mode ? "fchip fchip-on" : "fchip"}
-                            onClick={() => props.preferenceSection.onUiBackgroundModeChange(mode)}
-                          >
-                            {mode === "solid" ? "纯色" : mode === "gradient" ? "渐变" : "图片"}
-                          </button>
-                        ))}
-                      </span>
                     </div>
-                    {/* S14-2 必达：图片模式下的「遮罩亮度」「背景模糊」滑杆（原型 1125-1126 行） */}
-                    {props.preferenceSection.uiBackgroundMode === "image" ? (
-                      <div className="bg-image-sliders">
-                        <label className="bg-slider-field">
-                          <span>遮罩亮度</span>
-                          <input
-                            type="range"
-                            min={0}
-                            max={90}
-                            value={props.preferenceSection.customImageOverlay}
-                            onChange={(event) => props.preferenceSection.onCustomImageOverlayChange(Number(event.target.value))}
-                          />
-                          <code>{props.preferenceSection.customImageOverlay}%</code>
-                        </label>
-                        <label className="bg-slider-field">
-                          <span>背景模糊</span>
-                          <input
-                            type="range"
-                            min={0}
-                            max={24}
-                            value={props.preferenceSection.customImageBlur}
-                            onChange={(event) => props.preferenceSection.onCustomImageBlurChange(Number(event.target.value))}
-                          />
-                          <code>{props.preferenceSection.customImageBlur}px</code>
-                        </label>
+                    <div className="bg-image-sliders">
+                      <label className="bg-slider-field">
+                        <span>遮罩亮度</span>
+                        <input
+                          type="range"
+                          min={0}
+                          max={90}
+                          value={props.preferenceSection.uiImgOverlay}
+                          onChange={(event) => props.preferenceSection.onUiImgOverlayChange(Number(event.target.value))}
+                        />
+                        <code>{props.preferenceSection.uiImgOverlay}%</code>
+                      </label>
+                      <label className="bg-slider-field">
+                        <span>背景模糊</span>
+                        <input
+                          type="range"
+                          min={0}
+                          max={24}
+                          value={props.preferenceSection.uiImgBlur}
+                          onChange={(event) => props.preferenceSection.onUiImgBlurChange(Number(event.target.value))}
+                        />
+                        <code>{props.preferenceSection.uiImgBlur}px</code>
+                      </label>
+                    </div>
+                    <div className="settings-image-field settings-field-span-2">
+                      <span>图片背景</span>
+                      <div className="settings-image-picker-row">
+                        <input
+                          value={props.preferenceSection.customBackgroundImage}
+                          onChange={(event) => props.preferenceSection.onCustomBackgroundImageChange(event.target.value)}
+                          placeholder="本地图片 / file:// / https:// / data:image"
+                        />
+                        <input
+                          ref={backgroundImageInputRef}
+                          className="settings-hidden-file-input"
+                          type="file"
+                          accept="image/*"
+                          onChange={(event) => {
+                            void handlePickBackgroundImage(event.target.files?.[0] ?? null);
+                            event.target.value = "";
+                          }}
+                        />
+                        <button
+                          type="button"
+                          className="settings-secondary-action"
+                          onClick={() => backgroundImageInputRef.current?.click()}
+                        >
+                          选择图片
+                        </button>
+                        <button
+                          type="button"
+                          className="settings-secondary-action"
+                          onClick={() => props.preferenceSection.onCustomBackgroundImageChange("")}
+                          disabled={!props.preferenceSection.customBackgroundImage}
+                        >
+                          清除
+                        </button>
                       </div>
-                    ) : null}
-                    <div className="settings-custom-theme-grid">
-                      {props.preferenceSection.uiBackgroundMode === "solid" ? (
-                        <label className="settings-color-field">
-                          <span>背景色</span>
-                          <input
-                            type="color"
-                            value={props.preferenceSection.customBackgroundColor}
-                            onChange={(event) => props.preferenceSection.onCustomBackgroundColorChange(event.target.value)}
-                          />
-                          <code>{props.preferenceSection.customBackgroundColor}</code>
-                        </label>
-                      ) : null}
-                      {props.preferenceSection.uiBackgroundMode === "gradient" ? (
-                        <>
-                          <label className="settings-color-field">
-                            <span>渐变起点</span>
-                            <input
-                              type="color"
-                              value={props.preferenceSection.customGradientStart}
-                              onChange={(event) => props.preferenceSection.onCustomGradientStartChange(event.target.value)}
-                            />
-                            <code>{props.preferenceSection.customGradientStart}</code>
-                          </label>
-                          <label className="settings-color-field">
-                            <span>渐变终点</span>
-                            <input
-                              type="color"
-                              value={props.preferenceSection.customGradientEnd}
-                              onChange={(event) => props.preferenceSection.onCustomGradientEndChange(event.target.value)}
-                            />
-                            <code>{props.preferenceSection.customGradientEnd}</code>
-                          </label>
-                        </>
-                      ) : null}
-                      {props.preferenceSection.uiBackgroundMode === "image" ? (
-                        <div className="settings-image-field settings-field-span-2">
-                          <span>图片背景</span>
-                          <div className="settings-image-picker-row">
-                            <input
-                              value={props.preferenceSection.customBackgroundImage}
-                              onChange={(event) => props.preferenceSection.onCustomBackgroundImageChange(event.target.value)}
-                              placeholder="可选择本地图片，也支持 file://、https://、data:image..."
-                            />
-                            <input
-                              ref={backgroundImageInputRef}
-                              className="settings-hidden-file-input"
-                              type="file"
-                              accept="image/*"
-                              onChange={(event) => {
-                                void handlePickBackgroundImage(event.target.files?.[0] ?? null);
-                                event.target.value = "";
-                              }}
-                            />
-                            <button
-                              type="button"
-                              className="settings-secondary-action"
-                              onClick={() => backgroundImageInputRef.current?.click()}
-                            >
-                              选择图片
-                            </button>
-                            <button
-                              type="button"
-                              className="settings-secondary-action"
-                              onClick={() => props.preferenceSection.onCustomBackgroundImageChange("")}
-                              disabled={!props.preferenceSection.customBackgroundImage}
-                            >
-                              清除
-                            </button>
-                          </div>
-                        </div>
-                      ) : null}
-                      <label className="settings-color-field">
-                        <span>字体颜色</span>
-                        <input
-                          type="color"
-                          value={props.preferenceSection.customTextColor}
-                          onChange={(event) => props.preferenceSection.onCustomTextColorChange(event.target.value)}
-                        />
-                        <code>{props.preferenceSection.customTextColor}</code>
-                      </label>
-                      <label className="settings-color-field">
-                        <span>日志/搜索背景</span>
-                        <input
-                          type="color"
-                          value={props.preferenceSection.customLogBackgroundColor}
-                          onChange={(event) => props.preferenceSection.onCustomLogBackgroundColorChange(event.target.value)}
-                        />
-                        <code>{props.preferenceSection.customLogBackgroundColor}</code>
-                      </label>
-                      <label className="settings-color-field">
-                        <span>终端背景</span>
-                        <input
-                          type="color"
-                          value={props.preferenceSection.customTerminalBackgroundColor}
-                          onChange={(event) => props.preferenceSection.onCustomTerminalBackgroundColorChange(event.target.value)}
-                        />
-                        <code>{props.preferenceSection.customTerminalBackgroundColor}</code>
-                      </label>
                     </div>
                   </div>
                 ) : null}
+                </div>
+                <aside className="slc-appearance-preview">
+                  {(() => {
+                    const resolvedPreset =
+                      props.preferenceSection.themePresetOptions.find((p) => p.id === props.preferenceSection.resolvedThemeId) ??
+                      props.preferenceSection.themePresetOptions[0];
+                    return (
+                      <>
+                        <div className="slc-pv-cap"><i />实时预览 · 主题与背景即时生效</div>
+                        <AppearanceLivePreview
+                          preset={resolvedPreset}
+                          bgLayer={props.preferenceSection.uiBackground}
+                          imgOverlay={props.preferenceSection.uiImgOverlay}
+                          imgBlur={props.preferenceSection.uiImgBlur}
+                          bgImage={props.preferenceSection.customBackgroundImage}
+                        />
+                      </>
+                    );
+                  })()}
+                </aside>
+                </div>
                 <div className="settings-pref-row">
                   <span className="settings-pref-label"><strong>界面密度</strong><span>紧凑适合小屏</span></span>
                   <span className="settings-pref-value">
@@ -1147,7 +1274,16 @@ export function ConnectionSettingsWorkspace(props: Props) {
                               ]}
                             />
                           </td>
-                          <td><span className="pill">跟随界面密度</span></td>
+                          <td>
+                            <input
+                              type="number"
+                              min={12}
+                              max={18}
+                              value={props.preferenceSection.uiFontSize}
+                              onChange={(event) => props.preferenceSection.onUiFontSizeChange(Number(event.target.value))}
+                              aria-label="界面字号"
+                            />
+                          </td>
                         </tr>
                         <tr>
                           <td>日志预览</td>
@@ -1296,38 +1432,42 @@ export function ConnectionSettingsWorkspace(props: Props) {
                 <div className="settings-pref-row">
                   <span className="settings-pref-label"><strong>日志切片</strong><span>单次加载的日志字节数</span></span>
                   <span className="settings-pref-value">
-                    <select
+                    <ThemedSelect
                       value={props.preferenceSection.sliceLengthMode === "auto" ? "auto" : String(props.preferenceSection.sliceLength)}
-                      onChange={(event) => {
-                        if (event.target.value === "auto") {
+                      onChange={(value) => {
+                        if (value === "auto") {
                           props.preferenceSection.onSliceLengthModeChange("auto");
                           return;
                         }
                         props.preferenceSection.onSliceLengthModeChange("manual");
-                        props.preferenceSection.onSliceLengthChange(Number(event.target.value));
+                        props.preferenceSection.onSliceLengthChange(Number(value));
                       }}
-                    >
-                      <option value="auto">自动</option>
-                      <option value={32768}>32 KB</option>
-                      <option value={65536}>64 KB</option>
-                      <option value={131072}>128 KB</option>
-                      <option value={262144}>256 KB</option>
-                    </select>
+                      ariaLabel="日志切片大小"
+                      options={[
+                        { value: "auto", label: "自动" },
+                        { value: "32768", label: "32 KB" },
+                        { value: "65536", label: "64 KB" },
+                        { value: "131072", label: "128 KB" },
+                        { value: "262144", label: "256 KB" }
+                      ]}
+                    />
                   </span>
                 </div>
                 <div className="settings-pref-row">
                   <span className="settings-pref-label"><strong>日志字号</strong><span>立即生效</span></span>
                   <span className="settings-pref-value">
-                    <select
+                    <ThemedSelect
                       value={String(props.preferenceSection.logFontSize)}
-                      onChange={(event) => props.preferenceSection.onLogFontSizeChange(Number(event.target.value))}
-                    >
-                      <option value="11">11px</option>
-                      <option value="12">12px</option>
-                      <option value="13">13px</option>
-                      <option value="14">14px</option>
-                      <option value="16">16px</option>
-                    </select>
+                      onChange={(value) => props.preferenceSection.onLogFontSizeChange(Number(value))}
+                      ariaLabel="日志字号"
+                      options={[
+                        { value: "11", label: "11px" },
+                        { value: "12", label: "12px" },
+                        { value: "13", label: "13px" },
+                        { value: "14", label: "14px" },
+                        { value: "16", label: "16px" }
+                      ]}
+                    />
                   </span>
                 </div>
                 {/* S14-3：日志字号已并入「外观」的字体三处独立表 */}
@@ -1344,6 +1484,29 @@ export function ConnectionSettingsWorkspace(props: Props) {
                 <div className="settings-pref-row">
                   <span className="settings-pref-label"><strong>终端选中复制</strong><span>选中即复制，右键粘贴</span></span>
                   <span className="settings-pref-value">默认开启</span>
+                </div>
+                {/* 终端配色（独立槽位，8 款）：渐变 swatch 条 = 底色→主色→成功→错误 */}
+                <div className="settings-pref-row settings-pref-row-wide">
+                  <span className="settings-pref-label"><strong>终端配色</strong><span>独立于 UI 主题；映射 xterm ITheme（前景/背景/光标/选区 + ANSI 16 色）</span></span>
+                  <div className="slc-term-grid" role="radiogroup" aria-label="终端配色">
+                    {props.preferenceSection.terminalSchemeOptions.map((scheme) => {
+                      const active = props.preferenceSection.uiTerminalScheme === scheme.id;
+                      return (
+                        <button
+                          key={scheme.id}
+                          type="button"
+                          role="radio"
+                          aria-checked={active}
+                          title={scheme.desc}
+                          className={active ? "slc-term-card slc-term-card-active" : "slc-term-card"}
+                          onClick={() => props.preferenceSection.onUiTerminalSchemeChange(scheme.id)}
+                        >
+                          <TerminalPreview scheme={scheme} />
+                          <span className="slc-term-name">{scheme.name}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             </section>
@@ -1383,6 +1546,38 @@ export function ConnectionSettingsWorkspace(props: Props) {
             <section id="pref-advanced" data-anchor className="settings-pref-section">
               <div className="settings-card-kicker">高级</div>
               <div className="settings-pref-card">
+                <div className="settings-pref-row settings-pref-row-wide">
+                  <span className="settings-pref-label"><strong>强调色覆盖</strong><span>默认跟随主题；on-accent 黑白按对比度自动派生</span></span>
+                  <span className="slc-accent-row">
+                    <button
+                      type="button"
+                      className={props.preferenceSection.uiAccentOverride === null ? "csw csw-on" : "csw"}
+                      title="跟随主题"
+                      onClick={() => props.preferenceSection.onUiAccentOverrideChange(null)}
+                    >
+                      <i style={{ background: "color-mix(in srgb, var(--accent) 40%, transparent)" }} />
+                    </button>
+                    {ACCENT_OVERRIDES.map((accent) => (
+                      <button
+                        key={accent}
+                        type="button"
+                        className={props.preferenceSection.uiAccentOverride?.toLowerCase() === accent ? "csw csw-on" : "csw"}
+                        style={{ color: accent }}
+                        title={accent}
+                        onClick={() => props.preferenceSection.onUiAccentOverrideChange(accent)}
+                      >
+                        <i style={{ background: accent }} />
+                      </button>
+                    ))}
+                    <label className="settings-color-field slc-accent-custom">
+                      <input
+                        type="color"
+                        value={props.preferenceSection.uiAccentOverride ?? "#0070f3"}
+                        onChange={(event) => props.preferenceSection.onUiAccentOverrideChange(event.target.value)}
+                      />
+                    </label>
+                  </span>
+                </div>
                 <button type="button" className="settings-pref-row settings-pref-row-click settings-pref-reset" onClick={props.preferenceSection.onResetUiPreferences}>
                   <span className="settings-pref-label"><strong>恢复默认显示</strong><span>重置主题、背景、字号等显示偏好</span></span>
                   <span className="settings-pref-value">重置</span>

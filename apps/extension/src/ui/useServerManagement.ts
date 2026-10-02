@@ -233,8 +233,10 @@ export function useServerManagement(deps: {
   const requestDeleteServer = useCallback((targetServer: ServerSummary) => {
     setConfirmDialog({
       title: "删除服务器",
-      message: `确定删除服务器"${targetServer.name}"？\n${targetServer.username}@${targetServer.host}:${targetServer.port}`,
+      message: `确定删除服务器「${targetServer.name}」？删除后需重新添加并配置凭证。`,
+      target: `${targetServer.username}@${targetServer.host}:${targetServer.port}`,
       danger: true,
+      confirmText: "删除",
       onConfirm: () => {
         void deleteServerRecord(targetServer);
       }

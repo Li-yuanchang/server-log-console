@@ -165,13 +165,7 @@
   white-space: pre-wrap;
   overflow-y: auto;
 }
-/* 选中框收敛：1px 描边 + 2px 浅色光环（覆盖全局粗环，设置中心所有输入框统一） */
-.theme-modern .settings-exclusive input:focus,
-.theme-modern .settings-exclusive textarea:focus,
-.theme-modern .settings-exclusive select:focus {
-  border-width: 1px;
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent, #8a6d3b) 14%, transparent);
-}
+
 .theme-modern .settings-exclusive .credential-inline-row > input {
   flex: 1;
   min-width: 0;
@@ -607,7 +601,7 @@
 }
 
 /* S14-5：动态背景（Ken Burns，动效=减少时 class 不挂载） */
-.theme-modern.ui-surface-custom.ui-custom-background-image.ui-dynamic-background .shell-layout {
+.theme-modern.ui-bg-image.ui-dynamic-background .shell-layout {
   animation: slc-dyn-bg 26s ease-in-out infinite alternate;
 }
 @keyframes slc-dyn-bg {
@@ -637,7 +631,7 @@
 }
 .theme-modern .settings-exclusive .conn-list-search .conn-list-add {
   flex: none;
-  height: 24px;
+  height: var(--ctl-h);
   padding: 0 9px;
   font-size: 11px;
 }
@@ -808,3 +802,272 @@
 .theme-modern .settings-exclusive .conn-entry-note {
   margin: 0 20px 12px;
 }
+
+/* ============================================================
+   主题系统（2026-10 定稿）：主题网格 / 迷你缩略 / 背景 chips / 终端配色
+   全部消费 token，自动跟随 8 套主题（含深色）。
+   ============================================================ */
+
+/* 主题网格：紧凑 3 列；卡 = 真实界面缩略 + 名称 + 明暗角标 */
+.slc-theme-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  width: 100%;
+}
+
+.slc-theme-card {
+  display: block;
+  width: 100%;
+  padding: 6px;
+  text-align: left;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.slc-theme-card:hover { border-color: var(--line-strong); }
+.slc-theme-card-active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+/* 迷你窗口：等比真实界面缩略 */
+.slc-mini {
+  display: flex;
+  flex-direction: column;
+  height: 88px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.slc-mini-top {
+  display: flex; align-items: center; gap: 3px;
+  height: 13px; padding: 0 6px; flex: none;
+  border-bottom: 1px solid var(--line);
+}
+.slc-mini-top i { width: 4px; height: 4px; border-radius: 50%; }
+.slc-mini-top b { font-size: var(--fs-2xs); margin-left: 3px; font-weight: 600; white-space: nowrap; overflow: hidden; }
+.slc-mini-top em {
+  margin-left: auto; font-style: normal; font-size: 8px; font-weight: 700;
+  color: #fff; padding: 0 4px; border-radius: 999px; line-height: 12px;
+}
+.slc-mini-main { flex: 1; display: flex; min-height: 0; }
+.slc-mini-nav {
+  width: 30%; flex: none; padding: 5px;
+  display: flex; flex-direction: column; gap: 4px;
+  border-right: 1px solid var(--line);
+}
+.slc-mini-navrow { display: flex; align-items: center; gap: 3px; }
+.slc-mini-navrow i { width: 4px; height: 4px; border-radius: 1px; flex: none; }
+.slc-mini-navrow span { height: 3px; border-radius: 2px; display: block; }
+.slc-mini-body { flex: 1; min-width: 0; padding: 5px 6px; display: flex; flex-direction: column; gap: 3px; }
+.slc-mini-tools { display: flex; align-items: center; gap: 4px; flex: none; }
+.slc-mini-tools i { flex: 1; height: 8px; border: 1px solid; border-radius: 3px; }
+.slc-mini-tools b { width: 30%; height: 8px; border-radius: 3px; flex: none; }
+.slc-mini-line {
+  display: flex; align-items: center; gap: 3px;
+  font-family: var(--mono); font-size: 8px; line-height: 1.5;
+  white-space: nowrap; overflow: hidden;
+}
+.slc-mini-line u { text-decoration: none; flex: none; }
+.slc-mini-line b { font-weight: 700; flex: none; }
+.slc-mini-line span { overflow: hidden; text-overflow: ellipsis; }
+
+.slc-theme-name { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
+.slc-theme-name b { font-size: var(--fs-xs); }
+.slc-tone {
+  margin-left: auto; font-size: var(--fs-2xs); padding: 0 5px;
+  border-radius: 999px; border: 1px solid var(--line); color: var(--ink-muted); flex: none;
+}
+.slc-tone-dark { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 35%, transparent); }
+
+/* 背景 chips */
+.slc-bg-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* 终端配色 gallery */
+.slc-term-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  width: 100%;
+}
+.slc-term-card {
+  padding: 7px;
+  text-align: left;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.slc-term-card:hover { border-color: var(--line-strong); }
+.slc-term-card-active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.slc-term-bar { display: block; height: 18px; border-radius: 5px; margin-bottom: 5px; }
+.slc-term-card b { font-size: var(--fs-2xs); font-weight: 600; color: var(--ink-soft); }
+
+/* 高级 · 强调色覆盖圆卡（描边环选中态） */
+.slc-accent-row { display: inline-flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+.csw {
+  width: 24px; height: 24px; border-radius: 50%;
+  border: none; cursor: pointer; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: transparent; background: transparent;
+}
+.csw i { width: 16px; height: 16px; border-radius: 50%; display: block; }
+.csw-on { box-shadow: 0 0 0 2px var(--panel), 0 0 0 4px currentColor; }
+.slc-accent-custom { margin: 0; }
+.slc-accent-custom input {
+  width: 30px; height: 24px; padding: 1px;
+  border: 1px solid var(--line); border-radius: 6px; background: none; cursor: pointer;
+}
+
+@media (max-width: 1100px) {
+  .slc-theme-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .slc-term-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* 卡片类按钮脱离控件几何刻度（:where(.theme-modern) button 的 28px 高度会压扁卡片） */
+.slc-theme-card,
+.slc-term-card {
+  height: auto;
+  min-height: 0;
+  line-height: normal;
+}
+
+/* ============================================================
+   修复（2026-10-02）：①主题网格左右呼吸间距 ②终端配色真实预览卡
+   ③外观节实时预览面板（背景/主题选了能看见效果）
+   ============================================================ */
+
+/* ① 主题网格左右呼吸间距（此前是 .settings-pref-card 直接子元素，padding 为 0 → 贴左） */
+.slc-theme-grid {
+  padding: 12px 20px;
+  box-sizing: border-box;
+}
+
+/* ③ 外观节：左配置 + 右常驻实时预览 */
+.slc-appearance-cols {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  padding: 0 20px 12px;
+  box-sizing: border-box;
+}
+.slc-appearance-cols .slc-appearance-main {
+  flex: 1;
+  min-width: 0;
+}
+.slc-appearance-preview {
+  flex: 0 0 340px;
+  min-width: 0;
+  position: sticky;
+  top: 8px;
+}
+.slc-pv-cap {
+  font-size: var(--fs-2xs);
+  color: var(--ink-muted);
+  padding: 2px 0 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.slc-pv-cap i {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--green-dot);
+  animation: pl 1.4s infinite;
+}
+/* 预览窗体：背景层 + 半透明面板（与主界面消费同一组 token/机制） */
+.slc-pv-frame {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 300px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  background-color: var(--panel);
+}
+.slc-pv-frame.ui-bg-fancy .slc-pv-pane {
+  backdrop-filter: blur(14px) saturate(1.05);
+  -webkit-backdrop-filter: blur(14px) saturate(1.05);
+}
+.slc-pv-top {
+  flex: none; height: 26px;
+  display: flex; align-items: center; gap: 5px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--line);
+  font-size: var(--fs-2xs);
+}
+.slc-pv-top i { width: 7px; height: 7px; border-radius: 50%; }
+.slc-pv-main { flex: 1; display: flex; min-height: 0; }
+.slc-pv-side {
+  width: 32%; flex: none;
+  border-right: 1px solid var(--line);
+  padding: 7px 6px;
+  display: flex; flex-direction: column; gap: 5px;
+}
+.slc-pv-side span { height: 4px; border-radius: 2px; display: block; }
+.slc-pv-body { flex: 1; min-width: 0; padding: 7px 9px; display: flex; flex-direction: column; gap: 4px; }
+.slc-pv-tools { display: flex; align-items: center; gap: 5px; flex: none; }
+.slc-pv-tools .s { flex: 1; height: 10px; border: 1px solid var(--line); border-radius: 3px; }
+.slc-pv-tools .b { height: 10px; width: 28%; border-radius: 3px; flex: none; }
+.slc-pv-log {
+  flex: 1; min-height: 0; overflow: hidden;
+  font-family: var(--mono); font-size: var(--fs-2xs); line-height: 1.7;
+  display: flex; flex-direction: column; gap: 1px;
+}
+
+/* ② 终端配色真实预览卡（不再是纯渐变条） */
+.slc-term-card {
+  padding: 0;
+  overflow: hidden;
+}
+.slc-term-preview {
+  font-family: var(--mono);
+  font-size: 9px;
+  line-height: 1.5;
+  padding: 6px 8px 7px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-height: 62px;
+}
+.slc-term-preview span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.slc-term-preview .cursor {
+  display: inline-block; width: 5px; height: 9px;
+  vertical-align: -1px;
+  animation: pl 1s steps(1) infinite;
+}
+.slc-term-name {
+  display: block;
+  padding: 5px 8px 6px;
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+  color: var(--ink-soft);
+  border-top: 1px solid var(--line);
+}
+
+/* 修正：外观节两栏布局的内边距归位（theme-grid 自带 12px 20px；预览列自带右距） */
+.slc-appearance-cols {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  padding: 0;
+}
+.slc-appearance-main { flex: 1; min-width: 0; }
+.slc-appearance-preview {
+  flex: 0 0 320px;
+  min-width: 0;
+  position: sticky;
+  top: 8px;
+  padding: 12px 20px 12px 0;
+  box-sizing: border-box;
+}
+.slc-pv-bg { position: absolute; inset: -14px; z-index: 0; background-size: cover; background-position: center; }
+.slc-pv-veil { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
+.slc-pv-frame > *:not(.slc-pv-bg):not(.slc-pv-veil) { position: relative; z-index: 1; }
+.slc-pv-right { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.slc-pv-log { flex: 1; min-height: 0; overflow: hidden; padding: 6px 8px; }

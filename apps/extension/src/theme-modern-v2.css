@@ -105,10 +105,6 @@
   color: var(--ink);
   box-shadow: none;
 }
-.theme-modern .command-input:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px var(--accent-soft);
-}
 .theme-modern .command-input::placeholder { color: var(--ink-muted); }
 
 .theme-modern .kbd {
@@ -670,7 +666,8 @@
 .theme-modern .file-table-head .file-th,
 .theme-modern .file-table-head th,
 .theme-modern .file-table-head [class*="head-cell"] {
-  font-size: var(--fs-2xs);
+  /* 表头档 --fs-xs（12px）：与 .table-head-button 同档，传输进度等 head-cell 一并对齐 */
+  font-size: var(--fs-xs);
   font-weight: 600;
   color: var(--ink-soft);
 }
@@ -820,8 +817,9 @@
 .theme-modern .keyword-input-kbd {
   position: absolute;
   right: 10px;
-  top: 50%;
-  transform: translateY(-50%);
+  /* 垂直居中用 top 计算而非 translateY(-50%)：全局 `.theme-modern button:active { transform: none }`
+     会在按下瞬时抹掉 translateY，导致按钮往下跳。固定 18px 高 → 上移 9px。 */
+  top: calc(50% - 9px);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -905,6 +903,19 @@
   background: var(--accent-soft);
   box-shadow: inset 2px 0 0 var(--accent);
 }
+/* 拖拽移动的落点高亮（批量条提示 ③）：悬停节点描边强调，
+   可与当前目录态叠加（拖到当前目录合法：可拖入其他文件） */
+.theme-modern .tree-row.tree-row-drop-target {
+  outline: 2px dashed color-mix(in srgb, var(--accent) 55%, transparent);
+  outline-offset: -2px;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+/* 文件列表内的文件夹行同为有效落点（用户实测把文件拖向列表而非树） */
+.theme-modern .file-row.file-row-drop-target {
+  outline: 2px dashed color-mix(in srgb, var(--accent) 55%, transparent);
+  outline-offset: -2px;
+  background: color-mix(in srgb, var(--accent) 10%, transparent) !important;
+}
 .theme-modern .tree-tw {
   display: flex;
   align-items: center;
@@ -946,26 +957,30 @@
   flex: none;
   margin-left: auto;
   font-family: var(--v2-mono);
-  font-size: var(--fs-2xs);
+  /* 与树名同行，字号必须一致：走「表头」档 --fs-xs（用户反馈 2026-09-30：
+     树行文字与表头/文件名统一 12px，不再用极小档） */
+  font-size: var(--fs-xs);
   color: var(--ink-muted);
 }
 
 /* === 日志行时间戳列 === */
-/* 对齐 prototype .ll：时间戳 muted 灰列 148px（flex）+ 内容列；命中行左 2px 蓝条；mark 无背景下划线 */
-.theme-modern .log-line {
-  --log-time-col-w: 148px;   /* 时间戳内容宽（原型值，等宽字符对齐） */
-  --log-time-gap: 12px;      /* 时间戳与正文之间的呼吸间距（原型 148px 列宽在完整时间戳下只剩 0.8px） */
-}
-/* 有时间戳的行：时间列（muted 等宽、固定 148px）+ 内容列，基线对齐 */
-.theme-modern .log-line-ts {
+/* 时间列宽自适应：--log-time-ch 由 VirtualLogViewer 按当前内容里最长的时间戳写到容器上
+   （单位 ch，在 .log-line-time 自身等宽字体上解析，日志字号/字体族设置变化也不会溢出），
+   缺省 23 字符 = 完整日期时间（2026-09-20 16:55:16.793）。整个内容都没有行首时间戳时
+   JS 置 0 并把 gap 归零，行首不再保留固定列宽留白（如 access.log 时间在行中提取不了的场景）。
+   注意：变量默认值只能放 var() fallback，不能在 .log-line 上重声明——否则会盖掉容器注入值。 */
+/* 时间列（muted 等宽）+ 内容列，基线对齐；无时间戳行（堆栈 at ...、空行）渲染同样的
+   空时间占位，正文对齐上一条记录的内容列，不再用整行 padding 缩进 */
+.theme-modern .log-line-ts,
+.theme-modern .log-line-no-time {
   display: flex;
   align-items: baseline;
 }
 .theme-modern .log-line .log-line-time {
-  flex: 0 0 calc(var(--log-time-col-w) + var(--log-time-gap));
-  width: calc(var(--log-time-col-w) + var(--log-time-gap));
+  flex: 0 0 calc(var(--log-time-ch, 23) * 1ch + var(--log-time-gap, 12px));
+  width: calc(var(--log-time-ch, 23) * 1ch + var(--log-time-gap, 12px));
   box-sizing: border-box;
-  padding-right: var(--log-time-gap);
+  padding-right: var(--log-time-gap, 12px);
   color: var(--shell-mut);
   font-size: calc(var(--log-font-size, 12px) - 1px);
   letter-spacing: -0.2px;
@@ -976,14 +991,31 @@
   flex: 1 1 auto;
   min-width: 0;
 }
-/* 无时间戳行（堆栈 at ...、空行）：不拆列，整行缩进挂在内容列下（行内边距 10px + 148px 列宽） */
-.theme-modern .log-line-no-time {
-  padding-left: calc(var(--log-time-col-w) + var(--log-time-gap) + 10px);
+/* 聚焦/书签行 3px 左边框回吐：border(3px) + padding(7px) = 基线 10px，所有行内容列对齐 */
+.theme-modern .log-line-focus,
+.theme-modern .log-line-bookmarked {
+  padding-left: 7px;
 }
-/* 聚焦/书签行带 3px 左边框，缩进回吐 3px 保持内容列对齐 */
-.theme-modern .log-line-no-time.log-line-focus,
-.theme-modern .log-line-no-time.log-line-bookmarked {
-  padding-left: calc(var(--log-time-col-w) + 7px);
+/* 检索结果行（variant=results）：行号列（muted、右对齐）+ 内容列。
+   结果行没有时间戳，148px 时间列只会形成大片空白；改为行号列，
+   保留 Ctrl/Cmd 点击跳转原日志的定位锚（原型 .ll 的固定 meta 列 + 内容列语言）。 */
+.theme-modern .log-line-results {
+  --log-num-col-w: 64px;     /* 行号列内容宽（右对齐，容纳 9 位行号） */
+  --log-num-gap: 14px;       /* 行号与正文之间的呼吸间距 */
+  display: flex;
+  align-items: baseline;
+}
+.theme-modern .log-line .log-line-num {
+  flex: 0 0 auto;
+  min-width: calc(var(--log-num-col-w) + var(--log-num-gap));
+  box-sizing: border-box;
+  padding-right: var(--log-num-gap);
+  text-align: right;
+  color: var(--shell-mut);
+  font-size: calc(var(--log-font-size, 12px) - 1px);
+  letter-spacing: -0.2px;
+  white-space: pre;
+  user-select: text;
 }
 /* 命中行：左侧 2px 蓝条（prototype .ll.hit） */
 .theme-modern .log-line-hit {
@@ -1094,12 +1126,6 @@
   font-size: var(--fs-sm);
   padding: 0 8px;
   min-width: 0;
-}
-.theme-modern .advanced-strip-drawer select:focus,
-.theme-modern .advanced-strip-drawer input:focus {
-  outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px var(--accent-soft);
 }
 .theme-modern .advanced-strip-drawer input::placeholder { color: var(--ink-muted); }
 .theme-modern .advanced-strip-drawer .regex-pill {
@@ -1309,13 +1335,6 @@
   min-width: 0;
 }
 .theme-modern .xdrawer textarea { height: auto; padding: 6px 8px; }
-.theme-modern .xdrawer input:focus,
-.theme-modern .xdrawer select:focus,
-.theme-modern .xdrawer textarea:focus {
-  outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px var(--accent-soft);
-}
 
 /* ============================================================
    19. S6/S3 精修：呼吸间距 · 路径面包屑 chips · 批量条横跨 · 抽屉表单
@@ -1371,29 +1390,39 @@
   min-width: 0;
 }
 
-/* 3) 批量条横跨双列（列头对齐，勾选不再产生落差；browser-grid 实际为 flex，有批量条时开启换行：
-      第一行 = 批量条(全宽)，第二行 = 树列 + 分隔 + 内容列。
-      align-content 必须是 flex-start：stretch 会把容器剩余高度灌进批量条行，小窗口/短列表时批量条被撑到上百像素 */
-/* 批量条已移入文件列表头槽位（不再作为 .browser-grid 的子元素），
-   故原先为容纳它而开启的换行布局不再需要，.browser-grid 恢复单行 flex。 */
+/* 3) 批量条承接「目录树｜目录内容」标题行（用户决策 2026-09-30）：
+      绝对定位覆盖层，作为 .browser-grid（position:relative）的子元素钉在网格顶部，
+      高度精确等于列头行 34px（含 1px 底边框），勾选时盖住两个列头行、取消时露出；
+      不占文档流 → 勾选/取消几何零变化，屏幕不抖动。原型 .batchbar 即此位置。 */
 .theme-modern .file-batch-span {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  /* 34px = 列头行高度（.browser-column-head height:34px） */
+  height: 34px;
   min-width: 0;
+  z-index: 5;
+  box-sizing: border-box;
 }
 .theme-modern .file-batch-span .file-batch-actions {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: var(--accent-soft) !important;
+  /* 不透明底：panel 实底 + accent-soft 半透明叠加（纯 accent-soft 是半透明的，
+     会透出被覆盖的「目录树｜目录内容」标题文字） */
+  background-color: var(--panel) !important;
+  background-image: linear-gradient(var(--accent-soft), var(--accent-soft)) !important;
   border: none !important;
   border-bottom: 1px solid color-mix(in srgb, var(--accent) 22%, transparent) !important;
   border-radius: 0 !important;
-  /* 原型 .batchbar: padding:6px 12px（此前 14px，右缘与表头/行内 12px 网格不齐） */
-  padding: 6px 12px !important;
-  min-height: 36px;
-  /* 关键：批量条高度恒定，不随容器剩余高度拉伸（短窗口下不再出现大空白） */
-  height: auto !important;
+  /* 4px 上下内边距 + 26px 文字按钮 = 34px，恰好等于列头行高度（按钮不溢出） */
+  padding: 4px 12px !important;
+  min-height: 34px;
+  height: 34px !important;
+  box-sizing: border-box;
+  /* 高度恒定 34px，不随内容拉伸（与列头行完全一致） */
   flex-grow: 0 !important;
-  align-self: flex-start !important;
 }
 .theme-modern .file-batch-span .file-batch-summary { font-size: var(--fs-xs); color: var(--ink); flex: 1 1 auto !important; min-width: 0 !important; max-width: none !important; overflow: visible !important; }
 .theme-modern .file-batch-span .file-batch-actions .ghost-button { margin-left: 0 !important; }
@@ -1676,63 +1705,69 @@
   min-height: 0;
 }
 
-/* ---------- 22. S7 文件预览：整体深色（头部/搜索/页脚与代码区连成一体） ---------- */
+/* ---------- 22. S7 文件预览（含录制结束预览）：跟随主题浅色 ----------
+   用户决策 2026-09-30：预览弹窗（file preview / 录制预览）不再做独立深色，
+   头/搜索/页脚/内容区全部走主题令牌，与主界面同源、随主题变化。
+   注：代码内容区为浅色（见 align-s7-s8.css S7 段），此处仅收口外框与控件。 */
 .theme-modern .preview-dialog,
 .theme-modern .preview-dialog-archive,
 .theme-modern .preview-dialog-class {
-  border: 1px solid color-mix(in srgb, var(--ink) 18%, transparent);
-  border-radius: 10px;
-  background: var(--shell, #0b0e11);
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.42);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel-strong);
+  box-shadow: var(--v2-shadow-pop, 0 24px 70px rgba(15, 23, 42, 0.28));
+  color: var(--ink);
 }
 .theme-modern .preview-header {
   border-bottom: 1px solid var(--line);
-  background: var(--terminal-background, var(--shell));
+  background: var(--panel);
 }
 .theme-modern .preview-title {
-  color: var(--shell-ink, #e8edf3);
+  color: var(--ink);
 }
 .theme-modern .preview-meta {
-  color: var(--shell-mut);
+  color: var(--ink-muted);
 }
+/* 徽标统一：描边 + 文字着色，无实心填充（与全局 .chip 规范一致） */
 .theme-modern .preview-readonly-badge {
-  color: #d9b06c;
-  background: rgba(217, 176, 108, 0.14);
+  color: var(--ink-muted);
+  border: 1px solid var(--line);
 }
 .theme-modern .preview-loading-badge {
-  color: #8fc1e8;
-  background: rgba(143, 193, 232, 0.14);
+  color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
 }
 .theme-modern .preview-dirty {
-  color: #e8a04c;
-  background: rgba(232, 160, 76, 0.14);
+  color: var(--amber, #b45309);
+  border: 1px solid color-mix(in srgb, var(--amber, #b45309) 30%, transparent);
 }
 .theme-modern .preview-dialog-archive .preview-readonly-badge {
-  color: #6fd3c0;
-  background: rgba(111, 211, 192, 0.14);
+  color: var(--green, #0a7b3e);
+  border-color: color-mix(in srgb, var(--green, #0a7b3e) 30%, transparent);
 }
 .theme-modern .preview-dialog-class .preview-readonly-badge {
-  color: #8fb7f5;
-  background: rgba(143, 183, 245, 0.14);
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 30%, transparent);
 }
-/* 头部按钮（下载/搜索/保存/最大化/关闭） */
+/* 头部按钮（下载/搜索/保存/最大化/关闭）走主题 ghost 形态 */
 .theme-modern .preview-save-btn,
 .theme-modern .preview-maximize-btn,
 .theme-modern .preview-close {
-  border: 1px solid color-mix(in srgb, var(--ink) 16%, transparent);
-  background: transparent;
-  color: var(--shell-ink, #e8edf3);
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--ink-soft);
 }
 .theme-modern .preview-save-btn:hover,
 .theme-modern .preview-maximize-btn:hover,
 .theme-modern .preview-close:hover {
-  background: color-mix(in srgb, var(--ink) 10%, transparent);
+  background: var(--panel-muted);
+  color: var(--ink);
 }
 .theme-modern .preview-save-btn-disabled {
   opacity: 0.45;
   cursor: not-allowed;
 }
-/* 页脚：编码/大小/行数/EOL 信息（原型 S7） */
+/* 页脚：编码/大小/行数/EOL 信息 */
 .theme-modern .preview-footer {
   display: flex;
   align-items: center;
@@ -1741,8 +1776,8 @@
   padding: 0 14px;
   flex: none;
   border-top: 1px solid var(--line);
-  background: var(--terminal-background, var(--shell));
-  color: var(--shell-mut);
+  background: var(--panel);
+  color: var(--ink-muted);
   font-size: var(--fs-2xs);
   font-family: var(--v2-mono);
   white-space: nowrap;
@@ -1758,14 +1793,14 @@
   width: 1px;
   height: 12px;
   flex: none;
-  background: color-mix(in srgb, var(--ink) 14%, transparent);
+  background: var(--line);
 }
 .theme-modern .preview-footer-spacer { flex: 1; }
 .theme-modern .preview-footer-hint { opacity: 0.75; }
-/* 归档/Class 结构化预览同框架深色 */
+/* 归档/Class 结构化预览同用主题面板 */
 .theme-modern .preview-dialog .structured-preview {
-  background: var(--terminal-background, var(--shell));
-  color: var(--shell-ink, #dbe5f1);
+  background: var(--panel);
+  color: var(--ink);
 }
 
 /* ---------- 23. S6 文件浏览打磨（对齐原型） ---------- */
@@ -1788,9 +1823,42 @@
 }
 .theme-modern .file-browser-workbench .workspace-pathbar { flex: 0 1 auto; min-width: 0; max-width: 60%; }
 .theme-modern .file-browser-workbench .workspace-pathbar > * { flex: 0 1 auto; width: auto; }
-/* 图标组靠右：与路径呈左右布局（原型 tbar 的 flex:1 撑开效果） */
-.theme-modern .file-browser-workbench .workspace-actions { gap: 2px; margin-left: auto; }
+/* 图标组靠右：与路径呈左右布局（原型 tbar 的 flex:1 撑开效果）。
+   workspace-actions 自身无 display 定义（旧结构靠 .toolbar-inline 提供 flex），
+   并入命令行后该类不再携带 → 补 flex + 垂直居中，否则按钮按文字基线排布、偏高。 */
+.theme-modern .file-browser-workbench .workspace-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+}
 .theme-modern .file-browser-workbench .workspace-actions .icon-button { width: 26px; height: 26px; }
+/* 文件模式命令行内嵌工具区（用户决策 2026-09-30，对齐原型 tbar 一行式）：
+   seg 之后紧跟目录层级（面包屑），过滤框 + 图标组靠右；检索/LIVE 等日志工具
+   仅日志预览显示。容器带 .file-browser-workbench 以继承面包屑紧凑等既有规则，
+   此处校正基础样式（height:100%）在命令行 flex 上下文中的影响。 */
+.theme-modern .toolbar-commandbar .file-tools-inline {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1 1 260px;
+  min-width: 260px;
+  gap: 10px;
+  height: auto;
+  padding: 0;
+  background: transparent;
+}
+.theme-modern .toolbar-commandbar .file-tools-inline > * { flex: 0 1 auto; min-width: 0; }
+.theme-modern .toolbar-commandbar .file-tools-inline .directory-input { flex: 0 1 280px; }
+/* 历史下拉改浮层：原为文档流内联（挂在内容区工具行下），并入命令行后
+   必须绝对定位，否则会撑开命令行 */
+.theme-modern .toolbar-commandbar .file-tools-inline .path-history-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  margin: 0;
+  z-index: 70;
+}
 /* ⋯ 收纳菜单 */
 .theme-modern .fb-more-wrap { position: relative; display: inline-flex; }
 .theme-modern .fb-more-menu {
@@ -1855,25 +1923,28 @@
 .theme-modern .file-batch-danger { color: var(--red); }
 .theme-modern .file-batch-spacer { flex: 1; }
 .theme-modern .file-batch-hint { font-size: var(--fs-2xs); color: var(--ink-soft); opacity: 0.85; white-space: nowrap; }
-/* 目录树列去标题头（原型 = 直接树）；文件列的列头保留为「摘要/批量条」槽位：
-   两者互斥占同一行 → 勾选/取消时高度恒定，不推挤表格也不留空白。 */
-.theme-modern .browser-tree-column .browser-column-head { display: none; }
-.theme-modern .browser-file-column .browser-column-head {
+/* 两列第 1 行表头齐平（用户决策 2026-09-30）：
+   左「目录树 + N 个目录」↔ 右「目录内容 + 批量条/N 项」，同高 34px。
+   树列不设第二行「名称」表头（用户反馈：有顶部目录树标题行即可，树列表直接跟在下面）。 */
+.theme-modern .browser-tree-column .browser-column-head {
   display: flex;
   align-items: center;
-  /* 固定高度：摘要态与批量条态共用此槽位，高度必须完全一致，否则切换时表格上下跳 */
+  /* 与文件列列头同高同底，保证两列第 1 行齐平 */
   height: 34px;
   min-height: 34px;
   padding: 0 12px;
   background: var(--panel);
   border-bottom: 1px solid var(--line);
 }
-/* 槽位内的批量条内容不撑高容器 */
-.theme-modern .browser-file-column .browser-column-head .file-batch-actions {
+.theme-modern .browser-file-column .browser-column-head {
+  display: flex;
+  align-items: center;
+  /* 槽位恒显「N 项」摘要；批量条已恢复为横跨双列的整行（.file-batch-span，见 §19-3） */
   height: 34px;
-  padding: 0;
-  background: transparent !important;
-  border: none !important;
+  min-height: 34px;
+  padding: 0 12px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
 }
 /* 面包屑紧凑：抵消旧表的底色大块，恢复原型 mono chips + › 分隔 */
 .theme-modern .file-browser-workbench .pathbar-breadcrumbs {
@@ -1908,20 +1979,17 @@
   font-size: var(--fs-xs);
   padding: 0 1px;
 }
-/* S6 行悬浮快捷组 —— 对齐原型：
-   `background: var(--panel)` + `border: 1px solid var(--line)` + `radius 6px`
-   + `padding: 2px` + `gap: 3px` + `box-shadow: 0 4px 16px rgba(0,0,0,.1)`，
-   绝对定位浮在行尾、垂直居中，不参与行内布局（避免撑高行/遮挡名称）。 */
+/* S6 行悬浮快捷组 —— 对齐原型 705-711：白卡片（panel 底 + line 描边 +
+   radius 6 + padding 2 + gap 3 + 投影 0 4px 16px rgba(0,0,0,.1)），
+   内含 5 个 .btn.icon.sm 独立描边小方钮（24×24）。
+   位置（用户反馈 2026-09-30）：跟随文件名之后的空白区，不绝对定位到行尾、
+   不浮在大小/修改时间/类型列上，也不遮盖文件名文字。 */
 .theme-modern .file-table .file-row { position: relative; }
 .theme-modern .file-name-cell .file-row-actions {
-  position: absolute;
-  right: 10px;
-  top: 50%;
-  transform: translateY(-50%);
-  align-self: center;
+  position: static;
+  flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
-  justify-content: center;
   margin: 0;
   padding: 2px;
   gap: 3px;
@@ -1934,8 +2002,10 @@
   transition: opacity 100ms ease;
   z-index: 2;
 }
+/* 悬浮组仅 hover / 键盘聚焦时出现（原型形态）。
+   file-row-active 不再常驻显示（用户反馈 2026-09-30：拖拽松开后原位置与
+   活动行同时出现两个工具栏，突兀）；活动行以左侧选中条标识即可。 */
 .theme-modern .file-table .file-row:hover .file-row-actions,
-.theme-modern .file-table .file-row-active .file-row-actions,
 .theme-modern .file-table .file-row:focus-within .file-row-actions {
   opacity: 1;
   pointer-events: auto;
@@ -1944,29 +2014,52 @@
 .theme-modern .file-table .file-row .file-action-icon {
   width: 24px;
   height: 24px;
+  min-width: 24px;
   display: inline-grid;
   place-items: center;
-  border: none;
-  border-radius: 5px;
-  background: transparent !important;
+  /* 原型 .btn.icon.sm：每颗按钮独立描边（panel 底 + line 边 + r-s 圆角），
+     非无框裸图标；!important 压 theme-modern.css 的 transparent !important */
+  border: 1px solid var(--line) !important;
+  border-radius: var(--r-s, 6px);
+  background: var(--panel) !important;
   color: var(--ink-soft);
   box-shadow: none !important;
+  padding: 0;
 }
 .theme-modern .file-table .file-row .file-action-icon:hover {
-  background: var(--panel-muted) !important;
-  color: var(--accent);
+  background: var(--accent-soft) !important;
+  border-color: color-mix(in srgb, var(--accent) 26%, transparent) !important;
+  color: var(--ink);
+}
+.theme-modern .file-table .file-row .file-action-icon svg {
+  width: 12px;
+  height: 12px;
 }
 /* 勾选模式下隐藏悬浮组，避免与 checkbox 冲突 */
 .theme-modern .file-table .file-row.file-row-select-mode .file-row-actions { display: none; }
+/* 拖拽移动进行中：隐藏全部行悬浮工具栏（用户反馈 2026-09-30）——
+   拖拽经过/悬停任何行都不再弹出，避免遮挡拖拽落点视觉。
+   容器类由 dragstart/dragend 直接挂卸（不走 React 状态，dragstart 内同步
+   re-render 会干扰拖拽启动），见 FileBrowserTableRows.tsx。
+   注意：快照在 dragstart 处理完之后拍摄，原生拖影因此不含工具栏。 */
+.theme-modern .file-table.file-table-dragging .file-row-actions {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+/* ⋯ 菜单/历史下拉被裁剪的修复（用户反馈 2026-09-30「更多按钮是摆设」）：
+   actions 行 overflow:hidden（styles-responsive）与命令行 overflow:auto 把
+   绝对定位的下拉整个裁掉 —— 菜单其实弹出了但完全不可见。文件工具区内必须放行溢出。 */
+.theme-modern .toolbar-commandbar { overflow: visible; }
+.theme-modern .toolbar-commandbar .file-tools-inline .workspace-actions { overflow: visible; }
 /* 批量条计数用等宽数字，位数变化时右侧按钮不左右移动 */
 .theme-modern .file-batch-title,
 .theme-modern .file-batch-mut {
   font-variant-numeric: tabular-nums;
   min-width: max-content;
 }
-/* 批量条紧贴文件区（原型：批量条 34px 一行，下沿即表头） */
-.theme-modern .file-batch-actions { min-height: 32px; padding: 0 10px; }
-.theme-modern .file-table-head { font-size: var(--fs-sm); padding: 5px 16px 5px 12px; }
+/* 批量条基础形态见 §19-3（.file-batch-span 整行）；此处不再单独设高度/内边距 */
+/* 列头字号走 12px 档 token（--fs-xs），与表头按钮/树文字同档（用户要求 2026-09-30） */
+.theme-modern .file-table-head { font-size: var(--fs-xs); padding: 5px 16px 5px 12px; }
 
 /* S6 列宽（选择/名称/[传输]/大小/修改时间/类型）统一在 theme-modern.css 定义，
    此处不再重复，避免表头与数据行取到不同模板导致错位。 */
@@ -1982,17 +2075,33 @@
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-/* 行尾快捷组：绝对定位浮在行尾，不参与行内布局，
-   故宽度必须按内容自适应 —— 固定 108px 会裁掉 5 个 24px 图标中的首尾
-   （recon S6-4：实测 scrollWidth 129 > offsetWidth 108）。
-   原型该组为内容自适应卡片（158×30），此处等价实现。 */
+/* 名称列 = 弹性盒子（用户反馈 2026-09-30 二轮修正）：
+   图标+文件名成组贴左（strong 弹性填充剩余空间，名称文字左对齐，
+   修复此前 space-between 把三个子元素均匀撑开、名称被顶到行中间的问题）；
+   悬浮快捷组贴名称列右缘但不贴死（margin-right 8px，与右侧「大小」列留呼吸位）。
+   长文件名截断时与按钮组最小间距 = gap 8 + margin 8 = 16px。 */
 .theme-modern .file-name-cell {
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.theme-modern .file-name-cell strong {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 .theme-modern .file-name-cell .file-row-actions {
-  width: max-content;
-  min-width: 0;
-  flex: none;
+  flex: 0 0 auto;
+  margin-left: 8px;
+  margin-right: 8px;
+}
+/* 文件/目录图标（对齐原型 lucide Folder / FileText）：
+   目录=accent 蓝（与原型目录名同色系），文件=柔和灰，一眼可分 */
+.theme-modern .file-name-cell .entry-icon-svg {
+  flex: 0 0 auto;
+  color: var(--ink-muted);
+}
+.theme-modern .file-name-cell .entry-icon-svg-dir {
+  color: var(--accent);
 }
 
 /* ---------- 24. S7 文件预览深色 → 仅模态预览弹窗（.preview-dialog） ----------
@@ -2005,31 +2114,26 @@
    故内嵌 `.pip-viewer-wrap` 一律浅色（base `.viewer-actions-strip{background:var(--panel)}` 生效），
    深色作用域只保留 `.preview-dialog`（见 align-s7-s8.css）。 */
 
-/* 深色下的分段控件单独适配（原型 S7 第 703 行的深色 .seg：
-   <div class="seg" style="background:#1a1a1a;border-color:#2c2c2c">
-     <button class="on" style="background:#2c2c2c;color:#fff;border-right:1px solid #2c2c2c">源码</button>
-     <button style="color:#9aa7b4;border-right:1px solid #2c2c2c">归档 · 132 项</button>
-     <button style="color:#9aa7b4">Class</button>
-   选中项在深色下不再是黑底（黑压黑不可辨），改用 #2c2c2c 抬升一档以保持选中可读性。
-   ⚠️ 作用域只限 `.preview-dialog`（S7 模态预览弹窗）——
-     内嵌 `.pip-viewer-wrap` 是浅色视图，其分段控件（结果页签等）应走浅色，不在此处涂黑。 */
+/* 预览弹窗分段控件（源码 / 归档 · N 项 / Class）：跟随主题浅色方案。
+   用户决策 2026-09-30：预览弹窗不再做独立深色，分段控件走统一主题令牌
+   （未选中 = 面板底 + ink-soft；选中 = accent-soft + accent）。 */
 .theme-modern .preview-dialog .seg {
-  background: #1a1a1a;
-  border-color: #2c2c2c;
+  background: var(--panel);
+  border-color: var(--line);
 }
 .theme-modern .preview-dialog .seg > button {
-  background: #1a1a1a !important;
-  color: #9aa7b4 !important;
-  border-right-color: #2c2c2c;
+  background: transparent !important;
+  color: var(--ink-soft) !important;
+  border-right-color: var(--line);
 }
 .theme-modern .preview-dialog .seg > button.on {
-  background: #2c2c2c !important;
-  color: #ffffff !important;
+  background: var(--accent-soft) !important;
+  color: var(--accent) !important;
   font-weight: 600;
 }
 .theme-modern .preview-dialog .seg.lite > button.on {
-  background: rgba(0, 112, 243, 0.22) !important;
-  color: #8fc1e8 !important;
+  background: var(--accent-soft) !important;
+  color: var(--accent) !important;
   font-weight: 600;
 }
 
@@ -2094,12 +2198,12 @@
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
-/* 输入类控件本身已有 border 高亮，焦点环改为内嵌避免布局位移 */
+/* 输入类控件焦点不走 accent 外环（鼠标聚焦文本框也会命中 focus-visible，
+   2px outline 叠加在 border 内侧形成粗边框）；统一由 border 描边表达焦点态 */
 .theme-modern input:focus-visible,
 .theme-modern select:focus-visible,
 .theme-modern textarea:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -1px;
+  outline: none;
 }
 /* 深色区域（终端 / 预览）用浅色焦点环保证对比度 */
 .theme-modern .terminal-workarea :focus-visible,
@@ -2134,8 +2238,7 @@ body:has(.theme-modern) :focus-visible {
 body:has(.theme-modern) input:focus-visible,
 body:has(.theme-modern) select:focus-visible,
 body:has(.theme-modern) textarea:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -1px;
+  outline: none;
 }
 body:has(.theme-modern) button:disabled {
   cursor: not-allowed;
@@ -2192,7 +2295,7 @@ body:has(.theme-modern) button:disabled {
    该层承担输入法与候选框定位，若继承界面比例字体会导致中文候选框错位。 */
 .theme-modern .xterm-helper-textarea {
   font-family: var(--terminal-font-family, var(--mono-font-family));
-  font-size: var(--terminal-font-size, 12px);
+  font-size: var(--terminal-font-size, 11px);
 }
 
 
@@ -2601,4 +2704,36 @@ body:has(.theme-modern) button:disabled {
   border-color: var(--line) !important;
   background: var(--panel) !important;
   color: var(--ink) !important;
+}
+
+/* ---------- 侧栏底部摘要行 × 终端状态栏 同高对齐（用户反馈：左右底栏落差） ----------
+   终端状态栏（align-s5-terminal.css §9）为 30px + 1px 上边框；摘要行折叠态此前
+   padding 7px 14px + 默认行高，实测与状态栏差数像素，底部出现台阶。
+   此处折叠态固定 30px、内容垂直居中、line-height:1；展开态（.sidebar-status-open）不受影响。 */
+.theme-modern .sidebar-status {
+  padding: 0 14px;
+  line-height: 1;
+}
+.theme-modern .sidebar-status:not(.sidebar-status-open) {
+  height: 30px;
+  flex-direction: row;
+  align-items: center;
+  overflow: hidden;
+}
+
+/* ============================================================
+   18b. 抽屉推挤式断点（S15/§3d 收口）
+   ≥1440：抽屉统一 420px 推挤——主内容区经 padding-right 让位
+   （shell-layout 为 border-box，内容自然收窄，不横向溢出），
+   无遮罩、不变暗；过渡统一 150ms。抽屉本体经 Drawer 内
+   matchMedia("(min-width: 1440px)") 加 .xdrawer-push 并把宽度
+   收口到 420，与该让位空间精确对位（此前工具抽屉 480 宽会残余
+   遮盖 60px）。
+   <1440：覆盖式（维持各自原宽度，如工具抽屉 480），无推挤。
+   ============================================================ */
+@media (min-width: 1440px) {
+  .theme-modern.v2-drawer-push .shell-layout {
+    padding-right: 420px;
+    transition: padding-right 0.15s ease;
+  }
 }
