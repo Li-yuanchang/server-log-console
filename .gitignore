@@ -26,3 +26,6 @@ Thumbs.db
 # Logs
 *.log
 tmp/
+
+# Extension packaged artifact
+apps/extension/*.zip
