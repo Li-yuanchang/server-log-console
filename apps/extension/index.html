@@ -9,16 +9,24 @@
       window.__SLC_PIP_MODE__=new URLSearchParams(location.search).get('pip')||'';
       document.documentElement.dataset.slcPip=window.__SLC_PIP_MODE__?'1':'0';
       document.documentElement.dataset.slcElectron=/Electron/.test(navigator.userAgent)?'1':'0';
-      /* 首屏骨架跟随主题外观（ui-surface localStorage 与 useUiTheme 同键名），
-         避免冷启动时灰蓝骨架叠在纸感/雾面主题上的突兀感。custom 自定义背景拿不到完整
-         参数组合，回落 plain 中性色。 */
+      /* 首屏底色跟随主题（ui-theme-preset/ui-tone-mode 与 useUiTheme 同键名）。
+         8 套主题的 bg 色表与 useUiTheme THEME_PRESETS 一致；toneMode=system 时
+         读 prefers-color-scheme 在同族内取变体。 */
       try{
-        var skSurface=localStorage.getItem('ui-surface');
-        document.documentElement.dataset.skSurface=(skSurface==='mist'||skSurface==='paper')?skSurface:'plain';
-      }catch(e){document.documentElement.dataset.skSurface='plain'}
+        var __slcBg={'geist':'#fafafa','carbon':'#0a0a0a','steel':'#f6f8fa','slate':'#0b1220','sand':'#faf9f7','espresso':'#1c1917','cal':'#ffffff','ink':'#09090b'};
+        var __slcFam={geist:'neutral',carbon:'neutral',steel:'cool',slate:'cool',sand:'warm',espresso:'warm',cal:'mono',ink:'mono'};
+        var __slcPair={neutral:['geist','carbon'],cool:['steel','slate'],warm:['sand','espresso'],mono:['cal','ink']};
+        var __slcPreset=localStorage.getItem('ui-theme-preset')||'geist';
+        if(!__slcBg[__slcPreset])__slcPreset='geist';
+        var __slcTone=localStorage.getItem('ui-tone-mode')||'system';
+        var __slcDark=__slcTone==='dark'||(__slcTone==='system'&&window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches);
+        var __slcId=__slcTone==='light'?__slcPair[__slcFam[__slcPreset]][0]:__slcTone==='dark'?__slcPair[__slcFam[__slcPreset]][1]:(__slcDark?__slcPair[__slcFam[__slcPreset]][1]:__slcPair[__slcFam[__slcPreset]][0]);
+        document.documentElement.dataset.skTheme=__slcId;
+        document.documentElement.style.background=__slcBg[__slcId];
+      }catch(e){}
     </script>
     <style>
-      html,body,#root{margin:0;width:100%;height:100%;min-height:100%;overflow:hidden;background:#fafafa}
+      html,body,#root{margin:0;width:100%;height:100%;min-height:100%;overflow:hidden;background:transparent}
       html[data-slc-pip="1"],html[data-slc-pip="1"] body,html[data-slc-pip="1"] #root{background:#0a0a0a}
       /* 骨架主题令牌：值逐项抄自 theme-modern.css 各 ui-surface-* 块（2026-09-30 重设计）。
          几何对齐真实布局：侧栏 240px（<1440px 时 200px，同 theme-modern.css:3810 媒体查询）、

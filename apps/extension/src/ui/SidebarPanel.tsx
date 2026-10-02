@@ -1,8 +1,9 @@
 import { useState } from "react";
 import type { ServerSummary, ServerConnectionTestResponse } from "@server-log-console/shared";
 import type { SettingsWorkspaceView } from "./ConnectionSettingsWorkspace.js";
-import { Command as CommandIcon, Copy, Ellipsis, Pencil, Play, Trash2, ServerOff, FolderSearch } from "lucide-react";
+import { Command as CommandIcon, ServerOff, FolderSearch } from "lucide-react";
 import { ToolIcon } from "./ToolIcon.js";
+import { ServerGroupsList } from "./SidepanelMobile.js";
 
 export type SidebarPanelProps = {
   uiTheme?: "classic" | "modern";
@@ -33,7 +34,6 @@ export type SidebarPanelProps = {
 
 export function SidebarPanel(props: SidebarPanelProps) {
   const [statusExpanded, setStatusExpanded] = useState(false);
-  const [serverMenuId, setServerMenuId] = useState("");
   const {
     uiTheme,
     isElectron,
@@ -115,104 +115,25 @@ export function SidebarPanel(props: SidebarPanelProps) {
             <strong>{isElectron ? "正在等待内置连接服务启动" : "本地服务未启动"}</strong>
             <span>{isElectron ? "应用会自动重试连接本地服务；如果长时间没有恢复，我会继续排查安装版启动链路。" : "请在终端执行 npm run dev:gateway 启动本地连接服务，然后点击下方\"检查服务\"。"}</span>
           </div>
-        ) : filteredGroupedServers.length ? (
-          filteredGroupedServers.map(([groupName, groupServers]) => (
-            <section key={groupName} className="server-group">
-              <div className="server-group-title">{groupName}</div>
-              <div className="server-list">
-                {groupServers
-                  .map((server) => (
-                    <div key={server.id} className={`server-item-wrap ${server.id === serverId ? "server-item-wrap-active" : ""}`}>
-                      <button
-                        type="button"
-                        className={`server-item ${server.id === serverId ? "server-item-active" : ""}`}
-                        onClick={() => {
-                          selectServerById(server.id);
-                        }}
-                      >
-                        <span className={`server-status-dot ${server.id === serverId ? (connectionTestStatus?.connected ? "dot-connected" : "dot-pending") : "dot-idle"}`} />
-                        <span className="server-item-main">
-                          <strong>{server.name}</strong>
-                          <span>{server.host}</span>
-                        </span>
-                        <span className="server-item-meta">{server.port}</span>
-                      </button>
-                      <div className="server-item-quick-actions" aria-label={`${server.name} 管理操作`}>
-                        {/* 原型 srow() 悬浮组 = 三个按钮：连接 ▶ / 编辑 ✏️ / 更多 ⋯
-                            （prototype.html 第 350-352 行）。图标 12px、描边 1.6（原型 ic 默认 sw=1.6）。 */}
-                        <button
-                          type="button"
-                          className="server-item-mini-action"
-                          title="连接"
-                          aria-label={`连接 ${server.name}`}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            selectServerById(server.id);
-                          }}
-                        >
-                          <Play size={12} strokeWidth={1.6} />
-                        </button>
-                        <button
-                          type="button"
-                          className="server-item-mini-action"
-                          title="编辑（设置中心）"
-                          aria-label={`编辑 ${server.name}`}
-                          onClick={() => onOpenSettingsWorkspace("connections")}
-                        >
-                          <Pencil size={12} strokeWidth={1.6} />
-                        </button>
-                        <button
-                          type="button"
-                          className={`server-item-mini-action${serverMenuId === server.id ? " is-open" : ""}`}
-                          title="更多操作"
-                          aria-label={`${server.name} 更多操作`}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setServerMenuId((current) => current === server.id ? "" : server.id);
-                          }}
-                        >
-                          <Ellipsis size={12} strokeWidth={1.6} />
-                        </button>
-                        {serverMenuId === server.id ? (
-                          <div className="server-item-menu" onClick={(event) => event.stopPropagation()}>
-                            <button
-                              type="button"
-                              className="server-item-menu-item"
-                              onClick={() => {
-                                void navigator.clipboard?.writeText(`${server.username}@${server.host}:${server.port}`).catch(() => {});
-                                setServerMenuId("");
-                              }}
-                            >
-                              <Copy size={12} strokeWidth={1.8} /> 复制连接信息
-                            </button>
-                            {server.source ? (
-                              <button
-                                type="button"
-                                className="server-item-menu-item server-item-menu-danger"
-                                onClick={() => {
-                                  setServerMenuId("");
-                                  onDeleteServer(server);
-                                }}
-                              >
-                                <Trash2 size={12} strokeWidth={1.8} /> 删除
-                              </button>
-                            ) : null}
-                          </div>
-                        ) : null}
-                      </div>
-                    </div>
-                  ))}
-              </div>
-            </section>
-          ))
         ) : (
-          <div className="empty-box sidebar-empty-box">
-            <span className="empty-box-icon" aria-hidden="true">
-              <FolderSearch size={18} strokeWidth={1.8} />
-            </span>
-            <strong>还没有服务器</strong>
-            <span>检查 FinalShell 目录后导入，或手动补录连接信息。</span>
-          </div>
+          /* 服务器分组列表抽取为共享组件（SidepanelMobile.tsx），选服层复用同一渲染 */
+          <ServerGroupsList
+            filteredGroupedServers={filteredGroupedServers}
+            serverId={serverId}
+            connectionTestStatus={connectionTestStatus}
+            onSelectServer={selectServerById}
+            onDeleteServer={onDeleteServer}
+            onOpenSettingsWorkspace={onOpenSettingsWorkspace}
+            emptyState={
+              <div className="empty-box sidebar-empty-box">
+                <span className="empty-box-icon" aria-hidden="true">
+                  <FolderSearch size={18} strokeWidth={1.8} />
+                </span>
+                <strong>还没有服务器</strong>
+                <span>检查 FinalShell 目录后导入，或手动补录连接信息。</span>
+              </div>
+            }
+          />
         )}
       </div>
 

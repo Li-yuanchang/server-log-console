@@ -1,0 +1,178 @@
+/* ============================================================
+   styles-sidepanel.css — Chrome 扩展侧栏环境覆盖层
+   ------------------------------------------------------------
+   作用范围：仅 body.extension-sidepanel（MV3 side_panel，popup.html），
+   桌面/网页模式完全不受影响。
+
+   2026-10-02 重写（自 theme-modern.css 迁出并去主题化）：
+   1. 去主题化：旧 22 条规则全部带 `.theme-modern` 前缀，classic 主题下
+      侧栏零适配（base 200px 固定列塞进 ~360px 侧栏）。侧栏涉及的组件
+      类名与 token 跨主题共用，去掉前缀即双主题同时生效。
+   2. 修正 flex→grid 语义漂移：旧规则写于布局 flex 时代（2026-04），其后
+      `.shell-layout` / `.browser-grid` / `.workspace-strip` / `.pane-section`
+      相继 grid 化，旧规则里的 flex-direction / flex-basis / flex-wrap 均
+      已是 no-op（侧栏里侧栏宽实际由 base 的 200px 栅格决定，180px 意图
+      从未生效）。本版按 grid 语义重写同一意图。
+   3. `.toolbar-commandbar` 在 classic 下是 grid、modern 下被覆写为 flex
+      （theme-modern.css 两处），故此处显式 display:grid 单列堆叠，对两种
+      主题给出同一确定行为。
+   4. token 回落：--sidebar-line 是 theme-modern 专属变量，classic 下
+      回落 var(--line)。
+
+   加载顺序：main.tsx 末尾（环境覆盖层，最后加载）。选择器统一
+   `body.extension-sidepanel` 前缀（≥(0,2,1)），稳定压过 base / align 批次。
+   ============================================================ */
+
+/* ---------- 1. 外壳：去圆角外框呼吸边，铺满侧栏 ---------- */
+body.extension-sidepanel .app-shell {
+  padding: 0;
+  height: 100vh;
+}
+
+/* ---------- 2. 主栅格：侧栏压到 180px（桌面 200/198px） ---------- */
+body.extension-sidepanel .shell-layout {
+  grid-template-columns: 180px minmax(0, 1fr);
+  height: 100vh;
+}
+
+/* ---------- 3. 服务器侧栏：竖排卡，右描边替代桌面态下描边 ---------- */
+body.extension-sidepanel .sidebar-panel {
+  width: auto;
+  max-height: none;
+  min-height: 0;
+  border-right: 1px solid var(--sidebar-line, var(--line));
+  border-bottom: none;
+}
+
+body.extension-sidepanel .sidebar-head,
+body.extension-sidepanel .pane-section {
+  padding-left: 12px;
+  padding-right: 12px;
+}
+
+body.extension-sidepanel .server-groups {
+  min-height: 120px;
+}
+
+body.extension-sidepanel .compact-activity-panel {
+  height: 132px !important;
+}
+
+/* ---------- 4. 工具栏：命令行压成单列纵向堆叠 ---------- */
+body.extension-sidepanel .toolbar-panel {
+  padding: 12px;
+}
+
+body.extension-sidepanel .toolbar-commandbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+  overflow-x: visible;
+}
+
+body.extension-sidepanel .toolbar-view-switch {
+  width: fit-content;
+}
+
+body.extension-sidepanel .toolbar-search-row {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+body.extension-sidepanel .toolbar-search-row .command-input-keyword {
+  min-width: 0;
+  width: 100%;
+}
+
+body.extension-sidepanel .toolbar-search-actions {
+  justify-content: flex-start;
+}
+
+body.extension-sidepanel .advanced-row-main,
+body.extension-sidepanel .advanced-row-time,
+body.extension-sidepanel .time-pair {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* ---------- 5. 工作区条：标题/操作竖排，过滤框放开宽度 ---------- */
+body.extension-sidepanel .workspace-strip {
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+}
+
+body.extension-sidepanel .workspace-actions {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+
+body.extension-sidepanel .directory-filter-input {
+  max-width: none;
+}
+
+/* ---------- 6. 文件浏览：树列压到 148px，保留拖拽手柄 ---------- */
+body.extension-sidepanel .browser-grid {
+  grid-template-columns: 148px 6px minmax(0, 1fr);
+}
+
+body.extension-sidepanel .browser-grid > .browser-column:first-child {
+  min-width: 120px;
+  border-right: 1px solid var(--line);
+  border-bottom: none;
+}
+
+body.extension-sidepanel .browser-resizer {
+  display: block;
+}
+
+/* ---------- 7. 设置中心 v2：导轨转顶部横条，固定列压窄（2026-10-02） ----------
+   桌面布局 rail 164px +（conn-list 268px / pref-anchor 116px）在 ~360px 侧栏里
+   详情列只剩负空间（实测 360px 截图详情列被挤成竖排字）。侧栏下改为：
+   导轨横排置顶、连接清单 132px、偏好锚点 92px，详情列拿到全部剩余宽度。 */
+body.extension-sidepanel .settings-workspace-v2 {
+  flex-direction: column;
+}
+
+body.extension-sidepanel .settings-rail {
+  flex: none;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-right: none;
+  border-bottom: 1px solid var(--sidebar-line, var(--line));
+}
+
+body.extension-sidepanel .settings-rail-item {
+  flex: none;
+}
+
+body.extension-sidepanel .settings-rail-note,
+body.extension-sidepanel .settings-rail-foot {
+  display: none;
+}
+
+body.extension-sidepanel .conn-list-pane {
+  flex: 0 0 132px;
+}
+
+body.extension-sidepanel .settings-pref-anchor {
+  flex: 0 0 92px;
+}
+
+/* ---------- 8. 空态启动卡：classic 侧栏下转居中竖排 ----------
+   基础 .workspace-startup-card 是横向横幅（icon｜文案｜操作三段），modern 已在
+   theme-modern-v2.css §12 转居中竖排；classic 在 ~150px 主区里横幅被挤成
+   一字一行（实测 360px 截图标题竖排）。此处按 modern 同款意图转竖排，
+   仅作用于侧栏，classic 桌面横幅不受影响。 */
+body.extension-sidepanel .workspace-startup-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 6px;
+  padding: 0 16px;
+}
+
+body.extension-sidepanel .workspace-startup-card > span {
+  max-width: 320px;
+}

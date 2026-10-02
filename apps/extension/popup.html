@@ -1,12 +1,80 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Server Log Console</title>
+    <title>日志控制台</title>
     <script type="module" src="./src/main.tsx"></script>
+    <style>
+      /* 侧栏形态首屏骨架：几何对齐 body.extension-sidepanel 真实布局
+         （侧栏 180px + 主区工具栏 45px，同 styles-sidepanel.css / 主题命令行条）。
+         注意：MV3 CSP script-src 'self' 禁内联脚本，故不做 index.html 那套
+         localStorage 主题跟随，骨架固定浅色（React 挂载后由应用接管）。
+         #app-loading 由 App.tsx 挂载 effect 淡出移除（与 index.html 同一约定）。 */
+      html,body,#root{margin:0;width:100%;height:100%;min-height:100%;overflow:hidden;background:#fafafa}
+      #app-loading{
+        --sk-bg:#fafafa;--sk-panel:#ffffff;--sk-muted:#f2f2f2;--sk-line:#eaeaea;
+        --sk-ink:#171717;--sk-ink-muted:#8f8f8f;--sk-ink-soft:#666666;--sk-accent:#0070f3;
+        position:fixed;inset:0;z-index:9999;display:flex;
+        background:var(--sk-bg);color:var(--sk-ink-muted);
+        font-family:-apple-system,BlinkMacSystemFont,'Geist Sans','PingFang SC',sans-serif;
+        transition:opacity .25s ease;
+      }
+      #sk-side{flex:0 0 180px;background:var(--sk-panel);border-right:1px solid var(--sk-line);display:flex;flex-direction:column}
+      #sk-side-head{flex:none;height:45px;display:flex;align-items:center;gap:6px;padding:0 12px;border-bottom:1px solid var(--sk-line)}
+      #sk-side-head .sk-block{width:26px;height:26px;border-radius:6px}
+      #sk-side-head .sk-block+ .sk-block{width:52px;height:12px}
+      #sk-side-list{flex:1;padding:8px;display:flex;flex-direction:column;gap:2px;overflow:hidden}
+      .sk-server-row{display:flex;align-items:center;gap:8px;height:40px;padding:0 8px;border-radius:6px}
+      .sk-server-row .sk-dot{flex:none;width:6px;height:6px;border-radius:50%;background:var(--sk-muted)}
+      .sk-server-row .sk-lines{flex:1;display:flex;flex-direction:column;gap:5px}
+      .sk-server-row .sk-line{height:9px;border-radius:3px;background:var(--sk-muted)}
+      .sk-server-row .sk-line.w1{width:62%}.sk-server-row .sk-line.w2{width:38%;opacity:.7}
+      #sk-main{flex:1;min-width:0;display:flex;flex-direction:column;background:var(--sk-bg)}
+      #sk-toolbar{flex:none;height:45px;background:var(--sk-panel);border-bottom:1px solid var(--sk-line);display:flex;align-items:center;gap:8px;padding:0 12px}
+      .sk-tab{width:64px;height:28px;border-radius:8px;background:var(--sk-muted)}
+      #sk-content{flex:1;display:flex;align-items:center;justify-content:center}
+      .sk-startup{display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;margin-top:-40px;padding:0 24px}
+      .sk-startup-icon{width:44px;height:44px;display:flex;align-items:center;justify-content:center;border:1px solid var(--sk-line);border-radius:12px;color:var(--sk-ink-soft);margin-bottom:6px}
+      .sk-startup strong{font-size:15px;font-weight:650;color:var(--sk-ink);letter-spacing:-.01em}
+      .sk-startup span{font-size:12px;line-height:1.7;color:var(--sk-ink-muted)}
+      .sk-spin{width:14px;height:14px;margin-top:10px;border:2px solid var(--sk-muted);border-top-color:var(--sk-accent);border-radius:50%;animation:sk-spin .8s linear infinite}
+      @keyframes sk-spin{to{transform:rotate(360deg)}}
+      .sk-block{border-radius:6px;background:var(--sk-muted)}
+    </style>
   </head>
   <body class="extension-sidepanel">
+    <div id="app-loading">
+      <!-- Skeleton: 侧栏（几何对齐 extension-sidepanel 的 180px 侧栏 + sidebar-head 45px） -->
+      <div id="sk-side">
+        <div id="sk-side-head">
+          <div class="sk-block"></div>
+          <div class="sk-block"></div>
+        </div>
+        <div id="sk-side-list">
+          <div class="sk-server-row"><span class="sk-dot"></span><span class="sk-lines"><i class="sk-line w1"></i><i class="sk-line w2"></i></span></div>
+          <div class="sk-server-row"><span class="sk-dot"></span><span class="sk-lines"><i class="sk-line w1"></i><i class="sk-line w2"></i></span></div>
+          <div class="sk-server-row"><span class="sk-dot"></span><span class="sk-lines"><i class="sk-line w1"></i><i class="sk-line w2"></i></span></div>
+          <div class="sk-server-row"><span class="sk-dot"></span><span class="sk-lines"><i class="sk-line w1"></i><i class="sk-line w2"></i></span></div>
+        </div>
+      </div>
+      <!-- Skeleton: 主区（工具栏 + 启动卡，与真实 extension-sidepanel 启动态同构） -->
+      <div id="sk-main">
+        <div id="sk-toolbar">
+          <div class="sk-tab"></div>
+        </div>
+        <div id="sk-content">
+          <div class="sk-startup">
+            <div class="sk-startup-icon">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>
+            </div>
+            <strong>正在连接服务…</strong>
+            <span>正在等待本地连接服务就绪</span>
+            <div class="sk-spin"></div>
+          </div>
+        </div>
+      </div>
+    </div>
     <div id="root"></div>
   </body>
 </html>

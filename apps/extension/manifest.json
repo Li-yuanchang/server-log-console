@@ -24,7 +24,7 @@
   "background": {
     "service_worker": "background.js"
   },
-  "permissions": ["storage", "downloads", "sidePanel"],
+  "permissions": ["downloads", "sidePanel"],
   "host_permissions": ["http://localhost:4040/*", "http://127.0.0.1:4040/*"],
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'"
