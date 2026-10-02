@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, useCallback } from "react";
+import { TERMINAL_SCHEMES, type TerminalColorSchemeId } from "./useUiTheme.js";
 import type { ServerSummary } from "@server-log-console/shared";
 import { looksLikeJumpServer } from "./terminal-utils.js";
+import { createTerminalColorizer, type TerminalColorizer } from "./terminal-decorations.js";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
@@ -28,10 +30,18 @@ interface UseTerminalSessionOptions {
   preserveSessionOnInactive?: boolean;
   preserveSessionOnDispose?: boolean;
   onSelectionMenu?: (menu: { x: number; y: number; text: string } | null) => void;
+  /** props 缺口（终端工作台重设计）：xterm 实例创建/销毁时上报，供容器把激活终端交给 useTerminalSearch 附着。
+      只做实例上报，不触及 WS 协议逻辑。 */
+  onTerminalInstanceChange?: (terminal: Terminal | null) => void;
   terminalFontSize?: number;
   /** S14：终端字体族（CSS 字体栈字符串）。变更后 xterm 需重排以免列宽错位。 */
   terminalFontFamily?: string;
   terminalBackgroundColor?: string;
+  /** 终端配色（独立槽位）：映射 xterm ITheme（背景/前景/光标/选区 + ANSI 16 色） */
+  terminalScheme?: TerminalColorSchemeId;
+  /** 终端客户端着色开关（默认 true）：纯客户端读 buffer + xterm registerDecoration 上色，
+      绝不向 PTY 写入任何字节（JumpServer 红线：不能发不可见字符），跳板机会话同样安全。 */
+  enableClientColoring?: boolean;
 }
 
 function readTerminalTheme(container: HTMLElement | null, overrideBackground?: string) {
@@ -40,8 +50,26 @@ function readTerminalTheme(container: HTMLElement | null, overrideBackground?: s
     || cs.getPropertyValue("--terminal-background").trim()
     || cs.getPropertyValue("--shell").trim()
     || "#0a0a0a";
-  const shellInk = cs.getPropertyValue("--shell-ink").trim() || "#e8e8e8";
+  const shellInk = cs.getPropertyValue("--shell-ink").trim() || "#d7dde5";
   return { shellBg, shellInk };
+}
+
+/** 终端配色 → xterm ITheme。背景仍可被 terminalBackgroundColor 覆盖（WinPiP 等）。 */
+function buildTerminalTheme(schemeId: TerminalColorSchemeId | undefined, shellBg: string, shellInk: string) {
+  const scheme = TERMINAL_SCHEMES.find((s) => s.id === schemeId) ?? TERMINAL_SCHEMES[0];
+  const t = scheme.theme;
+  return {
+    background: shellBg || t.background,
+    foreground: t.foreground === "#d7dde5" ? shellInk : t.foreground,
+    cursor: t.cursor,
+    cursorAccent: shellBg || t.background,
+    selectionBackground: t.selectionBackground,
+    black: t.black, red: t.red, green: t.green, yellow: t.yellow,
+    blue: t.blue, magenta: t.magenta, cyan: t.cyan, white: t.white,
+    brightBlack: t.brightBlack, brightRed: t.brightRed, brightGreen: t.brightGreen,
+    brightYellow: t.brightYellow, brightBlue: t.brightBlue, brightMagenta: t.brightMagenta,
+    brightCyan: t.brightCyan, brightWhite: t.brightWhite,
+  };
 }
 
 function rebuildSelectionFromBuffer(terminal: Terminal): string {
@@ -106,6 +134,8 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
   const reconnectTimerRef = useRef<number | null>(null);
   const fitTimersRef = useRef<number[]>([]);
   const outputSettleTimerRef = useRef<number | null>(null);
+  const colorizerRef = useRef<TerminalColorizer | null>(null);
+  const decorationScanTimerRef = useRef<number | null>(null);
   const retryCountRef = useRef(0);
   const reconnectDesiredRef = useRef(false);
   const followOutputRef = useRef(true);
@@ -166,6 +196,30 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
     }
   }, []);
 
+  const clearDecorationScanTimer = useCallback(() => {
+    if (decorationScanTimerRef.current !== null) {
+      window.clearTimeout(decorationScanTimerRef.current);
+      decorationScanTimerRef.current = null;
+    }
+  }, []);
+
+  /* 客户端着色扫描（80ms 合并防抖）；resize 后的重扫也复用该定时器。
+     纯读 buffer + 装饰渲染，不向 PTY 写入任何字节。 */
+  const scheduleDecorationScan = useCallback((delay = 80) => {
+    if (!options.enableClientColoring || !colorizerRef.current) {
+      return;
+    }
+    clearDecorationScanTimer();
+    decorationScanTimerRef.current = window.setTimeout(() => {
+      decorationScanTimerRef.current = null;
+      try {
+        colorizerRef.current?.scan();
+      } catch {
+        /* 着色异常绝不影响终端数据流 */
+      }
+    }, delay);
+  }, [clearDecorationScanTimer, options.enableClientColoring]);
+
   const clearPendingInput = useCallback(() => {
     if (pendingInputTimerRef.current !== null) {
       window.clearTimeout(pendingInputTimerRef.current);
@@ -206,8 +260,10 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
       if (followOutputRef.current) {
         terminalRef.current?.scrollToBottom();
       }
+      /* 输出落定 → 扫描最近行上色（内部再 80ms 合并） */
+      scheduleDecorationScan();
     }, 32);
-  }, [clearOutputSettleTimer, runFit]);
+  }, [clearOutputSettleTimer, runFit, scheduleDecorationScan]);
 
   const scheduleFit = useCallback((delays: number[] = [0, 16, 80, 180, 320]) => {
     clearFitTimers();
@@ -224,34 +280,22 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
       return terminalRef.current;
     }
 
-    const { shellBg, shellInk } = readTerminalTheme(containerRef.current, options.terminalBackgroundColor);
+    const { shellBg } = readTerminalTheme(containerRef.current, options.terminalBackgroundColor);
 
     const terminal = new Terminal({
       cursorBlink: true,
-      fontSize: options.terminalFontSize || 12,
-      fontFamily: options.terminalFontFamily || "'SFMono-Regular', 'Consolas', monospace",
-      theme: {
-        background: shellBg,
-        foreground: shellInk,
-        cursor: "#7ec8e3",
-        selectionBackground: "#2a4a6a",
-        black: shellBg,
-        red: "#e06c75",
-        green: "#98c379",
-        yellow: "#e5c07b",
-        blue: "#61afef",
-        magenta: "#c678dd",
-        cyan: "#56b6c2",
-        white: shellInk,
-        brightBlack: "#5c6370",
-        brightRed: "#e06c75",
-        brightGreen: "#98c379",
-        brightYellow: "#e5c07b",
-        brightBlue: "#61afef",
-        brightMagenta: "#c678dd",
-        brightCyan: "#56b6c2",
-        brightWhite: "#ffffff",
-      },
+      /* 用户反馈：默认块状光标太粗 → 竖线光标（2px，闪烁保留） */
+      cursorStyle: "bar",
+      cursorWidth: 2,
+      /* 搜索高亮（addon-search decorations）与客户端着色（registerDecoration）依赖提案 API，
+         未开启时 findNext 在高亮环节抛错（被 safeSearchCall 吞掉 → 恒 0/0）、着色静默失效。 */
+      allowProposedApi: true,
+      /* 原型 .term（prototype.html 190 行）原为 11px，用户确认过小 → 默认 14
+         （= useUiTheme DEFAULT_TERMINAL_FONT_SIZE，设置中心可调）；字体兜底栈 = --mono token。 */
+      fontSize: options.terminalFontSize || 14,
+      lineHeight: 1.8,
+      fontFamily: options.terminalFontFamily || "'Geist Mono', 'SFMono-Regular', 'Menlo', 'Consolas', monospace",
+      theme: buildTerminalTheme(options.terminalScheme, shellBg, ""),
       scrollback: 20000,
       convertEol: true,
     });
@@ -262,9 +306,13 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
 
     fitAddonRef.current = fitAddon;
     terminalRef.current = terminal;
+    /* 终端客户端着色器（默认开启）：纯 buffer 读取 + registerDecoration 渲染层上色，
+       不向 PTY 写入字节（JumpServer 安全）；API 缺失/异常时模块内部静默降级。 */
+    colorizerRef.current = options.enableClientColoring !== false ? createTerminalColorizer(terminal) : null;
+    options.onTerminalInstanceChange?.(terminal);
     return terminal;
-    // terminalFontFamily 变更需重建实例，故一并作为依赖
-  }, [options.terminalFontSize, options.terminalFontFamily]);
+    // terminalFontFamily / terminalScheme 变更需重建实例，故一并作为依赖
+  }, [options.enableClientColoring, options.terminalFontSize, options.terminalFontFamily, options.terminalScheme]);
 
   useEffect(() => {
     const terminal = terminalRef.current;
@@ -272,21 +320,16 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
       return;
     }
     const { shellBg, shellInk } = readTerminalTheme(containerRef.current, options.terminalBackgroundColor);
-    terminal.options.fontSize = options.terminalFontSize || 12;
+    terminal.options.fontSize = options.terminalFontSize || 14;
     /* S14：字体族同步。改字体族会改变字符宽度，必须配合 scheduleFit 重排，
        否则 xterm 的列数/光标位置会错乱。 */
     if (options.terminalFontFamily) {
       terminal.options.fontFamily = options.terminalFontFamily;
     }
-    terminal.options.theme = {
-      ...terminal.options.theme,
-      background: shellBg,
-      foreground: shellInk,
-      black: shellBg,
-      white: shellInk,
-    };
+    /* 终端配色：整套 ITheme 替换（ANSI 16 色随方案切换） */
+    terminal.options.theme = buildTerminalTheme(options.terminalScheme, shellBg, shellInk);
     scheduleFit([0, 24, 96]);
-  }, [options.terminalBackgroundColor, options.terminalFontSize, options.terminalFontFamily, scheduleFit]);
+  }, [options.terminalBackgroundColor, options.terminalFontSize, options.terminalFontFamily, options.terminalScheme, scheduleFit]);
 
   useEffect(() => {
     if (!options.active || !containerRef.current) {
@@ -365,9 +408,10 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
       window.clearTimeout(timer);
       clearFitTimers();
       clearOutputSettleTimer();
+      clearDecorationScanTimer();
       clearPendingInput();
     };
-  }, [options.active, clearFitTimers, clearOutputSettleTimer, clearPendingInput, scheduleFit]);
+  }, [options.active, clearFitTimers, clearOutputSettleTimer, clearDecorationScanTimer, clearPendingInput, scheduleFit]);
 
   useEffect(() => {
     if (!options.active || !options.serverId) {
@@ -380,11 +424,13 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
     }
 
     startTerminal({ auto: true });
-  }, [connected, options.active, options.serverId]);
+    /* isBusy 入依赖：忙碌期间启动被跳过/中断时，忙碌结束后自动补连（否则会停留在"已断开"且无重试） */
+  }, [connected, options.active, options.serverId, options.isBusy]);
 
   useEffect(() => () => {
     clearFitTimers();
     clearOutputSettleTimer();
+    clearDecorationScanTimer();
     clearPendingInput();
     stopTerminal({
       preserveSession: options.preserveSessionOnDispose,
@@ -396,10 +442,13 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
     onDataDisposableRef.current = null;
     onResizeDisposableRef.current?.dispose();
     onResizeDisposableRef.current = null;
+    colorizerRef.current?.disposeAll();
+    colorizerRef.current = null;
     terminalRef.current?.dispose();
     terminalRef.current = null;
     fitAddonRef.current = null;
-  }, [clearFitTimers, clearOutputSettleTimer, clearPendingInput, options.preserveSessionOnDispose]);
+    options.onTerminalInstanceChange?.(null);
+  }, [clearFitTimers, clearOutputSettleTimer, clearDecorationScanTimer, clearPendingInput, options.preserveSessionOnDispose]);
 
   function clearReconnectTimer() {
     if (reconnectTimerRef.current !== null) {
@@ -429,6 +478,10 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
     clearReconnectTimer();
     reconnectDesiredRef.current = false;
     terminalReadyRef.current = false;
+    /* 会话停止：清空客户端装饰并取消待扫描（terminal.clear 时 marker 已随 buffer 释放，
+       这里同步登记表；keepContent 保留内容的场景按规格同样清空） */
+    colorizerRef.current?.disposeAll();
+    clearDecorationScanTimer();
     if (!optionsArg?.preserveRetryCount) {
       retryCountRef.current = 0;
       setRetryCount(0);
@@ -505,6 +558,8 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
     const terminal = ensureTerminal();
     if (!startOptions?.isReconnect) {
       terminal.clear();
+      /* 清屏后装饰随 marker 释放，这里同步登记表（幂等） */
+      colorizerRef.current?.disposeAll();
     }
 
     onDataDisposableRef.current?.dispose();
@@ -517,6 +572,9 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
 
     onResizeDisposableRef.current?.dispose();
     onResizeDisposableRef.current = terminal.onResize(({ cols, rows }) => {
+      /* 终端 reflow 会使装饰列错位：先清空，待布局稳定后重扫一次（复用 80ms 防抖定时器） */
+      colorizerRef.current?.disposeAll();
+      scheduleDecorationScan(260);
       const socket = socketRef.current;
       if (
         socket?.readyState === WebSocket.OPEN
@@ -599,6 +657,7 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
           setRetryCount(0);
           if (payload.resumed) {
             terminal.clear();
+            colorizerRef.current?.disposeAll();
           }
           if (payload.chunk) {
             terminalReadyRef.current = true;

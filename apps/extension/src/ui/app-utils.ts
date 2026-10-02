@@ -149,6 +149,8 @@ export function createDefaultWorkspaceSessionState(nextServerId: string, savedDi
     terminalDetached: false,
     terminalOverlay: "none" as const,
     terminalSessionId: "",
+    terminalTabs: [] as never[],
+    activeTerminalTabId: "",
     recordingSession: null,
     liveFollowEnabled: false,
     liveFollowPaused: false,

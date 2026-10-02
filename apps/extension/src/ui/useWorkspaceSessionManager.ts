@@ -72,6 +72,8 @@ export type WorkspaceSessionSetters = {
   setFileLoadingName: (v: string) => void;
   // Terminal
   setTerminalSessionId: (v: string) => void;
+  setTerminalTabs: (v: WorkspaceSessionState["terminalTabs"]) => void;
+  setActiveTerminalTabId: (v: string) => void;
   setTerminalDetached: (v: boolean) => void;
   setTerminalPanelOpen: (v: boolean) => void;
   setTerminalOverlay: (v: "none" | "shortcuts" | "ai") => void;
@@ -140,6 +142,8 @@ export type WorkspaceSessionManagerParams = {
   terminalDetached: boolean;
   terminalOverlay: "none" | "shortcuts" | "ai";
   terminalSessionId: string;
+  terminalTabs: WorkspaceSessionState["terminalTabs"];
+  activeTerminalTabId: string;
   recordingSession: WorkspaceSessionState["recordingSession"];
   liveFollowEnabled: boolean;
   liveFollowPaused: boolean;
@@ -232,6 +236,8 @@ export function useWorkspaceSessionManager(params: WorkspaceSessionManagerParams
     terminalDetached,
     terminalOverlay,
     terminalSessionId,
+    terminalTabs,
+    activeTerminalTabId,
     recordingSession,
     liveFollowEnabled,
     liveFollowPaused,
@@ -309,6 +315,8 @@ export function useWorkspaceSessionManager(params: WorkspaceSessionManagerParams
       terminalDetached,
       terminalOverlay,
       terminalSessionId,
+      terminalTabs: [...terminalTabs],
+      activeTerminalTabId,
       recordingSession,
       liveFollowEnabled,
       liveFollowPaused,
@@ -395,6 +403,8 @@ export function useWorkspaceSessionManager(params: WorkspaceSessionManagerParams
     setters.setShowTransferHistory(nextState.showTransferHistory);
     setters.setFileLoadingName("");
     setters.setTerminalSessionId(nextState.terminalSessionId);
+    setters.setTerminalTabs(nextState.terminalTabs || []);
+    setters.setActiveTerminalTabId(nextState.activeTerminalTabId || nextState.terminalTabs?.[0]?.tabId || "");
     setters.setTerminalDetached(nextState.terminalDetached);
     setters.setTerminalPanelOpen(nextState.terminalPanelOpen);
     setters.setTerminalOverlay(nextState.terminalOverlay);
@@ -426,7 +436,9 @@ export function useWorkspaceSessionManager(params: WorkspaceSessionManagerParams
 
     if (!isStandaloneTerminalWindow && (terminalPanelOpen || terminalDetached)) {
       pendingWorkspaceActivationRef.current = { session, state: nextState, fromCache: hasCachedState };
-      setters.setPreserveTerminalOnInactive(Boolean(terminalSessionId.trim()) || terminalDetached);
+      setters.setPreserveTerminalOnInactive(
+        Boolean(terminalSessionId.trim()) || terminalTabs.length > 0 || terminalDetached
+      );
       setters.setTerminalDetached(false);
       setters.setTerminalPanelOpen(false);
       return;

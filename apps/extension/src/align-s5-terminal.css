@@ -312,7 +312,7 @@
   color: var(--ink) !important;
 }
 .theme-modern .tsc-input::placeholder { color: var(--ink-muted); }
-.theme-modern .tsc-input:focus { border-color: var(--accent) !important; box-shadow: 0 0 0 2px var(--accent-soft); }
+.theme-modern .tsc-input:focus { border-color: var(--line-strong) !important; box-shadow: 0 0 0 2px color-mix(in srgb, var(--line-strong) 12%, transparent); }
 .theme-modern .tsc-btn {
   border: 1px solid var(--line) !important;
   background: var(--panel) !important;
@@ -347,4 +347,1530 @@
 }
 .theme-modern .terminal-panel-bar-actions .terminal-toolbar-button.terminal-toolbar-button-accent:hover:not(:disabled) {
   color: var(--accent);
+}
+
+/* ---------- 6. 终端菜单（对应原型 T3「更多」菜单 / T10 终端·标签页右键菜单） ----------
+   TerminalMenus.tsx 专用：.terminal-menu-anchor 为定位壳（父级给 absolute 坐标，
+   渲染在终端容器内），.terminal-menu 为菜单本体。
+   外观对齐原型规格：白底 1px 描边 + 圆角 --r-m(8px) + 弹出阴影 + min-width 190px；
+   item 高 28px、label --fs-xs、右侧 kbd/hint --fs-2xs（§10 字号 token 约束，不写裸字号）。 */
+.theme-modern .terminal-menu-anchor {
+  position: absolute;
+  z-index: 40; /* 盖过终端容器内的 xterm 辅助层与提示行 */
+}
+.theme-modern .terminal-menu {
+  min-width: 190px;
+  padding: 4px 0;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-m);
+  box-shadow: var(--v2-shadow-pop);
+}
+.theme-modern .terminal-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 28px;
+  padding: 0 12px;
+  font-size: var(--fs-xs);
+  color: var(--ink);
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+}
+.theme-modern .terminal-menu-item:hover:not(.terminal-menu-item-disabled) {
+  background: var(--accent-soft);
+}
+.theme-modern .terminal-menu-item-icon {
+  flex: none;
+}
+.theme-modern .terminal-menu-item-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: left;
+}
+.theme-modern .terminal-menu-item-kbd {
+  flex: none;
+  font-family: var(--mono-font-family);
+  font-size: var(--fs-2xs);
+  color: var(--ink-muted);
+}
+.theme-modern .terminal-menu-item-hint {
+  flex: none;
+  font-size: var(--fs-2xs);
+  color: var(--ink-muted);
+}
+.theme-modern .terminal-menu-item-danger {
+  color: var(--red);
+}
+.theme-modern .terminal-menu-item-danger:hover:not(.terminal-menu-item-disabled) {
+  background: color-mix(in srgb, var(--red) 8%, transparent);
+}
+.theme-modern .terminal-menu-item-disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.theme-modern .terminal-menu-separator {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--line);
+}
+
+/* ---------- 7. 终端悬浮查找条（对应原型 T3 悬浮查找条）----------
+   TerminalFindBar.tsx：absolute 右上白底浮层（1px --line 描边 + --r-m 圆角 + 弹出阴影），
+   与工具行同属浅色 chrome。字号走 --fs-* token（§10：原型 10px 计数收敛到 --fs-2xs），
+   颜色全用现有 token；父容器（终端面板体）需为 position:relative 定位上下文。 */
+.theme-modern .terminal-findbar {
+  position: absolute;
+  top: 10px;
+  right: 14px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-m);
+  box-shadow: var(--v2-shadow-pop);
+}
+.theme-modern .terminal-findbar-icon {
+  flex: none;
+  color: var(--ink-muted);
+}
+.theme-modern .terminal-findbar-input {
+  width: 170px;
+  height: 22px;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--ink);
+  font-size: var(--fs-xs);
+}
+.theme-modern .terminal-findbar-input::placeholder {
+  color: var(--ink-muted);
+}
+/* 命中计数：mono + 最小字号 token（--fs-2xs，§10 计数类） */
+.theme-modern .terminal-findbar-count {
+  flex: none;
+  min-width: 36px;
+  text-align: center;
+  font-family: var(--mono-font-family);
+  font-size: var(--fs-2xs);
+  color: var(--ink-muted);
+}
+/* 上/下翻与关闭按钮：22px 透明底，hover 同工具行 accent-soft 护栏 */
+.theme-modern .terminal-findbar-btn {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--r-s);
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.theme-modern .terminal-findbar-btn:hover:not(:disabled) {
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 26%, transparent);
+  color: var(--ink);
+}
+/* Aa / .* 切换：22px 方形 toggle，on 态 accent 边框 + 浅蓝底（--accent-soft） */
+.theme-modern .terminal-findbar-toggle {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  font-family: var(--mono-font-family);
+  font-size: var(--fs-2xs);
+  border: 1px solid var(--line);
+  border-radius: var(--r-s);
+  background: var(--panel);
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.theme-modern .terminal-findbar-toggle:hover:not(:disabled) {
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 26%, transparent);
+  color: var(--ink);
+}
+.theme-modern .terminal-findbar-toggle.terminal-findbar-toggle-on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+/* ---------- 8. 终端内多标签条（对应原型 T2 终端内多标签，.ttabs/.ttab 129-141） ----------
+   对应原型 T2 终端内多标签（含两层标签规则：标签组属于当前工作区）。
+   形态：31px 高白底横条 + 底部 1px 描边 + 横向可滚动；标签 24px 高、左侧 6px 状态点、
+   悬浮出 ×；active 浅蓝底 + accent 字加粗。字号走 --fs-2xs / --fs-xs token。
+   结构上把原型 .ttabs 的 overflow-x:auto 下放到内层 .terminal-tabs-scroll，
+   外层 .terminal-tabs 保持 overflow 可见并作右键菜单的 absolute 定位基准。 */
+.theme-modern .terminal-tabs {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: none;
+  height: 31px;
+  min-width: 0;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+}
+.theme-modern .terminal-tabs-scroll {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 0 1 auto;
+  min-width: 0;
+  padding: 0 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+/* 右侧空 spacer：父级不传 children 时自然收尾 */
+.theme-modern .terminal-tabs-spacer {
+  flex: 1 1 0%;
+  min-width: 0;
+}
+/* 父级经 children 传入的 kbd 提示（原型 .ttabs .hint 141 行） */
+.theme-modern .terminal-tabs-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  padding: 0 8px 0 4px;
+}
+
+/* 标签（原型 .ttab 130 行：24px 高 / padding 0 7px 0 10px / radius 6 / 11.5px 字
+   → 字号取 --fs-2xs token） */
+.theme-modern .terminal-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  min-width: 0;
+  height: 24px;
+  padding: 0 7px 0 10px;
+  border-radius: var(--r-s);
+  font-size: var(--fs-2xs);
+  color: var(--ink-soft);
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+.theme-modern .terminal-tab:hover {
+  background: var(--panel-muted);
+  color: var(--ink);
+}
+.theme-modern .terminal-tab-active,
+.theme-modern .terminal-tab-active:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+/* 标题单行截断（原型 .ttab .nm 135 行 + .ttab max-width 230px） */
+.theme-modern .terminal-tab-title {
+  max-width: 230px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* 状态点 6px（原型 .ttab .dot 133 行）：绿=connected / 橙=connecting / 红=disconnected / 灰=closed */
+.theme-modern .terminal-tab-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex: none;
+}
+.theme-modern .terminal-tab-dot-connected {
+  background: var(--green-dot); /* #22c55e，原型 .dot.on */
+  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.14);
+}
+.theme-modern .terminal-tab-dot-connecting {
+  background: var(--amber); /* #b45309，原型 .dot.wait */
+}
+.theme-modern .terminal-tab-dot-disconnected {
+  background: var(--red); /* 原型 .dot.err */
+  box-shadow: 0 0 0 2px rgba(212, 19, 19, 0.14);
+}
+.theme-modern .terminal-tab-dot-closed {
+  background: #c8ccd2; /* 原型 .dot.off 灰点（本文件 §1 .dot.off 同值） */
+}
+/* × 关闭钮（原型 .ttab .cl 136-138 行）：悬浮/active 才出现 */
+.theme-modern .terminal-tab-close {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  border-radius: 4px;
+  color: var(--ink-muted);
+  flex: none;
+  cursor: pointer;
+}
+.theme-modern .terminal-tab:hover .terminal-tab-close,
+.theme-modern .terminal-tab-active .terminal-tab-close {
+  display: flex;
+}
+.theme-modern .terminal-tab-close:hover {
+  background: var(--line);
+  color: var(--red);
+}
+/* 图标按钮 SVG 显式继承颜色（styles-architecture §5.1.1 规则） */
+.theme-modern .terminal-tab-close svg,
+.theme-modern .terminal-tabs-new svg {
+  display: block;
+  stroke: currentColor;
+}
+/* 末尾「新建终端」按钮（原型 .tnew 139-140 行：24×24 方钮） */
+.theme-modern .terminal-tabs-new {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex: none;
+  border-radius: var(--r-s);
+  color: var(--ink-muted);
+  cursor: pointer;
+}
+.theme-modern .terminal-tabs-new:hover {
+  background: var(--panel-muted);
+  color: var(--ink);
+}
+.theme-modern .terminal-tabs-new.terminal-tabs-new-disabled {
+  opacity: 0.45;
+  cursor: default;
+  pointer-events: none;
+}
+
+/* tab 右键菜单：与仓库下拉一致（白底 / 1px --line / 圆角 --r-m=8 / 阴影 / item 28px）。
+   absolute 挂在 .terminal-tabs 内，top 定位到条下缘，left 由组件按被右键 tab 夹算。 */
+.theme-modern .terminal-tabs-menu {
+  position: absolute;
+  top: 100%;
+  z-index: 90;
+  min-width: 172px;
+  padding: 5px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-m);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+.theme-modern .terminal-tabs-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: var(--r-s);
+  font-size: var(--fs-xs);
+  color: var(--ink);
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+.theme-modern .terminal-tabs-menu-item:hover {
+  background: var(--panel-muted);
+}
+.theme-modern .terminal-tabs-menu-key {
+  margin-left: auto;
+  padding-left: 18px;
+  font-family: var(--mono-font-family);
+  font-size: var(--fs-2xs);
+  color: var(--ink-muted);
+}
+
+/* ---------- 9. 终端底部状态栏（terminal-statusbar-*，对应原型 T1/T4/T8） ----------
+   TerminalStatusBar.tsx 专用：30px 高白底横条 + 1px 上边框（浅色 chrome，同 §3 口径）。
+   左 = 状态点 + 连接文案 + 主机 + 时长（断线时红点 + 原因 + 自动重试 n/N + 立即重连）；
+   中 = CPU/内存/磁盘迷你条（42×4px 圆角槽，<60 绿 / 60-85 橙 / >85 红，整组可点开监控）；
+   右 = UTF-8 · ⌘F 查找。悬浮提示走原生 title（ImmediateTooltip 拦截渲染），无自定义样式。
+   字号一律 --fs-2xs / --fs-xs token（§10 字号约束）；颜色只用现有变量（三档资源色 =
+   var(--green-dot) #22c55e / var(--amber) 橙 / var(--red) 红），状态点光晕沿用本文件 §1/§8
+   已有的同值 rgba 阴影口径。line-height:1 防继承行高把单行内容顶离垂直中心。 */
+.theme-modern .terminal-statusbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: none;
+  height: 30px;
+  padding: 0 12px;
+  background: var(--panel);
+  border-top: 1px solid var(--line);
+  font-size: var(--fs-2xs);
+  line-height: 1;
+  color: var(--ink-soft);
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  user-select: none;
+}
+/* 左侧状态区：点 + 文案，整块不压缩（超宽由根容器 overflow hidden 兜底） */
+.theme-modern .terminal-statusbar-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+/* 状态点 7px（原型 .dot 79-82 行；§1 同规格）：
+   绿=connected / 红=disconnected / 灰=idle（原型 .dot.off 同值 #c8ccd2） */
+.theme-modern .terminal-statusbar-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+}
+.theme-modern .terminal-statusbar-dot-connected {
+  background: var(--green-dot);
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.15);
+}
+.theme-modern .terminal-statusbar-dot-disconnected {
+  background: var(--red);
+  box-shadow: 0 0 0 3px rgba(212, 19, 19, 0.14);
+}
+.theme-modern .terminal-statusbar-dot-idle {
+  background: #c8ccd2; /* 原型 .dot.off 灰点（本文件 §1 .dot.off 同值） */
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.05);
+}
+/* preserved = 会话保活（切视图/切标签 detach）：同 idle 灰点，非红色"已断开" */
+.theme-modern .terminal-statusbar-dot-preserved {
+  background: #c8ccd2;
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.05);
+}
+/* 状态文案：连接态 --ink 加粗 / 断线态红字（原型 statusBar err：color:var(--red) 加粗） */
+.theme-modern .terminal-statusbar-label-ok {
+  color: var(--ink);
+  font-weight: 600;
+}
+.theme-modern .terminal-statusbar-label-err {
+  color: var(--red);
+  font-weight: 600;
+}
+.theme-modern .terminal-statusbar-host {
+  font-family: var(--mono-font-family);
+  color: var(--ink-soft);
+}
+.theme-modern .terminal-statusbar-duration {
+  color: var(--ink-soft);
+}
+.theme-modern .terminal-statusbar-retry {
+  color: var(--ink-soft);
+}
+/* T8 空态整句提示（未连接 · 连接后显示主机与资源信息） */
+.theme-modern .terminal-statusbar-idle {
+  color: var(--ink-muted);
+}
+/* 立即重连小按钮（原型 .btn.sm pri 压到 20px 高）：accent-soft 底 + accent 字，
+   与 §1 工具行 accent 按钮同语义；须显式复位全局 `.theme-modern button` 干扰（§5.1.1） */
+.theme-modern .terminal-statusbar-reconnect {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+  height: 20px;
+  min-height: 0;
+  margin: 0;
+  padding: 0 9px;
+  line-height: 1;
+  border: 1px solid color-mix(in srgb, var(--accent) 34%, transparent);
+  border-radius: var(--r-s);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-family: inherit;
+  font-size: var(--fs-2xs);
+  cursor: pointer;
+}
+.theme-modern .terminal-statusbar-reconnect:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+/* SVG 显式继承颜色（styles-architecture §5.1.1 规则） */
+.theme-modern .terminal-statusbar-reconnect svg {
+  display: block;
+  width: 11px;
+  height: 11px;
+  stroke: currentColor;
+}
+/* 中部资源条组（button 语义，整组可点打开监控）：透明底复位全局 button 样式 */
+.theme-modern .terminal-statusbar-res {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  flex: none;
+  height: auto;
+  min-height: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: var(--fs-2xs);
+  color: inherit;
+  cursor: pointer;
+}
+.theme-modern .terminal-statusbar-res:hover:not(:disabled) {
+  background: transparent;
+}
+/* 单条迷你条（原型 .rbar：label + b 数值 + 42×4px 槽） */
+.theme-modern .terminal-statusbar-meter {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+}
+.theme-modern .terminal-statusbar-meter-label {
+  color: var(--ink-muted);
+}
+.theme-modern .terminal-statusbar-meter-value {
+  min-width: 30px;
+  font-family: var(--mono-font-family);
+  font-weight: 600;
+  color: var(--ink);
+}
+/* 数值颜色随分档联动（原型 .rbar.warn b / .rbar.bad b） */
+.theme-modern .terminal-statusbar-meter-warn .terminal-statusbar-meter-value {
+  color: var(--amber);
+}
+.theme-modern .terminal-statusbar-meter-bad .terminal-statusbar-meter-value {
+  color: var(--red);
+}
+.theme-modern .terminal-statusbar-meter-track {
+  width: 42px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--panel-muted);
+  overflow: hidden;
+  flex: none;
+}
+.theme-modern .terminal-statusbar-meter-fill {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+}
+/* 三档填充色：<60 绿(--green-dot) / 60-85 橙(--amber) / >85 红(--red) */
+.theme-modern .terminal-statusbar-meter-fill-ok {
+  background: var(--green-dot);
+}
+.theme-modern .terminal-statusbar-meter-fill-warn {
+  background: var(--amber);
+}
+.theme-modern .terminal-statusbar-meter-fill-bad {
+  background: var(--red);
+}
+/* 弹性占位：把右侧提示推到行尾 */
+.theme-modern .terminal-statusbar-grow {
+  flex: 1 1 0%;
+  min-width: 0;
+}
+/* 右侧：UTF-8 · ⌘F 查找（均 muted，UTF-8 用 mono） */
+.theme-modern .terminal-statusbar-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  color: var(--ink-muted);
+}
+.theme-modern .terminal-statusbar-mono {
+  font-family: var(--mono-font-family);
+}
+/* 分隔竖线（原型 .statusbar .sep：1×12px --line） */
+.theme-modern .terminal-statusbar-sep {
+  width: 1px;
+  height: 12px;
+  background: var(--line);
+  flex: none;
+}
+
+/* ---------- 10. useTerminalFit（纯行为 hook，无样式） ----------
+   终端 fit 自适应收敛 hook（ResizeObserver + requestAnimationFrame + 32ms 去抖），
+   不产生任何 DOM 与样式；本节仅作编号占位，保持「第 N 节」追加序列连续。 */
+
+/* ---------- 11. terminal-qbar-* / shortcuts-dialog-*（对应原型 T1/T9/T10：可开关快捷命令行 + 管理对话框） ----------
+   独立命名空间：terminal-qbar-* 承接底部快捷命令行布局（旧 .terminal-quick-* 规则保留不动，便于回滚），
+   shortcuts-dialog-* 为管理对话框。字号一律走 --fs-* token，颜色只用 token（遮罩/阴影除外）。 */
+
+/* 快捷命令行：33px 白底 + 上边框 1px（原型 603-607） */
+.theme-modern .terminal-qbar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 33px;
+  padding: 0 12px;
+  flex: none;
+  min-width: 0;
+  background: var(--panel);
+  border-top: 1px solid var(--line);
+}
+.theme-modern .terminal-qbar-label {
+  flex: none;
+  font-size: var(--fs-2xs);
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+/* chips 区：命令多时横向滚动，滚动条隐藏 */
+.theme-modern .terminal-qbar-chips {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.theme-modern .terminal-qbar-chips::-webkit-scrollbar {
+  display: none;
+}
+/* chip = 原型 .fchip 胶囊，mono 字号 --fs-2xs */
+.theme-modern .terminal-qbar-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  height: 21px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--ink-soft);
+  font-family: var(--mono-font-family);
+  font-size: var(--fs-2xs);
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+.theme-modern .terminal-qbar-chip:hover {
+  border-color: var(--line-strong);
+  background: var(--panel-muted);
+  color: var(--ink);
+}
+.theme-modern .terminal-qbar-chip-add {
+  border-style: dashed;
+  color: var(--ink-muted);
+  font-family: inherit;
+}
+.theme-modern .terminal-qbar-hint {
+  flex: none;
+  font-size: var(--fs-2xs);
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+/* chip 就地编辑输入框（输入规范见 docs/style-architecture.md §11） */
+.theme-modern .terminal-qbar-edit-input {
+  flex: none;
+  width: 220px;
+  height: 21px;
+  padding: 0 9px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-s);
+  background: var(--panel);
+  color: var(--ink);
+  font-family: var(--mono-font-family);
+  font-size: var(--fs-2xs);
+  outline: none;
+}
+.theme-modern .terminal-qbar-edit-input:focus {
+  border-color: var(--line-strong);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--line-strong) 12%, transparent);
+}
+/* chip 右键菜单：命令行贴屏幕底，向上弹出避免出屏 */
+.theme-modern .terminal-qbar-menu {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  z-index: 40;
+  min-width: 148px;
+  padding: 4px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-m);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+.theme-modern .terminal-qbar-menu-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 26px;
+  padding: 0 9px;
+  border: none;
+  border-radius: var(--r-s);
+  background: transparent;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: var(--fs-xs);
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.theme-modern .terminal-qbar-menu-item:hover {
+  background: var(--panel-muted);
+}
+.theme-modern .terminal-qbar-menu-item-danger {
+  color: var(--red);
+}
+.theme-modern .terminal-qbar-menu-item-danger:hover {
+  background: var(--red-soft);
+}
+.theme-modern .terminal-qbar-menu-sep {
+  height: 1px;
+  margin: 3px 4px;
+  background: var(--line);
+}
+
+/* 管理对话框：520px 居中，遮罩 rgba(23,23,23,.28) 点击关闭 */
+.theme-modern .shortcuts-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(23, 23, 23, 0.28);
+}
+.theme-modern .shortcuts-dialog {
+  display: flex;
+  flex-direction: column;
+  width: 520px;
+  max-width: calc(100vw - 48px);
+  max-height: calc(100vh - 96px);
+  overflow: hidden;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-l);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.2);
+}
+.theme-modern .shortcuts-dialog-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  height: 44px;
+  padding: 0 8px 0 16px;
+  border-bottom: 1px solid var(--line);
+}
+.theme-modern .shortcuts-dialog-title {
+  font-size: var(--fs-md);
+  font-weight: 600;
+  color: var(--ink);
+}
+.theme-modern .shortcuts-dialog-head .shortcuts-dialog-icon-btn {
+  margin-left: auto;
+}
+.theme-modern .shortcuts-dialog-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px;
+}
+.theme-modern .shortcuts-dialog-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 2px 6px;
+  border-radius: var(--r-s);
+}
+.theme-modern .shortcuts-dialog-row:hover {
+  background: var(--panel-muted);
+}
+.theme-modern .shortcuts-dialog-row-dragging {
+  opacity: 0.45;
+}
+.theme-modern .shortcuts-dialog-row-drop {
+  box-shadow: inset 0 2px 0 var(--accent);
+}
+.theme-modern .shortcuts-dialog-grip {
+  flex: none;
+  color: var(--ink-muted);
+  cursor: grab;
+}
+.theme-modern .shortcuts-dialog-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-sm);
+  color: var(--ink);
+}
+.theme-modern .shortcuts-dialog-badge {
+  flex: none;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: var(--fs-2xs);
+  line-height: 16px;
+}
+.theme-modern .shortcuts-dialog-cmd {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-left: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+  font-family: var(--mono-font-family);
+  font-size: var(--fs-2xs);
+  color: var(--ink-muted);
+}
+.theme-modern .shortcuts-dialog-row-actions {
+  display: flex;
+  gap: 2px;
+  flex: none;
+}
+.theme-modern .shortcuts-dialog-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: var(--r-s);
+  background: transparent;
+  color: var(--ink-muted);
+  cursor: pointer;
+}
+.theme-modern .shortcuts-dialog-icon-btn:hover:not(:disabled) {
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+.theme-modern .shortcuts-dialog-icon-btn-danger:hover:not(:disabled) {
+  background: var(--red-soft);
+  color: var(--red);
+}
+.theme-modern .shortcuts-dialog-icon-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+/* 行内编辑：名称/命令两输入框 + 保存/取消 */
+.theme-modern .shortcuts-dialog-editor {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border-radius: var(--r-s);
+  background: var(--panel-muted);
+}
+.theme-modern .shortcuts-dialog-input {
+  flex: 1 1 30%;
+  min-width: 0;
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-s);
+  background: var(--panel);
+  color: var(--ink);
+  font-size: var(--fs-xs);
+  outline: none;
+}
+.theme-modern .shortcuts-dialog-input:hover {
+  border-color: var(--line-strong);
+}
+.theme-modern .shortcuts-dialog-input:focus {
+  border-color: var(--line-strong);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--line-strong) 12%, transparent);
+}
+.theme-modern .shortcuts-dialog-input-mono {
+  flex: 2 1 70%;
+  font-family: var(--mono-font-family);
+}
+.theme-modern .shortcuts-dialog-empty {
+  padding: 18px 8px;
+  text-align: center;
+  font-size: var(--fs-xs);
+  color: var(--ink-muted);
+}
+.theme-modern .shortcuts-dialog-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  padding: 10px 14px;
+  border-top: 1px solid var(--line);
+}
+.theme-modern .shortcuts-dialog-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-s);
+  background: var(--panel);
+  color: var(--ink-soft);
+  font-family: inherit;
+  font-size: var(--fs-xs);
+  cursor: pointer;
+}
+.theme-modern .shortcuts-dialog-btn:hover {
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 26%, transparent);
+  color: var(--ink);
+}
+.theme-modern .shortcuts-dialog-btn-primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+}
+.theme-modern .shortcuts-dialog-btn-primary:hover {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+  filter: brightness(1.05);
+}
+.theme-modern .shortcuts-dialog-foot-hint {
+  margin-left: auto;
+  font-size: var(--fs-2xs);
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+
+/* ============================================================
+   12. 终端工作台五段式容器（TerminalWorkspace 重写，T1/T2/T3/T8/T10）
+   五段 = 工具行（纯动作）→ 标签条 → 终端区（panes/分屏/FindBar/菜单）
+        → 快捷命令行 → 状态栏。旧 .terminal-bottom-panel 的两行 grid
+        改为纵向 flex 以承载五段；其余新类统一 terminal-tw-* / 复用既有前缀。
+   ============================================================ */
+
+/* 五段布局：旧 grid（auto 1fr）改 flex 列，标签条/qbar/状态栏各占 auto */
+.theme-modern .terminal-bottom-panel {
+  display: flex;
+  flex-direction: column;
+}
+.theme-modern .terminal-bottom-panel .terminal-panel-bar {
+  flex: none;
+}
+.theme-modern .terminal-bottom-panel .terminal-body-slot {
+  flex: 1 1 0%;
+  min-height: 0;
+  display: flex;
+  min-width: 0;
+}
+/* 工具行只放动作：spacer 占位把按钮组推到右侧（左侧标签信息已并入 TabStrip） */
+.theme-modern .terminal-panel-bar-spacer {
+  flex: 1 1 0%;
+  min-width: 0;
+}
+/* 分屏▾ 按钮：图标 + 下拉小箭头 */
+/* 标签页窗格：非激活 display:none（live 输出保活），激活铺满终端区 */
+.theme-modern .terminal-tab-panes {
+  position: relative;
+  display: flex;
+  flex: 1 1 0%;
+  min-width: 0;
+  min-height: 0;
+}
+.theme-modern .terminal-tab-pane {
+  position: absolute;
+  inset: 0;
+}
+
+/* 分屏焦点环（T2：焦点窗格 accent 内框；单边框原则下把手为既定例外） */
+.theme-modern .terminal-split-child:focus-within {
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+}
+
+/* T8 空态：居中图标 + 标题 + 副文案 + 唯一主按钮 */
+.theme-modern .terminal-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  text-align: center;
+}
+.theme-modern .terminal-empty-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  margin-bottom: 6px;
+  color: var(--ink-muted);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.theme-modern .terminal-empty-title {
+  font-size: var(--fs-sm);
+  font-weight: 650;
+  color: var(--ink);
+}
+.theme-modern .terminal-empty-sub {
+  margin-bottom: 10px;
+  font-size: var(--fs-2xs);
+  color: var(--ink-muted);
+}
+.theme-modern .terminal-empty-connect {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 14px;
+  font-size: var(--fs-xs);
+  color: #fff;
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: var(--r-m);
+}
+.theme-modern .terminal-empty-connect:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 88%, #fff);
+}
+.theme-modern .terminal-empty-connect:disabled {
+  opacity: 0.45;
+}
+
+/* ---------- 13. 终端工作台状态栏防裁切兜底（用户反馈 Bug④b：状态栏内容贴顶/重连按钮贴底，呼吸间距缺失） ----------
+   级联分析（npx vite build 后按 dist/assets/style-*.css 产物顺序核对，同优先级后出者胜）：
+   1) styles-terminal-workspace.css:7 `.terminal-bottom-panel { display:grid; grid-template-rows:auto
+      minmax(0,1fr) }`（0-1-0，产物最靠前）是旧「工具行 + 终端体」两段布局的遗产。五段式后容器流内
+      子元素有 5 个：一旦 theme-modern 的 flex 覆盖未命中（非 modern 主题等回落场景），第 3~5 段
+      （终端体 / 快捷命令行 / 状态栏）被塞进 1fr 行 + 隐式 auto 行，容器 overflow:hidden 会把最后
+      一段状态栏推出可视区 → 底部被裁、内容贴顶、20px 重连按钮贴底。
+   2) theme-modern.css:2127 `.theme-modern .terminal-bottom-panel { max-height:40vh; margin:0 16px 8px;
+      overflow:hidden }`（0-2-0）：嵌入工作台路径被 theme-modern-v2.css:1528
+      `.theme-modern .workspace-panel .terminal-bottom-panel`（0-3-0，产物中更靠后）重置为
+      none/0；独立终端窗路径被 `.theme-modern.pip-terminal-standalone .terminal-bottom-panel`
+      （0-3-0）重置——两条命中链均已在构建产物中核对，不生效。
+   3) 修复（对应原型 T1 状态栏 30px 规格；禁 !important、不动字号）：
+      a. 基础类直接改纵向 flex（与 theme-modern 覆盖口径一致），彻底关闭两行 grid 的回落裁切源；
+      b. 状态栏钉为 flex:0 0 30px：flex 列里永不被压缩/推走，30px 完整可见（底部不被裁），
+         与左右底栏（侧栏摘要行 30px）齐平无落差；
+      c. 行内 align-items:center + 重连按钮 align-self:center：20px 按钮在 30px 行内垂直居中
+         （上下各约 5px 呼吸间距）。 */
+.terminal-bottom-panel {
+  display: flex;
+  flex-direction: column;
+  grid-template-rows: none;
+}
+.theme-modern .terminal-statusbar {
+  flex: 0 0 30px;
+  align-items: center;
+}
+.theme-modern .terminal-statusbar-reconnect {
+  align-self: center;
+}
+
+/* ---------- 14. terminal-ai-v2：终端 AI 抽屉对齐原型 S5（用户反馈「样式问题很大」2026-10-01） ----------
+   原型 s5() 619-636 行：dhead 头部（终端 AI + chip GLM-4 · ⌘J + ×）→ 主体（引用块 + AI 回复块）
+   → 底部输入框 + fchip 追问。settings-tsc.css 的 .tai-* 深色遗留 + theme-modern(-v2).css 的
+   !important 适配层与此处竞争，故本段统一用 `.theme-modern .tai-dropdown .tai-*`（0,3,0）
+   特异性 + 同位 !important 压过（本文件加载序晚于两者；align-controls.css 的
+   `.tai-dropdown button{height:auto}` 仅 (0,2,1)，也被 0,3,0 覆盖）。
+   字号一律 --fs-* token（禁裸 font-size）；颜色只用现有 token。 */
+.theme-modern .tai-dropdown {
+  border-radius: var(--r-m);
+  box-shadow: var(--v2-shadow-pop);
+}
+/* B. 头部 = 原型 .dhead 口径：padding 11px 14px / gap 8px / 1px --line 下边框 */
+.theme-modern .tai-dropdown .tai-header {
+  gap: 8px;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+.theme-modern .tai-dropdown .tai-header-title {
+  gap: 6px;
+  color: var(--ink);
+  font-size: var(--fs-sm);
+  font-weight: 650;
+}
+.theme-modern .tai-dropdown .tai-sparkle {
+  color: var(--accent);
+}
+.theme-modern .tai-dropdown .tai-badge-unconfigured {
+  color: var(--amber);
+  background: color-mix(in srgb, var(--amber) 12%, transparent);
+}
+.theme-modern .tai-dropdown .tai-header-actions {
+  gap: 5px;
+}
+/* +新对话 = 小号 ghost 按钮（原型 .btn.sm：24px 高 / --r-s 圆角 / 1px --line） */
+.theme-modern .tai-dropdown .tai-hdr-btn-chat {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: auto;
+  min-width: 0;
+  height: 24px;
+  padding: 0 9px;
+  gap: 5px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-s);
+  background: var(--panel);
+  color: var(--ink-soft);
+}
+.theme-modern .tai-dropdown .tai-hdr-btn-chat span {
+  font-size: var(--fs-2xs);
+}
+.theme-modern .tai-dropdown .tai-hdr-btn-chat svg {
+  width: 12px;
+  height: 12px;
+}
+.theme-modern .tai-dropdown .tai-hdr-btn-chat:hover:not(:disabled) {
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 26%, transparent);
+  color: var(--ink);
+}
+/* 设置 / 关闭 = 原型 .btn.icon.sm：24×24 幽灵图标钮，hover accent-soft 护栏 */
+.theme-modern .tai-dropdown .tai-hdr-btn {
+  width: 24px;
+  height: 24px;
+  border: 1px solid transparent;
+  border-radius: var(--r-s);
+  background: transparent;
+  color: var(--ink-soft);
+}
+.theme-modern .tai-dropdown .tai-hdr-btn:hover:not(:disabled) {
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 26%, transparent);
+  color: var(--ink);
+}
+
+/* A. 消息列表：原型主体容器口径 padding 12px 14px / gap 10px，气泡 max-width 92% */
+.theme-modern .tai-dropdown .tai-messages {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+}
+.theme-modern .tai-dropdown .tai-messages::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+}
+.theme-modern .tai-dropdown .tai-msg {
+  padding: 0;
+}
+/* 顶部引用卡（原型 585-588）：灰底 + 1px --line + --r-m 圆角 + mono 摘要 */
+.theme-modern .tai-dropdown .tai-quote-card {
+  margin: 0;
+  background: var(--panel-muted);
+}
+/* 用户消息 = 右对齐紧凑引用块：1px --line 描边 + --panel 底（禁用旧蓝色大气泡） */
+.theme-modern .tai-dropdown .tai-msg-user {
+  display: flex;
+  justify-content: flex-end;
+  border: none !important;
+  background: transparent !important;
+  border-radius: 0;
+  text-align: right;
+}
+.theme-modern .tai-dropdown .tai-user-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  max-width: 92%;
+  padding: 8px 11px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-m);
+  background: var(--panel);
+  text-align: left;
+}
+.theme-modern .tai-dropdown .tai-user-quote-chip {
+  align-self: flex-start;
+}
+.theme-modern .tai-dropdown .tai-user-text {
+  margin: 0;
+  align-self: stretch;
+  font-size: var(--fs-xs);
+  line-height: 1.7;
+  color: var(--ink);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+/* AI 回复块（原型 589-595）：1px accent 30% 描边 + --accent-soft 底 + --r-m 圆角 +
+   行高 1.75 + --fs-xs 正文 */
+.theme-modern .tai-dropdown .tai-msg-ai {
+  max-width: 92%;
+  padding: 9px 11px;
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent) !important;
+  border-radius: var(--r-m);
+  background: var(--accent-soft) !important;
+  align-self: flex-start;
+}
+.theme-modern .tai-dropdown .tai-msg-ai > * {
+  color: var(--ink) !important;
+}
+.theme-modern .tai-dropdown .tai-msg-text {
+  margin: 0;
+  font-size: var(--fs-xs);
+  line-height: 1.75;
+  color: var(--ink);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.theme-modern .tai-dropdown .tai-msg-streaming {
+  opacity: 0.75;
+}
+.theme-modern .tai-dropdown .tai-thinking {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+  font-size: var(--fs-2xs);
+}
+/* 空态推荐 = 原型 .fchip 胶囊（压过 theme-modern.css 深色 !important 残留） */
+.theme-modern .tai-dropdown .tai-welcome {
+  padding: 24px 4px 8px;
+}
+.theme-modern .tai-dropdown .tai-welcome-icon {
+  color: var(--accent);
+}
+.theme-modern .tai-dropdown .tai-suggestion {
+  height: 24px;
+  padding: 0 11px !important;
+  border: 1px solid var(--line) !important;
+  border-radius: 999px !important;
+  background: var(--panel) !important;
+  color: var(--ink-soft) !important;
+  font-size: var(--fs-2xs);
+  white-space: nowrap;
+}
+.theme-modern .tai-dropdown .tai-suggestion:hover:not(:disabled) {
+  border-color: var(--line-strong) !important;
+  background: var(--panel) !important;
+  color: var(--ink) !important;
+}
+.theme-modern .tai-dropdown .tai-suggestion:disabled {
+  opacity: 0.5;
+}
+/* 回复内命令块（原型式）：mono 小字 + 1px --line 浅底 + 右侧「↵ 发送」 */
+.theme-modern .tai-dropdown .tai-cmd-group {
+  gap: 4px;
+  margin: 8px 0 0;
+}
+.theme-modern .tai-dropdown .tai-cmd-block {
+  padding: 5px 8px;
+  border: 1px solid var(--line) !important;
+  border-radius: var(--r-s);
+  background: var(--panel) !important;
+}
+.theme-modern .tai-dropdown .tai-cmd-danger {
+  border-color: color-mix(in srgb, var(--red) 36%, transparent) !important;
+  background: color-mix(in srgb, var(--red) 6%, transparent) !important;
+}
+.theme-modern .tai-dropdown .tai-cmd-needs-backup {
+  border-color: color-mix(in srgb, var(--amber) 40%, transparent) !important;
+  background: color-mix(in srgb, var(--amber) 8%, transparent) !important;
+}
+.theme-modern .tai-dropdown .tai-cmd-warn-icon {
+  color: var(--amber);
+}
+.theme-modern .tai-dropdown .tai-cmd-badge-danger {
+  color: var(--red);
+  background: color-mix(in srgb, var(--red) 10%, transparent);
+}
+.theme-modern .tai-dropdown .tai-cmd-badge-backup {
+  color: var(--amber);
+  background: color-mix(in srgb, var(--amber) 12%, transparent);
+}
+.theme-modern .tai-dropdown .tai-cmd-badge-safe {
+  color: var(--green);
+  background: color-mix(in srgb, var(--green) 10%, transparent);
+}
+.theme-modern .tai-dropdown .tai-cmd-run {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: auto;
+  height: 18px;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: var(--r-s);
+  color: var(--accent);
+  font-size: var(--fs-2xs);
+  white-space: nowrap;
+}
+.theme-modern .tai-dropdown .tai-cmd-run:hover:not(:disabled) {
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 26%, transparent);
+  color: var(--accent);
+}
+.theme-modern .tai-dropdown .tai-cmd-run:disabled {
+  opacity: 0.4;
+}
+/* 底部输入区（原型 597-598）：1px --line 上边框 + padding 10px 14px + 输入框 + fchip 行 */
+.theme-modern .tai-dropdown .tai-input-bar {
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--line) !important;
+  background: var(--panel) !important;
+}
+.theme-modern .tai-dropdown .tai-textarea {
+  min-height: 28px;
+  padding: 5px 10px;
+  border: 1px solid var(--line) !important;
+  border-radius: var(--r-s);
+  background: var(--panel) !important;
+  color: var(--ink) !important;
+  font-size: var(--fs-xs);
+  line-height: 1.5;
+}
+.theme-modern .tai-dropdown .tai-textarea:focus {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 2px var(--accent-soft);
+  outline: none;
+}
+.theme-modern .tai-dropdown .tai-textarea::placeholder {
+  color: var(--ink-muted);
+}
+.theme-modern .tai-dropdown .tai-send-btn {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--accent);
+  border-radius: var(--r-s);
+  background: var(--accent) !important;
+  color: var(--on-accent) !important;
+}
+.theme-modern .tai-dropdown .tai-send-btn:hover:not(:disabled) {
+  border-color: var(--accent-strong);
+  background: var(--accent-strong) !important;
+  color: var(--on-accent) !important;
+}
+/* D. 追问 chips = 原型 .fchip：24px 高 / 999px 胶囊 / 1px --line / --ink-soft 字 */
+.theme-modern .tai-dropdown .tai-quick-asks {
+  flex: 0 0 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.theme-modern .tai-dropdown .tai-quick-ask {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 11px;
+  border: 1px solid var(--line) !important;
+  border-radius: 999px;
+  background: var(--panel) !important;
+  color: var(--ink-soft) !important;
+  font-size: var(--fs-2xs);
+  white-space: nowrap;
+}
+.theme-modern .tai-dropdown .tai-quick-ask:hover:not(:disabled) {
+  border-color: var(--line-strong) !important;
+  background: var(--panel) !important;
+  color: var(--ink) !important;
+}
+.theme-modern .tai-dropdown .tai-quick-ask:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* C. 设置子视图：文字三级 --ink/--ink-soft/--ink-muted，控件 = 原型 .input，
+   底部按钮 = 原型 .btn.pri（保存）+ .btn（取消）。修复深色遗留文字色
+   （rgba(248,250,252,*)/rgba(191,219,254,*)）在浅底上近乎不可见的问题。 */
+.theme-modern .tai-dropdown .tai-settings {
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--panel) !important;
+  color: var(--ink) !important;
+}
+.theme-modern .tai-dropdown .tai-settings-title {
+  color: var(--ink);
+  font-size: var(--fs-sm);
+  font-weight: 650;
+}
+.theme-modern .tai-dropdown .tai-settings-field {
+  gap: 4px;
+}
+.theme-modern .tai-dropdown .tai-settings-field > span {
+  color: var(--ink-muted);
+  font-size: var(--fs-2xs);
+}
+.theme-modern .tai-dropdown .tai-settings .tai-input {
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--line) !important;
+  border-radius: var(--r-s);
+  background: var(--panel) !important;
+  color: var(--ink) !important;
+  font-size: var(--fs-xs);
+}
+.theme-modern .tai-dropdown .tai-settings .tai-input::placeholder {
+  color: var(--ink-muted);
+}
+.theme-modern .tai-dropdown .tai-settings .tai-input:focus {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 2px var(--accent-soft);
+  outline: none;
+}
+.theme-modern .tai-dropdown .tai-settings-check {
+  color: var(--ink-soft);
+  font-size: var(--fs-xs);
+}
+.theme-modern .tai-dropdown .tai-settings-check input[type="checkbox"] {
+  accent-color: var(--accent);
+}
+.theme-modern .tai-dropdown .tai-preset-btn {
+  padding: 7px 9px !important;
+  border: 1px solid var(--line) !important;
+  border-radius: var(--r-s) !important;
+  background: var(--panel) !important;
+}
+.theme-modern .tai-dropdown .tai-preset-btn:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 26%, transparent) !important;
+  background: var(--accent-soft) !important;
+}
+.theme-modern .tai-dropdown .tai-preset-btn strong {
+  color: var(--ink);
+  font-size: var(--fs-2xs);
+}
+.theme-modern .tai-dropdown .tai-preset-btn span {
+  color: var(--ink-muted);
+  font-size: var(--fs-2xs);
+}
+.theme-modern .tai-dropdown .tai-preset-active,
+.theme-modern .tai-dropdown .tai-preset-active:hover:not(:disabled) {
+  border-color: var(--accent) !important;
+  background: var(--accent-soft) !important;
+}
+.theme-modern .tai-dropdown .tai-preset-active strong {
+  color: var(--accent);
+}
+.theme-modern .tai-dropdown .tai-settings-actions {
+  gap: 6px;
+  margin-top: 2px;
+}
+.theme-modern .tai-dropdown .tai-btn-save {
+  flex: 1;
+  height: 28px;
+  border: 1px solid var(--accent) !important;
+  border-radius: var(--r-s);
+  background: var(--accent) !important;
+  color: var(--on-accent) !important;
+  font-size: var(--fs-xs);
+  font-weight: 550;
+}
+.theme-modern .tai-dropdown .tai-btn-save:hover:not(:disabled) {
+  border-color: var(--accent-strong) !important;
+  background: var(--accent-strong) !important;
+  color: var(--on-accent) !important;
+}
+.theme-modern .tai-dropdown .tai-btn-cancel {
+  flex: 1;
+  height: 28px;
+  border: 1px solid var(--line) !important;
+  border-radius: var(--r-s);
+  background: var(--panel) !important;
+  color: var(--ink) !important;
+  font-size: var(--fs-xs);
+}
+.theme-modern .tai-dropdown .tai-btn-cancel:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 26%, transparent) !important;
+  background: var(--accent-soft) !important;
+  color: var(--ink) !important;
+}
+
+/* 用户消息文字：压过 styles-tsc.css 的 .tai-msg-user p 遗留深色气泡规则
+   （inline-block + max-width:85% 在内容自适应卡片里导致两三个字就换行） */
+.theme-modern .tai-dropdown .tai-user-card .tai-user-text {
+  display: block;
+  max-width: 100%;
+  width: auto;
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+}
+.theme-modern .tai-dropdown .tai-hdr-btn-chat {
+  white-space: nowrap;
+  flex: none;
+}
+
+/* ---------- 15. AI 侧板宽度与头部收缩保护（用户反馈 2026-10-01：消息换行/按钮重叠/模型名截断） ----------
+   根因：.terminal-side-panel 虽有 flex-basis 320px（theme-modern-v2 §29/21），但未禁收缩——
+   flex 行布局里被左侧内容挤压至 <320px，头部一行放不下「GLM-4·⌘J + 新对话 + 设置 + ×」
+   相互重叠，消息区被压到 ~160px 导致文字两三字一断。此处钉死宽度 + 头部收缩策略。 */
+.theme-modern .terminal-side-panel {
+  flex: 0 0 320px;
+  width: 320px;
+  min-width: 320px;
+  max-width: 320px;
+}
+.theme-modern .terminal-side-panel .tai-dropdown {
+  width: 100%;
+}
+/* 头部：标题不许缩，动作区允许内部压缩但不换行；模型 chip 截断省略 */
+.theme-modern .tai-dropdown .tai-header {
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+.theme-modern .tai-dropdown .tai-header-title {
+  flex: none;
+  white-space: nowrap;
+}
+.theme-modern .tai-dropdown .tai-header-actions {
+  flex: 1 1 auto;
+  min-width: 0;
+  justify-content: flex-end;
+  flex-wrap: nowrap;
+}
+.theme-modern .tai-dropdown .tai-model-chip {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 96px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.theme-modern .tai-dropdown .tai-hdr-btn-chat {
+  flex: none;
+  white-space: nowrap;
+}
+.theme-modern .tai-dropdown .tai-hdr-btn {
+  flex: none;
+}
+/* 消息区：占满侧板宽度，不再被气泡遗留规则压窄 */
+.theme-modern .tai-dropdown .tai-messages {
+  width: 100%;
+  min-width: 0;
+}
+
+/* ---------- 16. AI 侧板响应式：宽屏并排 / 窄屏悬浮覆盖（用户反馈"独立伸缩空间"2026-10-01） ----------
+   实测（CDP 756px 视口）：侧板钉死 320px 后终端主体被压到 368px——"独立伸缩空间"的正确语义是
+   小屏时不与终端抢横向空间。对齐项目 §3d 抽屉规范：≥1024px 并排（侧板留在 flex 流，终端收窄）；
+   <1024px 悬浮覆盖（absolute 挂终端区右上，不占布局，点击外部/Esc 关闭由组件既有逻辑承接）。 */
+@media (max-width: 1023px) {
+  .theme-modern .terminal-body-layout {
+    position: relative;
+  }
+  .theme-modern .terminal-side-panel {
+    position: absolute;
+    top: 8px;
+    right: 10px;
+    bottom: 8px;
+    z-index: 15;
+    width: min(320px, calc(100% - 20px));
+    min-width: 0;
+    max-width: calc(100% - 20px);
+    border: 1px solid var(--line);
+    border-radius: var(--r-m);
+    box-shadow: var(--v2-shadow-pop);
+    background: var(--panel);
+  }
+  /* 覆盖态下终端主体恢复全宽，不再被侧板压缩 */
+  .theme-modern .terminal-main-shell {
+    flex: 1 1 100%;
+  }
+}
+
+/* 头部元素减员后（新对话=纯图标、chip 去掉 ⌘J 尾巴），chip 不再需要截断上限 */
+.theme-modern .tai-dropdown .tai-model-chip {
+  flex: none;
+  max-width: none;
+}
+.theme-modern .tai-dropdown .tai-hdr-btn-chat {
+  width: 24px;
+  padding: 0;
+  justify-content: center;
 }

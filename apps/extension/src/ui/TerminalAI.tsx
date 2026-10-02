@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
-import { X, Send, Settings, Play, Loader, AlertTriangle, Sparkles, Plus } from "lucide-react";
+import { X, Send, Settings, Loader, AlertTriangle, Sparkles, Plus } from "lucide-react";
 import {
   readAIConfig,
   saveAIConfig,
@@ -103,16 +103,33 @@ function CommandBlock(props: {
         disabled={isBlocked}
         onClick={() => props.onExecute(props.command)}
       >
-        <Play size={10} fill="currentColor" />
+        {/* 原型 S5 命令块右侧「↵ 发送」提示（保留点击发送能力） */}
+        <span className="tai-cmd-run-hint">↵ 发送</span>
       </button>
     </div>
   );
 }
 
-function MessageBubble(props: { msg: ChatMessage; executedBackupTokens: string[]; onExecute: (cmd: string) => void }) {
+function MessageBubble(props: {
+  msg: ChatMessage;
+  executedBackupTokens: string[];
+  onExecute: (cmd: string) => void;
+  /* 原型 S5 第 585 行引用 chip「已引用选中 N 行」：选中引用生效中时随用户消息展示 */
+  selectionLineCount?: number;
+}) {
   const { msg } = props;
   if (msg.role === "user") {
-    return <div className="tai-msg tai-msg-user"><p>{msg.content}</p></div>;
+    return (
+      <div className="tai-msg tai-msg-user">
+        {/* 原型引用块形态：1px --line 描边 + --panel 底的紧凑卡片，右对齐 */}
+        <div className="tai-user-card">
+          {props.selectionLineCount ? (
+            <span className="chip tai-user-quote-chip">已引用选中 {props.selectionLineCount} 行</span>
+          ) : null}
+          <p className="tai-user-text">{msg.content}</p>
+        </div>
+      </div>
+    );
   }
 
   const parts = msg.content.split(/(```(?:bash|sh|shell)?\s*\n[\s\S]*?```)/g);
@@ -398,7 +415,8 @@ export function TerminalAI(props: TerminalAIProps) {
       onMouseDown={(event) => event.stopPropagation()}
       onClick={(event) => event.stopPropagation()}
     >
-      {/* Header —— 原型 S5 第 583 行：`终端 AI` + chip `GLM-4 · ⌘J` */}
+      {/* Header —— 原型 S5 第 583 行：`终端 AI` + 模型 chip + 动作。320px 抽屉里一行最多容纳
+          4 个图标级元素，"新对话"砍文字改纯图标（tooltip 承载语义），chip 去掉「· ⌘J」尾巴。 */}
       <div className="tai-header">
         <div className="tai-header-title">
           <Sparkles size={13} className="tai-sparkle" />
@@ -406,16 +424,16 @@ export function TerminalAI(props: TerminalAIProps) {
           {!configured && <span className="tai-badge-unconfigured">未配置</span>}
         </div>
         <div className="tai-header-actions">
-          <span className="chip tai-model-chip" title={config.model || "GLM-4"}>{modelChipLabel(config.model)} · ⌘J</span>
+          <span className="chip tai-model-chip" title={`${config.model || "GLM-4"} · 快捷键 ⌘J`}>{modelChipLabel(config.model)}</span>
           <button
             type="button"
             className="tai-hdr-btn tai-hdr-btn-chat"
             title="新对话"
+            aria-label="新对话"
             disabled={!canStartNewChat}
             onClick={handleNewChat}
           >
-            <Plus size={12} />
-            <span>新对话</span>
+            <Plus size={13} />
           </button>
           <button type="button" className="tai-hdr-btn" title="设置" onClick={() => setShowSettings((v) => !v)}>
             <Settings size={13} />
@@ -475,6 +493,7 @@ export function TerminalAI(props: TerminalAIProps) {
                 msg={msg}
                 executedBackupTokens={executedBackupTokens}
                 onExecute={handleExecute}
+                selectionLineCount={selectionLineCount}
               />
             ))}
 
