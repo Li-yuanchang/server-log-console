@@ -40,9 +40,17 @@
    ============================================================ */
 
 /* --- 1. CSS 变量 --- */
+/* html 底色随主题（防深色主题白边；.ui-theme-* 挂在 .app-shell 上） */
 :root:has(.theme-modern) {
   background: #fafafa;
 }
+:root:has(.ui-theme-carbon) { background: #0a0a0a; }
+:root:has(.ui-theme-steel) { background: #f6f8fa; }
+:root:has(.ui-theme-slate) { background: #0b1220; }
+:root:has(.ui-theme-sand) { background: #faf9f7; }
+:root:has(.ui-theme-espresso) { background: #1c1917; }
+:root:has(.ui-theme-cal) { background: #ffffff; }
+:root:has(.ui-theme-ink) { background: #09090b; }
 
 :root:has(.pip-standalone) {
   background: #0a0a0a;
@@ -85,6 +93,10 @@
   --shell-mut: #5c6b7a;
   --sidebar-bg: #ffffff;
   --sidebar-line: #eaeaea;
+  /* var(--ink) 之上的前景（页签选中、黑底徽标等）；离线状态点；遮罩 */
+  --on-ink: #ffffff;
+  --dot-idle: #c8ccd2;
+  --overlay: rgba(23, 23, 23, 0.28);
   --app-font-family: "Geist", "Inter", -apple-system, "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   --custom-background-color: #f7f9fc;
   --custom-gradient-start: #eef5ff;
@@ -102,139 +114,248 @@
   background: var(--bg);
   font-family: var(--app-font-family);
   letter-spacing: -0.01em;
-}
+}/* ============================================================
+   8 套内置主题（.ui-theme-<id>，定稿见 docs/ui-redesign-2026-09/
+   设置中心重设计方案-2026-10-01.md §3.2 / 主题系统实施梳理-2026-10-02.md）
+   每套 = 完整 token 组；强调色随主题走（on-accent 黑白由对比度决定）。
+   基础 .theme-modern 块的取值 = 晨白兜底。
+   ============================================================ */
 
-.theme-modern.ui-surface-mist {
-  --bg: #eef5f7;
-  --panel: rgba(248, 252, 253, 0.94);
-  --panel-strong: rgba(255, 255, 255, 0.9);
-  --panel-muted: #edf6f8;
-  --line: rgba(49, 95, 141, 0.16);
-  --line-strong: rgba(49, 95, 141, 0.28);
-  /* accent 三件套 + on-accent 随方案联动（主按钮/焦点色整体跟随主题） */
-  --accent: #31708f;
-  --accent-strong: #275a73;
-  --accent-soft: rgba(49, 112, 143, 0.1);
+.theme-modern.ui-theme-geist {
+  --bg: #fafafa; --panel: #ffffff; --panel-strong: #ffffff; --panel-muted: #f5f5f5;
+  --ink: #171717; --ink-soft: #595959; --ink-muted: #808080;
+  --line: #e7e7e7; --line-strong: #d0d0d0;
+  --accent: #0070f3; --accent-strong: #0060df; --accent-soft: rgba(0, 112, 243, 0.08);
   --on-accent: #ffffff;
-  --sidebar-bg: rgba(248, 252, 253, 0.92);
-  --sidebar-line: rgba(49, 95, 141, 0.16);
+  --green: #0a7b3e; --green-dot: #22c55e; --red: #d41313; --red-soft: rgba(212, 19, 19, 0.07);
+  --amber: #b45309; --amber-soft: rgba(180, 83, 9, 0.09); --warning: #b45309;
+  --shell: #0a0a0a; --shell-soft: #111111; --shell-ink: #d7dde5; --shell-mut: #5c6b7a;
+  --sidebar-bg: #ffffff; --sidebar-line: #e7e7e7;
+  --on-ink: #ffffff; --dot-idle: #c8ccd2;
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 
-.theme-modern.ui-surface-paper {
-  --bg: #f4efe4;
-  --panel: rgba(255, 252, 244, 0.94);
-  --panel-strong: rgba(255, 254, 250, 0.92);
-  --panel-muted: #f2eadc;
-  --line: rgba(120, 88, 48, 0.16);
-  --line-strong: rgba(120, 88, 48, 0.28);
-  --accent: #8a6a3f;
-  --accent-strong: #71552f;
-  --accent-soft: rgba(138, 106, 63, 0.12);
+.theme-modern.ui-theme-carbon {
+  --bg: #0a0a0a; --panel: #121212; --panel-strong: #191919; --panel-muted: #171717;
+  --ink: #ededed; --ink-soft: #a6a6a6; --ink-muted: #7a7a7a;
+  --line: #262626; --line-strong: #3a3a3a;
+  --accent: #0070f3; --accent-strong: color-mix(in srgb, #0070f3 82%, #ffffff); --accent-soft: rgba(0, 112, 243, 0.16);
   --on-accent: #ffffff;
-  --sidebar-bg: rgba(255, 252, 244, 0.92);
-  --sidebar-line: rgba(120, 88, 48, 0.16);
+  --green: #4ade80; --green-dot: #4ade80; --red: #f87171; --red-soft: rgba(248, 113, 113, 0.14);
+  --amber: #fbbf24; --amber-soft: rgba(251, 191, 36, 0.14); --warning: #fbbf24;
+  --shell: #050505; --shell-soft: #0b0b0d; --shell-ink: #d7dde5; --shell-mut: #6b7684;
+  --sidebar-bg: #121212; --sidebar-line: #262626;
+  --on-ink: #0a0a0a; --dot-idle: #4a4a4a;
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.4);
 }
 
-.theme-modern.ui-surface-mist,
-.theme-modern.ui-surface-paper {
+.theme-modern.ui-theme-steel {
+  --bg: #f6f8fa; --panel: #ffffff; --panel-strong: #ffffff; --panel-muted: #eef2f6;
+  --ink: #0f172a; --ink-soft: #525f70; --ink-muted: #7d8b9c;
+  --line: #e2e8f0; --line-strong: #c9d4e0;
+  --accent: #2563eb; --accent-strong: #1d4ed8; --accent-soft: rgba(37, 99, 235, 0.09);
+  --on-accent: #ffffff;
+  --green: #0a7b3e; --green-dot: #22c55e; --red: #d41313; --red-soft: rgba(212, 19, 19, 0.07);
+  --amber: #b45309; --amber-soft: rgba(180, 83, 9, 0.09); --warning: #b45309;
+  --shell: #0a0a0a; --shell-soft: #111111; --shell-ink: #d7dde5; --shell-mut: #5c6b7a;
+  --sidebar-bg: #ffffff; --sidebar-line: #e2e8f0;
+  --on-ink: #ffffff; --dot-idle: #c2ccd6;
+  --shadow-sm: 0 2px 8px rgba(15, 23, 42, 0.06);
+}
+
+.theme-modern.ui-theme-slate {
+  --bg: #0b1220; --panel: #111827; --panel-strong: #18213a; --panel-muted: #0e1626;
+  --ink: #e2e8f0; --ink-soft: #94a3b8; --ink-muted: #6b7c92;
+  --line: #1e293b; --line-strong: #334155;
+  --accent: #60a5fa; --accent-strong: color-mix(in srgb, #60a5fa 82%, #ffffff); --accent-soft: rgba(96, 165, 250, 0.14);
+  --on-accent: #141414;
+  --green: #4ade80; --green-dot: #4ade80; --red: #f87171; --red-soft: rgba(248, 113, 113, 0.14);
+  --amber: #fbbf24; --amber-soft: rgba(251, 191, 36, 0.14); --warning: #fbbf24;
+  --shell: #060a12; --shell-soft: #0b1220; --shell-ink: #cbd5e1; --shell-mut: #64748b;
+  --sidebar-bg: #111827; --sidebar-line: #1e293b;
+  --on-ink: #0b1220; --dot-idle: #3a4a63;
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.45);
+}
+
+.theme-modern.ui-theme-sand {
+  --bg: #faf9f7; --panel: #ffffff; --panel-strong: #ffffff; --panel-muted: #f3f1ec;
+  --ink: #1c1917; --ink-soft: #6b6259; --ink-muted: #94897e;
+  --line: #eae5dd; --line-strong: #d7d0c4;
+  --accent: #9a6a1a; --accent-strong: #7e5615; --accent-soft: rgba(154, 106, 26, 0.1);
+  --on-accent: #ffffff;
+  --green: #0a7b3e; --green-dot: #22c55e; --red: #d41313; --red-soft: rgba(212, 19, 19, 0.07);
+  --amber: #b45309; --amber-soft: rgba(180, 83, 9, 0.09); --warning: #b45309;
+  --shell: #0a0a0a; --shell-soft: #111111; --shell-ink: #d7dde5; --shell-mut: #5c6b7a;
+  --sidebar-bg: #ffffff; --sidebar-line: #eae5dd;
+  --on-ink: #ffffff; --dot-idle: #cfc8bc;
+  --shadow-sm: 0 2px 8px rgba(28, 25, 23, 0.06);
+}
+
+.theme-modern.ui-theme-espresso {
+  --bg: #1c1917; --panel: #26221f; --panel-strong: #2f2a25; --panel-muted: #211d1a;
+  --ink: #f5f5f4; --ink-soft: #b8b0a8; --ink-muted: #857a70;
+  --line: #332e29; --line-strong: #4a423a;
+  --accent: #d97706; --accent-strong: color-mix(in srgb, #d97706 82%, #ffffff); --accent-soft: rgba(217, 119, 6, 0.14);
+  --on-accent: #141414;
+  --green: #4ade80; --green-dot: #4ade80; --red: #f87171; --red-soft: rgba(248, 113, 113, 0.14);
+  --amber: #fbbf24; --amber-soft: rgba(251, 191, 36, 0.14); --warning: #fbbf24;
+  --shell: #120f0d; --shell-soft: #191512; --shell-ink: #e7e1da; --shell-mut: #857a70;
+  --sidebar-bg: #26221f; --sidebar-line: #332e29;
+  --on-ink: #1c1917; --dot-idle: #4a423a;
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+.theme-modern.ui-theme-cal {
+  --bg: #ffffff; --panel: #ffffff; --panel-strong: #ffffff; --panel-muted: #f5f5f5;
+  --ink: #1a1a1a; --ink-soft: #6b6b6b; --ink-muted: #8c8c8c;
+  --line: #e8e8e8; --line-strong: #cfcfcf;
+  --accent: #1a1a1a; --accent-strong: #000000; --accent-soft: rgba(26, 26, 26, 0.06);
+  --on-accent: #ffffff;
+  --green: #0a7b3e; --green-dot: #22c55e; --red: #d41313; --red-soft: rgba(212, 19, 19, 0.07);
+  --amber: #b45309; --amber-soft: rgba(180, 83, 9, 0.09); --warning: #b45309;
+  --shell: #0a0a0a; --shell-soft: #111111; --shell-ink: #d7dde5; --shell-mut: #5c6b7a;
+  --sidebar-bg: #ffffff; --sidebar-line: #e8e8e8;
+  --on-ink: #ffffff; --dot-idle: #cfcfcf;
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.theme-modern.ui-theme-ink {
+  --bg: #09090b; --panel: #18181b; --panel-strong: #202024; --panel-muted: #121214;
+  --ink: #fafafa; --ink-soft: #a1a1aa; --ink-muted: #71717a;
+  --line: #27272a; --line-strong: #3f3f46;
+  --accent: #fafafa; --accent-strong: #ffffff; --accent-soft: rgba(250, 250, 250, 0.1);
+  --on-accent: #141414;
+  --green: #4ade80; --green-dot: #4ade80; --red: #f87171; --red-soft: rgba(248, 113, 113, 0.14);
+  --amber: #fbbf24; --amber-soft: rgba(251, 191, 36, 0.14); --warning: #fbbf24;
+  --shell: #050505; --shell-soft: #0c0c0e; --shell-ink: #d7dde5; --shell-mut: #6b7280;
+  --sidebar-bg: #18181b; --sidebar-line: #27272a;
+  --on-ink: #09090b; --dot-idle: #3f3f46;
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+/* ============================================================
+   背景层（独立于主题的一层；ui-bg-fancy = 非纯色 → 面板半透明 + 毛玻璃）
+   纹理色用 color-mix(var(--ink)) 派生 → 同一条规则同时适配浅/深主题。
+   ============================================================ */
+
+.theme-modern.ui-bg-aurora {
   background:
-    radial-gradient(circle at 18% 8%, color-mix(in srgb, var(--accent-soft) 72%, transparent), transparent 36%),
-    linear-gradient(135deg, var(--bg), color-mix(in srgb, var(--panel-muted) 38%, var(--bg) 62%));
+    radial-gradient(120% 90% at 14% 0%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 52%),
+    radial-gradient(100% 80% at 96% 6%, color-mix(in srgb, #8b5cf6 10%, transparent), transparent 50%),
+    var(--bg);
 }
 
-.theme-modern.ui-surface-custom {
-  --bg: color-mix(in srgb, var(--custom-background-color) 82%, #ffffff 18%);
-  --panel: color-mix(in srgb, var(--custom-panel-tint) 82%, var(--custom-background-color) 18%);
-  --panel-strong: color-mix(in srgb, rgba(255, 255, 255, 0.88) 86%, var(--custom-background-color) 14%);
-  --panel-muted: color-mix(in srgb, var(--custom-background-color) 22%, #ffffff 78%);
-  --ink: var(--custom-text-color);
-  --ink-soft: color-mix(in srgb, var(--custom-text-color) 72%, #64748b 28%);
-  --ink-muted: color-mix(in srgb, var(--custom-text-color) 54%, #94a3b8 46%);
-  --line: color-mix(in srgb, var(--custom-text-color) 12%, rgba(255, 255, 255, 0.62) 88%);
-  --line-strong: color-mix(in srgb, var(--custom-text-color) 22%, rgba(255, 255, 255, 0.58) 78%);
-  --accent-soft: color-mix(in srgb, var(--accent) 12%, transparent 88%);
-  --sidebar-bg: color-mix(in srgb, var(--panel-strong) 86%, transparent 14%);
-  --sidebar-line: var(--line);
-  --log-viewer-background: var(--custom-log-background-color);
-  --terminal-background: var(--custom-terminal-background-color);
-  --terminal-background-soft: color-mix(in srgb, var(--custom-terminal-background-color) 88%, #ffffff 12%);
-  color: var(--ink);
-  background: var(--custom-shell-background);
+.theme-modern.ui-bg-linear {
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--accent) 12%, var(--bg)),
+    color-mix(in srgb, var(--accent) 4%, var(--bg)) 55%,
+    var(--bg)
+  );
 }
 
-.theme-modern.ui-surface-custom,
-.theme-modern.ui-surface-custom .shell-layout {
-  background: var(--custom-shell-background);
+.theme-modern.ui-bg-grid {
+  background-color: var(--bg);
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--ink) 9%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--ink) 9%, transparent) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+
+.theme-modern.ui-bg-dots {
+  background-color: var(--bg);
+  background-image: radial-gradient(color-mix(in srgb, var(--ink) 14%, transparent) 1.4px, transparent 1.4px);
+  background-size: 15px 15px;
+}
+
+.theme-modern.ui-bg-diag {
+  background-color: var(--bg);
+  background-image: repeating-linear-gradient(
+    45deg,
+    color-mix(in srgb, var(--ink) 7%, transparent) 0 1px,
+    transparent 1px 13px
+  );
+}
+
+.theme-modern.ui-bg-noise {
+  background-color: var(--bg);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E");
+}
+.theme-modern.ui-theme-carbon.ui-bg-noise,
+.theme-modern.ui-theme-slate.ui-bg-noise,
+.theme-modern.ui-theme-espresso.ui-bg-noise,
+.theme-modern.ui-theme-ink.ui-bg-noise {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='0.07'/%3E%3C/svg%3E");
+}
+
+.theme-modern.ui-bg-image {
+  background:
+    linear-gradient(135deg, rgba(248, 250, 252, 0.34), rgba(255, 255, 255, 0.2)),
+    radial-gradient(circle at 18% 12%, rgba(255, 255, 255, 0.22), transparent 34%),
+    radial-gradient(circle at 88% 10%, rgba(15, 23, 42, 0.1), transparent 30%),
+    var(--custom-background-image, none),
+    var(--bg);
+  background-attachment: fixed;
+  background-position: center;
+  background-size: cover;
+}
+.theme-modern.ui-theme-carbon.ui-bg-image,
+.theme-modern.ui-theme-slate.ui-bg-image,
+.theme-modern.ui-theme-espresso.ui-bg-image,
+.theme-modern.ui-theme-ink.ui-bg-image {
+  background:
+    linear-gradient(135deg, rgba(10, 10, 12, 0.52), rgba(10, 10, 12, 0.3)),
+    radial-gradient(circle at 18% 12%, rgba(0, 0, 0, 0.3), transparent 34%),
+    var(--custom-background-image, none),
+    var(--bg);
   background-attachment: fixed;
   background-position: center;
   background-size: cover;
 }
 
-.theme-modern.ui-surface-custom.ui-custom-background-solid {
-  --custom-shell-background:
-    radial-gradient(circle at 14% 8%, rgba(255, 255, 255, 0.32), transparent 28%),
-    linear-gradient(135deg, var(--custom-background-color), color-mix(in srgb, var(--custom-background-color) 78%, #ffffff 22%));
-}
-
-.theme-modern.ui-surface-custom.ui-custom-background-gradient {
-  --custom-shell-background:
-    radial-gradient(circle at 16% 10%, color-mix(in srgb, var(--custom-gradient-start) 64%, transparent), transparent 34%),
-    radial-gradient(circle at 88% 18%, color-mix(in srgb, var(--custom-gradient-end) 58%, transparent), transparent 32%),
-    linear-gradient(135deg, var(--custom-gradient-start), var(--custom-gradient-end));
-  --bg: color-mix(in srgb, var(--custom-gradient-start) 45%, var(--custom-gradient-end) 55%);
-  --panel-muted: color-mix(in srgb, var(--custom-gradient-start) 14%, #ffffff 86%);
-}
-
-.theme-modern.ui-surface-custom.ui-custom-background-image {
-  --custom-shell-background:
-    linear-gradient(135deg, rgba(248, 250, 252, 0.34), rgba(255, 255, 255, 0.2)),
-    radial-gradient(circle at 18% 12%, rgba(255, 255, 255, 0.22), transparent 34%),
-    radial-gradient(circle at 88% 10%, rgba(15, 23, 42, 0.1), transparent 30%),
-    var(--custom-background-image),
-    linear-gradient(135deg, var(--custom-gradient-start), var(--custom-gradient-end));
-  --panel: rgba(255, 255, 255, 0.46);
-  --panel-strong: rgba(255, 255, 255, 0.62);
-  --panel-muted: rgba(255, 255, 255, 0.34);
-  --custom-panel-tint: rgba(255, 255, 255, 0.56);
-  --line: color-mix(in srgb, var(--custom-text-color) 16%, rgba(255, 255, 255, 0.48) 84%);
-  --line-strong: color-mix(in srgb, var(--custom-text-color) 28%, rgba(255, 255, 255, 0.42) 72%);
-  --sidebar-bg: rgba(255, 255, 255, 0.54);
-}
-
-.theme-modern.ui-surface-custom .main-panel,
-.theme-modern.ui-surface-custom .main-panel.main-panel {
+/* 非纯色背景：主面板 / 侧栏 / 工具栏 / 工作区 / 高级面板 → 半透明 + 毛玻璃 */
+.theme-modern.ui-bg-fancy .main-panel,
+.theme-modern.ui-bg-fancy .main-panel.main-panel {
   background:
-    linear-gradient(180deg, color-mix(in srgb, var(--panel-muted) 44%, transparent), color-mix(in srgb, var(--panel) 28%, transparent));
+    linear-gradient(180deg, color-mix(in srgb, var(--panel-muted) 44%, transparent), color-mix(in srgb, var(--panel) 46%, transparent));
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
 }
 
-.theme-modern.ui-surface-custom .sidebar-panel,
-.theme-modern.ui-surface-custom .toolbar-panel,
-.theme-modern.ui-surface-custom .workspace-panel,
-.theme-modern.ui-surface-custom .advanced-panel {
-  background: color-mix(in srgb, var(--panel-strong) 82%, transparent 18%);
+.theme-modern.ui-bg-fancy .sidebar-panel,
+.theme-modern.ui-bg-fancy .toolbar-panel,
+.theme-modern.ui-bg-fancy .workspace-panel,
+.theme-modern.ui-bg-fancy .advanced-panel {
+  background: color-mix(in srgb, var(--panel) 62%, transparent);
   border-color: var(--line);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(16px) saturate(1.05);
+  -webkit-backdrop-filter: blur(16px) saturate(1.05);
 }
 
-.theme-modern.ui-surface-custom.ui-custom-background-image .main-panel,
-.theme-modern.ui-surface-custom.ui-custom-background-image .main-panel.main-panel {
+/* 毛玻璃背景下设置弹窗的背板与壳 */
+.theme-modern.ui-bg-fancy .settings-modal-backdrop {
+  background: color-mix(in srgb, var(--bg) 28%, rgba(15, 23, 42, 0.26) 72%);
+}
+.theme-modern.ui-bg-fancy .settings-modal-shell {
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.04));
-  backdrop-filter: blur(6px) saturate(1.04);
-  -webkit-backdrop-filter: blur(6px) saturate(1.04);
+    linear-gradient(180deg, color-mix(in srgb, var(--panel) 94%, transparent), color-mix(in srgb, var(--panel-muted) 42%, var(--panel) 58%));
+  border-color: var(--line);
 }
-
-.theme-modern.ui-surface-custom.ui-custom-background-image .sidebar-panel,
-.theme-modern.ui-surface-custom.ui-custom-background-image .toolbar-panel,
-.theme-modern.ui-surface-custom.ui-custom-background-image .workspace-panel,
-.theme-modern.ui-surface-custom.ui-custom-background-image .advanced-panel {
-  background: rgba(255, 255, 255, 0.56);
-  border-color: rgba(15, 23, 42, 0.12);
-  backdrop-filter: blur(12px) saturate(1.08);
-  -webkit-backdrop-filter: blur(12px) saturate(1.08);
+.theme-modern.ui-bg-image .settings-modal-shell {
+  background:
+    radial-gradient(circle at 12% 8%, color-mix(in srgb, var(--accent-soft) 60%, transparent), transparent 34%),
+    linear-gradient(180deg, color-mix(in srgb, var(--panel-strong) 88%, transparent), color-mix(in srgb, var(--panel-muted) 76%, transparent));
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
+}
+.theme-modern.ui-bg-image .settings-modal-backdrop {
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.22), rgba(15, 23, 42, 0.08)), rgba(255, 255, 255, 0.16);
+}
+.theme-modern.ui-theme-carbon.ui-bg-image .settings-modal-backdrop,
+.theme-modern.ui-theme-slate.ui-bg-image .settings-modal-backdrop,
+.theme-modern.ui-theme-espresso.ui-bg-image .settings-modal-backdrop,
+.theme-modern.ui-theme-ink.ui-bg-image .settings-modal-backdrop {
+  background: linear-gradient(135deg, rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.2));
 }
 
 .theme-modern.pip-standalone {
@@ -312,18 +433,6 @@
   padding: 0;
   gap: 0;
   background: var(--panel);
-}
-
-.theme-modern.ui-surface-mist .sidebar-panel,
-.theme-modern.ui-surface-mist .toolbar-panel,
-.theme-modern.ui-surface-mist .workspace-panel,
-.theme-modern.ui-surface-mist .advanced-panel,
-.theme-modern.ui-surface-paper .sidebar-panel,
-.theme-modern.ui-surface-paper .toolbar-panel,
-.theme-modern.ui-surface-paper .workspace-panel,
-.theme-modern.ui-surface-paper .advanced-panel {
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
 }
 
 /* --- 4. 侧边栏（浅色） --- */
@@ -507,9 +616,9 @@
 }
 
 .theme-modern .server-item-mini-danger:hover:not(:disabled) {
-  border-color: rgba(220, 38, 38, 0.18);
-  background: rgba(254, 242, 242, 0.92);
-  color: #b91c1c;
+  border-color: color-mix(in srgb, var(--red) 18%, transparent);
+  background: var(--red-soft);
+  color: var(--red);
 }
 
 .theme-modern .server-item:hover {
@@ -1438,15 +1547,15 @@
 }
 
 .theme-modern .file-loading-card {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(247, 248, 250, 0.86));
-  border: 1px solid rgba(23, 23, 23, 0.075);
-  box-shadow: 0 16px 36px rgba(23, 23, 23, 0.07), inset 0 1px 0 rgba(255, 255, 255, 0.76);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-sm);
 }
 .theme-modern .file-loading-bar {
-  background: rgba(23, 23, 23, 0.055);
+  background: var(--panel-muted);
 }
 .theme-modern .file-loading-bar-fill {
-  background: linear-gradient(90deg, transparent, rgba(82, 96, 112, 0.18), rgba(82, 96, 112, 0.42), rgba(82, 96, 112, 0.18), transparent);
+  background: linear-gradient(90deg, transparent, var(--accent-soft), color-mix(in srgb, var(--accent) 40%, transparent), var(--accent-soft), transparent);
 }
 .theme-modern .file-loading-label strong {
   color: var(--ink);
@@ -1769,8 +1878,8 @@
 }
 
 .theme-modern .workspace-session-tab-active .workspace-session-tab-close:hover {
-  background: rgba(239, 68, 68, 0.1);
-  color: #b91c1c;
+  background: color-mix(in srgb, var(--red) 10%, transparent);
+  color: var(--red);
 }
 
 .theme-modern .pathbar-breadcrumbs {
@@ -2098,12 +2207,12 @@
 }
 
 .theme-modern .file-action-danger {
-  color: #b91c1c;
+  color: var(--red);
 }
 
 .theme-modern .file-action-danger:hover {
   background: transparent !important;
-  color: #7f1010;
+  color: color-mix(in srgb, var(--red) 84%, var(--ink));
   box-shadow: none !important;
 }
 
@@ -3035,13 +3144,13 @@
 
 .theme-modern .utility-workspace {
   border-left: 1px solid var(--line);
-  background: rgba(248, 250, 252, 0.98);
+  background: var(--bg);
   box-shadow: none;
 }
 
 .theme-modern .utility-workspace-topbar {
   border-bottom: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.92);
+  background: var(--panel);
 }
 
 .theme-modern .utility-workspace-titleblock strong {
@@ -3255,14 +3364,14 @@
 }
 
 .theme-modern .confirm-btn-danger {
-  border-color: rgba(220, 38, 38, 0.28);
-  background: #dc2626;
-  color: #fff;
+  border-color: color-mix(in srgb, var(--red) 28%, transparent);
+  background: var(--red);
+  color: var(--on-ink);
 }
 
 .theme-modern .confirm-btn-danger:hover:not(:disabled) {
-  border-color: #b91c1c;
-  background: #b91c1c;
+  border-color: color-mix(in srgb, var(--red) 82%, var(--ink));
+  background: color-mix(in srgb, var(--red) 82%, var(--ink));
   color: #fff;
 }
 
@@ -3506,59 +3615,6 @@
   padding: 0;
 }
 
-.theme-modern.ui-surface-mist .settings-modal-backdrop,
-.theme-modern.ui-surface-paper .settings-modal-backdrop,
-.theme-modern.ui-surface-custom .settings-modal-backdrop {
-  background: color-mix(in srgb, var(--bg) 28%, rgba(15, 23, 42, 0.26) 72%);
-}
-
-.theme-modern.ui-surface-mist .settings-modal-shell,
-.theme-modern.ui-surface-paper .settings-modal-shell,
-.theme-modern.ui-surface-custom .settings-modal-shell {
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--panel) 94%, white 6%), color-mix(in srgb, var(--panel-muted) 42%, var(--panel) 58%));
-  border-color: var(--line);
-  box-shadow: 0 28px 72px rgba(15, 23, 42, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.78);
-}
-
-.theme-modern.ui-surface-mist .settings-modal-shell {
-  background:
-    radial-gradient(circle at 12% 8%, rgba(47, 128, 192, 0.1), transparent 32%),
-    linear-gradient(180deg, rgba(249, 253, 254, 0.96), rgba(239, 247, 249, 0.94));
-}
-
-.theme-modern.ui-surface-paper .settings-modal-shell {
-  background:
-    linear-gradient(135deg, rgba(120, 88, 48, 0.035) 25%, transparent 25%) 0 0 / 18px 18px,
-    linear-gradient(315deg, rgba(120, 88, 48, 0.025) 25%, transparent 25%) 0 0 / 18px 18px,
-    linear-gradient(180deg, rgba(255, 253, 247, 0.98), rgba(247, 239, 225, 0.95));
-}
-
-.theme-modern.ui-surface-custom .settings-modal-shell {
-  color: var(--ink);
-  background:
-    radial-gradient(circle at 12% 8%, color-mix(in srgb, var(--accent-soft) 60%, transparent), transparent 34%),
-    linear-gradient(180deg, color-mix(in srgb, var(--panel-strong) 88%, transparent), color-mix(in srgb, var(--panel-muted) 76%, transparent));
-  backdrop-filter: blur(22px);
-  -webkit-backdrop-filter: blur(22px);
-}
-
-.theme-modern.ui-surface-custom.ui-custom-background-image .settings-modal-backdrop {
-  background:
-    linear-gradient(135deg, rgba(15, 23, 42, 0.22), rgba(15, 23, 42, 0.08)),
-    rgba(255, 255, 255, 0.16);
-}
-
-.theme-modern.ui-surface-custom.ui-custom-background-image .settings-modal-shell {
-  background:
-    radial-gradient(circle at 12% 8%, rgba(255, 255, 255, 0.22), transparent 34%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.9));
-  border-color: rgba(15, 23, 42, 0.14);
-  box-shadow: 0 28px 72px rgba(15, 23, 42, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.56);
-  backdrop-filter: blur(12px) saturate(1.08);
-  -webkit-backdrop-filter: blur(12px) saturate(1.08);
-}
-
 .theme-modern .settings-workspace-head {
   flex: 0 0 auto;
 }
@@ -3648,57 +3704,6 @@
     linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(248, 249, 250, 0.72));
 }
 
-.theme-modern.ui-surface-mist .settings-card,
-.theme-modern.ui-surface-mist .settings-preference-item,
-.theme-modern.ui-surface-mist .settings-preference-toggle,
-.theme-modern.ui-surface-mist .settings-roadmap-grid span,
-.theme-modern.ui-surface-paper .settings-card,
-.theme-modern.ui-surface-paper .settings-preference-item,
-.theme-modern.ui-surface-paper .settings-preference-toggle,
-.theme-modern.ui-surface-paper .settings-roadmap-grid span,
-.theme-modern.ui-surface-custom .settings-card,
-.theme-modern.ui-surface-custom .settings-preference-item,
-.theme-modern.ui-surface-custom .settings-preference-toggle,
-.theme-modern.ui-surface-custom .settings-roadmap-grid span {
-  background: color-mix(in srgb, var(--panel-strong) 78%, var(--panel-muted) 22%);
-  border-color: var(--line);
-}
-
-.theme-modern.ui-surface-mist .settings-preference-hero {
-  background:
-    radial-gradient(circle at 16% 12%, rgba(47, 128, 192, 0.15), transparent 34%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(235, 246, 249, 0.78));
-}
-
-.theme-modern.ui-surface-paper .settings-preference-hero {
-  background:
-    radial-gradient(circle at 16% 12%, rgba(120, 88, 48, 0.1), transparent 34%),
-    linear-gradient(180deg, rgba(255, 253, 247, 0.9), rgba(246, 236, 220, 0.72));
-}
-
-.theme-modern.ui-surface-custom .settings-preference-hero {
-  background:
-    radial-gradient(circle at 16% 12%, color-mix(in srgb, var(--accent-soft) 76%, transparent), transparent 34%),
-    linear-gradient(180deg, color-mix(in srgb, var(--panel-strong) 86%, transparent), color-mix(in srgb, var(--panel-muted) 72%, transparent));
-}
-
-.theme-modern.ui-surface-custom.ui-custom-background-image .settings-card,
-.theme-modern.ui-surface-custom.ui-custom-background-image .settings-preference-item,
-.theme-modern.ui-surface-custom.ui-custom-background-image .settings-preference-toggle,
-.theme-modern.ui-surface-custom.ui-custom-background-image .settings-roadmap-grid span {
-  background: rgba(255, 255, 255, 0.58);
-  border-color: rgba(15, 23, 42, 0.12);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.52);
-  backdrop-filter: blur(10px) saturate(1.04);
-  -webkit-backdrop-filter: blur(10px) saturate(1.04);
-}
-
-.theme-modern.ui-surface-custom.ui-custom-background-image .settings-preference-hero {
-  background:
-    radial-gradient(circle at 16% 12%, rgba(0, 112, 243, 0.1), transparent 34%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0.38));
-}
-
 .theme-modern .settings-preference-item,
 .theme-modern .settings-preference-toggle,
 .theme-modern .settings-roadmap-grid span {
@@ -3733,21 +3738,6 @@
 .theme-modern .settings-image-field {
   border-color: var(--line);
   background: color-mix(in srgb, var(--panel-strong) 82%, var(--panel-muted) 18%);
-}
-
-.theme-modern.ui-surface-custom.ui-custom-background-image .settings-color-field,
-.theme-modern.ui-surface-custom.ui-custom-background-image .settings-image-field,
-.theme-modern.ui-surface-custom.ui-custom-background-image .settings-theme-customizer {
-  background: rgba(255, 255, 255, 0.5);
-  border-color: rgba(15, 23, 42, 0.12);
-}
-
-.theme-modern.ui-surface-custom.ui-custom-background-image .settings-theme-customizer-head select,
-.theme-modern.ui-surface-custom.ui-custom-background-image .settings-image-field input,
-.theme-modern.ui-surface-custom.ui-custom-background-image .settings-image-field select,
-.theme-modern.ui-surface-custom.ui-custom-background-image .settings-secondary-action {
-  background: rgba(255, 255, 255, 0.72);
-  border-color: rgba(15, 23, 42, 0.14);
 }
 
 .theme-modern .settings-color-field input[type="color"] {
@@ -3795,19 +3785,19 @@
 }
 
 .theme-modern .credential-status-tags .credential-tag-ok {
-  color: #166534;
-  border-color: rgba(34, 197, 94, 0.22);
-  background: rgba(34, 197, 94, 0.08);
+  color: var(--green);
+  border-color: color-mix(in srgb, var(--green) 22%, transparent);
+  background: color-mix(in srgb, var(--green) 8%, transparent);
 }
 
 .theme-modern .danger-button {
-  background: rgba(254, 242, 242, 0.9);
-  color: #b91c1c;
-  border: 1px solid rgba(220, 38, 38, 0.24);
+  background: var(--red-soft);
+  color: var(--red);
+  border: 1px solid color-mix(in srgb, var(--red) 24%, transparent);
 }
 
 .theme-modern .danger-button:hover:not(:disabled) {
-  background: rgba(254, 226, 226, 1);
+  background: color-mix(in srgb, var(--red) 14%, transparent);
   filter: none;
 }
 
@@ -4094,8 +4084,8 @@ body.extension-sidepanel .theme-modern .browser-resizer {
 }
 
 .theme-modern .workspace-session-tab-active .workspace-session-tab-close:hover {
-  background: rgba(239, 68, 68, 0.1);
-  color: #b91c1c;
+  background: color-mix(in srgb, var(--red) 10%, transparent);
+  color: var(--red);
   box-shadow: none;
   filter: none;
   transform: none;
@@ -4260,7 +4250,7 @@ body.is-electron .settings-exclusive-head input {
 }
 
 .settings-pill-success { color: var(--green); border-color: color-mix(in srgb, var(--green) 30%, transparent); }
-.settings-pill-danger { color: #b91c1c; border-color: rgba(185, 28, 28, 0.3); }
+.settings-pill-danger { color: var(--red); border-color: color-mix(in srgb, var(--red) 30%, transparent); }
 
 /* 连接管理：主从布局 */
 .conn-layout {
@@ -4485,7 +4475,7 @@ body.is-electron .settings-exclusive-head input {
 }
 
 .settings-exclusive .danger-button {
-  color: #b91c1c;
+  color: var(--red);
 }
 
 .settings-exclusive .settings-tool-chip {
@@ -4691,7 +4681,7 @@ body.is-electron .settings-exclusive-head input {
 }
 
 .settings-pref-reset:hover .settings-pref-value {
-  color: #b91c1c;
+  color: var(--red);
 }
 
 .settings-pref-row-wide {

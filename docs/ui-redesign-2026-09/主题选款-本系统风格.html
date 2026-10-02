@@ -1,0 +1,466 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>主题选款 · 符合本系统风格（Vercel Geist 基因）</title>
+<style>
+:root{--acc:#0070f3}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font:13px/1.55 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif;background:#f4f4f5;color:#18181b;padding:28px 32px 80px}
+h1{font-size:20px;letter-spacing:-.01em;margin-bottom:5px}
+.sub{color:#71717a;font-size:12.5px;max-width:940px;line-height:1.75;margin-bottom:16px}
+.note{background:#fff;border:1px solid #e4e4e7;border-radius:10px;padding:13px 16px;font-size:12px;color:#52525b;margin-bottom:24px;max-width:940px;line-height:1.9}
+.note b{color:#18181b}
+.note code{background:#f4f4f5;border:1px solid #e4e4e7;border-radius:4px;padding:0 5px;font-size:11px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(430px,1fr));gap:20px}
+.card{background:#fff;border:1px solid #e4e4e7;border-radius:12px;padding:15px;cursor:pointer;transition:border-color .15s,box-shadow .15s}
+.card:hover{border-color:#c9c9cf}
+.card.pick{border-color:var(--acc);box-shadow:0 0 0 2px color-mix(in srgb,var(--acc) 25%,transparent)}
+.card header{display:flex;align-items:center;justify-content:space-between;margin-bottom:3px}
+.card header b{font-size:15px}
+.card header .fam{font-size:11px;color:#a1a1aa;margin-left:8px}
+.swset{display:flex;gap:4px}
+.swset i{width:16px;height:16px;border-radius:4px;border:1px solid rgba(0,0,0,.1)}
+.desc{font-size:12px;color:#71717a;margin-bottom:12px}
+/* 真实产品框架 */
+.frame{border:1px solid #d4d4d4;border-radius:9px;overflow:hidden;display:flex;flex-direction:column;height:250px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.tb{height:26px;flex:none;display:flex;align-items:center;gap:7px;padding:0 10px;border-bottom:1px solid}
+.tb .dot{width:8px;height:8px;border-radius:50%}
+.tb b{font-size:11.5px;font-weight:650}
+.tb .sp{flex:1}
+.tb .mi{font-size:10px}
+.tabs{height:24px;flex:none;display:flex;align-items:center;gap:2px;padding:0 10px;border-bottom:1px solid}
+.tab{font-size:10.5px;padding:0 8px;height:24px;display:flex;align-items:center;border-bottom:2px solid transparent}
+.tab.on{font-weight:600;border-bottom-width:2px}
+.mid{flex:1;display:flex;min-height:0}
+.side{width:132px;flex:none;border-right:1px solid;padding:7px 0;display:flex;flex-direction:column;gap:1px}
+.ssearch{margin:0 8px 6px;height:20px;border:1px solid;border-radius:5px;font-size:9.5px;display:flex;align-items:center;padding:0 7px}
+.srow{display:flex;align-items:center;gap:7px;padding:4px 10px}
+.sdot{width:6px;height:6px;border-radius:50%;flex:none}
+.smeta{display:flex;flex-direction:column;min-width:0}
+.snm{font-size:11px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sh{font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.right{flex:1;display:flex;flex-direction:column;min-width:0}
+.tools{flex:none;display:flex;align-items:center;gap:7px;padding:6px 9px;border-bottom:1px solid}
+.seg{display:inline-flex;border:1px solid;border-radius:5px;overflow:hidden}
+.sg{font-size:10px;padding:2px 8px;display:flex;align-items:center}
+.sg.on{font-weight:600}
+.sbox{flex:1;height:20px;border:1px solid;border-radius:5px;font-size:10px;display:flex;align-items:center;padding:0 8px}
+.pbtn{font-size:10px;font-weight:600;padding:3px 11px;border-radius:5px}
+.live{font-size:9.5px;font-weight:700;border:1px solid;border-radius:999px;padding:1px 7px}
+.log{flex:1;padding:6px 0;overflow:hidden;display:flex;flex-direction:column;gap:1px}
+.ll{display:flex;gap:8px;padding:0 10px;font-family:ui-monospace,Menlo,monospace;font-size:9.5px;line-height:1.75;white-space:nowrap}
+.lt{flex:0 0 116px}
+.lv{flex:none;font-weight:700}
+.lm{overflow:hidden;text-overflow:ellipsis}
+.tokens{font-size:10px;color:#a1a1aa;margin-top:10px;line-height:1.6}
+.pickbar{position:fixed;left:0;right:0;bottom:0;background:rgba(255,255,255,.96);backdrop-filter:blur(8px);border-top:1px solid #e4e4e7;padding:11px 32px;display:flex;align-items:center;gap:12px;font-size:12.5px;z-index:9}
+.pickbar b{color:var(--acc)}
+.pickbar .sel{font-family:ui-monospace,Menlo,monospace}
+.pickbar button{margin-left:auto;background:#18181b;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:12.5px;cursor:pointer;font-family:inherit}
+</style></head><body>
+<h1>主题选款 · 符合本系统风格</h1>
+<p class="sub">先读了本项目的设计规范（THEME-SPEC + Vercel/Cal 参考），确认这套系统的基因是 <b>Vercel Geist 单色极简</b>。所以主题不是"换一整块调色"，而是「灰阶骨架不动 + 一个克制的功能色」。</p>
+<div class="note">
+  <b>本系统的设计 DNA（摘自项目自己的规范文档）：</b><br/>
+  · 「纯白底 + 黑白主调 + Vercel Blue 强调 + Geist 字体」<code>THEME-SPEC.md</code><br/>
+  · 「灰阶就是系统本身，<b>颜色是功能性的、绝不装饰性</b>」；用 <code>#171717</code> 而非纯黑　<code>vercel-design.md</code><br/>
+  · 「纯粹灰阶品牌色，靠单色体现自信」　<code>cal-design.md</code><br/><br/>
+  <b>所以这 8 套全部遵循：</b>只有 <code>bg/panel/ink/line</code> 走灰阶，仅 <code>accent</code>（按钮/选中/链接/进度）带一点功能色，且都是低饱和、不抢日志的克制色。<b>渲染用的是真实产品布局</b>（浅色侧栏 + 深色日志区 + 工具栏），不是通用小卡片——请在这个真实语境下判断。
+</div>
+<div class="grid"><article class="card" data-k="geist">
+  <header>
+    <div><b>晨白</b><span class="fam">中性族 · 浅色</span></div>
+    <span class="swset">
+      <i style="background:#fafafa"></i><i style="background:#ffffff"></i><i style="background:#0070f3"></i><i style="background:#171717"></i>
+    </span>
+  </header>
+  <p class="desc">Vercel 本尊 · 近白画布 + Vercel 蓝</p>
+  <div class="frame" style="background:#fafafa;border-color:#d0d0d0">
+    <div class="tb" style="background:#ffffff;border-color:#e7e7e7">
+    <span class="dot" style="background:#0070f3"></span>
+    <b style="color:#171717">日志控制台</b>
+    <span class="sp"></span>
+    <span class="mi" style="color:#808080">⌘K</span><span class="mi" style="color:#808080">⚙</span>
+  </div><div class="tabs" style="background:#ffffff;border-color:#e7e7e7">
+    <span class="tab on" style="color:#0070f3;border-color:#0070f3">127.38</span>
+    <span class="tab" style="color:#808080">2.137</span>
+    <span class="tab" style="color:#808080">prod-web-01</span>
+  </div>
+    <div class="mid">
+      <div class="side" style="background:#ffffff;border-color:#e7e7e7">
+    <div class="ssearch" style="background:#f5f5f5;border-color:#e7e7e7;color:#808080">搜索服务器…</div>
+    <div class="srow cur" style="background:color-mix(in srgb,#0070f3 9%,transparent);box-shadow:inset 2px 0 0 #0070f3">
+      <span class="sdot" style="background:#22c55e"></span>
+      <span class="smeta"><span class="snm" style="color:#171717">127.122</span><span class="sh" style="color:#808080">root@192.168.127.122</span></span>
+    </div><div class="srow" style="">
+      <span class="sdot" style="background:#c8ccd2"></span>
+      <span class="smeta"><span class="snm" style="color:#171717">127.38</span><span class="sh" style="color:#808080">root@192.168.127.38</span></span>
+    </div><div class="srow" style="">
+      <span class="sdot" style="background:#c8ccd2"></span>
+      <span class="smeta"><span class="snm" style="color:#171717">2.137</span><span class="sh" style="color:#808080">root@192.168.2.137</span></span>
+    </div><div class="srow" style="">
+      <span class="sdot" style="background:#c8ccd2"></span>
+      <span class="smeta"><span class="snm" style="color:#171717">2.208</span><span class="sh" style="color:#808080">root@192.168.2.208</span></span>
+    </div>
+  </div>
+      <div class="right">
+        <div class="tools" style="border-color:#e7e7e7">
+    <span class="seg" style="border-color:#e7e7e7"><span class="sg on" style="color:#0070f3">日志预览</span><span class="sg" style="color:#808080">文件</span><span class="sg" style="color:#808080">终端</span></span>
+    <span class="sbox" style="background:#ffffff;border-color:#e7e7e7;color:#808080">sync failed</span>
+    <span class="pbtn" style="background:#0070f3;color:#141414">检索</span>
+    <span class="live" style="color:#d41313;border-color:color-mix(in srgb,#d41313 35%,transparent)">● LIVE</span>
+  </div>
+        <div class="log" style="background:#0a0a0a"><div class="ll"><span class="lt" style="color:rgba(215,221,229,.42)">2026-09-29 09:02:11.113</span><span class="lv" style="color:#d7dde5">INFO </span><span class="lm" style="color:rgba(215,221,229,.62)">[http-nio-8080] c.e.w.LoginController - user admin login from 192.168.2.33</span></div><div class="ll"><span class="lt" style="color:rgba(215,221,229,.42)">2026-09-29 09:02:03.882</span><span class="lv" style="color:#d41313">ERROR</span><span class="lm" style="color:rgba(215,221,229,.86)">[pool-2-thread-7] c.e.task.SyncJob - sync failed: connection reset by peer</span></div><div class="ll"><span class="lt" style="color:rgba(215,221,229,.42)">2026-09-29 09:02:03.884</span><span class="lv" style="color:#d7dde5">INFO </span><span class="lm" style="color:rgba(215,221,229,.62)">[pool-2-thread-7] c.e.task.SyncJob - retry 1/3 scheduled in 5s</span></div><div class="ll"><span class="lt" style="color:rgba(215,221,229,.42)">2026-09-29 09:02:09.101</span><span class="lv" style="color:#d41313">ERROR</span><span class="lm" style="color:rgba(215,221,229,.86)">[pool-2-thread-7] c.e.task.SyncJob - sync failed again, giving up</span></div><div class="ll"><span class="lt" style="color:rgba(215,221,229,.42)">2026-09-29 09:02:09.102</span><span class="lv" style="color:#b45309">WARN </span><span class="lm" style="color:rgba(215,221,229,.86)">[pool-2-thread-7] c.e.task.SyncJob - mark job #4821 as FAILED</span></div></div>
+      </div>
+    </div>
+  </div>
+  <div class="tokens" style="font-family:ui-monospace,Menlo,monospace">bg #fafafa · panel #ffffff · accent #0070f3 · ink #171717</div>
+</article><article class="card" data-k="carbon">
+  <header>
+    <div><b>碳黑</b><span class="fam">中性族 · 深色</span></div>
+    <span class="swset">
+      <i style="background:#0a0a0a"></i><i style="background:#121212"></i><i style="background:#0070f3"></i><i style="background:#ededed"></i>
+    </span>
+  </header>
+  <p class="desc">Vercel 深色 · 近黑画布 + 同蓝</p>
+  <div class="frame" style="background:#0a0a0a;border-color:#3a3a3a">
+    <div class="tb" style="background:#121212;border-color:#262626">
+    <span class="dot" style="background:#0070f3"></span>
+    <b style="color:#ededed">日志控制台</b>
+    <span class="sp"></span>
+    <span class="mi" style="color:#7a7a7a">⌘K</span><span class="mi" style="color:#7a7a7a">⚙</span>
+  </div><div class="tabs" style="background:#121212;border-color:#262626">
+    <span class="tab on" style="color:#0070f3;border-color:#0070f3">127.38</span>
+    <span class="tab" style="color:#7a7a7a">2.137</span>
+    <span class="tab" style="color:#7a7a7a">prod-web-01</span>
+  </div>
+    <div class="mid">
+      <div class="side" style="background:#121212;border-color:#262626">
+    <div class="ssearch" style="background:#171717;border-color:#262626;color:#7a7a7a">搜索服务器…</div>
+    <div class="srow cur" style="background:color-mix(in srgb,#0070f3 9%,transparent);box-shadow:inset 2px 0 0 #0070f3">
+      <span class="sdot" style="background:#22c55e"></span>
+      <span class="smeta"><span class="snm" style="color:#ededed">127.122</span><span class="sh" style="color:#7a7a7a">root@192.168.127.122</span></span>
+    </div><div class="srow" style="">
+      <span class="sdot" style="background:#c8ccd2"></span>
+      <span class="smeta"><span class="snm" style="color:#ededed">127.38</span><span class="sh" style="color:#7a7a7a">root@192.168.127.38</span></span>
+    </div><div class="srow" style="">
+      <span class="sdot" style="background:#c8ccd2"></span>
+      <span class="smeta"><span class="snm" style="color:#ededed">2.137</span><span class="sh" style="color:#7a7a7a">root@192.168.2.137</span></span>
+    </div><div class="srow" style="">
+      <span class="sdot" style="background:#c8ccd2"></span>
+      <span class="smeta"><span class="snm" style="color:#ededed">2.208</span><span class="sh" style="color:#7a7a7a">root@192.168.2.208</span></span>
+    </div>
+  </div>
+      <div class="right">
+        <div class="tools" style="border-color:#262626">
+    <span class="seg" style="border-color:#262626"><span class="sg on" style="color:#0070f3">日志预览</span><span class="sg" style="color:#7a7a7a">文件</span><span class="sg" style="color:#7a7a7a">终端</span></span>
+    <span class="sbox" style="background:#121212;border-color:#262626;color:#7a7a7a">sync failed</span>
+    <span class="pbtn" style="background:#0070f3;color:#141414">检索</span>
+    <span class="live" style="color:#f87171;border-color:color-mix(in srgb,#f87171 35%,transparent)">● LIVE</span>
+  </div>
+        <div class="log" style="background:#050505"><div class="ll"><span class="lt" style="color:rgba(215,221,229,.34)">2026-09-29 09:02:11.113</span><span class="lv" style="color:#d7dde5">INFO </span><span class="lm" style="color:rgba(215,221,229,.62)">[http-nio-8080] c.e.w.LoginController - user admin login from 192.168.2.33</span></div><div class="ll"><span class="lt" style="color:rgba(215,221,229,.34)">2026-09-29 09:02:03.882</span><span class="lv" style="color:#f87171">ERROR</span><span class="lm" style="color:rgba(215,221,229,.86)">[pool-2-thread-7] c.e.task.SyncJob - sync failed: connection reset by peer</span></div><div class="ll"><span class="lt" style="color:rgba(215,221,229,.34)">2026-09-29 09:02:03.884</span><span class="lv" style="color:#d7dde5">INFO </span><span class="lm" style="color:rgba(215,221,229,.62)">[pool-2-thread-7] c.e.task.SyncJob - retry 1/3 scheduled in 5s</span></div><div class="ll"><span class="lt" style="color:rgba(215,221,229,.34)">2026-09-29 09:02:09.101</span><span class="lv" style="color:#f87171">ERROR</span><span class="lm" style="color:rgba(215,221,229,.86)">[pool-2-thread-7] c.e.task.SyncJob - sync failed again, giving up</span></div><div class="ll"><span class="lt" style="color:rgba(215,221,229,.34)">2026-09-29 09:02:09.102</span><span class="lv" style="color:#fbbf24">WARN </span><span class="lm" style="color:rgba(215,221,229,.86)">[pool-2-thread-7] c.e.task.SyncJob - mark job #4821 as FAILED</span></div></div>
+      </div>
+    </div>
+  </div>
+  <div class="tokens" style="font-family:ui-monospace,Menlo,monospace">bg #0a0a0a · panel #121212 · accent #0070f3 · ink #ededed</div>
+</article><article class="card" data-k="steel">
+  <header>
+    <div><b>钢青</b><span class="fam">冷调族 · 浅色</span></div>
+    <span class="swset">
+      <i style="background:#f6f8fa"></i><i style="background:#ffffff"></i><i style="background:#2563eb"></i><i style="background:#0f172a"></i>
+    </span>
+  </header>
+  <p class="desc">冷灰蓝 · 工程感</p>
+  <div class="frame" style="background:#f6f8fa;border-color:#c9d4e0">
+    <div class="tb" style="background:#ffffff;border-color:#e2e8f0">
+    <span class="dot" style="background:#2563eb"></span>
+    <b style="color:#0f172a">日志控制台</b>
+    <span class="sp"></span>
+    <span class="mi" style="color:#7d8b9c">⌘K</span><span class="mi" style="color:#7d8b9c">⚙</span>
+  </div><div class="tabs" style="background:#ffffff;border-color:#e2e8f0">
+    <span class="tab on" style="color:#2563eb;border-color:#2563eb">127.38</span>
+    <span class="tab" style="color:#7d8b9c">2.137</span>
+    <span class="tab" style="color:#7d8b9c">prod-web-01</span>
+  </div>
+    <div class="mid">
+      <div class="side" style="background:#ffffff;border-color:#e2e8f0">
+    <div class="ssearch" style="background:#eef2f6;border-color:#e2e8f0;color:#7d8b9c">搜索服务器…</div>
+    <div class="srow cur" style="background:color-mix(in srgb,#2563eb 9%,transparent);box-shadow:inset 2px 0 0 #2563eb">
+      <span class="sdot" style="background:#22c55e"></span>
+      <span class="smeta"><span class="snm" style="color:#0f172a">127.122</span><span class="sh" style="color:#7d8b9c">root@192.168.127.122</span></span>
+    </div><div class="srow" style="">
+      <span class="sdot" style="background:#c8ccd2"></span>
+      <span class="smeta"><span class="snm" style="color:#0f172a">127.38</span><span class="sh" style="color:#7d8b9c">root@192.168.127.38</span></span>
+    </div><div class="srow" style="">
+      <span class="sdot" style="background:#c8ccd2"></span>
+      <span class="smeta"><span class="snm" style="color:#0f172a">2.137</span><span class="sh" style="color:#7d8b9c">root@192.168.2.137</span></span>
+    </div><div class="srow" style="">
+      <span class="sdot" style="background:#c8ccd2"></span>
+      <span class="smeta"><span class="snm" style="color:#0f172a">2.208</span><span class="sh" style="color:#7d8b9c">root@192.168.2.208</span></span>
+    </div>
+  </div>
+      <div class="right">
+        <div class="tools" style="border-color:#e2e8f0">
+    <span class="seg" style="border-color:#e2e8f0"><span class="sg on" style="color:#2563eb">日志预览</span><span class="sg" style="color:#7d8b9c">文件</span><span class="sg" style="color:#7d8b9c">终端</span></span>
+    <span class="sbox" style="background:#ffffff;border-color:#e2e8f0;color:#7d8b9c">sync failed</span>
+    <span class="pbtn" style="background:#2563eb;color:#141414">检索</span>
+    <span class="live" style="color:#d41313;border-color:color-mix(in srgb,#d41313 35%,transparent)">● LIVE</span>
+  </div>
+        <div class="log" style="background:#0a0a0a"><div class="ll"><span class="lt" style="color:rgba(215,221,229,.42)">2026-09-29 09:02:11.113</span><span class="lv" style="color:#d7dde5">INFO </span><span class="lm" style="color:rgba(215,221,229,.62)">[http-nio-8080] c.e.w.LoginController - user admin login from 192.168.2.33</span></div><div class="ll"><span class="lt" style="color:rgba(215,221,229,.42)">2026-09-29 09:02:03.882</span><span class="lv" style="color:#d41313">ERROR</span><span class="lm" style="color:rgba(215,221,229,.86)">[pool-2-thread-7] c.e.task.SyncJob - sync failed: connection reset by peer</span></div><div class="ll"><span class="lt" style="color:rgba(215,221,229,.42)">2026-09-29 09:02:03.884</span><span class="lv" style="color:#d7dde5">INFO </span><span class="lm" style="color:rgba(215,221,229,.62)">[pool-2-thread-7] c.e.task.SyncJob - retry 1/3 scheduled in 5s</span></div><div class="ll"><span class="lt" style="color:rgba(215,221,229,.42)">2026-09-29 09:02:09.101</span><span class="lv" style="color:#d41313">ERROR</span><span class="lm" style="color:rgba(215,221,229,.86)">[pool-2-thread-7] c.e.task.SyncJob - sync failed again, giving up</span></div><div class="ll"><span class="lt" style="color:rgba(215,221,229,.42)">2026-09-29 09:02:09.102</span><span class="lv" style="color:#b45309">WARN </span><span class="lm" style="color:rgba(215,221,229,.86)">[pool-2-thread-7] c.e.task.SyncJob - mark job #4821 as FAILED</span></div></div>
+      </div>
+    </div>
+  </div>
+  <div class="tokens" style="font-family:ui-monospace,Menlo,monospace">bg #f6f8fa · panel #ffffff · accent #2563eb · ink #0f172a</div>
+</article><article class="card" data-k="slate">
+  <header>
+    <div><b>深钢</b><span class="fam">冷调族 · 深色</span></div>
+    <span class="swset">
+      <i style="background:#0b1220"></i><i style="background:#111827"></i><i style="background:#60a5fa"></i><i style="background:#e2e8f0"></i>
+    </span>
+  </header>
+  <p class="desc">深蓝灰 · 冷静技术流</p>
+  <div class="frame" style="background:#0b1220;border-color:#334155">
+    <div class="tb" style="background:#111827;border-color:#1e293b">
+    <span class="dot" style="background:#60a5fa"></span>
+    <b style="color:#e2e8f0">日志控制台</b>
+    <span class="sp"></span>
+    <span class="mi" style="color:#6b7c92">⌘K</span><span class="mi" style="color:#6b7c92">⚙</span>
+  </div><div class="tabs" style="background:#111827;border-color:#1e293b">
+    <span class="tab on" style="color:#60a5fa;border-color:#60a5fa">127.38</span>
+    <span class="tab" style="color:#6b7c92">2.137</span>
+    <span class="tab" style="color:#6b7c92">prod-web-01</span>
+  </div>
+    <div class="mid">
+      <div class="side" style="background:#111827;border-color:#1e293b">
+    <div class="ssearch" style="background:#0e1626;border-color:#1e293b;color:#6b7c92">搜索服务器…</div>
+    <div class="srow cur" style="background:color-mix(in srgb,#60a5fa 9%,transparent);box-shadow:inset 2px 0 0 #60a5fa">
+      <span class="sdot" style="background:#22c55e"></span>
+      <span class="smeta"><span class="snm" style="color:#e2e8f0">127.122</span><span class="sh" style="color:#6b7c92">root@192.168.127.122</span></span>
+    </div><div class="srow" style="">
+      <span class="sdot" style="background:#c8ccd2"></span>
+      <span class="smeta"><span class="snm" style="color:#e2e8f0">127.38</span><span class="sh" style="color:#6b7c92">root@192.168.127.38</span></span>
+    </div><div class="srow" style="">
+      <span class="sdot" style="background:#c8ccd2"></span>
+      <span class="smeta"><span class="snm" style="color:#e2e8f0">2.137</span><span class="sh" style="color:#6b7c92">root@192.168.2.137</span></span>
+    </div><div class="srow" style="">
+      <span class="sdot" style="background:#c8ccd2"></span>
+      <span class="smeta"><span class="snm" style="color:#e2e8f0">2.208</span><span class="sh" style="color:#6b7c92">root@192.168.2.208</span></span>
+    </div>
+  </div>
+      <div class="right">
+        <div class="tools" style="border-color:#1e293b">
+    <span class="seg" style="border-color:#1e293b"><span class="sg on" style="color:#60a5fa">日志预览</span><span class="sg" style="color:#6b7c92">文件</span><span class="sg" style="color:#6b7c92">终端</span></span>
+    <span class="sbox" style="background:#111827;border-color:#1e293b;color:#6b7c92">sync failed</span>
+    <span class="pbtn" style="background:#60a5fa;color:#141414">检索</span>
+    <span class="live" style="color:#f87171;border-color:color-mix(in srgb,#f87171 35%,transparent)">● LIVE</span>
+  </div>
+        <div class="log" style="background:#060a12"><div class="ll"><span class="lt" style="color:rgba(215,221,229,.34)">2026-09-29 09:02:11.113</span><span class="lv" style="color:#cbd5e1">INFO </span><span class="lm" style="color:rgba(215,221,229,.62)">[http-nio-8080] c.e.w.LoginController - user admin login from 192.168.2.33</span></div><div class="ll"><span class="lt" style="color:rgba(215,221,229,.34)">2026-09-29 09:02:03.882</span><span class="lv" style="color:#f87171">ERROR</span><span class="lm" style="color:rgba(215,221,229,.86)">[pool-2-thread-7] c.e.task.SyncJob - sync failed: connection reset by peer</span></div><div class="ll"><span class="lt" style="color:rgba(215,221,229,.34)">2026-09-29 09:02:03.884</span><span class="lv" style="color:#cbd5e1">INFO </span><span class="lm" style="color:rgba(215,221,229,.62)">[pool-2-thread-7] c.e.task.SyncJob - retry 1/3 scheduled in 5s</span></div><div class="ll"><span class="lt" style="color:rgba(215,221,229,.34)">2026-09-29 09:02:09.101</span><span class="lv" style="color:#f87171">ERROR</span><span class="lm" style="color:rgba(215,221,229,.86)">[pool-2-thread-7] c.e.task.SyncJob - sync failed again, giving up</span></div><div class="ll"><span class="lt" style="color:rgba(215,221,229,.34)">2026-09-29 09:02:09.102</span><span class="lv" style="color:#fbbf24">WARN </span><span class="lm" style="color:rgba(215,221,229,.86)">[pool-2-thread-7] c.e.task.SyncJob - mark job #4821 as FAILED</span></div></div>
+      </div>
+    </div>
+  </div>
+  <div class="tokens" style="font-family:ui-monospace,Menlo,monospace">bg #0b1220 · panel #111827 · accent #60a5fa · ink #e2e8f0</div>
+</article><article class="card" data-k="sand">
+  <header>
+    <div><b>暖砂</b><span class="fam">暖调族 · 浅色</span></div>
+    <span class="swset">
+      <i style="background:#faf9f7"></i><i style="background:#ffffff"></i><i style="background:#9a6a1a"></i><i style="background:#1c1917"></i>
+    </span>
+  </header>
+  <p class="desc">暖灰米调 · 克制的琥珀</p>
+  <div class="frame" style="background:#faf9f7;border-color:#d7d0c4">
+    <div class="tb" style="background:#ffffff;border-color:#eae5dd">
+    <span class="dot" style="background:#9a6a1a"></span>
+    <b style="color:#1c1917">日志控制台</b>
+    <span class="sp"></span>
+    <span class="mi" style="color:#94897e">⌘K</span><span class="mi" style="color:#94897e">⚙</span>
+  </div><div class="tabs" style="background:#ffffff;border-color:#eae5dd">
+    <span class="tab on" style="color:#9a6a1a;border-color:#9a6a1a">127.38</span>
+    <span class="tab" style="color:#94897e">2.137</span>
+    <span class="tab" style="color:#94897e">prod-web-01</span>
+  </div>
+    <div class="mid">
+      <div class="side" style="background:#ffffff;border-color:#eae5dd">
+    <div class="ssearch" style="background:#f3f1ec;border-color:#eae5dd;color:#94897e">搜索服务器…</div>
+    <div class="srow cur" style="background:color-mix(in srgb,#9a6a1a 9%,transparent);box-shadow:inset 2px 0 0 #9a6a1a">
+      <span class="sdot" style="background:#22c55e"></span>
+      <span class="smeta"><span class="snm" style="color:#1c1917">127.122</span><span class="sh" style="color:#94897e">root@192.168.127.122</span></span>
+    </div><div class="srow" style="">
+      <span class="sdot" style="background:#c8ccd2"></span>
+      <span class="smeta"><span class="snm" style="color:#1c1917">127.38</span><span class="sh" style="color:#94897e">root@192.168.127.38</span></span>
+    </div><div class="srow" style="">
+      <span class="sdot" style="background:#c8ccd2"></span>
+      <span class="smeta"><span class="snm" style="color:#1c1917">2.137</span><span class="sh" style="color:#94897e">root@192.168.2.137</span></span>
+    </div><div class="srow" style="">
+      <span class="sdot" style="background:#c8ccd2"></span>
+      <span class="smeta"><span class="snm" style="color:#1c1917">2.208</span><span class="sh" style="color:#94897e">root@192.168.2.208</span></span>
+    </div>
+  </div>
+      <div class="right">
+        <div class="tools" style="border-color:#eae5dd">
+    <span class="seg" style="border-color:#eae5dd"><span class="sg on" style="color:#9a6a1a">日志预览</span><span class="sg" style="color:#94897e">文件</span><span class="sg" style="color:#94897e">终端</span></span>
+    <span class="sbox" style="background:#ffffff;border-color:#eae5dd;color:#94897e">sync failed</span>
+    <span class="pbtn" style="background:#9a6a1a;color:#141414">检索</span>
+    <span class="live" style="color:#d41313;border-color:color-mix(in srgb,#d41313 35%,transparent)">● LIVE</span>
+  </div>
+        <div class="log" style="background:#0a0a0a"><div class="ll"><span class="lt" style="color:rgba(215,221,229,.42)">2026-09-29 09:02:11.113</span><span class="lv" style="color:#d7dde5">INFO </span><span class="lm" style="color:rgba(215,221,229,.62)">[http-nio-8080] c.e.w.LoginController - user admin login from 192.168.2.33</span></div><div class="ll"><span class="lt" style="color:rgba(215,221,229,.42)">2026-09-29 09:02:03.882</span><span class="lv" style="color:#d41313">ERROR</span><span class="lm" style="color:rgba(215,221,229,.86)">[pool-2-thread-7] c.e.task.SyncJob - sync failed: connection reset by peer</span></div><div class="ll"><span class="lt" style="color:rgba(215,221,229,.42)">2026-09-29 09:02:03.884</span><span class="lv" style="color:#d7dde5">INFO </span><span class="lm" style="color:rgba(215,221,229,.62)">[pool-2-thread-7] c.e.task.SyncJob - retry 1/3 scheduled in 5s</span></div><div class="ll"><span class="lt" style="color:rgba(215,221,229,.42)">2026-09-29 09:02:09.101</span><span class="lv" style="color:#d41313">ERROR</span><span class="lm" style="color:rgba(215,221,229,.86)">[pool-2-thread-7] c.e.task.SyncJob - sync failed again, giving up</span></div><div class="ll"><span class="lt" style="color:rgba(215,221,229,.42)">2026-09-29 09:02:09.102</span><span class="lv" style="color:#b45309">WARN </span><span class="lm" style="color:rgba(215,221,229,.86)">[pool-2-thread-7] c.e.task.SyncJob - mark job #4821 as FAILED</span></div></div>
+      </div>
+    </div>
+  </div>
+  <div class="tokens" style="font-family:ui-monospace,Menlo,monospace">bg #faf9f7 · panel #ffffff · accent #9a6a1a · ink #1c1917</div>
+</article><article class="card" data-k="espresso">
+  <header>
+    <div><b>暖深</b><span class="fam">暖调族 · 深色</span></div>
+    <span class="swset">
+      <i style="background:#1c1917"></i><i style="background:#26221f"></i><i style="background:#d97706"></i><i style="background:#f5f5f4"></i>
+    </span>
+  </header>
+  <p class="desc">暖褐深色 · 沉稳</p>
+  <div class="frame" style="background:#1c1917;border-color:#4a423a">
+    <div class="tb" style="background:#26221f;border-color:#332e29">
+    <span class="dot" style="background:#d97706"></span>
+    <b style="color:#f5f5f4">日志控制台</b>
+    <span class="sp"></span>
+    <span class="mi" style="color:#857a70">⌘K</span><span class="mi" style="color:#857a70">⚙</span>
+  </div><div class="tabs" style="background:#26221f;border-color:#332e29">
+    <span class="tab on" style="color:#d97706;border-color:#d97706">127.38</span>
+    <span class="tab" style="color:#857a70">2.137</span>
+    <span class="tab" style="color:#857a70">prod-web-01</span>
+  </div>
+    <div class="mid">
+      <div class="side" style="background:#26221f;border-color:#332e29">
+    <div class="ssearch" style="background:#211d1a;border-color:#332e29;color:#857a70">搜索服务器…</div>
+    <div class="srow cur" style="background:color-mix(in srgb,#d97706 9%,transparent);box-shadow:inset 2px 0 0 #d97706">
+      <span class="sdot" style="background:#22c55e"></span>
+      <span class="smeta"><span class="snm" style="color:#f5f5f4">127.122</span><span class="sh" style="color:#857a70">root@192.168.127.122</span></span>
+    </div><div class="srow" style="">
+      <span class="sdot" style="background:#c8ccd2"></span>
+      <span class="smeta"><span class="snm" style="color:#f5f5f4">127.38</span><span class="sh" style="color:#857a70">root@192.168.127.38</span></span>
+    </div><div class="srow" style="">
+      <span class="sdot" style="background:#c8ccd2"></span>
+      <span class="smeta"><span class="snm" style="color:#f5f5f4">2.137</span><span class="sh" style="color:#857a70">root@192.168.2.137</span></span>
+    </div><div class="srow" style="">
+      <span class="sdot" style="background:#c8ccd2"></span>
+      <span class="smeta"><span class="snm" style="color:#f5f5f4">2.208</span><span class="sh" style="color:#857a70">root@192.168.2.208</span></span>
+    </div>
+  </div>
+      <div class="right">
+        <div class="tools" style="border-color:#332e29">
+    <span class="seg" style="border-color:#332e29"><span class="sg on" style="color:#d97706">日志预览</span><span class="sg" style="color:#857a70">文件</span><span class="sg" style="color:#857a70">终端</span></span>
+    <span class="sbox" style="background:#26221f;border-color:#332e29;color:#857a70">sync failed</span>
+    <span class="pbtn" style="background:#d97706;color:#141414">检索</span>
+    <span class="live" style="color:#f87171;border-color:color-mix(in srgb,#f87171 35%,transparent)">● LIVE</span>
+  </div>
+        <div class="log" style="background:#120f0d"><div class="ll"><span class="lt" style="color:rgba(215,221,229,.34)">2026-09-29 09:02:11.113</span><span class="lv" style="color:#e7e1da">INFO </span><span class="lm" style="color:rgba(215,221,229,.62)">[http-nio-8080] c.e.w.LoginController - user admin login from 192.168.2.33</span></div><div class="ll"><span class="lt" style="color:rgba(215,221,229,.34)">2026-09-29 09:02:03.882</span><span class="lv" style="color:#f87171">ERROR</span><span class="lm" style="color:rgba(215,221,229,.86)">[pool-2-thread-7] c.e.task.SyncJob - sync failed: connection reset by peer</span></div><div class="ll"><span class="lt" style="color:rgba(215,221,229,.34)">2026-09-29 09:02:03.884</span><span class="lv" style="color:#e7e1da">INFO </span><span class="lm" style="color:rgba(215,221,229,.62)">[pool-2-thread-7] c.e.task.SyncJob - retry 1/3 scheduled in 5s</span></div><div class="ll"><span class="lt" style="color:rgba(215,221,229,.34)">2026-09-29 09:02:09.101</span><span class="lv" style="color:#f87171">ERROR</span><span class="lm" style="color:rgba(215,221,229,.86)">[pool-2-thread-7] c.e.task.SyncJob - sync failed again, giving up</span></div><div class="ll"><span class="lt" style="color:rgba(215,221,229,.34)">2026-09-29 09:02:09.102</span><span class="lv" style="color:#fbbf24">WARN </span><span class="lm" style="color:rgba(215,221,229,.86)">[pool-2-thread-7] c.e.task.SyncJob - mark job #4821 as FAILED</span></div></div>
+      </div>
+    </div>
+  </div>
+  <div class="tokens" style="font-family:ui-monospace,Menlo,monospace">bg #1c1917 · panel #26221f · accent #d97706 · ink #f5f5f4</div>
+</article><article class="card" data-k="cal">
+  <header>
+    <div><b>纯白</b><span class="fam">无彩族 · 浅色</span></div>
+    <span class="swset">
+      <i style="background:#ffffff"></i><i style="background:#ffffff"></i><i style="background:#1a1a1a"></i><i style="background:#1a1a1a"></i>
+    </span>
+  </header>
+  <p class="desc">Cal 式纯白极简 · 黑强调，零彩色</p>
+  <div class="frame" style="background:#ffffff;border-color:#cfcfcf">
+    <div class="tb" style="background:#ffffff;border-color:#e8e8e8">
+    <span class="dot" style="background:#1a1a1a"></span>
+    <b style="color:#1a1a1a">日志控制台</b>
+    <span class="sp"></span>
+    <span class="mi" style="color:#8c8c8c">⌘K</span><span class="mi" style="color:#8c8c8c">⚙</span>
+  </div><div class="tabs" style="background:#ffffff;border-color:#e8e8e8">
+    <span class="tab on" style="color:#1a1a1a;border-color:#1a1a1a">127.38</span>
+    <span class="tab" style="color:#8c8c8c">2.137</span>
+    <span class="tab" style="color:#8c8c8c">prod-web-01</span>
+  </div>
+    <div class="mid">
+      <div class="side" style="background:#ffffff;border-color:#e8e8e8">
+    <div class="ssearch" style="background:#f5f5f5;border-color:#e8e8e8;color:#8c8c8c">搜索服务器…</div>
+    <div class="srow cur" style="background:color-mix(in srgb,#1a1a1a 9%,transparent);box-shadow:inset 2px 0 0 #1a1a1a">
+      <span class="sdot" style="background:#22c55e"></span>
+      <span class="smeta"><span class="snm" style="color:#1a1a1a">127.122</span><span class="sh" style="color:#8c8c8c">root@192.168.127.122</span></span>
+    </div><div class="srow" style="">
+      <span class="sdot" style="background:#c8ccd2"></span>
+      <span class="smeta"><span class="snm" style="color:#1a1a1a">127.38</span><span class="sh" style="color:#8c8c8c">root@192.168.127.38</span></span>
+    </div><div class="srow" style="">
+      <span class="sdot" style="background:#c8ccd2"></span>
+      <span class="smeta"><span class="snm" style="color:#1a1a1a">2.137</span><span class="sh" style="color:#8c8c8c">root@192.168.2.137</span></span>
+    </div><div class="srow" style="">
+      <span class="sdot" style="background:#c8ccd2"></span>
+      <span class="smeta"><span class="snm" style="color:#1a1a1a">2.208</span><span class="sh" style="color:#8c8c8c">root@192.168.2.208</span></span>
+    </div>
+  </div>
+      <div class="right">
+        <div class="tools" style="border-color:#e8e8e8">
+    <span class="seg" style="border-color:#e8e8e8"><span class="sg on" style="color:#1a1a1a">日志预览</span><span class="sg" style="color:#8c8c8c">文件</span><span class="sg" style="color:#8c8c8c">终端</span></span>
+    <span class="sbox" style="background:#ffffff;border-color:#e8e8e8;color:#8c8c8c">sync failed</span>
+    <span class="pbtn" style="background:#1a1a1a;color:#fff">检索</span>
+    <span class="live" style="color:#d41313;border-color:color-mix(in srgb,#d41313 35%,transparent)">● LIVE</span>
+  </div>
+        <div class="log" style="background:#0a0a0a"><div class="ll"><span class="lt" style="color:rgba(215,221,229,.42)">2026-09-29 09:02:11.113</span><span class="lv" style="color:#d7dde5">INFO </span><span class="lm" style="color:rgba(215,221,229,.62)">[http-nio-8080] c.e.w.LoginController - user admin login from 192.168.2.33</span></div><div class="ll"><span class="lt" style="color:rgba(215,221,229,.42)">2026-09-29 09:02:03.882</span><span class="lv" style="color:#d41313">ERROR</span><span class="lm" style="color:rgba(215,221,229,.86)">[pool-2-thread-7] c.e.task.SyncJob - sync failed: connection reset by peer</span></div><div class="ll"><span class="lt" style="color:rgba(215,221,229,.42)">2026-09-29 09:02:03.884</span><span class="lv" style="color:#d7dde5">INFO </span><span class="lm" style="color:rgba(215,221,229,.62)">[pool-2-thread-7] c.e.task.SyncJob - retry 1/3 scheduled in 5s</span></div><div class="ll"><span class="lt" style="color:rgba(215,221,229,.42)">2026-09-29 09:02:09.101</span><span class="lv" style="color:#d41313">ERROR</span><span class="lm" style="color:rgba(215,221,229,.86)">[pool-2-thread-7] c.e.task.SyncJob - sync failed again, giving up</span></div><div class="ll"><span class="lt" style="color:rgba(215,221,229,.42)">2026-09-29 09:02:09.102</span><span class="lv" style="color:#b45309">WARN </span><span class="lm" style="color:rgba(215,221,229,.86)">[pool-2-thread-7] c.e.task.SyncJob - mark job #4821 as FAILED</span></div></div>
+      </div>
+    </div>
+  </div>
+  <div class="tokens" style="font-family:ui-monospace,Menlo,monospace">bg #ffffff · panel #ffffff · accent #1a1a1a · ink #1a1a1a</div>
+</article><article class="card" data-k="ink">
+  <header>
+    <div><b>墨</b><span class="fam">无彩族 · 深色</span></div>
+    <span class="swset">
+      <i style="background:#09090b"></i><i style="background:#18181b"></i><i style="background:#fafafa"></i><i style="background:#fafafa"></i>
+    </span>
+  </header>
+  <p class="desc">纯黑白 · 最高对比，零彩色</p>
+  <div class="frame" style="background:#09090b;border-color:#3f3f46">
+    <div class="tb" style="background:#18181b;border-color:#27272a">
+    <span class="dot" style="background:#fafafa"></span>
+    <b style="color:#fafafa">日志控制台</b>
+    <span class="sp"></span>
+    <span class="mi" style="color:#71717a">⌘K</span><span class="mi" style="color:#71717a">⚙</span>
+  </div><div class="tabs" style="background:#18181b;border-color:#27272a">
+    <span class="tab on" style="color:#fafafa;border-color:#fafafa">127.38</span>
+    <span class="tab" style="color:#71717a">2.137</span>
+    <span class="tab" style="color:#71717a">prod-web-01</span>
+  </div>
+    <div class="mid">
+      <div class="side" style="background:#18181b;border-color:#27272a">
+    <div class="ssearch" style="background:#121214;border-color:#27272a;color:#71717a">搜索服务器…</div>
+    <div class="srow cur" style="background:color-mix(in srgb,#fafafa 9%,transparent);box-shadow:inset 2px 0 0 #fafafa">
+      <span class="sdot" style="background:#22c55e"></span>
+      <span class="smeta"><span class="snm" style="color:#fafafa">127.122</span><span class="sh" style="color:#71717a">root@192.168.127.122</span></span>
+    </div><div class="srow" style="">
+      <span class="sdot" style="background:#c8ccd2"></span>
+      <span class="smeta"><span class="snm" style="color:#fafafa">127.38</span><span class="sh" style="color:#71717a">root@192.168.127.38</span></span>
+    </div><div class="srow" style="">
+      <span class="sdot" style="background:#c8ccd2"></span>
+      <span class="smeta"><span class="snm" style="color:#fafafa">2.137</span><span class="sh" style="color:#71717a">root@192.168.2.137</span></span>
+    </div><div class="srow" style="">
+      <span class="sdot" style="background:#c8ccd2"></span>
+      <span class="smeta"><span class="snm" style="color:#fafafa">2.208</span><span class="sh" style="color:#71717a">root@192.168.2.208</span></span>
+    </div>
+  </div>
+      <div class="right">
+        <div class="tools" style="border-color:#27272a">
+    <span class="seg" style="border-color:#27272a"><span class="sg on" style="color:#fafafa">日志预览</span><span class="sg" style="color:#71717a">文件</span><span class="sg" style="color:#71717a">终端</span></span>
+    <span class="sbox" style="background:#18181b;border-color:#27272a;color:#71717a">sync failed</span>
+    <span class="pbtn" style="background:#fafafa;color:#141414">检索</span>
+    <span class="live" style="color:#f87171;border-color:color-mix(in srgb,#f87171 35%,transparent)">● LIVE</span>
+  </div>
+        <div class="log" style="background:#050505"><div class="ll"><span class="lt" style="color:rgba(215,221,229,.34)">2026-09-29 09:02:11.113</span><span class="lv" style="color:#d7dde5">INFO </span><span class="lm" style="color:rgba(215,221,229,.62)">[http-nio-8080] c.e.w.LoginController - user admin login from 192.168.2.33</span></div><div class="ll"><span class="lt" style="color:rgba(215,221,229,.34)">2026-09-29 09:02:03.882</span><span class="lv" style="color:#f87171">ERROR</span><span class="lm" style="color:rgba(215,221,229,.86)">[pool-2-thread-7] c.e.task.SyncJob - sync failed: connection reset by peer</span></div><div class="ll"><span class="lt" style="color:rgba(215,221,229,.34)">2026-09-29 09:02:03.884</span><span class="lv" style="color:#d7dde5">INFO </span><span class="lm" style="color:rgba(215,221,229,.62)">[pool-2-thread-7] c.e.task.SyncJob - retry 1/3 scheduled in 5s</span></div><div class="ll"><span class="lt" style="color:rgba(215,221,229,.34)">2026-09-29 09:02:09.101</span><span class="lv" style="color:#f87171">ERROR</span><span class="lm" style="color:rgba(215,221,229,.86)">[pool-2-thread-7] c.e.task.SyncJob - sync failed again, giving up</span></div><div class="ll"><span class="lt" style="color:rgba(215,221,229,.34)">2026-09-29 09:02:09.102</span><span class="lv" style="color:#fbbf24">WARN </span><span class="lm" style="color:rgba(215,221,229,.86)">[pool-2-thread-7] c.e.task.SyncJob - mark job #4821 as FAILED</span></div></div>
+      </div>
+    </div>
+  </div>
+  <div class="tokens" style="font-family:ui-monospace,Menlo,monospace">bg #09090b · panel #18181b · accent #fafafa · ink #fafafa</div>
+</article></div>
+<div class="pickbar">已选 <b id="cnt">0</b>：<span class="sel" id="sel">（点击卡片选择，可多选）</span><button id="cp">复制选中 id</button></div>
+<script>
+const picked=new Set();
+document.querySelectorAll('.card').forEach(c=>c.addEventListener('click',()=>{
+  const k=c.dataset.k;
+  if(picked.has(k)){picked.delete(k);c.classList.remove('pick');}else{picked.add(k);c.classList.add('pick');}
+  document.getElementById('cnt').textContent=picked.size;
+  document.getElementById('sel').textContent=picked.size?[...picked].join(', '):'（点击卡片选择，可多选）';
+}));
+document.getElementById('cp').addEventListener('click',()=>{
+  const t=[...picked].join(', ');
+  navigator.clipboard&&navigator.clipboard.writeText(t);
+  const b=document.getElementById('cp');b.textContent='已复制 ✓';setTimeout(()=>b.textContent='复制选中 id',1400);
+});
+</script></body></html>

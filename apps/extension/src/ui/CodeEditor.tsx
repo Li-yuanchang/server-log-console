@@ -259,13 +259,15 @@ function braceFoldRange(state: EditorState, lineStart: number, lineEnd: number):
   return { from: openBracePos + 1, to: closingBracePos };
 }
 
+// 浅色外观：全部引用主题令牌（随主题/皮肤变化），不再写死色值。
 const lightTheme = EditorView.theme({
-  "&": { height: "100%", fontSize: "12.5px" },
-  ".cm-scroller": { overflow: "auto", fontFamily: "'SFMono-Regular', 'Consolas', monospace" },
-  ".cm-gutters": { background: "#f8f9fb", borderRight: "1px solid #e4e9ee", color: "#9ca8b6" },
-  ".cm-activeLineGutter": { background: "#e8eff7" },
-  ".cm-activeLine": { background: "rgba(49,95,141,0.04)" },
-  ".cm-cursor": { borderLeftColor: "#315f8d" },
+  "&": { height: "100%", fontSize: "12.5px", background: "var(--panel)", color: "var(--ink)" },
+  ".cm-scroller": { overflow: "auto", fontFamily: "var(--log-font-family, 'SFMono-Regular', 'Consolas', monospace)" },
+  ".cm-gutters": { background: "var(--panel)", borderRight: "1px solid var(--line)", color: "var(--ink-muted)" },
+  ".cm-activeLineGutter": { background: "var(--accent-soft)" },
+  ".cm-activeLine": { background: "var(--accent-soft)" },
+  ".cm-cursor": { borderLeftColor: "var(--accent)" },
+  ".cm-selectionBackground, &.cm-focused .cm-selectionBackground": { background: "var(--accent-soft) !important" },
 });
 
 const darkOverride = EditorView.theme({
@@ -325,6 +327,8 @@ interface CodeEditorProps {
   fileName: string;
   documentKey?: string;
   theme?: "classic" | "modern";
+  /** 外观：light=浅色（跟随主题弹窗，默认）| dark=深色终端风（保留给深色场景） */
+  appearance?: "light" | "dark";
   readOnly?: boolean;
   focusLine?: number | null;
   focusLineToken?: number;
@@ -333,7 +337,7 @@ interface CodeEditorProps {
   onSave?: () => void;
 }
 
-export function CodeEditor({ value, fileName, documentKey, theme = "modern", readOnly, focusLine, focusLineToken, openSearchToken, onChange, onSave }: CodeEditorProps) {
+export function CodeEditor({ value, fileName, documentKey, theme = "modern", appearance = "light", readOnly, focusLine, focusLineToken, openSearchToken, onChange, onSave }: CodeEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const initTokenRef = useRef(0);
@@ -365,7 +369,8 @@ export function CodeEditor({ value, fileName, documentKey, theme = "modern", rea
     viewRef.current?.destroy();
     viewRef.current = null;
     container.textContent = "";
-    const isDark = theme === "modern";
+    // 预览弹窗已统一为浅色主题（用户决策 2026-09-30），编辑器外观随之，不再由 uiTheme 决定。
+    const isDark = appearance === "dark";
     const languageExtension = await getLanguageExtension(fileName);
     if (initTokenRef.current !== initToken || !containerRef.current || containerRef.current !== container) {
       return;
@@ -397,7 +402,7 @@ export function CodeEditor({ value, fileName, documentKey, theme = "modern", rea
         scrollToLine(viewRef.current, focusRef.current.line);
       }
     });
-  }, [documentKey, fileName, theme, readOnly, scrollToLine]);
+  }, [documentKey, fileName, theme, appearance, readOnly, scrollToLine]);
 
   useEffect(() => {
     void init();
