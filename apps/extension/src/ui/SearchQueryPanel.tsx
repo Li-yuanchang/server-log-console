@@ -3,6 +3,7 @@ import { Download, Search } from "lucide-react";
 import { Drawer } from "./Drawer.js";
 import type { SearchSettingsState } from "./utils.js";
 import { readSearchHistory } from "./storage.js";
+import { ThemedSelect } from "./ThemedSelect.js";
 
 type SearchQueryPreset = {
   label: string;
@@ -16,7 +17,6 @@ type Props = {
   keywordInputRef: RefObject<HTMLInputElement | null>;
   onKeywordInputChange: (value: string) => void;
   onRunSearch: () => void;
-  onClearKeyword: () => void;
   showSummary: boolean;
   toolbarSummaryLabel: string;
   toolbarMetaLabel: string;
@@ -70,12 +70,16 @@ export function SearchQueryPanel(props: Props) {
             <span className="keyword-input-icon" aria-hidden="true"><Search size={13} strokeWidth={1.8} /></span>
             <input
               ref={props.keywordInputRef}
+              type="search"
+              autoComplete="off"
+              enterKeyHint="search"
               className="command-input command-input-keyword"
               value={props.settings.keywordInput}
               onChange={(event) => props.onKeywordInputChange(event.target.value)}
               onFocus={openHistory}
               onKeyDown={(event) => {
-                if (event.key === "Enter") {
+                // 回车检索；输入法组合中（中文拼音待选）不触发，避免误检索
+                if (event.key === "Enter" && !event.nativeEvent.isComposing) {
                   event.preventDefault();
                   props.onRunSearch();
                 } else if (event.key === "Escape") {
@@ -85,17 +89,24 @@ export function SearchQueryPanel(props: Props) {
               placeholder="输入关键字，或直接用 /关键字 后回车"
               disabled={!props.hasServer}
             />
-            <button
-              type="button"
-              className="keyword-input-kbd"
-              title="检索历史"
-              aria-label="检索历史"
-              tabIndex={-1}
-              disabled={!props.hasServer}
-              onClick={() => (historyOpen ? setHistoryOpen(false) : openHistory())}
-            >
-              /
-            </button>
+            {/* 右端附属控件：仅在有内容时显示「清空 ✕」（固定贴右端）。
+                空态不再放「/」历史提示按钮 —— 它与占位文字抢位、把 placeholder 压住（用户反馈，
+                DevTools 确认被遮挡元素即 button.keyword-input-kbd）。检索历史仍可在聚焦时自动展开（onFocus）。 */}
+            {props.settings.keywordInput ? (
+              <button
+                type="button"
+                className="keyword-input-clear"
+                title="清空"
+                aria-label="清空"
+                tabIndex={-1}
+                disabled={!props.hasServer}
+                onClick={() => props.onKeywordInputChange("")}
+              >
+                <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+                  <path d="M6 6l12 12M18 6L6 18" />
+                </svg>
+              </button>
+            ) : null}
             {historyOpen && historyItems.length ? (
               <div className="search-history-panel" role="listbox">
                 <div className="search-history-cap">最近检索</div>
@@ -116,9 +127,6 @@ export function SearchQueryPanel(props: Props) {
               </div>
             ) : null}
           </div>
-          <button className="ghost-button slim-button" onClick={props.onClearKeyword} disabled={!props.hasServer}>
-            清空
-          </button>
           <button
             type="button"
             className={`ghost-button slim-button search-run-button${props.searching ? " search-run-busy" : ""}`}
@@ -215,11 +223,13 @@ export function SearchQueryPanel(props: Props) {
           <div className="advanced-row advanced-row-main">
             <label>
               匹配
-              <select value={props.settings.keywordMode} onChange={(event) => props.onKeywordModeChange(event.target.value as SearchSettingsState["keywordMode"])} disabled={!props.hasServer}>
-                <option value="phrase">精确包含</option>
-                <option value="any">任意一个</option>
-                <option value="all">同时包含</option>
-              </select>
+              <ThemedSelect value={props.settings.keywordMode} onChange={(value) => props.onKeywordModeChange(value as SearchSettingsState["keywordMode"])} disabled={!props.hasServer} ariaLabel="匹配方式"
+                options={[
+                  { value: "phrase", label: "精确包含" },
+                  { value: "any", label: "任意一个" },
+                  { value: "all", label: "同时包含" }
+                ]}
+              />
             </label>
             <label>
               上下文

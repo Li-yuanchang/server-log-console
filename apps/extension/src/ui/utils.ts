@@ -349,6 +349,19 @@ export function parseKeywordTerms(input: string) {
     .filter(Boolean);
 }
 
+/**
+ * 按匹配方式解析检索词：
+ * - phrase（精确包含）：整句作为一个词组，不按逗号/换行拆分——粘贴 SQL、路径等含逗号长句时，
+ *   拆词会让服务端只匹配第一个逗号前的片段，且高亮散落各碎片（表现为"检索的不是我输入的"）。
+ * - any / all：多词场景才拆分（换行或中英文逗号分隔）。
+ */
+export function resolveSearchTerms(input: string, mode: "phrase" | "any" | "all") {
+  const normalized = normalizeSearchInput(input);
+  if (!normalized) return [];
+  if (mode === "phrase") return [normalized];
+  return parseKeywordTerms(input);
+}
+
 export function normalizeSearchInput(input: string) {
   return input.trim().replace(/^\/+/, "");
 }

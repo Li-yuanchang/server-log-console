@@ -30,6 +30,7 @@ import {
   getParentDirectoryPath,
   normalizeSearchInput,
   parseKeywordTerms,
+  resolveSearchTerms,
   searchWithinContent,
   searchWithinMatches,
 } from "./utils.js";
@@ -451,7 +452,8 @@ export function useLogViewer(params: LogViewerParams): LogViewerAPI {
 
   async function runSearch() {
     const normalizedInput = normalizeSearchInput(state.keywordInput);
-    const normalizedTerms = parseKeywordTerms(state.keywordInput);
+    // phrase 模式整句成词（不按逗号拆），any/all 才拆多词；详见 resolveSearchTerms
+    const normalizedTerms = resolveSearchTerms(state.keywordInput, state.keywordMode);
     if (!normalizedInput || !normalizedTerms.length) { callbacks.setActionStatus("先输入关键字再搜索。"); return; }
     const excludeTerms = parseKeywordTerms(state.excludeInput);
     if (state.activeViewerTabId !== "file" && activeResultTab) {
@@ -516,7 +518,7 @@ export function useLogViewer(params: LogViewerParams): LogViewerAPI {
     setters.setSearchTask(null);
     setters.setResults(null);
     try {
-      const primaryKeyword = state.keywordMode === "phrase" ? normalizedInput : normalizedTerms[0] || "";
+      const primaryKeyword = normalizedTerms[0] || "";
       const taskPayload = await apiCreateSearchTask({ serverId: state.serverId, filePath: state.filePath, keyword: primaryKeyword, keywordTerms: normalizedTerms, keywordMode: state.keywordMode, excludeTerms: excludeTerms.length ? excludeTerms : undefined, startDate: state.startDate, endDate: state.endDate, startTime: state.startTime, endTime: state.endTime, contextLines: state.contextLines, useRegex: state.useRegex });
       setters.setSearchTask(taskPayload);
       setters.setActiveLogView("search");
