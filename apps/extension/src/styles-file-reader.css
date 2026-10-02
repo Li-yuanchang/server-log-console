@@ -41,6 +41,47 @@
   min-height: 0;
 }
 
+/* 批量条承接「目录树｜目录内容」标题行（用户决策 2026-09-30）：绝对定位覆盖层，
+   钉在 .browser-grid（position:relative）顶部、高度=列头行 34px；
+   不占文档流 → 勾选/取消零抖动。配色等视觉由各主题定义（v2 §19-3）。 */
+.file-batch-span {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 34px;
+  min-width: 0;
+  z-index: 5;
+  box-sizing: border-box;
+}
+
+/* 文件模式命令行内嵌工具区（对齐原型 tbar 一行式）：seg 后跟面包屑，过滤+图标靠右。
+   视觉细则由 theme-modern-v2.css 定义，此处兜底布局（经典主题同样可用）。 */
+.file-tools-inline {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1 1 260px;
+  min-width: 260px;
+  gap: 10px;
+  height: auto;
+  padding: 0;
+}
+.file-tools-inline > * { flex: 0 1 auto; min-width: 0; }
+/* actions 行是纯按钮/输入的内联组：补 flex 垂直居中（无此规则时按文字基线排布、偏高） */
+.file-tools-inline .workspace-actions {
+  display: flex;
+  align-items: center;
+  overflow: visible;
+}
+.file-tools-inline .path-history-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  margin: 0;
+  z-index: 70;
+}
+
 .jump-terminal-shell .jump-terminal-surface {
   flex: 1;
 }
@@ -319,15 +360,6 @@
   box-shadow: none;
 }
 
-.tree-item-current .entry-icon-dir {
-  border-color: #b68536;
-  background: linear-gradient(180deg, #f0c872, #d49a39);
-}
-
-.tree-item-current .entry-icon-dir::before {
-  border-color: #b68536;
-  background: #f8e0ac;
-}
 
 .tree-name-cell {
   display: flex;
@@ -367,15 +399,6 @@
   border-top-color: #6f9fc9;
 }
 
-.tree-item-path .entry-icon-dir {
-  border-color: #c49c56;
-  background: linear-gradient(180deg, #f4d18d, #d8aa58);
-}
-
-.tree-item-path .entry-icon-dir::before {
-  border-color: #c49c56;
-  background: #f2d59d;
-}
 
 .tree-name-cell strong {
   min-width: 0;
@@ -516,10 +539,6 @@
   accent-color: #4e7ea8;
 }
 
-.file-select-cell:hover {
-  background: rgba(78, 126, 168, 0.1);
-}
-
 .file-select-checkbox:disabled {
   cursor: not-allowed;
 }
@@ -563,54 +582,7 @@
   white-space: nowrap;
 }
 
-.entry-icon {
-  width: 13px;
-  height: 12px;
-  flex: 0 0 auto;
-  border-radius: 2px;
-  border: 1px solid #c4cfdb;
-  background: linear-gradient(180deg, #ffffff, #eef3f8);
-  position: relative;
-}
-
-.entry-icon-dir {
-  border-color: #c49c56;
-  border-radius: 2px 2px 3px 3px;
-  background: linear-gradient(180deg, #f4d18d, #d8aa58);
-}
-
-.entry-icon-dir::before {
-  content: "";
-  position: absolute;
-  left: 1px;
-  top: -3px;
-  width: 7px;
-  height: 4px;
-  border: 1px solid #c49c56;
-  border-bottom: 0;
-  border-radius: 2px 2px 0 0;
-  background: #f2d59d;
-}
-
-.entry-icon-file {
-  opacity: 0.42;
-  border-color: #b7c2cf;
-  border-radius: 2px 2px 3px 2px;
-  background: linear-gradient(180deg, #ffffff, #e7edf4);
-}
-
-.entry-icon-file::before {
-  content: "";
-  position: absolute;
-  right: 0;
-  top: 0;
-  width: 4px;
-  height: 4px;
-  border-top: 1px solid #b7c2cf;
-  border-right: 1px solid #b7c2cf;
-  background: #f6f9fc;
-  clip-path: polygon(0 0, 100% 0, 100% 100%);
-}
+/* 文件/目录图标已换为 lucide Folder / FileText（对齐原型），手绘 CSS 小方块删除 */
 
 .file-row:hover:not(:disabled) {
   background: #f0f5fa;
@@ -629,10 +601,6 @@
   cursor: pointer;
 }
 
-.file-row-selected .file-select-cell {
-  background: rgba(78, 126, 168, 0.14);
-}
-
 .file-row-selected strong,
 .file-row-selected span {
   color: var(--ink);
@@ -643,24 +611,12 @@
   box-shadow: inset 3px 0 0 #4e7ea8;
 }
 
-.file-row-active .entry-icon-file {
-  opacity: 1;
-  border-color: #8fb1cf;
-  background: linear-gradient(180deg, #fff, #dde8f3);
-}
-
-.file-row-active .entry-icon-file::before {
-  background: #b9ccdf;
-}
 
 .file-row-active strong,
 .file-row-active span {
   color: var(--ink);
 }
 
-.file-row:hover:not(:disabled) .entry-icon-file {
-  opacity: 0.7;
-}
 
 .file-row-actions {
   position: static;

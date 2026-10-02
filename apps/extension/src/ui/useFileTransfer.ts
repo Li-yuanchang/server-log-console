@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useRef, useState } from "react";
 import type { UploadProgressState, DownloadProgressState } from "./FeedbackOverlays.js";
 import {
   apiDownloadFile,
@@ -9,6 +9,7 @@ import {
   apiUploadFinish,
 } from "./api.js";
 import type { TransferHistoryEntry } from "./storage.js";
+import { TransferGate, TransferCancelledError } from "./transferControl.js";
 
 const UPLOAD_JUNK_FILES = new Set([
   ".DS_Store", "._.DS_Store", "Thumbs.db", "thumbs.db", "desktop.ini", "Desktop.ini",
@@ -17,7 +18,9 @@ const UPLOAD_JUNK_FILES = new Set([
 ].map((name) => name.toLowerCase()));
 
 const UPLOAD_SPEED_SAMPLE_MS = 300;
-const TRANSFER_SUCCESS_HOLD_MS = 1200;
+/* 完成卡驻留时长：完成态改为原型 S8 的可关闭细条卡（✓/查看进度/关闭），
+   1.2s 用户来不及看清与点击，放宽到 8s；期间可手动关闭提前消失 */
+const TRANSFER_SUCCESS_HOLD_MS = 8000;
 
 type LocalUploadFile = {
   path: string;
@@ -132,8 +135,15 @@ async function collectFilesFromEntries(entries: FileSystemEntry[]): Promise<File
 export type FileTransferAPI = {
   downloadFile: (targetFilePath: string) => Promise<void>;
   uploadFiles: () => Promise<void>;
+  /** 直传 File 列表（终端工具行「上传」用：容器选好文件后走同一上传通道，目标 = 应用层联动目录） */
+  uploadFileList: (files: File[]) => Promise<void>;
   uploadDirectory: () => Promise<void>;
   handleFileDrop: (e: React.DragEvent) => void;
+  /** 上传是否处于暂停态（驱动抽屉按钮的「暂停/继续」切换） */
+  uploadPaused: boolean;
+  pauseUpload: () => void;
+  resumeUpload: () => void;
+  cancelUpload: () => void;
 };
 
 export function useFileTransfer(deps: {
@@ -150,6 +160,8 @@ export function useFileTransfer(deps: {
   appendTransferHistory: (entry: Omit<TransferHistoryEntry, "id" | "serverId" | "serverLabel" | "createdAt">) => void;
   browseLogFiles: (path: string, options?: { manual?: boolean; silent?: boolean }) => Promise<unknown>;
   setIsDragOver: (v: boolean) => void;
+  /* 上传开始回调：打开传输记录抽屉（进度看抽屉，不弹悬浮气泡） */
+  onUploadStarted?: () => void;
 }): FileTransferAPI {
   const {
     serverId,
@@ -163,7 +175,45 @@ export function useFileTransfer(deps: {
     appendTransferHistory,
     browseLogFiles,
     setIsDragOver,
+    onUploadStarted,
   } = deps;
+
+  /* 上传流程闸门：pause / resume / cancel 三态。
+     同一时刻只有一条上传在跑，用 ref 持有当前闸门即可（新上传会替换旧闸门）。 */
+  const uploadGateRef = useRef<TransferGate | null>(null);
+  const [uploadPaused, setUploadPaused] = useState(false);
+
+  /** 开启一轮新的上传：新建闸门并接管 ref（旧闸门作废，其挂起的 checkpoint 随流程自然结束） */
+  const beginUploadGate = useCallback((): TransferGate => {
+    const gate = new TransferGate();
+    uploadGateRef.current = gate;
+    setUploadPaused(false);
+    return gate;
+  }, []);
+
+  const pauseUpload = useCallback(() => {
+    const gate = uploadGateRef.current;
+    if (!gate || gate.isCancelled || gate.isPaused) return;
+    gate.pause();
+    setUploadPaused(true);
+    setActionStatus("上传已暂停");
+  }, [setActionStatus]);
+
+  const resumeUpload = useCallback(() => {
+    const gate = uploadGateRef.current;
+    if (!gate || gate.isCancelled || !gate.isPaused) return;
+    gate.resume();
+    setUploadPaused(false);
+    setActionStatus("继续上传...");
+  }, [setActionStatus]);
+
+  const cancelUpload = useCallback(() => {
+    const gate = uploadGateRef.current;
+    if (!gate) return;
+    gate.cancel();
+    setUploadPaused(false);
+    setActionStatus("正在取消上传...");
+  }, [setActionStatus]);
 
   const uploadOneFileWithBatchProgress = useCallback(async (
     file: File,
@@ -176,6 +226,7 @@ export function useFileTransfer(deps: {
       displayName: string;
       speedState: { sampleTime: number; sampleOffset: number; speed: number };
     },
+    gate?: TransferGate,
   ): Promise<void> => {
     const CHUNK_THRESHOLD = 10 * 1024 * 1024;
     const updateBatchProgress = (
@@ -217,6 +268,8 @@ export function useFileTransfer(deps: {
     };
 
     if (file.size < CHUNK_THRESHOLD) {
+      /* 小文件单个 POST 无法中途打断：先过闸门（暂停/取消在文件边界生效） */
+      await gate?.checkpoint();
       updateBatchProgress(0, "uploading");
       await apiUploadSmall(serverId!, targetPath, file, ({ loaded }) => {
         updateBatchProgress(Math.min(loaded, file.size), "uploading");
@@ -225,12 +278,15 @@ export function useFileTransfer(deps: {
       return;
     }
 
+    /* 大文件走分片：每片发送前过闸门 → 真正的暂停/继续（片间可停，已传分片保留） */
+    await gate?.checkpoint();
     const chunkSize = 1024 * 1024;
     const totalChunks = Math.ceil(file.size / chunkSize);
     const uploadId = await apiUploadStart(serverId, targetPath);
     let offset = 0;
 
     for (let i = 0; i < totalChunks; i++) {
+      await gate?.checkpoint();
       const end = Math.min(offset + chunkSize, file.size);
       const blob = file.slice(offset, end);
       const chunkStart = offset;
@@ -359,7 +415,7 @@ export function useFileTransfer(deps: {
     }
   }, [serverId, setDownloadProgress, setActionStatus, pushActivity, showToast, appendTransferHistory]);
 
-  const uploadLocalFileList = useCallback(async (files: LocalUploadFile[]) => {
+  const uploadLocalFileList = useCallback(async (files: LocalUploadFile[], gate?: TransferGate) => {
     if (!serverId || !directoryPath || files.length === 0) return;
     const total = files.length;
     const batchTotalBytes = getUploadBatchSize(files);
@@ -368,8 +424,11 @@ export function useFileTransfer(deps: {
     let uploadedBefore = 0;
     const speedState = { sampleTime: Date.now(), sampleOffset: 0, speed: 0 };
     setActionStatus(`正在本地直传 ${total} 个文件...`);
+    onUploadStarted?.();
     try {
       for (let i = 0; i < files.length; i++) {
+        /* 直传是服务端一条流式拷贝，无法中途打断 → 暂停/取消在文件边界生效 */
+        await gate?.checkpoint();
         const file = files[i];
         const targetPath = `${uploadDir}/${file.name}`;
         currentUpload = { fileName: file.name, localPath: file.path, targetPath, size: file.size };
@@ -444,6 +503,22 @@ export function useFileTransfer(deps: {
       await browseLogFiles(uploadDir, { silent: true });
       clearTransferProgressAfterHold(setUploadProgress);
     } catch (error) {
+      if (error instanceof TransferCancelledError) {
+        /* 用户取消：不记为失败，仅提示已取消 */
+        setActionStatus("已取消上传");
+        if (currentUpload) {
+          appendTransferHistory({
+            direction: "upload",
+            status: "canceled",
+            fileName: currentUpload.fileName,
+            filePath: currentUpload.targetPath,
+            size: currentUpload.size,
+            localPath: currentUpload.localPath,
+            message: "用户取消",
+          });
+        }
+        return;
+      }
       const detail = error instanceof Error ? error.message : "未知错误";
       setActionStatus(`上传失败：${detail}`);
       pushActivity(`上传失败：${detail}`);
@@ -462,7 +537,7 @@ export function useFileTransfer(deps: {
     } finally {
       setUploadProgress((prev) => prev?.stage === "completed" ? prev : null);
     }
-  }, [serverId, directoryPath, setUploadProgress, setActionStatus, pushActivity, showToast, appendTransferHistory, browseLogFiles]);
+  }, [serverId, directoryPath, setUploadProgress, setActionStatus, pushActivity, showToast, appendTransferHistory, browseLogFiles, onUploadStarted]);
 
   const uploadFileList = useCallback(async (fileList: File[]) => {
     if (!serverId || !directoryPath || fileList.length === 0) return;
@@ -482,8 +557,10 @@ export function useFileTransfer(deps: {
         }
         return { path: localPath, name: getUploadRelativePath(file) || file.name, size: file.size };
       });
+    /* 开启本轮上传闸门（暂停/继续/取消的载体） */
+    const gate = beginUploadGate();
     if (electronLocalFiles.every(Boolean)) {
-      await uploadLocalFileList(electronLocalFiles as LocalUploadFile[]);
+      await uploadLocalFileList(electronLocalFiles as LocalUploadFile[], gate);
       return;
     }
     const skippedCount = skipped.length;
@@ -494,8 +571,11 @@ export function useFileTransfer(deps: {
     let uploadedBefore = 0;
     const speedState = { sampleTime: Date.now(), sampleOffset: 0, speed: 0 };
     setActionStatus(`正在上传 ${total} 个文件${skippedCount ? `（已过滤 ${skippedCount} 个垃圾文件）` : ""}...`);
+    onUploadStarted?.();
     try {
       for (let i = 0; i < accepted.length; i++) {
+        /* 文件边界检查点：暂停时挂起，取消时抛 TransferCancelledError */
+        await gate?.checkpoint();
         const file = accepted[i];
         const relativePath = getUploadRelativePath(file);
         const localPath = getUploadLocalPath(file);
@@ -521,7 +601,7 @@ export function useFileTransfer(deps: {
           totalFiles: total,
           displayName: relativePath,
           speedState,
-        });
+        }, gate);
         uploadedBefore += file.size;
         pushActivity(`已上传文件：${targetPath}`);
         appendTransferHistory({
@@ -544,6 +624,22 @@ export function useFileTransfer(deps: {
       await browseLogFiles(uploadDir, { silent: true });
       clearTransferProgressAfterHold(setUploadProgress);
     } catch (error) {
+      if (error instanceof TransferCancelledError) {
+        /* 用户取消：不记为失败，仅提示已取消 */
+        setActionStatus("已取消上传");
+        if (currentUpload) {
+          appendTransferHistory({
+            direction: "upload",
+            status: "canceled",
+            fileName: currentUpload.fileName,
+            filePath: currentUpload.targetPath,
+            size: currentUpload.size,
+            localPath: currentUpload.localPath,
+            message: "用户取消",
+          });
+        }
+        return;
+      }
       const detail = error instanceof Error ? error.message : "未知错误";
       setActionStatus(`上传失败：${detail}`);
       pushActivity(`上传失败：${detail}`);
@@ -562,7 +658,7 @@ export function useFileTransfer(deps: {
     } finally {
       setUploadProgress((prev) => prev?.stage === "completed" ? prev : null);
     }
-  }, [serverId, directoryPath, uploadOneFileWithBatchProgress, uploadLocalFileList, setUploadProgress, setActionStatus, pushActivity, showToast, appendTransferHistory, browseLogFiles]);
+  }, [serverId, directoryPath, uploadOneFileWithBatchProgress, uploadLocalFileList, setUploadProgress, setActionStatus, pushActivity, showToast, appendTransferHistory, browseLogFiles, onUploadStarted]);
 
   const uploadFiles = useCallback(async () => {
     if (!serverId || !directoryPath) return;
@@ -570,7 +666,7 @@ export function useFileTransfer(deps: {
     if (electronAPI?.localPickFiles) {
       const result = await electronAPI.localPickFiles();
       if (result?.ok && Array.isArray(result.files)) {
-        await uploadLocalFileList(result.files);
+        await uploadLocalFileList(result.files, beginUploadGate());
       }
       return;
     }
@@ -583,7 +679,7 @@ export function useFileTransfer(deps: {
       await uploadFileList(Array.from(files));
     };
     input.click();
-  }, [serverId, directoryPath, uploadFileList, uploadLocalFileList]);
+  }, [serverId, directoryPath, uploadFileList, uploadLocalFileList, beginUploadGate]);
 
   const uploadDirectory = useCallback(async () => {
     if (!serverId || !directoryPath) return;
@@ -627,7 +723,13 @@ export function useFileTransfer(deps: {
   return {
     downloadFile,
     uploadFiles,
+    uploadFileList,
     uploadDirectory,
     handleFileDrop,
+    /* 上传流程控制（暂停 / 继续 / 取消） */
+    uploadPaused,
+    pauseUpload,
+    resumeUpload,
+    cancelUpload,
   };
 }

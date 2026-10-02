@@ -6,13 +6,17 @@ import {
   Download,
   FolderOpen,
   FolderOpenDot,
+  Pause,
+  Play,
   Search,
   Trash2,
   Upload,
+  X,
 } from "lucide-react";
 import type { TransferHistoryEntry, TransferHistoryStatus } from "./storage.js";
 import type { DownloadProgressState, UploadProgressState } from "./FeedbackOverlays.js";
 import { Drawer } from "./Drawer.js";
+import { OverflowText } from "./OverflowText.js";
 import { getParentDirectoryPath } from "./utils.js";
 
 type Props = {
@@ -28,6 +32,11 @@ type Props = {
   onRevealLocalPath: (path: string) => void;
   onClear: () => void;
   onClose: () => void;
+  /* 上传流程控制（进行中上传行的 暂停 / 继续 / 取消） */
+  uploadPaused: boolean;
+  onPauseUpload: () => void;
+  onResumeUpload: () => void;
+  onCancelUpload: () => void;
 };
 
 type FilterKey = "all" | "upload" | "download" | "success" | "error" | "canceled";
@@ -171,9 +180,7 @@ export function TransferHistoryDrawer(props: Props) {
               <div className="xrow">
                 <span className="xrow-ic xrow-ic-up"><Upload size={13} strokeWidth={1.9} /></span>
                 <span className="xrow-meta">
-                  <span className="xrow-fn" title={props.uploadProgress.fileName}>
-                    {props.uploadProgress.fileName}
-                  </span>
+                  <OverflowText className="xrow-fn" text={props.uploadProgress.fileName} />
                   <div className="xprog"><i style={{ width: `${Math.max(2, props.uploadProgress.current)}%` }} /></div>
                   <span className="xrow-sub">
                     <span>
@@ -185,7 +192,40 @@ export function TransferHistoryDrawer(props: Props) {
                     {props.uploadProgress.totalFiles && props.uploadProgress.totalFiles > 1 ? (
                       <span>批量 {props.uploadProgress.fileIndex}/{props.uploadProgress.totalFiles}</span>
                     ) : null}
+                    {props.uploadPaused ? <span className="xrow-paused">已暂停</span> : null}
                   </span>
+                </span>
+                <span className="xrow-ops" onClick={(event) => event.stopPropagation()}>
+                  {props.uploadPaused ? (
+                    <button
+                      type="button"
+                      className="ghost-button icon-button"
+                      title="继续上传"
+                      aria-label="继续上传"
+                      onClick={props.onResumeUpload}
+                    >
+                      <Play size={13} strokeWidth={1.85} />
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="ghost-button icon-button"
+                      title="暂停上传"
+                      aria-label="暂停上传"
+                      onClick={props.onPauseUpload}
+                    >
+                      <Pause size={13} strokeWidth={1.85} />
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="ghost-button icon-button xrow-cancel"
+                    title="取消上传"
+                    aria-label="取消上传"
+                    onClick={props.onCancelUpload}
+                  >
+                    <X size={13} strokeWidth={1.85} />
+                  </button>
                 </span>
               </div>
             ) : null}
@@ -193,9 +233,7 @@ export function TransferHistoryDrawer(props: Props) {
               <div className="xrow">
                 <span className="xrow-ic xrow-ic-dn"><Download size={13} strokeWidth={1.9} /></span>
                 <span className="xrow-meta">
-                  <span className="xrow-fn" title={props.downloadProgress.fileName}>
-                    {props.downloadProgress.fileName}
-                  </span>
+                  <OverflowText className="xrow-fn" text={props.downloadProgress.fileName} />
                   <div className="xprog"><i style={{ width: `${Math.max(2, props.downloadProgress.percent)}%` }} /></div>
                   <span className="xrow-sub">
                     <span>
@@ -246,12 +284,12 @@ export function TransferHistoryDrawer(props: Props) {
                     : entry.direction === "upload" ? <Upload size={13} strokeWidth={1.9} /> : <Download size={13} strokeWidth={1.9} />}
                 </span>
                 <span className="xrow-meta">
-                  <span className="xrow-fn" title={entry.filePath}>{entry.fileName}</span>
+                  <OverflowText className="xrow-fn" text={entry.fileName} />
                   <span className="xrow-sub">
                     <span className={isError ? "xrow-err-text" : ""}>{statusLabel(entry.status)}</span>
                     <span>{props.formatBytes(entry.size)}</span>
                     <span>{props.formatDateTime(entry.createdAt)}</span>
-                    {entry.message ? <span className="xrow-msg" title={entry.message}>{entry.message}</span> : null}
+                    {entry.message ? <OverflowText className="xrow-msg" text={entry.message} /> : null}
                   </span>
                 </span>
                 <span className="xrow-ops" onClick={(event) => event.stopPropagation()}>

@@ -87,20 +87,35 @@
 }
 
 .confirm-btn-danger {
-  border-color: #b94a48;
-  background: linear-gradient(180deg, #d06a67, #b94a48);
-  color: #ffffff;
+  /* 安静描边红（对齐原型 .btn.danger）：红字 + 30% 淡红边，非红实底填充。
+     原 #b94a48 实底过于抢眼，与全局「安静按钮」语言冲突（用户反馈 2026-10-01）。 */
+  border-color: color-mix(in srgb, var(--red) 30%, transparent);
+  background: var(--panel);
+  color: var(--red);
 }
 
 .confirm-btn-danger:hover:not(:disabled) {
-  border-color: #9f3432;
-  background: linear-gradient(180deg, #c95a57, #a83c3a);
-  color: #ffffff;
+  background: var(--red-soft);
+  border-color: color-mix(in srgb, var(--red) 46%, transparent);
+  color: var(--red);
 }
 
 .confirm-btn-disabled {
   opacity: 0.52;
   pointer-events: none;
+}
+
+/* 受影响目标（路径 / 名称 / 主机）：等宽 + 浅底信息块，可选中复制 */
+.confirm-target {
+  padding: 7px 10px;
+  border-radius: var(--r-s, 6px);
+  background: var(--panel-muted);
+  font-family: var(--mono, ui-monospace, Menlo, monospace);
+  font-size: var(--fs-2xs);
+  line-height: 1.5;
+  color: var(--ink-soft);
+  word-break: break-all;
+  user-select: text;
 }
 
 .rename-label {
@@ -219,51 +234,52 @@
   vertical-align: middle;
 }
 
+/* 徽标统一走主题令牌：描边 + 文字着色，无实心填充（与全局 .chip 规范一致） */
 .preview-readonly-badge {
-  color: #7c4a03;
-  background: #fef3c7;
+  color: var(--ink-muted);
+  border: 1px solid var(--line);
 }
 
 .preview-loading-badge {
-  color: #315f8d;
-  background: rgba(49, 95, 141, 0.12);
+  color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
 }
 
 .preview-dirty {
-  color: #b45309;
-  background: rgba(245, 158, 11, 0.12);
+  color: var(--amber, #b45309);
+  border: 1px solid color-mix(in srgb, var(--amber, #b45309) 30%, transparent);
 }
 
 .preview-dialog-archive .preview-readonly-badge {
-  color: #0f766e;
-  background: rgba(20, 184, 166, 0.14);
+  color: var(--green, #0a7b3e);
+  border-color: color-mix(in srgb, var(--green, #0a7b3e) 30%, transparent);
 }
 
 .preview-dialog-class .preview-readonly-badge {
-  color: #1d4ed8;
-  background: rgba(59, 130, 246, 0.14);
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 30%, transparent);
 }
 
 .theme-modern .preview-dialog-archive,
 .theme-modern .preview-dialog-class {
-  background: #f8fafc;
-  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: var(--panel-strong);
+  border: 1px solid var(--line);
 }
 
 .theme-modern .preview-dialog-archive .preview-header,
 .theme-modern .preview-dialog-class .preview-header {
-  border-bottom: 1px solid rgba(226, 232, 240, 0.95);
-  background: #ffffff;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
 }
 
 .theme-modern .preview-dialog-archive .preview-title,
 .theme-modern .preview-dialog-class .preview-title {
-  color: #172033;
+  color: var(--ink);
 }
 
 .theme-modern .preview-dialog-archive .preview-meta,
 .theme-modern .preview-dialog-class .preview-meta {
-  color: #64748b;
+  color: var(--ink-muted);
 }
 
 .structured-preview {
