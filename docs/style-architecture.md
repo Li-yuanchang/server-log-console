@@ -22,6 +22,14 @@
 1. `fonts.css`
 2. `styles.css`
 3. `theme-modern.css`
+4. `theme-modern-v2.css`
+5. `align-*.css`（原型 1:1 对齐批次：s5-terminal / s7-s8 / s9-monitor / s4-s6 / s10-s14 / log-light / selected / controls）
+6. `styles-sidepanel.css`（环境覆盖层，最后加载）
+
+`styles-sidepanel.css` 只作用于 `body.extension-sidepanel`（Chrome 扩展侧栏
+popup.html），把窄容器布局压成侧栏形态；选择器统一带 `body.extension-sidepanel`
+前缀且去主题化（classic / modern 双主题生效）。修改扩展侧栏表现时只动这个文件，
+不要把侧栏规则写回主题文件。
 
 其中 `styles.css` 内部又继续按顺序 `@import`：
 
@@ -881,3 +889,24 @@ grep -rn "font-size:\s*[0-9.]*px" apps/extension/src/*.css \
 2. 逐个视图切换验证（日志预览 / 文件目录 / 终端 / 设置中心 / 抽屉）
 3. `Network.setCacheDisabled(true)` + 重新导航后再测（Vite 会缓存旧 CSS）
 4. 截图用 `read_image` **真的看图**，DOM 探针说"尺寸正确"≠"视觉正确"
+
+## 11. 控件统一规范：input / select / textarea（2026-09-30 新增，强制）
+
+所有文本输入控件（含 `ThemedSelect` 触发器、各面板过滤框、终端侧输入）的边框/焦点态**只允许**使用以下 token，禁止写死 accent 或 rgba 颜色：
+
+| 状态 | 规范 |
+|---|---|
+| 默认 | `border: 1px solid var(--line)`，底色 `var(--panel)` |
+| hover | `border-color: var(--line-strong)` |
+| focus（含鼠标聚焦） | `border-color: var(--line-strong)` + `box-shadow: 0 0 0 2px color-mix(in srgb, var(--line-strong) 12%, transparent)` |
+| focus-visible outline | 输入类控件一律 `outline: none`（文本框鼠标聚焦也命中 focus-visible，accent 外环会形成粗边框） |
+
+实现位置：
+
+- 全局规则：`theme-modern.css`「统一输入规范」块 + `styles-sidebar-toolbar.css` 基础层 focus 规则（token 化）
+- `ThemedSelect` 触发器：`align-s4-s6.css` `.themed-select-trigger`（同规范，`focus-visible` 保留 accent 提示仅键盘导航可见）
+- 下拉组件：统一用 `ThemedSelect`（portal 到 body，fixed 定位防裁切），禁止新增原生 `<select>`
+
+已清理的历史覆盖（改动时勿照抄恢复）：`command-input` / `advanced-strip-drawer` / `xdrawer` / `rtools rt-filter-input` / `fb-filter-input` / `preview-search-shell` / `palette-input-row` / `xdrawer-search-shell` / `tsc-input` / `tai-input` / `tsc-textarea` / `tai-textarea` 的 accent 或硬编码 rgba focus 规则。
+
+token 来源：`--line` / `--line-strong` / `--accent` 三件套按 `ui-surface-*`（default / mist / paper / custom）在 `theme-modern.css` 内定义，控件样式**跟随主题**，勿在组件层写死颜色。
