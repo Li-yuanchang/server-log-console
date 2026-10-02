@@ -3,6 +3,7 @@ import { Plug, X, RefreshCw, Plus } from "lucide-react";
 import type { SshTunnelInfo, SshTunnelRequest } from "@server-log-console/shared";
 import { apiCreateSshTunnel, apiCloseSshTunnel, apiListSshTunnels } from "./api.js";
 import { useEscapeToClose } from "./useEscapeToClose.js";
+import { ThemedSelect } from "./ThemedSelect.js";
 
 type Props = {
   visible: boolean;
@@ -90,10 +91,12 @@ export function SshTunnelPanel({ visible, serverId, onClose, onStatus }: Props) 
         <div className="ssh-tunnel-form">
           <div className="ssh-tunnel-form-row">
             <label>类型</label>
-            <select value={formType} onChange={(e) => setFormType(e.target.value as "local" | "remote")}>
-              <option value="local">本地转发 (-L)</option>
-              <option value="remote">远程转发 (-R)</option>
-            </select>
+            <ThemedSelect value={formType} onChange={(value) => setFormType(value as "local" | "remote")} ariaLabel="隧道类型"
+              options={[
+                { value: "local", label: "本地转发 (-L)" },
+                { value: "remote", label: "远程转发 (-R)" }
+              ]}
+            />
           </div>
           <div className="ssh-tunnel-form-row">
             <label>本地地址</label>

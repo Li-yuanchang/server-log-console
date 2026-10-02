@@ -88,6 +88,26 @@
   color: var(--on-accent);
 }
 
+/* ---------- 4b. 检索中按钮：保持 accent 实心外观 ----------
+   现象：检索进行中按钮 `disabled`，命中全局 `button:disabled { opacity:.45 }`，
+       accent 实心底被冲淡成半透明灰（paper 主题下 ≈ rgb(198,185,164)），看起来"变样"。
+   原型（prototype.html 第 549 行决策 + 1131 行 busy 按钮）：
+       「主按钮变 spinner · 检索中 340MB/1.2GB，可随时取消，不再整栏禁用」——
+       按钮仍是实心主色，只是叠加 spinner + 进度文字。
+   处理：检索中维持 accent 底 + --on-accent 字、不透明；仅以 cursor 提示"处理中"。
+       网关侧暂无取消检索接口，故不放开点击，只把视觉修正为原型形态。 */
+.theme-modern .search-run-button.search-run-busy,
+.theme-modern .search-run-button.search-run-busy:disabled {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+  opacity: 1;
+  cursor: progress;
+}
+.theme-modern .search-run-button.search-run-busy .btn-spinner {
+  flex: none;
+}
+
 /* ---------- 3. 前置图标搜索框 · 输入框留白兜底 ---------- */
 /* 现象：多处「放大镜图标 + 输入框」的搜索框，图标叠在占位符/文字上。
    根因：主题基础 input 规则（theme-modern.css §7 的 :not 链、theme-modern-v2.css
@@ -99,3 +119,50 @@
 .theme-modern .xdrawer .xdrawer-search-shell > input {
   padding-left: 28px;
 }
+
+/* ---------- 5. 检索框清除 ✕（贴右端） ----------
+   空态不再放「/」历史提示按钮：它与占位文字抢位、把 placeholder 压住
+   （用户反馈，DevTools 确认被遮挡元素即 button.keyword-input-kbd）。
+   现仅在有内容时显示自绘清除 ✕（绝对定位贴右端）；原生 ::-webkit-search-cancel-button
+   由内核按内容长度内联定位、不贴右端，故隐藏之、改由自绘按钮承担。 */
+.theme-modern .toolbar-commandbar .command-input-keyword {
+  /* 右侧留白 = 清除 ✕ 的占位（right:10px + 宽 18px = 到 28px）+ 约 8px 呼吸间距 */
+  padding-right: 36px;
+}
+/* 隐藏原生清除/装饰按钮（改由自绘 .keyword-input-clear 承担）。
+   一并隐藏 results 系列，避免内核在 type=search 下注入多余装饰压住文字。 */
+.theme-modern .command-input-keyword::-webkit-search-cancel-button,
+.theme-modern .command-input-keyword::-webkit-search-decoration,
+.theme-modern .command-input-keyword::-webkit-search-results-button,
+.theme-modern .command-input-keyword::-webkit-search-results-decoration {
+  -webkit-appearance: none;
+  appearance: none;
+  display: none;
+}
+/* 清除 ✕：贴右端、垂直居中 */
+.theme-modern .keyword-input-clear {
+  position: absolute;
+  right: 10px;
+  /* 垂直居中改用 top 计算，不用 transform: translateY(-50%)：
+     全局 `.theme-modern button:active { transform: none }` 会在按下瞬时抹掉 translateY，
+     导致居中补偿失效、按钮往下跳（用户反馈：点删除 ✕ 会往下位移）。固定 18px 高 → 上移 9px。 */
+  top: calc(50% - 9px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ink-muted);
+  cursor: pointer;
+  z-index: 2;
+}
+.theme-modern .keyword-input-clear:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--ink) 12%, transparent);
+  color: var(--ink);
+}
+.theme-modern .keyword-input-clear:disabled { opacity: 0.5; cursor: not-allowed; }
+.theme-modern .keyword-input-clear svg { width: 12px; height: 12px; }

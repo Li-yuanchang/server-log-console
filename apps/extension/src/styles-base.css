@@ -14,9 +14,9 @@
   --green: #2d6a4f;
   --shell: #0a0a0a;
   --shell-soft: #111111;
-  --shell-ink: #e8e8e8;
+  --shell-ink: #d7dde5;
   --log-font-size: 12px;
-  --terminal-font-size: 12px;
+  --terminal-font-size: 11px;
   font-family: "SF Pro SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   color: var(--ink);
   background: #fafafa;

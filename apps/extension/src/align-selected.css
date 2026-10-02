@@ -124,3 +124,18 @@
   color: var(--accent) !important;
   box-shadow: none !important;
 }
+
+/* ---------- 8. 图标开关按钮选中态：选中即有底色（用户决策 2026-09-30） ----------
+   现象：仅「异常/告警高亮」按钮（btn-highlight-active）选中时有底色，其余开关按钮
+        （含上下文/书签/更多工具/调试）的选中态被 `.ghost-button.icon-button{background:transparent}`
+        压掉，看起来"点了没选中"。
+   规则：中性开关统一 = accent-soft 底 + accent 字（与 btn-highlight-active 的"选中即有底"同一行为，
+        仅色相按语义区分）。告警高亮保留红色语义，见 theme-modern.css 的 btn-highlight-active。
+   不含：下载 / 复制 / 弹出小窗 —— 属"一次性动作"而非开关，用户明确排除。 */
+.theme-modern .ghost-button.icon-button.icon-toggle-active,
+.theme-modern .ghost-button.icon-button.icon-toggle-active:hover:not(:disabled) {
+  background: var(--accent-soft) !important;
+  color: var(--accent) !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}

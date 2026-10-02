@@ -19,23 +19,6 @@ export function BatchCommandPanel({ visible, servers, onClose, onStatus }: Props
   const [expandedId, setExpandedId] = useState<string | null>(null);
   useEscapeToClose(visible, onClose);
 
-  if (!visible) return null;
-
-  const toggleServer = (id: string) => {
-    const next = new Set(selectedIds);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
-    setSelectedIds(next);
-  };
-
-  const selectAll = () => {
-    if (selectedIds.size === servers.length) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(servers.map((s) => s.id)));
-    }
-  };
-
   const handleExec = useCallback(async () => {
     if (!command.trim()) {
       onStatus("请输入要执行的命令");
@@ -61,6 +44,23 @@ export function BatchCommandPanel({ visible, servers, onClose, onStatus }: Props
       setExecuting(false);
     }
   }, [command, selectedIds, onStatus]);
+
+  if (!visible) return null;
+
+  const toggleServer = (id: string) => {
+    const next = new Set(selectedIds);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setSelectedIds(next);
+  };
+
+  const selectAll = () => {
+    if (selectedIds.size === servers.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(servers.map((s) => s.id)));
+    }
+  };
 
   return (
     <div className="batch-command-panel">

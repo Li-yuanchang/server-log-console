@@ -10,20 +10,6 @@
   padding: 0;
 }
 
-.app-shell.ui-surface-mist {
-  background:
-    radial-gradient(circle at 18% 8%, rgba(49, 95, 141, 0.13), transparent 34%),
-    radial-gradient(circle at 88% 18%, rgba(45, 106, 79, 0.1), transparent 30%),
-    linear-gradient(135deg, #eef3f7 0%, #f7f8f6 100%);
-}
-
-.app-shell.ui-surface-paper {
-  background:
-    linear-gradient(135deg, rgba(49, 95, 141, 0.045) 25%, transparent 25%) 0 0 / 18px 18px,
-    linear-gradient(315deg, rgba(49, 95, 141, 0.035) 25%, transparent 25%) 0 0 / 18px 18px,
-    #f6f3ec;
-}
-
 .app-shell.ui-density-comfortable {
   padding: 6px;
 }

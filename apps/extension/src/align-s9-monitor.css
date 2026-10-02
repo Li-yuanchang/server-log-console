@@ -1,5 +1,7 @@
-/* align-s9-monitor.css — S9 工具抽屉（监控记录时序图）对齐原型（prototype.html s9:828-922）
+/* align-s9-monitor.css — S9 工具抽屉（监控）对齐原型（prototype.html s9:865-959）
    隔离文件：仅由 S9 修复批次维护，最后加载。
+   覆盖范围：监控记录时序图 / 指标卡迷你趋势 / 进程 TOP 5 / 底部行，
+   以及身份卡、上下文行与其余真实区块的卡片视觉收敛（数据逻辑不动）。
    排除项：字号体系（--fs-*）为用户有意调整，不回改。
    全部规则加 `.theme-modern` 前缀：Drawer portal 已包壳，令牌/后代选择器恢复命中。 */
 
@@ -92,7 +94,11 @@
   width: 100%;
   height: 150px;
 }
+/* 样本不足占位（指标卡迷你线 + 监控记录大图同款）：与卡片一致的淡色虚线 + 灰字，
+   中间文字垫 panel 底色截断虚线，避免文字被贯穿 */
+.theme-modern .server-status-trend-spark-empty,
 .theme-modern .server-status-monitor-chart-empty {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -100,6 +106,22 @@
   font-size: var(--fs-2xs);
   color: var(--ink-muted);
   white-space: nowrap;
+}
+.theme-modern .server-status-trend-spark-empty { height: 26px; }
+.theme-modern .server-status-trend-spark-empty::before,
+.theme-modern .server-status-monitor-chart-empty::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  top: 50%;
+  border-top: 1px dashed var(--line-strong);
+}
+.theme-modern .server-status-trend-spark-empty > span,
+.theme-modern .server-status-monitor-chart-empty > span {
+  position: relative;
+  padding: 0 8px;
+  background: var(--panel);
 }
 
 /* 图例行：flex gap 14、padding 2px 12px 8px（原型 899） */
@@ -173,12 +195,15 @@
 }
 .theme-modern .server-status-process-name { color: var(--ink-soft); }
 .theme-modern .server-status-process-cpu { color: var(--ink); }
+/* CPU% 高亮分档：≥10% 红 / ≥5% 橙（与 --red / --amber 同源，见 ServerStatusPanel.tsx processCpuTone） */
+.theme-modern .server-status-process-cpu-hi { color: var(--red); font-weight: 600; }
+.theme-modern .server-status-process-cpu-md { color: var(--amber); font-weight: 600; }
 .theme-modern .server-status-process-mem { color: var(--ink-soft); }
 .theme-modern .server-status-process-args {
   min-width: 0;
   overflow: hidden;
   white-space: nowrap;
-  color: var(--ink-soft);
+  color: var(--ink-muted);
 }
 
 /* ------------------------------------------------------------
@@ -214,4 +239,88 @@
   border-radius: 5px;
   font-size: var(--fs-2xs);
   gap: 5px;
+}
+
+/* ------------------------------------------------------------
+   6. 身份卡（直连主机）与上下文行（跟随目录/跟随日志）：现有真实功能保留，
+   视觉收敛为抽屉语言（1px 描边 + var(--r-m) + panel 白底，去掉渐变/重阴影装饰） */
+.theme-modern .server-status-head {
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+}
+.theme-modern .server-status-icon {
+  color: var(--accent);
+  background: var(--panel-muted);
+  border-color: var(--line);
+}
+.theme-modern .server-status-identity strong { color: var(--ink); }
+.theme-modern .server-status-identity small { color: var(--ink-muted); }
+.theme-modern .server-status-hero-card {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-m);
+  background: var(--panel);
+  box-shadow: none;
+}
+.theme-modern .server-status-hero-orb {
+  color: var(--accent);
+  background: var(--panel-muted);
+  border-color: var(--line);
+  border-radius: var(--r-s);
+  box-shadow: none;
+}
+.theme-modern .server-status-hero-main span,
+.theme-modern .server-status-hero-meta span { color: var(--ink-muted); }
+.theme-modern .server-status-hero-main strong { color: var(--ink); }
+.theme-modern .server-status-context {
+  border: 1px solid var(--line);
+  border-radius: var(--r-m);
+  background: var(--panel);
+  box-shadow: none;
+  color: var(--ink-muted);
+}
+
+/* ------------------------------------------------------------
+   7. 其余真实区块（内存/Swap、磁盘、网络、核心负载、warnings）数据逻辑不动，
+   仅统一卡片视觉：描边/圆角/底色与监控卡一致，内嵌行底色用 panel-muted */
+.theme-modern .server-status-card {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-m);
+  background: var(--panel);
+  box-shadow: none;
+}
+.theme-modern .server-status-card-title {
+  font-weight: 600;
+  color: var(--ink);
+}
+.theme-modern .server-status-card-title em { color: var(--ink-muted); }
+.theme-modern .server-status-load-grid div {
+  background: var(--panel-muted);
+  border-color: var(--line);
+  border-radius: var(--r-s);
+}
+.theme-modern .server-status-load-grid strong { color: var(--ink); }
+.theme-modern .server-status-load-grid span,
+.theme-modern .server-status-meter-head,
+.theme-modern .server-status-kv,
+.theme-modern .server-status-disk span,
+.theme-modern .server-status-network-list span,
+.theme-modern .server-status-disk-usage small { color: var(--ink-soft); }
+.theme-modern .server-status-meter-head strong,
+.theme-modern .server-status-kv strong,
+.theme-modern .server-status-disk-usage > span { color: var(--ink); }
+.theme-modern .server-status-meter-track,
+.theme-modern .server-status-disk-track { background: var(--panel-muted); }
+.theme-modern .server-status-disk,
+.theme-modern .server-status-network-list > div {
+  background: var(--panel-muted);
+  border-color: var(--line);
+  border-radius: var(--r-s);
+}
+.theme-modern .server-status-disk strong,
+.theme-modern .server-status-network-list strong { color: var(--ink); }
+.theme-modern .server-status-empty {
+  background: var(--panel-muted);
+  color: var(--ink-muted);
 }

@@ -11,7 +11,7 @@
 .theme-modern .preview-dialog-archive,
 .theme-modern .preview-dialog-class {
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--r-l, 10px);
   background: var(--panel-strong);
   box-shadow: var(--v2-shadow-pop, 0 24px 70px rgba(15, 23, 42, 0.28));
   color: var(--ink);
@@ -24,7 +24,7 @@
   gap: 10px;
   min-height: 49px;
   padding: 9px 16px;
-  background: var(--panel-muted);
+  background: var(--panel);
   border-bottom: 1px solid var(--line);
 }
 .theme-modern .preview-dialog .preview-title {
@@ -40,28 +40,29 @@
 }
 .theme-modern .preview-header-spacer { flex: 1 1 auto; min-width: 0; }
 
-/* 徽标 chip：金黄=预览 / 灰=只读（用 amber/red 令牌做淡底） */
+/* 徽标 chip：遵循全局 .chip 规范（原型 .chip / .chip.amb）
+   —— 描边 + 文字着色，无实心填充；尺寸/圆角/字号与 .chip 完全一致。 */
 .theme-modern .preview-dialog .preview-chip-gold {
   flex: none;
   color: var(--amber, #b45309);
-  border: 1px solid color-mix(in srgb, var(--amber, #b45309) 35%, transparent);
-  background: color-mix(in srgb, var(--amber, #b45309) 8%, transparent);
+  border-color: color-mix(in srgb, var(--amber, #b45309) 30%, transparent);
+  background: transparent;
 }
 .theme-modern .preview-dialog .preview-chip-muted {
   flex: none;
   color: var(--ink-muted);
-  border: 1px solid var(--line);
+  border-color: var(--line);
   background: transparent;
 }
 .theme-modern .preview-dialog .preview-loading-badge {
   flex: none;
   color: var(--accent);
-  background: var(--accent-soft);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
 }
 .theme-modern .preview-dialog .preview-dirty {
   flex: none;
-  color: var(--warning, var(--amber, #b45309));
-  background: var(--amber-soft, rgba(180, 83, 9, 0.09));
+  color: var(--amber, #b45309);
+  border: 1px solid color-mix(in srgb, var(--amber, #b45309) 30%, transparent);
 }
 
 /* 分段控件：主题描边 + 选中 accent */
@@ -69,7 +70,7 @@
   flex: none;
   background: var(--panel);
   border-color: var(--line);
-  border-radius: 6px;
+  border-radius: var(--r-s, 6px);
 }
 .theme-modern .preview-dialog .seg.preview-view-seg > button {
   height: 28px;
@@ -105,7 +106,7 @@
   align-items: center;
   justify-content: center;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--r-s, 6px);
   background: var(--panel);
   color: var(--ink-soft);
   cursor: pointer;
@@ -132,7 +133,7 @@
   min-width: 132px;
   padding: 5px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--r-m, 8px);
   background: var(--panel-strong);
   box-shadow: var(--v2-shadow-pop, 0 12px 40px rgba(15, 23, 42, 0.2));
 }
@@ -141,7 +142,7 @@
   width: 100%;
   padding: 6px 10px;
   border: none;
-  border-radius: 5px;
+  border-radius: var(--r-s, 6px);
   background: transparent;
   color: var(--ink);
   font: inherit;
@@ -159,7 +160,7 @@
   align-items: center;
   gap: 8px;
   padding: 6px 16px;
-  background: var(--panel-muted);
+  background: var(--panel);
   border-bottom: 1px solid var(--line);
   flex: none;
 }
@@ -177,21 +178,17 @@
 }
 .theme-modern .preview-dialog .preview-search-shell input {
   width: 100%;
-  height: 24px;
+  height: var(--ctl-h);
   padding: 0 8px 0 25px;
   font: inherit;
   font-size: var(--fs-2xs);
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--r-s, 6px);
   background: var(--panel);
   color: var(--ink);
   outline: none;
 }
 .theme-modern .preview-dialog .preview-search-shell input::placeholder { color: var(--ink-muted); }
-.theme-modern .preview-dialog .preview-search-shell input:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px var(--accent-soft);
-}
 .theme-modern .preview-dialog .preview-search-count {
   flex: none;
   min-width: 58px;
@@ -201,13 +198,13 @@
 }
 .theme-modern .preview-dialog .preview-search-nav {
   width: 28px;
-  height: 24px;
+  height: var(--ctl-h);
   padding: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--r-s, 6px);
   background: var(--panel);
   color: var(--ink);
   cursor: pointer;
@@ -229,7 +226,7 @@
 .theme-modern .preview-dialog .code-editor-container .cm-scroller { background: var(--panel) !important; }
 .theme-modern .preview-dialog .code-editor-container .cm-content { color: var(--ink) !important; }
 .theme-modern .preview-dialog .code-editor-container .cm-gutters {
-  background: var(--panel-muted) !important;
+  background: var(--panel) !important;
   color: var(--ink-muted) !important;
   border-right: 1px solid var(--line) !important;
 }
@@ -273,7 +270,7 @@
   gap: 14px;
   min-height: 30px;
   padding: 7px 16px;
-  background: var(--panel-muted);
+  background: var(--panel);
   border-top: 1px solid var(--line);
   color: var(--ink-muted);
   font-family: var(--app-font-family);

@@ -7,7 +7,6 @@ import { FileBrowserContentColumn } from "./FileBrowserContentColumn.js";
 import { FileBrowserGrid } from "./FileBrowserGrid.js";
 import { FileBrowserHistoryDropdown } from "./FileBrowserHistoryDropdown.js";
 import { FileBrowserPathbar, buildBreadcrumbItems } from "./FileBrowserPathbar.js";
-import { FileBrowserStrip } from "./FileBrowserStrip.js";
 import { FileBrowserTableRows } from "./FileBrowserTableRows.js";
 import { FileBrowserTreeColumn } from "./FileBrowserTreeColumn.js";
 import { looksLikeJumpServer } from "./terminal-utils.js";
@@ -15,10 +14,8 @@ import type { PreviewDialogState } from "./FilePreviewDialog.js";
 import type { ConfirmDialogState } from "./ModalDialogs.js";
 import { ConnectionSettingsWorkspace, WatermarkOverlay, type ManualServerDraft, type SettingsWorkspaceView } from "./ConnectionSettingsWorkspace.js";
 import { SearchQueryPanel } from "./SearchQueryPanel.js";
-import { SearchProgressPanel } from "./SearchProgressPanel.js";
-import { SshTunnelPanel } from "./SshTunnelPanel.js";
-import { TerminalSplitView } from "./TerminalSplitView.js";
 import { SearchToolbarActions } from "./SearchToolbarActions.js";
+import { SshTunnelPanel } from "./SshTunnelPanel.js";
 import { BatchCommandPanel } from "./BatchCommandPanel.js";
 import { ToolDrawer } from "./ToolDrawer.js";
 import { DiffComparePanel } from "./DiffComparePanel.js";
@@ -39,17 +36,20 @@ import type {
   ServerSystemProfileResponse,
   ServerSummary
 } from "@server-log-console/shared";
-import { ArrowDown, ArrowLeft, Settings, Download, Copy, Bug, Bookmark, X, AlertTriangle, Search, Folder } from "lucide-react";
-import { TerminalPanel } from "./TerminalWorkspace.js";
+import { ArrowDown, ArrowLeft, Settings, Download, Copy, Bug, Bookmark, X, AlertTriangle, Search, Folder, ServerOff, FolderSearch } from "lucide-react";
+import { TerminalPanel, type TerminalPaneSessionState } from "./TerminalWorkspace.js";
 import { ToolIcon } from "./ToolIcon.js";
+import { PipExpandIcon } from "./PipExpandIcon.js";
+import { ThemedSelect } from "./ThemedSelect.js";
 
-import { useTerminalSession } from "./useTerminalSession.js";
+import type { useTerminalSession } from "./useTerminalSession.js";
+import { useTerminalTabs, createTerminalTabState } from "./useTerminalTabs.js";
 import { useToasts } from "./useToasts.js";
 import { VirtualLogViewer, type VirtualLogViewerHandle, type VirtualLogViewerScrollState } from "./VirtualLogViewer.js";
 import { useLiveFollow } from "./useLiveFollow.js";
 import { usePictureInPicture } from "./usePictureInPicture.js";
 import type { LogRecordingSessionResponse } from "./api.js";
-import type { WorkspaceSession, WorkspaceSessionState, ViewerPipSnapshot } from "./types.js";
+import type { WorkspaceSession, WorkspaceSessionState, TerminalTabState, ViewerPipSnapshot } from "./types.js";
 import {
   defaultDirectoryPath,
   MAX_PREVIEW_CACHE_ENTRIES,
@@ -61,13 +61,14 @@ import {
   readViewerPipSnapshot,
   writeViewerPipSnapshot,
   buildWorkspaceSession,
+  createTerminalSessionId,
 } from "./app-utils.js";
 import { useAsyncStatus } from "./useAsyncStatus.js";
 import { useLocalService } from "./useLocalService.js";
 import { useSearchTimer } from "./useSearchTimer.js";
 import { usePanelResize } from "./usePanelResize.js";
 import { useElectronEnv } from "./useElectronEnv.js";
-import { useUiTheme, monoFontFamilyValue } from "./useUiTheme.js";
+import { useUiTheme, monoFontFamilyValue, uiFontSizeVars, THEME_PRESETS, BG_LAYERS, TERMINAL_SCHEMES, onAccentColor, accentHoverColor, accentSoftColor } from "./useUiTheme.js";
 import { useWorkspaceTabDrag } from "./useWorkspaceTabDrag.js";
 import { useTransferHistory } from "./useTransferHistory.js";
 import { useFileBrowserComputed } from "./useFileBrowserComputed.js";
@@ -79,6 +80,7 @@ import { isSpecialPreviewFile, useFileOperations } from "./useFileOperations.js"
 import { useServerManagement } from "./useServerManagement.js";
 import { useLogRecording } from "./useLogRecording.js";
 import { SidebarPanel } from "./SidebarPanel.js";
+import { ServerPickerOverlay, SidepanelMobileTop, SidepanelMobileTabBar, DirectorySheet } from "./SidepanelMobile.js";
 import { WorkspaceTabContextMenu, type WorkspaceTabMenuState } from "./WorkspaceTabContextMenu.js";
 import { WorkspaceSessionTabs } from "./WorkspaceSessionTabs.js";
 import { SettingsModalOverlay } from "./SettingsModalOverlay.js";
@@ -101,18 +103,17 @@ import {
   clampPercent,
   clampSliceStart,
   copyText,
-  describeSearchStrategyClient,
+  formatNumber,
   formatBytes,
   formatDateTime,
   formatDurationLabel,
-  formatNumber,
   formatPercent,
   formatPreviewSnippet,
   formatSliceProgressLabel,
   getParentDirectoryPath,
   getPreviewCacheKey,
   normalizeSearchInput,
-  parseKeywordTerms,
+  resolveSearchTerms,
   previewBucketSize,
   previewSliceLength,
 } from "./utils.js";
@@ -128,20 +129,6 @@ import {
   writeActivityPanelHeight,
   writeBrowserTreeWidth,
 } from "./storage.js";
-
-
-// 原型 S11「弹出独立小窗」图标（prototype.html ic("expand")，四向外扩箭头），
-// 取代 lucide PictureInPicture2（矩形套矩形，与原型不符）。
-function PipExpandIcon({ size = 14, strokeWidth = 1.8 }: { size?: number; strokeWidth?: number }) {
-  return (
-    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="m15 15 6 6" />
-      <path d="m8 9-6-6" />
-      <path d="m21 9-6-6" />
-      <path d="m3 21 6-6" />
-    </svg>
-  );
-}
 
 
 // Detect PiP mode from URL params (Electron BrowserWindow PiP)
@@ -228,7 +215,20 @@ export function App() {
   const [activeLogView, setActiveLogView] = useState<"search" | "files">(isStandaloneViewerWindow ? "search" : ((pipUrlParams.get("activeLogView") as "search" | "files") || "files"));
   const [terminalPanelOpen, setTerminalPanelOpen] = useState(false);
   const [terminalDetached, setTerminalDetached] = useState(false);
+  /* 旧单会话 id：迁移来源 + openPipWindow 弹窗协议参数（新模型见 terminalTabs） */
   const [terminalSessionId, setTerminalSessionId] = useState(pipUrlParams.get("terminalSessionId") || "");
+  /* 终端内多标签组（每工作区独立持久化）；独立终端窗从 URL 构造单标签 */
+  const [terminalTabs, setTerminalTabs] = useState<TerminalTabState[]>(() => {
+    if (!isStandaloneTerminalWindow) {
+      return [];
+    }
+    const sessionId = pipUrlParams.get("terminalSessionId")?.trim() || "";
+    const seedServerId = pipUrlParams.get("serverId") || "server";
+    return [{ tabId: "tt-standalone", sessionId: sessionId || createTerminalSessionId(seedServerId), kind: "server" as const }];
+  });
+  const [activeTerminalTabId, setActiveTerminalTabId] = useState<string>(() => (isStandaloneTerminalWindow ? "tt-standalone" : ""));
+  /* pane 会话状态 map（激活标签的状态供工具栏/独立窗标题派生） */
+  const [terminalPaneStates, setTerminalPaneStates] = useState<Record<string, TerminalPaneSessionState>>({});
   const [terminalOverlay, setTerminalOverlay] = useState<"none" | "shortcuts" | "ai">("none");
   const [activeViewerTabId, setActiveViewerTabId] = useState("file");
   const [workspaceSessions, setWorkspaceSessions] = useState<WorkspaceSession[]>([]);
@@ -257,6 +257,8 @@ export function App() {
   const [uploadProgress, setUploadProgress] = useState<UploadProgressState | null>(null);
   const [downloadProgress, setDownloadProgress] = useState<DownloadProgressState | null>(null);
   const [contextMenu, setContextMenu] = useState<FileContextMenuState | null>(null);
+  /* 空白处右键菜单（用户反馈 2026-09-30）：文件列表/目录树空白右键 → 新建/上传/刷新等目录级操作 */
+  const [blankContextMenu, setBlankContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [workspaceTabMenu, setWorkspaceTabMenu] = useState<WorkspaceTabMenuState | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
   const [renameDialog, setRenameDialog] = useState<{ entry: LogFileEntry; newName: string } | null>(null);
@@ -281,40 +283,38 @@ export function App() {
     setUiTheme,
     uiDensity,
     setUiDensity,
-    uiSurface,
-    setUiSurface,
-    uiBackgroundMode,
-    setUiBackgroundMode,
-    customBackgroundColor,
-    setCustomBackgroundColor,
-    customGradientStart,
-    setCustomGradientStart,
-    customGradientEnd,
-    setCustomGradientEnd,
+    uiThemePreset,
+    setUiThemePreset,
+    uiToneMode,
+    setUiToneMode,
+    systemDark,
+    resolvedTheme,
+    uiBackground,
+    setUiBackground,
+    uiImgOverlay,
+    setUiImgOverlay,
+    uiImgBlur,
+    setUiImgBlur,
     customBackgroundImage,
     setCustomBackgroundImage,
-    customTextColor,
-    setCustomTextColor,
-    customLogBackgroundColor,
-    setCustomLogBackgroundColor,
-    customTerminalBackgroundColor,
-    setCustomTerminalBackgroundColor,
+    uiTerminalScheme,
+    setUiTerminalScheme,
+    uiAccentOverride,
+    setUiAccentOverride,
     uiFontFamily,
     setUiFontFamily,
     logFontSize,
     setLogFontSize,
     terminalFontSize,
     setTerminalFontSize,
+    uiFontSize,
+    setUiFontSize,
     logFontFamily,
     setLogFontFamily,
     terminalFontFamily,
     setTerminalFontFamily,
     motionMode,
     setMotionMode,
-    customImageOverlay,
-    setCustomImageOverlay,
-    customImageBlur,
-    setCustomImageBlur,
     dynamicBackground,
     setDynamicBackground,
     watermarkEnabled,
@@ -333,6 +333,10 @@ export function App() {
   const [showConnectionSettings, setShowConnectionSettings] = useState(() => new URLSearchParams(window.location.search).has("settings"));
   const [showTransferHistory, setShowTransferHistory] = useState(() => new URLSearchParams(window.location.search).has("transfer"));
   const [paletteOpen, setPaletteOpen] = useState(false);
+  /* 侧栏移动档（SidepanelMobile）：整屏选服层 / 目录树底部 sheet 的开关。
+     移动/宽档的显隐由 styles-sidepanel.css 容器查询决定，组件 DOM 常驻。 */
+  const [serverPickerOpen, setServerPickerOpen] = useState(false);
+  const [dirSheetOpen, setDirSheetOpen] = useState(false);
   const [settingsWorkspaceView, setSettingsWorkspaceView] = useState<SettingsWorkspaceView>(() => {
     const param = new URLSearchParams(window.location.search).get("settings");
     return param === "connections" || param === "preferences" ? param : "preferences";
@@ -391,7 +395,37 @@ export function App() {
   const [serverSystemProfileAutoRefresh, setServerSystemProfileAutoRefresh] = useState(true);
   const [multiFileMode, setMultiFileMode] = useState(false);
   const [filePattern, setFilePattern] = useState("*.log");
-  const [terminalSplitMode, setTerminalSplitMode] = useState(false);
+  /* 终端视图打开动作（openTerminalView/toggleTerminalPanel 语义）：确保至少一个标签 + setTerminalPanelOpen(true) */
+  const ensureAtLeastOneTerminalTab = useCallback(() => {
+    if (terminalTabs.length > 0) {
+      return;
+    }
+    const legacy = terminalSessionId.trim();
+    const tab = legacy
+      ? createTerminalTabState(serverId, legacy)
+      : createTerminalTabState(serverId);
+    setTerminalTabs([tab]);
+    setActiveTerminalTabId(tab.tabId);
+  }, [terminalTabs, terminalSessionId, serverId]);
+  /* 双轨拆除：单例 useTerminalSession 已移入 TerminalWorkspace 的每标签 pane；
+     窗口管理器只保留「打开 = 确保标签 + 开面板」的语义，协议动作一律 no-op。 */
+  const terminalSessionShim: ReturnType<typeof useTerminalSession> = {
+    connected: false,
+    retryCount: 0,
+    containerRef: { current: null },
+    startTerminal: () => {
+      ensureAtLeastOneTerminalTab();
+    },
+    stopTerminal: () => {
+      /* 关闭终端视图 = 保留会话（pane 卸载时自行 detach，网关保留 90s） */
+    },
+    focusTerminal: () => {},
+    focusTerminalSoon: () => {},
+    fitTerminal: () => {},
+    getSelection: () => "",
+    clearSelection: () => {},
+    pasteToTerminal: () => {},
+  };
   const keywordInputRef = useRef<HTMLInputElement | null>(null);
   const directoryInputRef = useRef<HTMLInputElement | null>(null);
   const virtualViewerRef = useRef<VirtualLogViewerHandle | null>(null);
@@ -399,6 +433,7 @@ export function App() {
   const browserGridRef = useRef<HTMLDivElement | null>(null);
   const directoryMouseNavRef = useRef<{ button: number; at: number } | null>(null);
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
+  const blankContextMenuRef = useRef<HTMLDivElement | null>(null);
   const workspaceTabMenuRef = useRef<HTMLDivElement | null>(null);
   
   const viewerDebugRef = useRef<HTMLDivElement | null>(null);
@@ -497,7 +532,10 @@ export function App() {
     width: 980,
     height: 680,
     onOpen: () => {
-      if (resolveCurrentLiveFollowEnabled()) {
+      // 仅 Electron 独立小窗（独立进程 / 独立状态树）需要「主窗停止 → 小窗接管」；
+      // 浏览器 Document PiP 与主窗共用同一 React 状态树（仅 portal 换 document 渲染），
+      // 若在浏览器下停掉，会连带主界面一起变成「未开启」。
+      if (isElectron && resolveCurrentLiveFollowEnabled()) {
         pipLiveFollowRef.current = true;
         stopLiveFollow({ keepContent: true });
         setActionStatus("实时跟随已转移到小窗。");
@@ -644,6 +682,8 @@ export function App() {
     setShowTransferHistory,
     setFileLoadingName,
     setTerminalSessionId,
+    setTerminalTabs,
+    setActiveTerminalTabId,
     setTerminalDetached,
     setTerminalPanelOpen,
     setTerminalOverlay,
@@ -714,6 +754,8 @@ export function App() {
     terminalDetached,
     terminalOverlay,
     terminalSessionId,
+    terminalTabs,
+    activeTerminalTabId,
     recordingSession,
     liveFollowEnabled,
     liveFollowPaused,
@@ -798,8 +840,10 @@ export function App() {
       restoringWorkspaceStateRef.current = null;
       restoringWorkspaceFromCacheRef.current = false;
       if (serverIdChanged) {
-        terminalSession.stopTerminal();
+        terminalSessionShim.stopTerminal();
         setTerminalSessionId("");
+        setTerminalTabs([]);
+        setActiveTerminalTabId("");
       }
       stopLiveFollow();
       setCredentialStatus(null);
@@ -837,8 +881,10 @@ export function App() {
 
     if (!isRestoringWorkspace) {
       if (serverIdChanged && !isStandaloneTerminalWindow) {
-        terminalSession.stopTerminal();
+        terminalSessionShim.stopTerminal();
         setTerminalSessionId("");
+        setTerminalTabs([]);
+        setActiveTerminalTabId("");
       }
       stopLiveFollow();
       setCredentialStatus(null);
@@ -1595,36 +1641,31 @@ export function App() {
     return normalized || undefined;
   }, [activeLogView, directoryPath, filePath, resolvedFileDirectoryPath]);
 
-  const [termSelMenu, setTermSelMenu] = useState<{ x: number; y: number; text: string } | null>(null);
+  /* 双轨拆除：单例 useTerminalSession / termSelMenu 已随重设计移入 TerminalWorkspace 的每标签 pane；
+     这里只保留 App 级 pane 状态 map（激活标签状态供工具栏 / 独立窗派生）与旧字段镜像。 */
+  const terminalPaneStatesRef = useRef<Record<string, TerminalPaneSessionState>>({});
+  const handleTerminalPaneSessionState = useCallback((tabId: string, state: TerminalPaneSessionState | null) => {
+    const next = { ...terminalPaneStatesRef.current };
+    if (state) {
+      next[tabId] = state;
+    } else {
+      delete next[tabId];
+    }
+    terminalPaneStatesRef.current = next;
+    setTerminalPaneStates(next);
+  }, []);
 
-  const terminalSession = useTerminalSession({
-    active: isStandaloneTerminalWindow || (terminalPanelOpen && !terminalDetached && !terminalSplitMode),
-    localServiceBase,
-    serverId,
-    preferredBastionId,
-    sessionId: terminalSessionId,
-    selectedServer,
-    isBusy,
-    cwd: terminalWorkingDirectory,
-    onStatus: setActionStatus,
-    onActivity: pushActivity,
-    onSessionIdChange: setTerminalSessionId,
-    preserveSessionOnInactive: terminalDetached || preserveTerminalOnInactive,
-    preserveSessionOnDispose: isStandaloneTerminalWindow,
-    onSelectionMenu: setTermSelMenu,
-    terminalFontSize,
-    terminalFontFamily: monoFontFamilyValue(terminalFontFamily),
-    terminalBackgroundColor: customTerminalBackgroundColor,
-  });
-
+  /* 激活标签的 sessionId 镜像进旧 terminalSessionId：openPipWindow / reconcile 弹窗协议仍按单会话 id 传参 */
   useEffect(() => {
-    if (terminalSplitMode || !terminalPanelOpen || terminalDetached || isStandaloneTerminalWindow) {
+    if (isStandaloneTerminalWindow) {
       return;
     }
-    requestAnimationFrame(() => {
-      terminalSession.fitTerminal();
-    });
-  }, [terminalSplitMode, terminalPanelOpen, terminalDetached, isStandaloneTerminalWindow, terminalSession]);
+    const activeTab = terminalTabs.find((tab) => tab.tabId === activeTerminalTabId);
+    const sessionId = activeTab?.sessionId.trim() || "";
+    if (sessionId && sessionId !== terminalSessionId) {
+      setTerminalSessionId(sessionId);
+    }
+  }, [terminalTabs, activeTerminalTabId, terminalSessionId, isStandaloneTerminalWindow]);
 
   const {
     openTerminalView,
@@ -1657,7 +1698,7 @@ export function App() {
     workspaceSessionStatesRef,
     readWorkspaceSessionState,
     storeWorkspaceSessionState,
-    terminalSession,
+    terminalSession: terminalSessionShim,
     pip,
   });
 
@@ -1726,17 +1767,26 @@ export function App() {
     return isBastionSftp ? { bastionId: serverId } : { serverId };
   }, [serverId, selectedServer]);
   const connectionStateText = buildConnectionSummary(selectedServer, connectionTestStatus);
-  const terminalPanelStatusText = !selectedServer
-    ? (localServiceState === "online" ? "未选择服务器" : (isElectron ? "正在等待内置连接服务启动..." : "本地连接服务未启动"))
-    : terminalSession.connected
-      ? "终端已连接"
-      : connectionTestStatus?.connected
-        ? "目录已连接，终端待连接"
-        : localServiceState !== "online"
-          ? (isElectron ? "正在等待内置连接服务启动..." : "本地连接服务未启动")
-          : connectionStateText;
+  /* 终端动作（TerminalPanel 新 props）：弹出组合 / 在文件目录中打开 / 上传通道 */
+  const toggleTerminalPopup = useCallback(() => {
+    if (terminalDetached) {
+      void restoreEmbeddedTerminalWindow();
+      return;
+    }
+    void openDetachedTerminalWindow();
+  }, [terminalDetached, restoreEmbeddedTerminalWindow, openDetachedTerminalWindow]);
 
-  const keywordTerms = useMemo(() => parseKeywordTerms(keywordInput), [keywordInput]);
+  const revealTerminalCwdInFiles = useCallback((cwd?: string) => {
+    const target = (cwd || terminalWorkingDirectory || "/").trim() || "/";
+    closeTerminalOverlay();
+    setTerminalPanelOpen(false);
+    setActiveLogView("files");
+    setDirectoryInput(target);
+    setActionStatus(`正在打开目录 ${target}...`);
+    void browseLogFiles(target);
+  }, [closeTerminalOverlay, terminalWorkingDirectory, browseLogFiles, setActionStatus]);
+
+  const keywordTerms = useMemo(() => resolveSearchTerms(keywordInput, keywordMode), [keywordInput, keywordMode]);
   const selectedFileDirectory = resolvedFileDirectoryPath;
   const breadcrumbDirectoryPath = activeLogView === "search" && filePath
     ? selectedFileDirectory
@@ -2141,8 +2191,8 @@ export function App() {
   }, [resultTabs]);
   const showingLogPreview = activeLogView === "search";
   const showingFileDirectory = activeLogView === "files";
-  // S5: 终端 = 工作区内容区视图（嵌入单屏/分屏态占满内容区；独立窗口不占用）
-  const terminalAsWorkspaceView = (terminalPanelOpen && !terminalDetached) || terminalSplitMode;
+  // S5: 终端 = 工作区内容区视图（嵌入态占满内容区；独立窗口不占用；分屏已收进标签内布局）
+  const terminalAsWorkspaceView = terminalPanelOpen && !terminalDetached;
   const viewerTabs = useMemo(() => {
     const items: Array<{ id: string; label: string; kind: "file" | "result" }> = filePath
       ? [{ id: "file", label: selectedFileName || "当前文件", kind: "file" as const }]
@@ -2180,7 +2230,6 @@ export function App() {
       // 终端正占用内容区：先收回终端（保持会话），再回日志视图
       closeTerminalOverlay();
       setTerminalPanelOpen(false);
-      setTerminalSplitMode(false);
     }
     setActionStatus("正在切换到日志预览...");
     setActiveLogView("search");
@@ -2207,7 +2256,6 @@ export function App() {
     if (terminalPanelOpen && !terminalDetached) {
       closeTerminalOverlay();
       setTerminalPanelOpen(false);
-      setTerminalSplitMode(false);
     }
     setActionStatus("正在切换到文件目录...");
     setActiveLogView("files");
@@ -2269,15 +2317,51 @@ export function App() {
     setActionStatus(`已前进目录：${normalizedOpenedPath}`);
   }
 
+  /* 鼠标前进/后退（XButton1/2）按目录历史导航。核心提成回调供两处复用：
+     ① 网格 onMouseDown/auxClick（原有入口）；② document 捕获级监听（下方 effect）——
+     文件行加了 draggable 后，行内拖拽机制会吞掉非主键 mousedown 的默认处理链，
+     捕获级监听在任何目标处理之前触发，保证前进/后退始终可用。 */
+  const navigateByMouseButton = useCallback((button: number) => {
+    const now = Date.now();
+    const previous = directoryMouseNavRef.current;
+    if (previous?.button === button && now - previous.at < 180) return;
+    directoryMouseNavRef.current = { button, at: now };
+    void navigateDirectoryHistory(button === 3 ? "back" : "forward");
+  }, [directoryNavBackStack, directoryNavForwardStack, directoryPath, serverId, isBusy, isDirectoryLoading, browseLogFiles]);
+
+  useEffect(() => {
+    if (!isFileMode) return;
+    const handleMouseDown = (event: MouseEvent) => {
+      if (event.button !== 3 && event.button !== 4) return;
+      const target = event.target as HTMLElement | null;
+      /* 浮层上（右键菜单/下拉/对话框/设置）不劫持 */
+      if (target?.closest(".context-menu, .fb-more-menu, .path-history-dropdown, .preview-dialog, .settings-workspace, .command-palette")) return;
+      event.preventDefault();
+      navigateByMouseButton(event.button);
+    };
+    /* 浏览器（和 Electron webContents）的 back/forward 默认动作在 mouseup 触发：
+       仅拦 mousedown 不够，会把页面打回上一条历史导致整页刷新（用户反馈 2026-09-30），
+       mouseup / auxclick 也必须一并取消默认行为 */
+    const swallowNavButton = (event: MouseEvent) => {
+      if (event.button !== 3 && event.button !== 4) return;
+      event.preventDefault();
+      event.stopPropagation();
+    };
+    window.addEventListener("mousedown", handleMouseDown, true);
+    window.addEventListener("mouseup", swallowNavButton, true);
+    window.addEventListener("auxclick", swallowNavButton, true);
+    return () => {
+      window.removeEventListener("mousedown", handleMouseDown, true);
+      window.removeEventListener("mouseup", swallowNavButton, true);
+      window.removeEventListener("auxclick", swallowNavButton, true);
+    };
+  }, [isFileMode, navigateByMouseButton]);
+
   function handleFileBrowserMouseNavigation(event: ReactMouseEvent<HTMLDivElement>) {
     if (event.button !== 3 && event.button !== 4) return;
     event.preventDefault();
     event.stopPropagation();
-    const now = Date.now();
-    const previous = directoryMouseNavRef.current;
-    if (previous?.button === event.button && now - previous.at < 180) return;
-    directoryMouseNavRef.current = { button: event.button, at: now };
-    void navigateDirectoryHistory(event.button === 3 ? "back" : "forward");
+    navigateByMouseButton(event.button);
   }
 
   function selectViewerTab(tab: { id: string; label: string; kind: "file" | "result" }) {
@@ -2342,6 +2426,8 @@ export function App() {
   const showViewerEmptyState = activeLogView === "search" && !hasSearchContent && !resultTabs.length && !fileLoadingName
     && (!filePath.trim() || !currentLogContent);
   const showCompactViewerChrome = pip.isPip || isStandaloneViewerWindow;
+  // 浏览器 Document PiP：窗口框/关闭/返回由 Chrome 提供，自带按钮会重复 → 需隐藏
+  const isBrowserDocumentPip = pip.isPip && Boolean(pip.pipWindow);
 
   useEffect(() => {
     if (!showCompactViewerChrome && showViewerDebugPanel) {
@@ -2471,6 +2557,46 @@ export function App() {
     }
   }, [refreshServerSystemProfile, serverId, serverSystemProfile, setActionStatus]);
 
+  /* 终端状态栏资源迷你条（T1/批5）：终端视图激活期间按既有全局间隔轮询 system-profile。
+     CPU = loadAverage[0]/核数（与 ServerStatusPanel 同口径）；磁盘取使用率最高的挂载点。 */
+  const [terminalResources, setTerminalResources] = useState<{ cpu: number; mem: number; disk: number; diskPath?: string } | null>(null);
+  useEffect(() => {
+    const terminalViewActive = isStandaloneTerminalWindow || (terminalPanelOpen && !terminalDetached);
+    if (!terminalViewActive || !serverId) {
+      setTerminalResources(null);
+      return;
+    }
+    let cancelled = false;
+    const fetchProfile = async () => {
+      try {
+        const profile = await apiGetServerSystemProfile(serverId, 15000, effectiveServerStatusContext.path || undefined);
+        if (cancelled) {
+          return;
+        }
+        const memoryPercent = profile.memory?.percent ?? 0;
+        const disks = profile.disks ?? [];
+        const topDisk = disks.reduce<(typeof disks)[number] | null>((best, disk) => (!best || disk.percent > best.percent ? disk : best), null);
+        const cpuPercent = profile.cpu?.cores ? (profile.loadAverage[0] / profile.cpu.cores) * 100 : 0;
+        setTerminalResources({
+          cpu: clampPercent(cpuPercent),
+          mem: clampPercent(memoryPercent),
+          disk: clampPercent(topDisk?.percent ?? 0),
+          diskPath: topDisk?.mount,
+        });
+      } catch {
+        /* 资源条获取失败静默：不打扰终端使用 */
+      }
+    };
+    void fetchProfile();
+    const timer = window.setInterval(() => {
+      void fetchProfile();
+    }, SERVER_STATUS_REFRESH_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [isStandaloneTerminalWindow, terminalPanelOpen, terminalDetached, serverId, effectiveServerStatusContext.path]);
+
   useEffect(() => {
     if (!showUtilityWorkspace || activeUtilityPanel !== "status" || !serverId) {
       return;
@@ -2565,21 +2691,7 @@ export function App() {
     : !filePath
       ? "输入关键字回车，或用 /关键字 语法"
       : "输入关键字后回车搜索，或在右下角使用回到底部。";
-  const liveStrategyLabel =
-    searchTask?.strategyLabel ||
-    activeViewerStrategyLabel ||
-    describeSearchStrategyClient(keywordMode, keywordTerms, useRegex, startDate, endDate, startTime, endTime);
   const searchElapsedLabel = searchStartedAt ? formatDurationLabel(searchStartedAt, searchNow) : "";
-  const searchProgressPhaseLabel = searchTask
-    ? `${searchTask.progressPhaseLabel || "正在查找"}${searchTask.progressPhaseCount && searchTask.progressPhaseIndex ? ` · 阶段 ${searchTask.progressPhaseIndex}/${searchTask.progressPhaseCount}` : ""}`
-    : "正在查找";
-  const searchOverallProgressLabel = searchTask
-    ? `总进度 ${searchTask.progressPercent.toFixed(1)}% · ${formatBytes(searchTask.scannedBytes)} / ${formatBytes(searchTask.totalBytes)}`
-    : "服务器正在查找";
-  const searchPhaseProgressLabel = searchTask
-    ? `${searchTask.progressPhaseLabel || "当前阶段"}${searchTask.progressPhaseCount && searchTask.progressPhaseIndex ? ` ${searchTask.progressPhaseIndex}/${searchTask.progressPhaseCount}` : ""} · ${(searchTask.phaseProgressPercent ?? searchTask.progressPercent).toFixed(1)}% · ${formatBytes(searchTask.phaseScannedBytes ?? searchTask.scannedBytes)} / ${formatBytes(searchTask.phaseTotalBytes ?? searchTask.totalBytes)}`
-    : "--";
-  const searchProgressMatchLabel = searchTask ? `命中 ${formatNumber(searchTask.matchCount)} 条` : "--";
   const isSearchView = activeLogView === "search";
   const activeSearchResultCount = activeViewerTabId === "file" ? (results?.matches.length ?? 0) : activeViewerMatchCount;
   const activeHighlightSummary = highlightCount ? `${Math.min(activeHighlightIndex + 1, highlightCount)} / ${highlightCount}` : "";
@@ -2603,9 +2715,6 @@ export function App() {
   const showSearchSummary = !showQueryAdvanced && isSearchView && Boolean(highlightCount || activeSearchResultCount || liveFollowEnabled || searchStartedAt);
   const canRecordLog = Boolean(serverId && filePath.trim() && isSearchView);
   const canToggleRecording = recordingSession ? Boolean(serverId) : canRecordLog;
-  const terminalConnectionLabel = selectedServer
-    ? `${selectedServer.host || selectedServer.name || "--"} · ${directoryPath || selectedServer.basePath || "/"}`
-    : (directoryPath || "/");
   const compactViewerTitle = selectedFileName || activeResultTab?.label || "日志预览";
   const canToolbarLive = Boolean(serverId && filePath.trim() && activeLogView === "search");
   const toggleToolbarLive = useCallback(() => {
@@ -2839,8 +2948,13 @@ export function App() {
   const {
     downloadFile,
     uploadFiles,
+    uploadFileList,
     uploadDirectory,
     handleFileDrop,
+    uploadPaused,
+    pauseUpload,
+    resumeUpload,
+    cancelUpload,
   } = useFileTransfer({
     serverId,
     directoryPath,
@@ -2855,7 +2969,21 @@ export function App() {
     appendTransferHistory,
     browseLogFiles,
     setIsDragOver,
+    /* 上传开始即打开传输记录抽屉（用户反馈 2026-09-30：进度看抽屉，不弹气泡） */
+    onUploadStarted: () => {
+      setShowPathHistory(false);
+      setShowTransferHistory(true);
+    },
   });
+
+  /* 终端工具行「上传」：容器选好文件（可多选）后走统一上传通道，目标 = 应用层联动目录
+     （不承诺 shell 实时 cwd，见方案 §5 差异取舍） */
+  const handleTerminalUploadFiles = useCallback((files: FileList) => {
+    if (!serverId) {
+      return;
+    }
+    void uploadFileList(Array.from(files));
+  }, [serverId, uploadFileList]);
 
   const {
     deleteRemoteFile,
@@ -2909,56 +3037,171 @@ export function App() {
     void openEntry(entry);
   };
 
-  const appShellClassName = `app-shell${uiTheme === "modern" ? " theme-modern" : ""} ui-density-${uiDensity} ui-surface-${uiSurface}${uiSurface === "custom" ? ` ui-custom-background-${uiBackgroundMode}` : ""} ui-motion-${motionMode}${dynamicBackground && motionMode !== "reduced" ? " ui-dynamic-background" : ""}${isElectron ? " electron-immersive" : ""}${isElectron && isMacOS ? " electron-macos-immersive" : ""}`;
+  /* 批量条提示 ③：拖拽移动 —— 文件行拖到目录树节点上完成移动。
+     moveRemoteEntries 只用 path/name（rename API），从路径重建 entry 即可；
+     防呆：目标目录是自身或其子目录时跳过（否则服务端报嵌套错误）。 */
+  const handleTreeDropMove = useCallback((paths: string[], targetDir: string) => {
+    if (!serverId || !paths.length) return;
+    const normalizedTarget = targetDir.replace(/\/+$/, "") || "/";
+    /* 防呆修正（2026-09-30 用户实测：logs/0 下的文件拖到 logs 树节点无效果）：
+       只拦「目标在被拖项内部」（targetDir === path 或在其下）——
+       仅当被拖项是目录时才可能发生递归；文件从子目录向上级目录移动是合法场景，
+       旧过滤器用 path.startsWith(targetDir) 把向上移动全部误拦且静默无提示。 */
+    const movable = paths
+      .filter((path) => normalizedTarget !== path && !normalizedTarget.startsWith(`${path}/`))
+      .map((path) => ({ path, name: path.split("/").filter(Boolean).pop() || path, kind: "file" as const }));
+    if (!movable.length) {
+      setActionStatus("目标位置无效：不能把目录移入它自己或它的子目录。");
+      return;
+    }
+    void moveRemoteEntries(movable, normalizedTarget);
+  }, [serverId, moveRemoteEntries, setActionStatus]);
+
+  /* 空白处右键菜单（用户反馈 2026-09-30）：文件列表/目录树空白右键弹出目录级操作
+     （返回上级/刷新/新建目录/上传），行内右键已在行上 stopPropagation 不受影响 */
+  const openBlankContextMenu = useCallback((event: ReactMouseEvent<HTMLElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const x = Math.max(4, Math.min(event.clientX, window.innerWidth - 210));
+    const y = Math.max(4, Math.min(event.clientY, window.innerHeight - 260));
+    setBlankContextMenu({ x, y });
+  }, []);
+
+  useEffect(() => {
+    if (!blankContextMenu) return;
+    const handlePointerDown = (event: PointerEvent) => {
+      const menuElement = blankContextMenuRef.current;
+      if (!menuElement) return;
+      const target = event.target;
+      if (target instanceof Node && menuElement.contains(target)) return;
+      setBlankContextMenu(null);
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setBlankContextMenu(null);
+    };
+    window.addEventListener("pointerdown", handlePointerDown, true);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("pointerdown", handlePointerDown, true);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [blankContextMenu]);
+
+  /* 最近访问目录下拉：点击外部 / Esc 关闭（用户反馈 2026-09-30：打开后无法关闭） */
+  useEffect(() => {
+    if (!showPathHistory) return;
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest(".path-history-dropdown")) return;
+      setShowPathHistory(false);
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setShowPathHistory(false);
+    };
+    window.addEventListener("pointerdown", handlePointerDown, true);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("pointerdown", handlePointerDown, true);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [showPathHistory]);
+
+  /* 批量条提示 ①：Esc 清空 —— 有勾选时按 Esc 清空选择。
+     文本输入控件内让位（正在输入）；checkbox 聚焦（刚点完勾选）时先还焦点再清空，
+     否则用户得先点一下空白处 Esc 才生效；对话框、浮层打开时让位。 */
+  useEffect(() => {
+    if (!selectedFilePaths.length) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      const target = event.target as HTMLElement | null;
+      if (target) {
+        const isTextEntry =
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT" ||
+          target.isContentEditable ||
+          (target.tagName === "INPUT" &&
+            (target as HTMLInputElement).type !== "checkbox" &&
+            (target as HTMLInputElement).type !== "radio");
+        if (isTextEntry) return;
+        if (target.tagName === "INPUT") target.blur();
+      }
+      if (confirmDialog || renameDialog || moveDialog || batchMoveDialog || mkdirDialog || previewDialog || contextMenu || workspaceTabMenu || blankContextMenu || showViewerDebugPanel || paletteOpen || showConnectionSettings) {
+        return;
+      }
+      clearSelectedFiles();
+      setActionStatus("已清空文件选择。");
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedFilePaths.length, clearSelectedFiles, confirmDialog, renameDialog, moveDialog, batchMoveDialog, mkdirDialog, previewDialog, contextMenu, workspaceTabMenu, blankContextMenu, showViewerDebugPanel, paletteOpen, showConnectionSettings, setActionStatus]);
+
+  const appShellClassName = `app-shell${uiTheme === "modern" ? " theme-modern" : ""} ui-density-${uiDensity} ui-theme-${resolvedTheme.id} ui-bg-${uiBackground}${uiBackground !== "solid" ? " ui-bg-fancy" : ""} ui-motion-${motionMode}${dynamicBackground && motionMode !== "reduced" ? " ui-dynamic-background" : ""}${isElectron ? " electron-immersive" : ""}${isElectron && isMacOS ? " electron-macos-immersive" : ""}`;
   const appShellStyle = {
+    /* 界面字号梯度：uiFontSize 驱动全套 --fs-* token（设置中心可调） */
+    ...uiFontSizeVars(uiFontSize),
     "--log-font-size": `${logFontSize}px`,
     "--terminal-font-size": `${terminalFontSize}px`,
     "--app-font-family": fontFamilyValue(uiFontFamily),
     /* S14：日志 / 终端字体族独立（原型：字体三处独立，日志字体族是原缺失能力） */
     "--log-font-family": monoFontFamilyValue(logFontFamily),
     "--terminal-font-family": monoFontFamilyValue(terminalFontFamily),
-    "--custom-background-color": customBackgroundColor,
-    "--custom-gradient-start": customGradientStart,
-    "--custom-gradient-end": customGradientEnd,
     "--custom-background-image": toCssImageUrl(customBackgroundImage),
-    "--custom-text-color": customTextColor,
-    "--custom-log-background-color": customLogBackgroundColor,
-    "--custom-terminal-background-color": customTerminalBackgroundColor,
-    /* S14-2：图片背景遮罩亮度 / 模糊由设置滑杆驱动（原型 1125-1126）。
-       -overlay 为展示用百分比，-overlay-alpha 为 rgba 计算用 0..1。 */
-    "--custom-image-overlay": `${customImageOverlay}%`,
-    "--custom-image-overlay-alpha": String(Math.max(0, Math.min(0.9, customImageOverlay / 100))),
-    "--custom-image-blur": `${customImageBlur}px`,
+    /* 背景层图片模式：遮罩亮度 / 模糊由设置滑杆驱动（原型 T1）。 */
+    "--custom-image-overlay": `${uiImgOverlay}%`,
+    "--custom-image-overlay-alpha": String(Math.max(0, Math.min(0.9, uiImgOverlay / 100))),
+    "--custom-image-blur": `${uiImgBlur}px`,
+    /* 强调色覆盖（高级节；null = 跟随主题）：contrast() 比较法派生 on-accent */
+    ...(uiAccentOverride
+      ? {
+          "--accent": uiAccentOverride,
+          "--accent-strong": accentHoverColor(uiAccentOverride, resolvedTheme.tone === "dark"),
+          "--accent-soft": accentSoftColor(uiAccentOverride),
+          "--on-accent": onAccentColor(uiAccentOverride),
+        }
+      : {}),
   } as CSSProperties;
+
+  /* 终端配色（独立槽位）：背景与 ITheme 都来自所选方案 */
+  const terminalScheme = TERMINAL_SCHEMES.find((s) => s.id === uiTerminalScheme) ?? TERMINAL_SCHEMES[0];
+
+  /* html 底色跟随主题：index.html 防闪烁脚本写入的是内联 style（优先级最高），
+     切主题时不会自动更新，这里同步，避免深色主题下窗口边缘露出浅色底。 */
+  useEffect(() => {
+    document.documentElement.style.background = resolvedTheme.v.bg;
+    document.documentElement.dataset.skTheme = resolvedTheme.id;
+  }, [resolvedTheme]);
 
   if (isStandaloneTerminalWindow) {
     return (
       <main className={`${appShellClassName} pip-standalone pip-terminal-standalone`} style={appShellStyle}>
         <section className="main-panel-terminal-standalone">
+          {/* T7 独立终端窗：由 URL 的 terminalSessionId 构造单标签；分屏/弹出按钮在 standalone 隐藏 */}
           <TerminalPanel
             popupMode="standalone"
             server={selectedServer}
-            connected={terminalSession.connected}
-            isBusy={isBusy}
             serverId={serverId}
-            statusText={terminalPanelStatusText}
-            subtitleText={terminalConnectionLabel}
-            detached={false}
+            preferredBastionId={preferredBastionId}
+            isBusy={isBusy}
+            cwd={terminalWorkingDirectory}
+            tabs={terminalTabs}
+            activeTabId={activeTerminalTabId}
+            legacySessionId={terminalSessionId}
+            onChangeTabs={(next) => {
+              setTerminalTabs(next.terminalTabs);
+              setActiveTerminalTabId(next.activeTerminalTabId);
+            }}
+            onStatus={setActionStatus}
+            onActivity={pushActivity}
+            terminalFontSize={terminalFontSize}
+            terminalFontFamily={monoFontFamilyValue(terminalFontFamily)}
+            terminalBackgroundColor={terminalScheme.theme.background}
+            terminalScheme={uiTerminalScheme}
             terminalOverlay={terminalOverlay}
-            containerRef={terminalSession.containerRef}
-            onReconnect={() => openTerminalView()}
-            onClose={() => window.close()}
-            onCloseTerminalOverlay={closeTerminalOverlay}
-            onFocus={() => terminalSession.focusTerminal()}
-            onDetach={() => undefined}
-            onAttach={() => undefined}
-            onFit={() => terminalSession.fitTerminal()}
-            selMenu={termSelMenu}
-            getSelectionText={() => terminalSession.getSelection()}
-            clearSelection={() => terminalSession.clearSelection()}
-            pasteToTerminal={(text) => terminalSession.pasteToTerminal(text)}
             onToggleTerminalOverlay={toggleTerminalOverlay}
-            onDismissMenu={() => setTermSelMenu(null)}
+            onTogglePopup={() => undefined}
+            detached={false}
+            onSessionState={handleTerminalPaneSessionState}
+            resources={terminalResources}
           />
         </section>
       </main>
@@ -3014,8 +3257,37 @@ export function App() {
     </ToolDrawer>
   ) : null;
 
+  /* 侧栏移动档（SidepanelMobile）共享数据：空态文案与 SidebarPanel 同源；
+     app bar 标题 / 底部 tab 高亮判定与桌面 toolbar-view-switch 的 is-active 同源（无宽度分支）。 */
+  const sidepanelServerEmptyState = showServiceOfflineState ? (
+    <div className="empty-box sidebar-empty-box">
+      <span className="empty-box-icon" aria-hidden="true">
+        <ServerOff size={18} strokeWidth={1.8} />
+      </span>
+      <strong>{isElectron ? "正在等待内置连接服务启动" : "本地服务未启动"}</strong>
+      <span>{isElectron ? "应用会自动重试连接本地服务；如果长时间没有恢复，我会继续排查安装版启动链路。" : "请在终端执行 npm run dev:gateway 启动本地连接服务，然后点击下方\"检查服务\"。"}</span>
+    </div>
+  ) : (
+    <div className="empty-box sidebar-empty-box">
+      <span className="empty-box-icon" aria-hidden="true">
+        <FolderSearch size={18} strokeWidth={1.8} />
+      </span>
+      <strong>还没有服务器</strong>
+      <span>检查 FinalShell 目录后导入，或手动补录连接信息。</span>
+    </div>
+  );
+  const sidepanelMobileViewTitle = terminalAsWorkspaceView ? "终端" : isFileMode ? "文件" : "日志";
+  const sidepanelMobileActiveView: "log" | "files" | "term" =
+    showingLogPreview && !terminalAsWorkspaceView
+      ? "log"
+      : showingFileDirectory && !terminalAsWorkspaceView
+        ? "files"
+        : terminalPanelOpen || terminalDetached
+          ? "term"
+          : isFileMode ? "files" : "log";
+
   return (
-    <main className={`${appShellClassName}${isStandalonePipWindow ? " pip-standalone" : ""}${showTransferHistory || showUtilityWorkspace ? " v2-drawer-push" : ""}`} style={appShellStyle}>
+    <main className={`${appShellClassName}${isStandalonePipWindow ? " pip-standalone" : ""}${showTransferHistory || showQueryAdvanced || (showUtilityWorkspace && canShowEmbeddedUtilityWorkspace) ? " v2-drawer-push" : ""}`} style={appShellStyle}>
       <section className="shell-layout">
         <SidebarPanel
           uiTheme={uiTheme}
@@ -3065,6 +3337,23 @@ export function App() {
             />
           ) : null}
           <section className="toolbar-panel">
+            {/* 侧栏移动档顶栏（sp-appbar + 服务器 chip）：宽档由 CSS display:none 隐藏，DOM 常驻 */}
+            <SidepanelMobileTop
+              viewTitle={sidepanelMobileViewTitle}
+              onOpenPalette={() => setPaletteOpen(true)}
+              onOpenSettings={() => {
+                if (showConnectionSettings) {
+                  closeSettingsWorkspace();
+                  return;
+                }
+                openSettingsWorkspace();
+              }}
+              showSettingsActive={showConnectionSettings}
+              selectedServer={selectedServer}
+              connectionTestStatus={connectionTestStatus}
+              onOpenServerPicker={() => setServerPickerOpen(true)}
+              uiTheme={uiTheme}
+            />
             <div className="toolbar-commandbar">
               <div className="toolbar-view-switch" aria-label="内容视图切换">
                 <button
@@ -3100,6 +3389,66 @@ export function App() {
                   </button>
                 ) : null}
               </div>
+              {isFileMode ? (
+                /* 文件模式：原型 tbar 一行式 —— seg 之后紧跟目录层级（面包屑），
+                   过滤框 + 图标组靠右；检索/LIVE 等日志工具不显示（用户反馈 2026-09-30）。
+                   容器复用 .file-browser-workbench 作用域以继承面包屑紧凑等既有规则。 */
+                <div className="file-tools-inline file-browser-workbench">
+                  <FileBrowserPathbar
+                    mode={pathbarMode}
+                    directoryInput={directoryInput}
+                    currentDirectory={currentDirectoryForPathbar}
+                    breadcrumbItems={directoryBreadcrumbItems}
+                    inputRef={directoryInputRef}
+                    hasServer={!!serverId}
+                    onSetDirectoryInput={setDirectoryInput}
+                    onEnterEditMode={enterPathbarEditMode}
+                    onExitEditMode={exitPathbarEditMode}
+                    onOpenFromInput={() => { void openDirectoryFromInput(); }}
+                    onCommitDirectoryPath={(path) => { void browseDirectoryWithNav(path); }}
+                  />
+                  <div className="workspace-actions">
+                    <FileBrowserActions
+                      uiTheme={uiTheme}
+                      hasServer={!!serverId}
+                      isBusy={isBusy}
+                      filterValue={fileFilter}
+                      showPathHistory={showPathHistory}
+                      showTransferHistory={showTransferHistory}
+                      onFilterChange={setFileFilter}
+                      onBrowseParent={() => { void browseDirectoryWithNav(getParentDirectoryPath(directoryPath || directoryInput || "/")); }}
+                      onTogglePathHistory={() => {
+                        setShowTransferHistory(false);
+                        setShowPathHistory((c) => !c);
+                      }}
+                      onToggleTransferHistory={() => {
+                        setShowPathHistory(false);
+                        setShowTransferHistory((c) => !c);
+                      }}
+                      onMkdir={() => setMkdirDialog({ parentDir: directoryPath || "/", dirName: "" })}
+                      onUploadFiles={() => { void uploadFiles(); }}
+                      onUploadDirectory={() => { void uploadDirectory(); }}
+                      onRefresh={() => browseLogFiles(directoryPath || "/")}
+                    />
+                    {/* 侧栏移动档：目录树收进底部 sheet，此处仅是打开入口（宽档 CSS 隐藏） */}
+                    <button
+                      type="button"
+                      className="ghost-button sp-dir-trigger"
+                      onClick={() => setDirSheetOpen(true)}
+                      disabled={!serverId}
+                      title="打开目录树"
+                    >
+                      目录
+                    </button>
+                  </div>
+                  {showPathHistory ? (
+                    <FileBrowserHistoryDropdown
+                      historyPaths={serverId ? readDirectoryHistory(serverId).filter((p) => p !== directoryPath) : []}
+                      onBrowsePath={(path: string) => { setShowPathHistory(false); void browseDirectoryWithNav(path); }}
+                    />
+                  ) : null}
+                </div>
+              ) : !terminalAsWorkspaceView ? (
               <SearchToolbarActions
                 uiTheme={uiTheme}
                 isElectron={isElectron}
@@ -3127,7 +3476,9 @@ export function App() {
                   setShowQueryAdvanced((current) => !current);
                 }}
               />
-
+              ) : null}
+            {/* 检索面板仅日志预览显示（原型 s1）；终端/文件模式各自的工具区在其视图内 */}
+            {!isFileMode && !terminalAsWorkspaceView ? (
             <SearchQueryPanel
               showKeywordBar={showKeywordBar}
               showQueryAdvanced={showQueryAdvanced}
@@ -3138,7 +3489,6 @@ export function App() {
               keywordInputRef={keywordInputRef}
               onKeywordInputChange={setKeywordInput}
               onRunSearch={() => { void runSearch(); }}
-              onClearKeyword={() => setKeywordInput("")}
               /* 1+2 合并：结果摘要行并入 viewer-actions-strip（避免与「文件预览 · xxx」标题行重复） */
               showSummary={false}
               toolbarSummaryLabel={toolbarSummaryLabel}
@@ -3194,21 +3544,10 @@ export function App() {
               canDownloadResults={Boolean(activeResultTab || results)}
               onDownloadResults={exportCurrentResults}
             />
+            ) : null}
             </div>
 
             {/* connection info in sidebar */}
-
-            {searchStartedAt ? (
-              <SearchProgressPanel
-                phaseLabel={searchProgressPhaseLabel}
-                elapsedLabel={searchElapsedLabel}
-                strategyLabel={liveStrategyLabel}
-                overallProgressLabel={searchOverallProgressLabel}
-                phaseProgressLabel={searchPhaseProgressLabel}
-                matchCountLabel={searchProgressMatchLabel}
-                progressPercent={searchTask?.progressPercent ?? null}
-              />
-            ) : null}
           </section>
 
           <section className={`workspace-panel ${isFileMode ? "workspace-panel-files" : ""}${terminalAsWorkspaceView ? " workspace-panel-terminal" : ""}`}>
@@ -3221,65 +3560,40 @@ export function App() {
               onImportFinalShell={importFromFinalShell}
               onRefreshServers={fetchServers}
             />
-            {!showServiceOfflineState && !showNoServerState && ((terminalPanelOpen && !terminalDetached) || (terminalSplitMode && serverId)) ? (
-              terminalSplitMode ? (
-                <div className="terminal-workarea-split">
-                  <div className="terminal-workarea-bar">
-                    <span className={`terminal-status-dot ${terminalSession.connected ? "terminal-status-dot-connected" : ""}`} />
-                    <strong>{selectedServer?.name || "终端"}</strong>
-                    <span className="terminal-workarea-bar-meta">分屏模式</span>
-                    <span className="terminal-workarea-bar-spacer" />
-                    <button type="button" className="ghost-button" onClick={() => setTerminalSplitMode(false)}>单屏</button>
-                    <button type="button" className="ghost-button" onClick={() => { closeTerminalOverlay(); setTerminalPanelOpen(false); setTerminalDetached(false); }} title="关闭终端"><X size={13} /></button>
-                  </div>
-                  <TerminalSplitView
-                    serverId={serverId}
-                    selectedServer={selectedServer}
-                    preferredBastionId={preferredBastionId}
-                    isBusy={isBusy}
-                    cwd={terminalWorkingDirectory}
-                    onStatus={setActionStatus}
-                    onActivity={pushActivity}
-                  />
-                </div>
-              ) : (
-                <TerminalPanel
-                  popupMode="embedded"
-                  server={selectedServer}
-                  connected={terminalSession.connected}
-                  isBusy={isBusy}
-                  serverId={serverId}
-                  statusText={terminalPanelStatusText}
-                  subtitleText={terminalConnectionLabel}
-                  detached={terminalDetached}
-                  terminalOverlay={terminalOverlay}
-                  containerRef={terminalSession.containerRef}
-                  onReconnect={() => openTerminalView()}
-                  onClose={() => {
-                    if (terminalDetached) {
-                      void closeDetachedTerminalWindow();
-                    }
-                    closeTerminalOverlay();
-                    setTerminalPanelOpen(false);
-                    setTerminalDetached(false);
-                  }}
-                  onCloseTerminalOverlay={closeTerminalOverlay}
-                  onFocus={() => terminalSession.focusTerminal()}
-                  onDetach={() => { void openDetachedTerminalWindow(); }}
-                  onAttach={() => { void closeDetachedTerminalWindow(); }}
-                  onFit={() => terminalSession.fitTerminal()}
-                  selMenu={termSelMenu}
-                  getSelectionText={() => terminalSession.getSelection()}
-                  clearSelection={() => terminalSession.clearSelection()}
-                  pasteToTerminal={(text) => terminalSession.pasteToTerminal(text)}
-                  onToggleTerminalOverlay={toggleTerminalOverlay}
-                  onDismissMenu={() => setTermSelMenu(null)}
-                  onSplitMode={() => {
-                    closeTerminalOverlay();
-                    setTerminalSplitMode(true);
-                  }}
-                />
-              )
+            {!showServiceOfflineState && !showNoServerState && terminalPanelOpen && !terminalDetached ? (
+              /* 终端工作台（五段式容器）：标签组 / 分屏 / 查找 / 菜单 / 状态栏均在容器内；
+                 分屏双轨（terminal-workarea-split 顶条 + TerminalSplitView 直挂）已拆除 */
+              <TerminalPanel
+                popupMode="embedded"
+                server={selectedServer}
+                serverId={serverId}
+                preferredBastionId={preferredBastionId}
+                isBusy={isBusy}
+                cwd={terminalWorkingDirectory}
+                tabs={terminalTabs}
+                activeTabId={activeTerminalTabId}
+                legacySessionId={terminalSessionId}
+                onChangeTabs={(next) => {
+                  setTerminalTabs(next.terminalTabs);
+                  setActiveTerminalTabId(next.activeTerminalTabId);
+                }}
+                onStatus={setActionStatus}
+                onActivity={pushActivity}
+                terminalFontSize={terminalFontSize}
+                terminalFontFamily={monoFontFamilyValue(terminalFontFamily)}
+                terminalBackgroundColor={terminalScheme.theme.background}
+            terminalScheme={uiTerminalScheme}
+                terminalOverlay={terminalOverlay}
+                onToggleTerminalOverlay={toggleTerminalOverlay}
+                onTogglePopup={toggleTerminalPopup}
+                detached={terminalDetached}
+                onSessionState={handleTerminalPaneSessionState}
+                resources={terminalResources}
+                onOpenMonitor={openServerStatusPanel}
+                onRevealInFiles={revealTerminalCwdInFiles}
+                onOpenSettings={() => openSettingsWorkspace("preferences")}
+                onUploadFiles={handleTerminalUploadFiles}
+              />
             ) : !showServiceOfflineState && !showNoServerState && (
               <>
                 {(!isFileMode || pip.isPip) ? (
@@ -3296,7 +3610,7 @@ export function App() {
                     <button className="ghost-button" onClick={() => void pip.togglePip()}>收回</button>
                   </div>
                 )}
-                {((node: ReactNode) => pip.isPip && pip.pipWindow ? createPortal(node, pip.pipWindow.document.body) : pip.isPip && !pip.pipWindow ? null : node)(
+                {((node: ReactNode) => pip.isPip && pip.pipWindow ? createPortal(<div className={appShellClassName} style={{ ...appShellStyle, display: "contents" }}>{node}</div>, pip.pipWindow.document.body) : pip.isPip && !pip.pipWindow ? null : node)(
                 <div className={showCompactViewerChrome ? "pip-viewer-root" : "pip-viewer-wrap"}>
                 {showCompactViewerChrome ? (
                   <>
@@ -3312,28 +3626,45 @@ export function App() {
                       <path d="M19.1 4.9C23 8.8 23 15.2 19.1 19.1" />
                     </svg>
                     <strong className="pip-header-name">{compactViewerTitle}</strong>
-                    <span className={`liveb${liveFollowEnabled ? (liveFollowConnected ? "" : " retry") : " idle"}`} aria-label="实时追踪状态">
+                    {/* 实时开关：可点击，状态跟随（浏览器 Document PiP 与主窗共享同一 React 状态；
+                        Electron 独立窗口经快照/URL 参数恢复状态）。 */}
+                    <button
+                      type="button"
+                      className={`liveb${liveFollowEnabled ? (liveFollowConnected ? "" : " retry") : " idle"}`}
+                      onClick={toggleToolbarLive}
+                      disabled={!canToolbarLive}
+                      title={liveFollowEnabled ? "断开实时追踪" : "开启实时追踪 (tail -F)"}
+                      aria-label={liveFollowEnabled ? (liveFollowConnected ? "实时追踪已连接，点击断开" : "实时追踪重连中") : "实时追踪未开启，点击开启"}
+                    >
                       <i aria-hidden="true" />
                       {liveFollowEnabled ? (liveFollowConnected ? "LIVE" : "重连中 ⟳") : "未开启"}
-                    </span>
-                    <button
-                      type="button"
-                      className="ghost-button icon-button"
-                      onClick={() => void pip.togglePip()}
-                      title="回到主窗口"
-                      aria-label="回到主窗口"
-                    >
-                      <PipExpandIcon size={13} />
                     </button>
-                    <button
-                      type="button"
-                      className="ghost-button icon-button"
-                      onClick={() => void pip.togglePip()}
-                      title="关闭小窗"
-                      aria-label="关闭小窗"
-                    >
-                      <X size={13} strokeWidth={1.8} />
-                    </button>
+                    {/* 有右侧按钮时用占位把按钮推到右端；文件名+状态徽标留在左侧成组（原 flex:1 把状态顶到最右，中间空一大段） */}
+                    {!isBrowserDocumentPip ? <span className="pip-header-spacer" /> : null}
+                    {/* 浏览器 Document PiP 由 Chrome 提供窗口框（自带关闭/返回），
+                        自带按钮会重复 → 隐藏；Electron 独立窗口无原生控件，保留。 */}
+                    {!isBrowserDocumentPip ? (
+                      <>
+                        <button
+                          type="button"
+                          className="ghost-button icon-button"
+                          onClick={() => void pip.togglePip()}
+                          title="回到主窗口"
+                          aria-label="回到主窗口"
+                        >
+                          <PipExpandIcon size={13} />
+                        </button>
+                        <button
+                          type="button"
+                          className="ghost-button icon-button"
+                          onClick={() => void pip.togglePip()}
+                          title="关闭小窗"
+                          aria-label="关闭小窗"
+                        >
+                          <X size={13} strokeWidth={1.8} />
+                        </button>
+                      </>
+                    ) : null}
                   </div>
                   ) : (
                   <div className={`viewer-floating-header${isStandaloneViewerWindow ? " viewer-floating-header-standalone" : ""}`}>
@@ -3344,7 +3675,7 @@ export function App() {
                     <div className="viewer-floating-header-actions">
                       <div className="viewer-debug-anchor" ref={viewerDebugRef}>
                         <button
-                          className={showViewerDebugPanel ? "ghost-button icon-button tab-active" : "ghost-button icon-button"}
+                          className={showViewerDebugPanel ? "ghost-button icon-button icon-toggle-active" : "ghost-button icon-button"}
                           onClick={() => setShowViewerDebugPanel((current) => !current)}
                           title={showViewerDebugPanel ? "隐藏调试内容" : "显示调试内容"}
                         >
@@ -3388,7 +3719,7 @@ export function App() {
                       </button>
                       {canToggleResultContext ? (
                         <button
-                          className={resultContextMode ? "ghost-button icon-button tab-active" : "ghost-button icon-button"}
+                          className={resultContextMode ? "ghost-button icon-button icon-toggle-active" : "ghost-button icon-button"}
                           onClick={toggleResultContext}
                           title={resultContextMode ? "切换到仅命中" : "切换到含上下文"}
                         >
@@ -3402,7 +3733,7 @@ export function App() {
                       ) : null}
                       {activeLogView === "search" && activeResultTab ? (
                         <button
-                          className={showBookmarkPanel ? "ghost-button icon-button tab-active" : "ghost-button icon-button"}
+                          className={showBookmarkPanel ? "ghost-button icon-button icon-toggle-active" : "ghost-button icon-button"}
                           onClick={() => setShowBookmarkPanel((current) => !current)}
                           title={showBookmarkPanel ? "隐藏书签" : "显示书签"}
                         >
@@ -3422,46 +3753,107 @@ export function App() {
                   </div>
                   )}
                   </>
-                ) : (
-                <div className="workspace-strip viewer-actions-strip">
-                  <span className="viewer-strip-label">{viewerStripLabel}</span>
-                  {/* 1+2 合并：原「结果摘要行」（toolbar-summary）与「查看器标题条」重复显示文件名，
-                      合并为一条：文件名 + 摘要 + 命中导航 + 动作组。 */}
-                  {showSearchSummary && toolbarMetaLabel ? (
-                    <span className="viewer-strip-summary">{toolbarMetaLabel}</span>
-                  ) : null}
-                  <span className="viewer-strip-spacer" />
-                  {activeHighlightSummary ? (
-                    <span className="summary-nav">
-                      <button type="button" className="ghost-button icon-button" title="上一处命中" aria-label="上一处命中" onClick={() => focusHighlight("prev")}>
-                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m12 19-7-7 7-7" /><path d="M19 12H5" /></svg>
-                      </button>
-                      <span className="mono summary-nav-count">{activeHighlightSummary}</span>
-                      <button type="button" className="ghost-button icon-button" title="下一处命中" aria-label="下一处命中" onClick={() => focusHighlight("next")}>
-                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg>
-                      </button>
-                    </span>
-                  ) : null}
-                  </div>
-                )}
+                ) : null}
 
                 <div className="viewer-shell">
-                {!showCompactViewerChrome && viewerTabs.length > 1 ? (
-                  <div className="result-tab-strip">
-                    {viewerTabs.map((tab) => (
-                      <div key={tab.id} className={`result-tab-chip ${tab.id === activeViewerTabId ? "result-tab-chip-active" : ""}`}>
-                        <button className="result-tab-main" type="button" aria-pressed={tab.id === activeViewerTabId} onClick={() => selectViewerTab(tab)}>
-                          {tab.label}
+                {/* 融合工具行：结果页签 + 标识 + 统计 + 命中导航 + 动作组
+                    （原「标题行 / 结果页签行 / 动作行」三行各自占一行、均大片留白且文件名重复，此处合为一行；
+                     切片条 / LIVE 若存在则落到下一行，故整体 1~2 行） */}
+                {!showCompactViewerChrome ? (
+                  <div className="viewer-toolbar-row viewer-actions-strip">
+                    {viewerTabs.length > 1 ? (
+                      <div className="result-tab-strip">
+                        {viewerTabs.map((tab) => (
+                          <div key={tab.id} className={`result-tab-chip ${tab.id === activeViewerTabId ? "result-tab-chip-active" : ""}`}>
+                            <button className="result-tab-main" type="button" aria-pressed={tab.id === activeViewerTabId} onClick={() => selectViewerTab(tab)}>
+                              {tab.label}
+                            </button>
+                            {tab.kind === "result" ? (
+                              <button className="result-tab-close" type="button" aria-label={`关闭${tab.label}`} onClick={() => closeResultTab(tab.id)}>
+                                ×
+                              </button>
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                    <span className="viewer-strip-label">{viewerStripLabel}</span>
+                    {showSearchSummary && toolbarMetaLabel ? (
+                      <span className="viewer-strip-summary">{toolbarMetaLabel}</span>
+                    ) : null}
+                    <span className="viewer-strip-spacer" />
+                    {activeHighlightSummary ? (
+                      <span className="summary-nav">
+                        <button type="button" className="ghost-button icon-button" title="上一处命中" aria-label="上一处命中" onClick={() => focusHighlight("prev")}>
+                          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m12 19-7-7 7-7" /><path d="M19 12H5" /></svg>
                         </button>
-                        {tab.kind === "result" ? (
-                          <button className="result-tab-close" type="button" aria-label={`关闭${tab.label}`} onClick={() => closeResultTab(tab.id)}>
-                            ×
+                        <span className="mono summary-nav-count">{activeHighlightSummary}</span>
+                        <button type="button" className="ghost-button icon-button" title="下一处命中" aria-label="下一处命中" onClick={() => focusHighlight("next")}>
+                          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg>
+                        </button>
+                      </span>
+                    ) : null}
+                    {/* 高频动作组：警告高亮 / 命中上下文 / 下载 / 书签 / 小窗 / 更多工具 */}
+                    {activeLogView === "search" ? (
+                      <div className="toolbar-inline viewer-action-group" aria-label="视图动作">
+                        <button
+                          className={errorHighlightEnabled ? "ghost-button icon-button btn-highlight-active" : "ghost-button icon-button"}
+                          onClick={toggleErrorHighlight}
+                          disabled={!canToggleErrorHighlight}
+                          title={errorHighlightEnabled ? "关闭异常/告警高亮" : "开启异常/告警高亮"}
+                        >
+                          <AlertTriangle size={14} strokeWidth={1.8} />
+                        </button>
+                        {canToggleResultContext ? (
+                          <button
+                            className={resultContextMode ? "ghost-button icon-button icon-toggle-active" : "ghost-button icon-button"}
+                            onClick={toggleResultContext}
+                            title={resultContextMode ? "切换到仅命中" : "切换到含上下文"}
+                          >
+                            <ToolIcon theme={uiTheme} kind="context" />
+                          </button>
+                        ) : null}
+                        <button className="ghost-button icon-button" onClick={exportCurrentResults} disabled={!activeResultTab && !results} title="下载结果">
+                          <Download size={14} strokeWidth={1.8} />
+                        </button>
+                        {activeResultTab ? (
+                          <button
+                            className={showBookmarkPanel ? "ghost-button icon-button icon-toggle-active" : "ghost-button icon-button"}
+                            onClick={() => setShowBookmarkPanel((current) => !current)}
+                            title={showBookmarkPanel ? "隐藏书签" : "显示书签"}
+                          >
+                            <Bookmark size={14} strokeWidth={1.8} />
+                          </button>
+                        ) : null}
+                        {activeViewerCommandPreview ? (
+                          <button
+                            className="ghost-button icon-button"
+                            onClick={() => {
+                              void copyText(activeViewerCommandPreview).then(() => setActionStatus("搜索命令已复制到剪贴板。"));
+                            }}
+                            title="复制命令"
+                          >
+                            <Copy size={14} strokeWidth={1.8} />
+                          </button>
+                        ) : null}
+                        {!isStandaloneViewerWindow ? (
+                          <button
+                            className={pip.isPip ? "ghost-button icon-button tab-active" : "ghost-button icon-button"}
+                            onClick={() => void pip.togglePip()}
+                            title={pip.isPip ? "收回小窗" : "弹出独立小窗"}
+                          >
+                            <PipExpandIcon size={14} />
+                          </button>
+                        ) : null}
+                        {filePath && activeViewerTabId === "file" ? (
+                          <button className={showFileTools ? "ghost-button icon-button icon-toggle-active" : "ghost-button icon-button"} onClick={() => setShowFileTools((current) => !current)} title="更多工具">
+                            <Settings size={14} strokeWidth={1.8} />
                           </button>
                         ) : null}
                       </div>
-                    ))}
+                    ) : null}
                   </div>
-                ) : <div />}
+                ) : null}
 
                 {/* 3+4 合并：切片条与实时状态带并成一行（原型此二处本就相邻） */}
                 {!showCompactViewerChrome && (showReaderRail || (activeLogView === "search" && Boolean(filePath || liveFollowEnabled))) ? (
@@ -3519,13 +3911,8 @@ export function App() {
                       仅在已打开具体日志文件（可 tail -F）时出现，避免空态下误导 */}
                   {activeLogView === "search" && Boolean(filePath || liveFollowEnabled) ? (
                   <div className="rtools" aria-label="实时状态">
-                    <span
-                      className={`liveb${liveFollowEnabled ? (liveFollowConnected ? "" : " retry") : " idle"}`}
-                      aria-label={liveFollowEnabled ? (liveFollowConnected ? "实时追踪已连接" : "实时追踪重连中") : "实时追踪未开启"}
-                    >
-                      <i aria-hidden="true" />
-                      {liveFollowEnabled ? (liveFollowConnected ? "LIVE" : "重连中 ⟳") : "未开启"}
-                    </span>
+                    {/* LIVE 徽标已移除：与顶部工具栏的 LIVE 按钮重复（用户反馈）。
+                        实时状态由顶部 LIVE 按钮承载，此处只保留文件说明 + 过滤 + 暂停。 */}
                     <span className="rt-note">
                       {selectedFileName || "eos-server.log"} · tail -F · 自动重连
                     </span>
@@ -3556,65 +3943,6 @@ export function App() {
                     </button>
                   </div>
                   ) : null}
-                  {/* 高频动作组（自标题行融合而来）：警告高亮 / 命中上下文 / 下载 / 书签 / 小窗 / 更多工具 */}
-                  {activeLogView === "search" ? (
-                  <div className="toolbar-inline viewer-action-group" aria-label="视图动作">
-                    <button
-                      className={errorHighlightEnabled ? "ghost-button icon-button btn-highlight-active" : "ghost-button icon-button"}
-                      onClick={toggleErrorHighlight}
-                      disabled={!canToggleErrorHighlight}
-                      title={errorHighlightEnabled ? "关闭异常/告警高亮" : "开启异常/告警高亮"}
-                    >
-                      <AlertTriangle size={14} strokeWidth={1.8} />
-                    </button>
-                    {canToggleResultContext ? (
-                      <button
-                        className={resultContextMode ? "ghost-button icon-button tab-active" : "ghost-button icon-button"}
-                        onClick={toggleResultContext}
-                        title={resultContextMode ? "切换到仅命中" : "切换到含上下文"}
-                      >
-                        <ToolIcon theme={uiTheme} kind="context" />
-                      </button>
-                    ) : null}
-                    <button className="ghost-button icon-button" onClick={exportCurrentResults} disabled={!activeResultTab && !results} title="下载结果">
-                      <Download size={14} strokeWidth={1.8} />
-                    </button>
-                    {activeResultTab ? (
-                      <button
-                        className={showBookmarkPanel ? "ghost-button icon-button tab-active" : "ghost-button icon-button"}
-                        onClick={() => setShowBookmarkPanel((current) => !current)}
-                        title={showBookmarkPanel ? "隐藏书签" : "显示书签"}
-                      >
-                        <Bookmark size={14} strokeWidth={1.8} />
-                      </button>
-                    ) : null}
-                    {activeViewerCommandPreview ? (
-                      <button
-                        className="ghost-button icon-button"
-                        onClick={() => {
-                          void copyText(activeViewerCommandPreview).then(() => setActionStatus("搜索命令已复制到剪贴板。"));
-                        }}
-                        title="复制命令"
-                      >
-                        <Copy size={14} strokeWidth={1.8} />
-                      </button>
-                    ) : null}
-                    {!isStandaloneViewerWindow ? (
-                      <button
-                        className={pip.isPip ? "ghost-button icon-button tab-active" : "ghost-button icon-button"}
-                        onClick={() => void pip.togglePip()}
-                        title={pip.isPip ? "收回小窗" : "弹出独立小窗"}
-                      >
-                        <PipExpandIcon size={14} />
-                      </button>
-                    ) : null}
-                    {filePath && activeViewerTabId === "file" ? (
-                      <button className={showFileTools ? "ghost-button icon-button tab-active" : "ghost-button icon-button"} onClick={() => setShowFileTools((current) => !current)} title="更多工具">
-                        <Settings size={14} strokeWidth={1.8} />
-                      </button>
-                    ) : null}
-                  </div>
-                  ) : null}
                   </div>
                 ) : null}
 
@@ -3622,30 +3950,31 @@ export function App() {
                   <div className="meta-list file-tools-panel">
                     <label>
                       切片大小
-                      <select
-                        value={sliceLengthMode === "auto" ? "auto" : sliceLength}
-                        onChange={(event) => {
-                          const val = event.target.value;
-                          if (val === "auto") {
+                      <ThemedSelect
+                        value={sliceLengthMode === "auto" ? "auto" : String(sliceLength)}
+                        onChange={(value) => {
+                          if (value === "auto") {
                             setSliceLengthMode("auto");
                             if (activeFileMeta) {
                               setSliceLength(computeAutoSliceLength(activeFileMeta.size));
                             }
                           } else {
-                            const next = Number(val);
+                            const next = Number(value);
                             if (next > 0) {
                               setSliceLengthMode("manual");
                               setSliceLength(next);
                             }
                           }
                         }}
-                      >
-                        <option value="auto">自动{activeFileMeta ? ` (${formatBytes(computeAutoSliceLength(activeFileMeta.size))})` : ""}</option>
-                        <option value={32768}>32 KB</option>
-                        <option value={65536}>64 KB</option>
-                        <option value={131072}>128 KB</option>
-                        <option value={262144}>256 KB</option>
-                      </select>
+                        ariaLabel="切片大小"
+                        options={[
+                          { value: "auto", label: `自动${activeFileMeta ? ` (${formatBytes(computeAutoSliceLength(activeFileMeta.size))})` : ""}` },
+                          { value: "32768", label: "32 KB" },
+                          { value: "65536", label: "64 KB" },
+                          { value: "131072", label: "128 KB" },
+                          { value: "262144", label: "256 KB" }
+                        ]}
+                      />
                     </label>
                     <span>文件大小：{formatBytes(activeFileMeta?.size)}</span>
                     <span>偏移：{activeSliceData ? `${formatNumber(activeSliceData.actualOffset)} → ${formatNumber(activeSliceData.nextOffset)}` : "--"}</span>
@@ -3731,6 +4060,8 @@ export function App() {
                     >
                       <VirtualLogViewer
                         ref={virtualViewerRef}
+                        /* 结果页签/主结果用行号列布局（结果行无时间戳，不保留时间列留白）；文件预览保留时间戳列 */
+                        variant={activeViewerTabId === "file" ? "log" : "results"}
                         content={currentLogContent}
                         keywordTerms={keywordTerms}
                         useRegex={useRegex}
@@ -3882,51 +4213,8 @@ export function App() {
                 {isFileMode ? (
               <div className="viewer-workbench file-browser-workbench">
                 <div className="file-browser-workbench-main">
-                <FileBrowserStrip
-                  pathbar={<FileBrowserPathbar
-                    mode={pathbarMode}
-                    directoryInput={directoryInput}
-                    currentDirectory={currentDirectoryForPathbar}
-                    breadcrumbItems={directoryBreadcrumbItems}
-                    inputRef={directoryInputRef}
-                    hasServer={!!serverId}
-                    onSetDirectoryInput={setDirectoryInput}
-                    onEnterEditMode={enterPathbarEditMode}
-                    onExitEditMode={exitPathbarEditMode}
-                    onOpenFromInput={() => { void openDirectoryFromInput(); }}
-                    onCommitDirectoryPath={(path) => { void browseDirectoryWithNav(path); }}
-                  />}
-                  actions={<FileBrowserActions
-                    uiTheme={uiTheme}
-                    hasServer={!!serverId}
-                    isBusy={isBusy}
-                    filterValue={fileFilter}
-                    showPathHistory={showPathHistory}
-                    showTransferHistory={showTransferHistory}
-                    onFilterChange={setFileFilter}
-                    onBrowseParent={() => { void browseDirectoryWithNav(getParentDirectoryPath(directoryPath || directoryInput || "/")); }}
-                    onTogglePathHistory={() => {
-                      setShowTransferHistory(false);
-                      setShowPathHistory((c) => !c);
-                    }}
-                    onToggleTransferHistory={() => {
-                      setShowPathHistory(false);
-                      setShowTransferHistory((c) => !c);
-                    }}
-                    onMkdir={() => setMkdirDialog({ parentDir: directoryPath || "/", dirName: "" })}
-                    onUploadFiles={() => { void uploadFiles(); }}
-                    onUploadDirectory={() => { void uploadDirectory(); }}
-                    onRefresh={() => browseLogFiles(directoryPath || "/")}
-                  />}
-                  filterBar={null}
-                  historyDropdown={showPathHistory ? (
-                    <FileBrowserHistoryDropdown
-                      historyPaths={serverId ? readDirectoryHistory(serverId).filter((p) => p !== directoryPath) : []}
-                      onBrowsePath={(path: string) => { void browseDirectoryWithNav(path); }}
-                    />
-                  ) : null}
-                  transferDropdown={null}
-                />
+                {/* 工具行已并入顶部命令行（.file-tools-inline，见 toolbar-commandbar），
+                    此处不再渲染独立 FileBrowserStrip（原型 = tbar 一行式） */}
 
                 {isConnectingWorkspace ? (
                   <div className="workspace-placeholder workspace-startup-card">
@@ -3939,6 +4227,14 @@ export function App() {
                         ? "等待系统自动建立 SSH 连接..."
                         : "先在左侧选择服务器，系统会自动连接并打开目录。")}
                     </span>
+                    {/* 侧栏移动档：未选服务器时给一个打开选服层的主按钮（与上方提示同级行，宽档 CSS 隐藏） */}
+                    {!selectedServer ? (
+                      <div className="toolbar-inline">
+                        <button type="button" className="ghost-button sp-startup-cta" onClick={() => setServerPickerOpen(true)}>
+                          选择服务器
+                        </button>
+                      </div>
+                    ) : null}
                     {selectedServer ? (
                       <div className="toolbar-inline connect-progress-actions">
                         <span className="connect-progress-host">{selectedServer.username}@{selectedServer.host}:{selectedServer.port}</span>
@@ -3982,29 +4278,11 @@ export function App() {
                     onAuxClick={handleFileBrowserMouseNavigation}
                     onMouseDown={handleFileBrowserMouseNavigation}
                   >
-                    {/* 批量条作为 batchBar 传入文件列表头槽位，与「N 项」摘要互斥共用一行：
-                        高度恒定 → 勾选/取消不抖动、不留空白、不遮挡表头 */}
-                    <FileBrowserTreeColumn
-                      title="目录树"
-                      summary={`${formatNumber(directoryEntries.length)} 个目录`}
-                      serverId={serverId}
-                      directoryPath={directoryPath || "/"}
-                      listingTarget={treeListingTarget}
-                      onBrowse={(path) => { void browseDirectoryWithNav(path); }}
-                      onOpenContextMenu={(entry, clientX, clientY) => {
-                        openContextMenu({ path: entry.path, name: entry.label || entry.path.split("/").pop() || "/", kind: "directory" }, clientX, clientY);
-                      }}
-                    />
-
-                    <div className="browser-resizer" onPointerDown={handleTreeResizeStart} title="拖拽调整目录宽度" />
-
-                    <FileBrowserContentColumn
-                      isDragOver={isDragOver}
-                      onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
-                      onDragLeave={(e) => { if (e.currentTarget.contains(e.relatedTarget as Node)) return; setIsDragOver(false); }}
-                      onDrop={handleFileDrop}
-                      summary={<span>{formatNumber(tableEntries.length)} 项</span>}
-                      batchBar={selectedFileEntries.length ? (
+                    {/* 批量条承接「目录树｜目录内容」标题行（用户决策 2026-09-30）：
+                        绝对定位覆盖层，钉在网格顶部、高度=列头行 34px；勾选时盖住两个标题行，
+                        不占文档流 → 勾选/取消零抖动。原型 .batchbar 即此位置（唯原型未画未选态） */}
+                    {selectedFileEntries.length ? (
+                      <div className="file-batch-span">
                         <div className="file-batch-actions file-batch-actions-compact">
                           <b className="file-batch-title">已选 {selectedFileEntries.length} 项</b>
                           <span className="file-batch-mut">· {formatBytes(selectedFileBytes)}</span>
@@ -4040,7 +4318,40 @@ export function App() {
                           <span className="file-batch-spacer" />
                           <span className="file-batch-hint">Esc 清空 · 双击进入 · 拖拽移动</span>
                         </div>
-                      ) : null}
+                      </div>
+                    ) : null}
+                    <FileBrowserTreeColumn
+                      title="目录树"
+                      summary={`${formatNumber(directoryEntries.length)} 个目录`}
+                      serverId={serverId}
+                      directoryPath={directoryPath || "/"}
+                      listingTarget={treeListingTarget}
+                      onBrowse={(path) => { void browseDirectoryWithNav(path); }}
+                      onOpenContextMenu={(entry, clientX, clientY) => {
+                        openContextMenu({ path: entry.path, name: entry.label || entry.path.split("/").pop() || "/", kind: "directory" }, clientX, clientY);
+                      }}
+                      onDropMove={handleTreeDropMove}
+                    />
+
+                    <div className="browser-resizer" onPointerDown={handleTreeResizeStart} title="拖拽调整目录宽度" />
+
+                    <FileBrowserContentColumn
+                      isDragOver={isDragOver}
+                      onDragOver={(e) => {
+                        /* 内部移动拖拽（批量条提示 ③）不算上传，不弹「松开上传」遮罩 */
+                        if (e.dataTransfer.types.includes("application/x-slcc-move")) return;
+                        e.preventDefault();
+                        setIsDragOver(true);
+                      }}
+                      onDragLeave={(e) => { if (e.currentTarget.contains(e.relatedTarget as Node)) return; setIsDragOver(false); }}
+                      onDrop={(e) => {
+                        /* 内部移动拖拽在列级不承接（不 preventDefault → 🚫 光标）：
+                           有效落点 = 目录树节点 / 列表内文件夹行（各自 stopPropagation 处理） */
+                        if (e.dataTransfer.types.includes("application/x-slcc-move")) { setIsDragOver(false); return; }
+                        handleFileDrop(e);
+                      }}
+                      onBlankContextMenu={openBlankContextMenu}
+                      summary={<span>{formatNumber(tableEntries.length)} 项</span>}
                       tableHead={<>
                         <span className="file-select-cell file-select-cell-head">
                           <input
@@ -4092,6 +4403,7 @@ export function App() {
                           onDownload={(path) => { void downloadFile(path); }}
                           onMove={openMoveDialog}
                           onRename={openRenameDialog}
+                          onDropMove={handleTreeDropMove}
                         />
                       )}
                     </FileBrowserContentColumn>
@@ -4112,15 +4424,27 @@ export function App() {
                       onOpenContextMenu={(entry, clientX, clientY) => {
                         openContextMenu({ path: entry.path, name: entry.label || entry.path.split("/").pop() || "/", kind: "directory" }, clientX, clientY);
                       }}
+                      onDropMove={handleTreeDropMove}
                     />
 
                     <div className="browser-resizer" onPointerDown={handleTreeResizeStart} title="拖拽调整目录宽度" />
 
                     <FileBrowserContentColumn
                       isDragOver={isDragOver}
-                      onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
+                      onDragOver={(e) => {
+                        /* 内部移动拖拽（批量条提示 ③）不算上传，不弹「松开上传」遮罩 */
+                        if (e.dataTransfer.types.includes("application/x-slcc-move")) return;
+                        e.preventDefault();
+                        setIsDragOver(true);
+                      }}
                       onDragLeave={(e) => { if (e.currentTarget.contains(e.relatedTarget as Node)) return; setIsDragOver(false); }}
-                      onDrop={handleFileDrop}
+                      onDrop={(e) => {
+                        /* 内部移动拖拽在列级不承接（不 preventDefault → 🚫 光标）：
+                           有效落点 = 目录树节点 / 列表内文件夹行（各自 stopPropagation 处理） */
+                        if (e.dataTransfer.types.includes("application/x-slcc-move")) { setIsDragOver(false); return; }
+                        handleFileDrop(e);
+                      }}
+                      onBlankContextMenu={openBlankContextMenu}
                       summary={<span>0 项</span>}
                       tableHead={<>
                         <span>名称</span>
@@ -4170,6 +4494,16 @@ export function App() {
             </div>
           ) : null}
 
+          {/* 侧栏移动档底部 tab 导航（sp-tabbar）：main-panel 最后一个子元素，宽档由 CSS 隐藏 */}
+          <SidepanelMobileTabBar
+            activeView={sidepanelMobileActiveView}
+            canOpenTerminal={canOpenTerminal}
+            hasServer={Boolean(serverId)}
+            onLog={switchToLogPreviewView}
+            onFiles={switchToFileDirectoryView}
+            onTerm={toggleTerminalPanelToolbar}
+          />
+
         </section>
 
         <SettingsModalOverlay open={showConnectionSettings && !isStandalonePipWindow} onClose={closeSettingsWorkspace}>
@@ -4182,16 +4516,22 @@ export function App() {
               preferenceSection={{
                 uiTheme,
                 uiDensity,
-                uiSurface,
-                uiBackgroundMode,
-                customBackgroundColor,
-                customGradientStart,
-                customGradientEnd,
+                uiThemePreset,
+                uiToneMode,
+                resolvedThemeId: resolvedTheme.id,
+                resolvedThemeName: resolvedTheme.name,
+                systemDark,
+                uiBackground,
+                uiImgOverlay,
+                uiImgBlur,
                 customBackgroundImage,
-                customTextColor,
-                customLogBackgroundColor,
-                customTerminalBackgroundColor,
+                uiTerminalScheme,
+                uiAccentOverride,
+                themePresetOptions: THEME_PRESETS,
+                backgroundOptions: BG_LAYERS,
+                terminalSchemeOptions: TERMINAL_SCHEMES,
                 uiFontFamily,
+                uiFontSize,
                 logFontSize,
                 terminalFontSize,
                 logFontFamily,
@@ -4199,8 +4539,6 @@ export function App() {
                 terminalFontFamily,
                 onTerminalFontFamilyChange: setTerminalFontFamily,
                 motionMode,
-                customImageOverlay,
-                customImageBlur,
                 dynamicBackground,
                 watermarkEnabled,
                 watermarkTemplate,
@@ -4218,21 +4556,19 @@ export function App() {
                 onToggleActivityPanelVisible: () => setActivityPanelVisible((current) => !current),
                 onUiThemeChange: setUiTheme,
                 onUiDensityChange: setUiDensity,
-                onUiSurfaceChange: setUiSurface,
-                onUiBackgroundModeChange: setUiBackgroundMode,
-                onCustomBackgroundColorChange: setCustomBackgroundColor,
-                onCustomGradientStartChange: setCustomGradientStart,
-                onCustomGradientEndChange: setCustomGradientEnd,
+                onUiThemePresetChange: setUiThemePreset,
+                onUiToneModeChange: setUiToneMode,
+                onUiBackgroundChange: setUiBackground,
+                onUiImgOverlayChange: setUiImgOverlay,
+                onUiImgBlurChange: setUiImgBlur,
                 onCustomBackgroundImageChange: setCustomBackgroundImage,
-                onCustomTextColorChange: setCustomTextColor,
-                onCustomLogBackgroundColorChange: setCustomLogBackgroundColor,
-                onCustomTerminalBackgroundColorChange: setCustomTerminalBackgroundColor,
+                onUiTerminalSchemeChange: setUiTerminalScheme,
+                onUiAccentOverrideChange: setUiAccentOverride,
                 onUiFontFamilyChange: setUiFontFamily,
+                onUiFontSizeChange: setUiFontSize,
                 onLogFontSizeChange: setLogFontSize,
                 onTerminalFontSizeChange: setTerminalFontSize,
                 onMotionModeChange: setMotionMode,
-                onCustomImageOverlayChange: setCustomImageOverlay,
-                onCustomImageBlurChange: setCustomImageBlur,
                 onToggleDynamicBackground: () => setDynamicBackground(!dynamicBackground),
                 onToggleWatermark: () => setWatermarkEnabled(!watermarkEnabled),
                 onWatermarkTemplateChange: setWatermarkTemplate,
@@ -4292,8 +4628,10 @@ export function App() {
                   if (!targetServer) return;
                   setConfirmDialog({
                     title: "清除连接凭证",
-                    message: `确定清除"${targetServer.name}"保存的密码/私钥？\n清除后再次连接需要重新录入或重新导入。`,
+                    message: `确定清除「${targetServer.name}」保存的密码 / 私钥？清除后再次连接需重新录入或导入。`,
+                    target: `${targetServer.username}@${targetServer.host}:${targetServer.port}`,
                     danger: true,
+                    confirmText: "清除",
                     onConfirm: () => { void clearCredentialOfServer(targetServerId); }
                   });
                 },
@@ -4314,8 +4652,10 @@ export function App() {
                   if (!selectedServer) return;
                   setConfirmDialog({
                     title: "清除连接凭证",
-                    message: `确定清除"${selectedServer.name}"保存的密码/私钥？\n清除后再次连接需要重新录入或重新导入。`,
+                    message: `确定清除「${selectedServer.name}」保存的密码 / 私钥？清除后再次连接需重新录入或导入。`,
+                    target: `${selectedServer.username}@${selectedServer.host}:${selectedServer.port}`,
                     danger: true,
+                    confirmText: "清除",
                     onConfirm: () => { void clearCredentialForServer(); }
                   });
                 },
@@ -4370,6 +4710,56 @@ export function App() {
         }}
       />
 
+      {/* 空白处右键菜单：目录级操作（用户反馈 2026-09-30）。样式复用 .context-menu 体系 */}
+      {blankContextMenu ? (
+        <div className="context-menu-backdrop">
+          <div
+            ref={blankContextMenuRef}
+            className="context-menu"
+            style={{ left: blankContextMenu.x, top: blankContextMenu.y }}
+            onClick={(event) => event.stopPropagation()}
+            onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); }}
+          >
+            <div
+              role="button"
+              className="context-menu-item"
+              onClick={() => { setBlankContextMenu(null); void browseDirectoryWithNav(getParentDirectoryPath(directoryPath || directoryInput || "/")); }}
+            >
+              返回上级
+            </div>
+            <div
+              role="button"
+              className="context-menu-item"
+              onClick={() => { setBlankContextMenu(null); browseLogFiles(directoryPath || "/"); }}
+            >
+              刷新目录
+            </div>
+            <div className="context-menu-separator" role="separator" />
+            <div
+              role="button"
+              className="context-menu-item"
+              onClick={() => { setBlankContextMenu(null); setMkdirDialog({ parentDir: directoryPath || "/", dirName: "" }); }}
+            >
+              新建目录
+            </div>
+            <div
+              role="button"
+              className="context-menu-item"
+              onClick={() => { setBlankContextMenu(null); void uploadFiles(); }}
+            >
+              上传文件
+            </div>
+            <div
+              role="button"
+              className="context-menu-item"
+              onClick={() => { setBlankContextMenu(null); void uploadDirectory(); }}
+            >
+              上传目录
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <WorkspaceTabContextMenu
         menu={workspaceTabMenu}
         menuRef={workspaceTabMenuRef}
@@ -4390,9 +4780,43 @@ export function App() {
 
       <FeedbackOverlays
         downloadProgress={downloadProgress}
-        uploadProgress={uploadProgress}
         toasts={toasts}
         onDismissToast={dismissToast}
+      />
+
+      {/* 侧栏移动档覆盖层：整屏选服层 / 目录树底部 sheet（宽档由 CSS display:none 隐藏，DOM 常驻） */}
+      <ServerPickerOverlay
+        open={serverPickerOpen}
+        onClose={() => setServerPickerOpen(false)}
+        serverFilter={serverFilter}
+        onServerFilterChange={setServerFilter}
+        filteredGroupedServers={filteredGroupedServers}
+        serverId={serverId}
+        connectionTestStatus={connectionTestStatus}
+        onSelectServer={selectServerById}
+        onDeleteServer={requestDeleteServer}
+        onOpenSettingsWorkspace={openSettingsWorkspace}
+        emptyState={sidepanelServerEmptyState}
+      />
+      <DirectorySheet
+        open={dirSheetOpen}
+        onClose={() => setDirSheetOpen(false)}
+        directoryPath={directoryPath || "/"}
+        tree={
+          /* 与文件模式 viewer-workbench 内的目录树同 props（FileBrowserTreeColumn 原样复用） */
+          <FileBrowserTreeColumn
+            title="目录树"
+            summary={`${formatNumber(directoryEntries.length)} 个目录`}
+            serverId={serverId}
+            directoryPath={directoryPath || "/"}
+            listingTarget={treeListingTarget}
+            onBrowse={(path) => { void browseDirectoryWithNav(path); }}
+            onOpenContextMenu={(entry, clientX, clientY) => {
+              openContextMenu({ path: entry.path, name: entry.label || entry.path.split("/").pop() || "/", kind: "directory" }, clientX, clientY);
+            }}
+            onDropMove={handleTreeDropMove}
+          />
+        }
       />
 
       <DialogOverlays
@@ -4465,7 +4889,14 @@ export function App() {
         onPreviewDialogToggleMaximize={() => setPreviewDialog((prev) => prev ? { ...prev, maximized: !prev.maximized } : null)}
         onPreviewDialogClose={() => {
           if (previewDialog && !previewDialog.readOnly && previewDialog.content !== previewDialog.originalContent) {
-            setConfirmDialog({ title: "未保存的更改", message: "文件已修改但未保存，确定关闭？", danger: true, onConfirm: () => setPreviewDialog(null) });
+            setConfirmDialog({
+              title: "未保存的更改",
+              message: "文件已修改但未保存，确定放弃更改并关闭？",
+              target: previewDialog.filePath,
+              danger: true,
+              confirmText: "放弃更改",
+              onConfirm: () => setPreviewDialog(null),
+            });
           } else {
             setPreviewDialog(null);
           }
@@ -4477,6 +4908,10 @@ export function App() {
         onTransferHistoryRevealLocalPath={(path) => { void handleRevealTransferHistoryLocalPath(path); }}
         onTransferHistoryClear={requestClearTransferHistory}
         onTransferHistoryClose={() => setShowTransferHistory(false)}
+        uploadPaused={uploadPaused}
+        onPauseUpload={pauseUpload}
+        onResumeUpload={resumeUpload}
+        onCancelUpload={cancelUpload}
       />
       {toolDrawerNode}
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} commands={paletteCommands} />
