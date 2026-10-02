@@ -6,6 +6,16 @@ import { useEscapeToClose } from "./useEscapeToClose.js";
 // 监控趋势：前端环形缓冲，默认 10s/次采样，360 个点 ≈ 1 小时
 const TREND_SAMPLE_CAPACITY = 360;
 
+// 异常事件阈值：窗口内 CPU（单核折算）≥60% 记一个异常点，红点与日志 ERROR 时间对齐（原型 decision ②）
+const ANOMALY_CPU_THRESHOLD = 60;
+
+// SVG 属性上取 CSS 变量在部分渲染路径不稳，按约束用与主题同源的字面 hex（括号内为对应 token）：
+//   #0070f3 = var(--accent) · #0a7b3e = var(--green) · #b45309 = var(--amber) · #d41313 = var(--red)
+const CHART_COLOR_CPU = "#0070f3";
+const CHART_COLOR_MEM = "#0a7b3e";
+const CHART_COLOR_DISK = "#b45309";
+const CHART_COLOR_ANOMALY = "#d41313";
+
 // 监控记录时序图的时间范围（原型 s9 895 行：5 分钟 / 30 分钟 / 1 小时）
 type TrendRangeKey = "5m" | "30m" | "1h";
 const TREND_RANGES: TrendRangeKey[] = ["5m", "30m", "1h"];
@@ -68,16 +78,6 @@ function MetricBar({ label, value, detail, tone = "blue" }: { label: string; val
   );
 }
 
-function MetricPill({ label, value, hint, tone = "blue" }: { label: string; value: string; hint: string; tone?: "blue" | "amber" | "green" }) {
-  return (
-    <div className={`server-status-pill server-status-pill-${tone}`}>
-      <span>{label}</span>
-      <strong>{value}</strong>
-      <small>{hint}</small>
-    </div>
-  );
-}
-
 function formatClock(ms: number): string {
   if (!Number.isFinite(ms)) return "--:--";
   const date = new Date(ms);
@@ -94,12 +94,24 @@ function processArgs(command: string): string {
   return (command || "").trim().split(/\s+/).slice(1).join(" ");
 }
 
+// 进程 CPU% 高亮分档：≥10% 红、≥5% 橙、其余正常字色
+function processCpuTone(value: number): "" | "hi" | "md" {
+  if (value >= 10) return "hi";
+  if (value >= 5) return "md";
+  return "";
+}
+
 // 迷你趋势线（SVG sparkline，参照重设计原型 s9 的 spark()：淡面积 + 1.4px 折线 + 异常红点）
 function TrendSparkline({ data, color, spikeIndex }: { data: number[]; color: string; spikeIndex?: number }) {
   const width = 100;
   const height = 26;
   if (data.length < 2) {
-    return <div className="server-status-trend-spark-empty">采样积累中…</div>;
+    // 样本不足：占位（见上方空态说明）
+    return (
+      <div className="server-status-trend-spark-empty" aria-hidden="true">
+        <span>采样积累中…</span>
+      </div>
+    );
   }
   const peak = Math.max(...data) * 1.15;
   const top = peak > 0 ? peak : 1;
@@ -115,7 +127,7 @@ function TrendSparkline({ data, color, spikeIndex }: { data: number[]; color: st
       <polyline points={points} style={{ fill: "none", stroke: color, strokeWidth: 1.4, strokeLinejoin: "round" }} />
       {spike >= 0 ? (
         <>
-          <circle cx={spikeX.toFixed(1)} cy={spikeY.toFixed(1)} r="2.6" style={{ fill: "#d41313" }} />
+          <circle cx={spikeX.toFixed(1)} cy={spikeY.toFixed(1)} r="2.6" style={{ fill: CHART_COLOR_ANOMALY }} />
           <circle cx={spikeX.toFixed(1)} cy={spikeY.toFixed(1)} r="5" style={{ fill: "rgba(212,19,19,.18)" }} />
         </>
       ) : null}
@@ -129,7 +141,12 @@ function MonitorChart({ cpu, mem }: { cpu: number[]; mem: number[] }) {
   const height = 150;
   const count = Math.max(cpu.length, mem.length);
   if (count < 2) {
-    return <div className="server-status-monitor-chart-empty">采样积累中，趋势线将在 ≥2 个采样点后绘出</div>;
+    // 样本不足：与指标卡同款占位（淡虚线 + 灰字），高度与大图一致
+    return (
+      <div className="server-status-monitor-chart-empty" aria-hidden="true">
+        <span>采样积累中…</span>
+      </div>
+    );
   }
   const xFor = (index: number) => (index / (count - 1)) * width;
   const yFor = (value: number) => height - (clampPercent(value) / 100) * (height - 10);
@@ -146,7 +163,7 @@ function MonitorChart({ cpu, mem }: { cpu: number[]; mem: number[] }) {
   for (let i = 0; i < cpu.length; i += 1) {
     if (anomalyIndex < 0 || cpu[i] > cpu[anomalyIndex]) anomalyIndex = i;
   }
-  const hasAnomaly = anomalyIndex >= 0 && cpu[anomalyIndex] >= 60;
+  const hasAnomaly = anomalyIndex >= 0 && cpu[anomalyIndex] >= ANOMALY_CPU_THRESHOLD;
   const ax = hasAnomaly ? xFor(anomalyIndex) : 0;
   const ay = hasAnomaly ? yFor(cpu[anomalyIndex]) : 0;
   return (
@@ -154,13 +171,13 @@ function MonitorChart({ cpu, mem }: { cpu: number[]; mem: number[] }) {
       {[25, 50, 75].map((y) => (
         <line key={y} x1="0" y1={yFor(y).toFixed(1)} x2={width} y2={yFor(y).toFixed(1)} stroke="var(--line)" strokeWidth="0.6" strokeDasharray="2 4" />
       ))}
-      {draw(cpu, "#0070f3")}
-      {draw(mem, "#0a7b3e")}
+      {draw(cpu, CHART_COLOR_CPU)}
+      {draw(mem, CHART_COLOR_MEM)}
       {hasAnomaly ? (
         <>
           <line x1={ax.toFixed(1)} y1="0" x2={ax.toFixed(1)} y2={height} stroke="var(--line-strong)" strokeWidth="0.6" />
-          <line x1={ax.toFixed(1)} y1={ay.toFixed(1)} x2={ax.toFixed(1)} y2={height} stroke="#d41313" strokeWidth="0.8" strokeDasharray="3 3" />
-          <circle cx={ax.toFixed(1)} cy={ay.toFixed(1)} r="3" style={{ fill: "#d41313" }} />
+          <line x1={ax.toFixed(1)} y1={ay.toFixed(1)} x2={ax.toFixed(1)} y2={height} stroke={CHART_COLOR_ANOMALY} strokeWidth="0.8" strokeDasharray="3 3" />
+          <circle cx={ax.toFixed(1)} cy={ay.toFixed(1)} r="3" style={{ fill: CHART_COLOR_ANOMALY }} />
           <circle cx={ax.toFixed(1)} cy={ay.toFixed(1)} r="6" style={{ fill: "rgba(212,19,19,.16)" }} />
         </>
       ) : null}
@@ -175,7 +192,7 @@ function TrendCard({ label, windowLabel, value, color, samples, spikeIndex }: { 
         <span className="server-status-trend-card-label">{label}</span>
         <span className="server-status-trend-card-win">{windowLabel}</span>
       </div>
-      <div className="server-status-trend-card-value">{clampPercent(value).toFixed(1)}%</div>
+      <div className="server-status-trend-card-value">{clampPercent(value).toFixed(0)}%</div>
       <TrendSparkline data={samples} color={color} spikeIndex={spikeIndex} />
     </div>
   );
@@ -234,17 +251,23 @@ export function ServerStatusPanel({
 
   // 监控记录时序图时间范围（原型 s9 895 行，默认 30 分钟）
   const now = Date.now();
-  const trendWindowStart = now - TREND_RANGE_MS[trendRange];
   const allSamples = trendSamplesRef.current;
+  // 指标卡固定画 1 小时全量缓冲（原型 decision ①「指标卡各带 1 小时迷你趋势线」，角标恒为 1h）
+  const seriesCpu1h = allSamples.map((sample) => sample.cpu);
+  const seriesMem1h = allSamples.map((sample) => sample.mem);
+  const seriesDisk1h = allSamples.map((sample) => sample.disk);
+  const cpuSpikeIndex1h = seriesCpu1h.reduce((best, value, index) => (value > seriesCpu1h[best] ? index : best), 0);
+  const hasSpike1h = seriesCpu1h.length >= 2 && seriesCpu1h[cpuSpikeIndex1h] >= ANOMALY_CPU_THRESHOLD;
+  // 大图按 segmented 时间范围过滤
+  const trendWindowStart = now - TREND_RANGE_MS[trendRange];
   const trendSamples = allSamples.filter((sample) => sample.t >= trendWindowStart);
   const seriesCpu = trendSamples.map((sample) => sample.cpu);
   const seriesMem = trendSamples.map((sample) => sample.mem);
-  const seriesDisk = trendSamples.map((sample) => sample.disk);
-  const cpuSpikeIndex = seriesCpu.reduce((best, value, index) => (value > seriesCpu[best] ? index : best), 0);
-  // 异常事件：窗口内存在 CPU 尖峰（≥60%）时标记，红点与日志 ERROR 时间对齐（原型 decision ②⑥）
-  const hasAnomaly = seriesCpu.length >= 2 && seriesCpu[cpuSpikeIndex] >= 60;
-  const anomalyAt = hasAnomaly ? trendSamples[cpuSpikeIndex].t : 0;
-  const anomalyText = hasAnomaly ? `异常 ${formatClock(anomalyAt)} · 与日志 ERROR 对齐` : "窗口内未检测到异常尖峰";
+  // 异常事件：窗口内 CPU 尖峰（≥60%，红点与日志 ERROR 时间对齐，原型 decision ②）；N = 异常点数
+  const anomalyCount = trendSamples.reduce((sum, sample) => (sample.cpu >= ANOMALY_CPU_THRESHOLD ? sum + 1 : sum), 0);
+  // 异常 chip 口径：有异常 → 红色「与日志 ERROR 对齐 · 异常 N」；无异常 → 灰色「未检测到异常尖峰」
+  const hasAnomaly = anomalyCount > 0;
+  const anomalyText = hasAnomaly ? `与日志 ERROR 对齐 · 异常 ${anomalyCount}` : "未检测到异常尖峰";
   const windowStartLabel = trendSamples.length >= 2 ? formatClock(trendSamples[0].t) : "--:--";
   const windowEndLabel = trendSamples.length >= 2 ? formatClock(trendSamples[trendSamples.length - 1].t) : "--:--";
 
@@ -258,11 +281,6 @@ export function ServerStatusPanel({
   const sourceLabel = profile?.source === "jumpserver" ? "JumpServer 资产" : profile?.source === "bastion" ? "堡垒机目标" : "直连主机";
   const statusTitle = profile?.hostname || server?.name || "未选择服务器";
   const statusSubTitle = profile?.os || server?.host || "点击刷新读取实时状态";
-  const refreshLabel = loading
-    ? "刷新中"
-    : autoRefresh
-      ? `自动刷新 ${Math.round(refreshIntervalMs / 1000)}s`
-      : "手动刷新";
 
   return (
     <div className="server-status-panel">
@@ -274,21 +292,7 @@ export function ServerStatusPanel({
             <small>{statusSubTitle}</small>
           </div>
         </div>
-        <div className="server-status-actions">
-          <button
-            className={autoRefresh ? "server-status-auto-toggle server-status-auto-toggle-on" : "server-status-auto-toggle"}
-            type="button"
-            onClick={onToggleAutoRefresh}
-            disabled={!server}
-            title={autoRefresh ? "关闭自动刷新" : "开启自动刷新"}
-          >
-            <span aria-hidden="true" />
-            {refreshLabel}
-          </button>
-          <button className="ghost-button icon-button" type="button" onClick={onRefresh} disabled={!server || loading} title="刷新状态">
-            <RefreshCw size={13} className={loading ? "server-status-spin" : ""} />
-          </button>
-        </div>
+        {/* 自动刷新 / 刷新按钮只保留底部行一处（原型 951-954 行），头部重复控件已删 */}
       </div>
 
       {error ? (
@@ -304,7 +308,7 @@ export function ServerStatusPanel({
         </div>
       ) : null}
 
-      {/* 骨架屏已按反馈移除：与实际内容尺寸不一致导致消失后抖动。加载反馈由头部刷新按钮的
+      {/* 骨架屏已按反馈移除：与实际内容尺寸不一致导致消失后抖动。加载反馈由底部「刷新」按钮的
           server-status-spin 旋转图标承担，布局零位移 */}
 
       {profile ? (
@@ -325,26 +329,26 @@ export function ServerStatusPanel({
             </div>
           </section>
 
-          <div className="server-status-pill-grid">
-            <MetricPill label="负载/核" value={`${clampPercent(loadPerCore).toFixed(1)}%`} hint={profile.loadAverage[0].toFixed(2)} tone="green" />
-            <MetricPill label="内存" value={`${(memory?.percent || 0).toFixed(1)}%`} hint={`${formatBytes(memory?.used || 0)} / ${formatBytes(memory?.total || 0)}`} />
-            <MetricPill label="磁盘最高" value={`${diskMax.toFixed(0)}%`} hint={`${profile.disks.length} 个挂载点`} tone={diskMax >= 85 ? "amber" : "blue"} />
-          </div>
-
-          {/* 原型 s9 880-887：三张指标卡直接排在 dbody 内（无外层标题卡），卡片自带 1h 迷你趋势线 */}
+          {/* 原型 s9 880-887：三张指标卡直接排在 dbody 内（无外层标题卡），卡片自带 1h 迷你趋势线
+              线色与原型同源（注释见顶部 CHART_COLOR_* 常量：accent 蓝 / green 绿 / amber 橙） */}
           <div className="server-status-trend-cards" aria-label="监控趋势">
-            <TrendCard label="CPU" windowLabel="1h" value={loadPerCore} color="#0070f3" samples={seriesCpu} spikeIndex={hasAnomaly ? cpuSpikeIndex : undefined} />
-            <TrendCard label="内存" windowLabel="1h" value={memory?.percent || 0} color="#0a7b3e" samples={seriesMem} />
-            <TrendCard label={topDiskMount ? `磁盘 ${topDiskMount}` : "磁盘"} windowLabel="1h" value={diskMax} color="#b45309" samples={seriesDisk} />
+            <TrendCard label="CPU" windowLabel="1h" value={loadPerCore} color={CHART_COLOR_CPU} samples={seriesCpu1h} spikeIndex={hasSpike1h ? cpuSpikeIndex1h : undefined} />
+            <TrendCard label="内存" windowLabel="1h" value={memory?.percent || 0} color={CHART_COLOR_MEM} samples={seriesMem1h} />
+            <TrendCard label={topDiskMount ? `磁盘 ${topDiskMount}` : "磁盘"} windowLabel="1h" value={diskMax} color={CHART_COLOR_DISK} samples={seriesDisk1h} />
           </div>
 
           <section className="server-status-monitor" aria-label="监控记录">
             <div className="server-status-monitor-head">
               <b className="server-status-monitor-title">监控记录</b>
               <span className={`chip server-status-monitor-chip${hasAnomaly ? " red" : ""}`}>
-                <span className="marq">
-                  <span>{`${anomalyText}\u00a0\u00a0·\u00a0\u00a0${anomalyText}`}</span>
-                </span>
+                {hasAnomaly ? (
+                  // 关键信息禁省略号（原型 decision ⑥）：异常文案走无缝滚动；灰色常态文案短，静态即可
+                  <span className="marq">
+                    <span>{`${anomalyText}\u00a0\u00a0·\u00a0\u00a0${anomalyText}`}</span>
+                  </span>
+                ) : (
+                  <span>{anomalyText}</span>
+                )}
               </span>
               <span className="server-status-monitor-spacer" />
               <div className="seg lite server-status-monitor-range" role="group" aria-label="监控记录时间范围">
@@ -374,24 +378,30 @@ export function ServerStatusPanel({
             </div>
           </section>
 
-          <section className="server-status-card server-status-overview">
-            <div className="server-status-card-title">
-              <Cpu size={14} />
-              <span>核心负载</span>
+          <section className="server-status-card server-status-process-card">
+            <div className="server-status-card-title server-status-process-title">
+              <b>进程 TOP 5</b>
+              <span className="server-status-process-sort mono">按 CPU</span>
             </div>
-            <div className="server-status-load-grid">
-              <div><strong>{profile.loadAverage[0].toFixed(2)}</strong><span>1 min</span></div>
-              <div><strong>{profile.loadAverage[1].toFixed(2)}</strong><span>5 min</span></div>
-              <div><strong>{profile.loadAverage[2].toFixed(2)}</strong><span>15 min</span></div>
-            </div>
-            <MetricBar label="负载 / 核心" value={loadPerCore} detail={`${profile.cpu.cores || "-"} 核 · ${profile.cpu.model || "CPU 信息不可用"}`} tone="green" />
-            <div className="server-status-kv">
-              <span>内核</span>
-              <strong>{profile.kernel || "-"}</strong>
-            </div>
-            <div className="server-status-kv">
-              <span>运行</span>
-              <strong>{profile.uptimeText || (profile.uptimeSeconds ? `${Math.floor(profile.uptimeSeconds / 3600)} 小时` : "-")}</strong>
+            <div className="server-status-process-rows mono">
+              {[...profile.processes]
+                .sort((left, right) => right.cpuPercent - left.cpuPercent)
+                .slice(0, 5)
+                .map((process) => {
+                  // 原型行式：进程名 + CPU% + 内存 + 说明，单行等宽；CPU% 按阈值着色
+                  const cpuTone = processCpuTone(process.cpuPercent);
+                  return (
+                    <div key={`${process.pid}-${process.command}`} className="server-status-process-row">
+                      <span className="server-status-process-name">{processName(process.command, process.pid)}</span>
+                      <span className={cpuTone ? `server-status-process-cpu server-status-process-cpu-${cpuTone}` : "server-status-process-cpu"}>
+                        {process.cpuPercent.toFixed(1)}%
+                      </span>
+                      <span className="server-status-process-mem">{formatBytes(process.rssKb * 1024)}</span>
+                      <span className="server-status-process-args">{processArgs(process.command)}</span>
+                    </div>
+                  );
+                })}
+              {profile.processes.length === 0 ? <p className="server-status-empty">未读取到进程排行</p> : null}
             </div>
           </section>
 
@@ -455,24 +465,25 @@ export function ServerStatusPanel({
             </div>
           </section>
 
-          <section className="server-status-card server-status-process-card">
-            <div className="server-status-card-title server-status-process-title">
-              <b>进程 TOP 5</b>
-              <span className="server-status-process-sort mono">按 CPU</span>
+          {/* 核心负载 / 系统信息卡（原型 dbody 无此块）：按反馈沉到面板底部 */}
+          <section className="server-status-card server-status-overview">
+            <div className="server-status-card-title">
+              <Cpu size={14} />
+              <span>核心负载</span>
             </div>
-            <div className="server-status-process-rows mono">
-              {[...profile.processes]
-                .sort((left, right) => right.cpuPercent - left.cpuPercent)
-                .slice(0, 5)
-                .map((process) => (
-                  <div key={`${process.pid}-${process.command}`} className="server-status-process-row">
-                    <span className="server-status-process-name">{processName(process.command, process.pid)}</span>
-                    <span className="server-status-process-cpu">{process.cpuPercent.toFixed(1)}%</span>
-                    <span className="server-status-process-mem">{formatBytes(process.rssKb * 1024)}</span>
-                    <span className="server-status-process-args">{processArgs(process.command)}</span>
-                  </div>
-                ))}
-              {profile.processes.length === 0 ? <p className="server-status-empty">未读取到进程排行</p> : null}
+            <div className="server-status-load-grid">
+              <div><strong>{profile.loadAverage[0].toFixed(2)}</strong><span>1 min</span></div>
+              <div><strong>{profile.loadAverage[1].toFixed(2)}</strong><span>5 min</span></div>
+              <div><strong>{profile.loadAverage[2].toFixed(2)}</strong><span>15 min</span></div>
+            </div>
+            <MetricBar label="负载 / 核心" value={loadPerCore} detail={`${profile.cpu.cores || "-"} 核 · ${profile.cpu.model || "CPU 信息不可用"}`} tone="green" />
+            <div className="server-status-kv">
+              <span>内核</span>
+              <strong>{profile.kernel || "-"}</strong>
+            </div>
+            <div className="server-status-kv">
+              <span>运行</span>
+              <strong>{profile.uptimeText || (profile.uptimeSeconds ? `${Math.floor(profile.uptimeSeconds / 3600)} 小时` : "-")}</strong>
             </div>
           </section>
 

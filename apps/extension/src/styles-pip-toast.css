@@ -227,10 +227,13 @@
   50%      { opacity: 0.86; }
 }
 
-/* ── Toast notifications ── */
+/* ── Toast notifications ──
+   位置优化（用户反馈 2026-09-30：底部中央气泡压在操作区附近，很碍事）：
+   改到顶部中央（会话页签行下方）——距左树/右工具组/文件行都远；
+   整条气泡 pointer-events:none（仅关闭钮可点）→ 物理上不挡任何点击。 */
 .toast-container {
   position: fixed;
-  bottom: 24px;
+  top: 56px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 11050;
@@ -242,7 +245,7 @@
   width: max-content;
 }
 .toast-item {
-  pointer-events: auto;
+  pointer-events: none;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -300,6 +303,7 @@
 }
 .toast-dismiss {
   flex-shrink: 0;
+  pointer-events: auto;
   width: 20px !important;
   height: 20px !important;
   display: inline-flex;
@@ -347,6 +351,7 @@
   z-index: 11040;
   pointer-events: none;
 }
+
 
 .upload-progress-card {
   display: grid;
@@ -1134,9 +1139,21 @@
 .pip-terminal-root {
   display: flex;
   flex-direction: column;
+  /* 全尺寸：PiP 窗口 body 下铺满视口（width 100% + height 100vh） */
+  width: 100%;
   height: 100vh;
+  min-width: 0;
+  min-height: 0;
   overflow: hidden;
   background: var(--terminal-background, var(--shell, #0a0a0a));
+}
+
+/* 搬迁目标 .terminal-main-shell 在 PiP 包裹层内纵向撑满（修复小窗内 xterm 只占左侧一条） */
+.pip-terminal-root .terminal-main-shell {
+  flex: 1 1 0%;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
 }
 
 .pip-terminal-root .terminal-panel-body {
@@ -1217,7 +1234,10 @@
   color: var(--green-dot, #22c55e);
 }
 .viewer-pip-header .pip-header-name {
-  flex: 1 1 auto;
+  /* 文件名不再独占弹性空间：原 flex:1 把状态徽标顶到最右端，中间留出大片空白。
+     改为内容宽（可收缩省略号），文件名与状态徽标左对齐成组；
+     右侧按钮（回主窗/关闭）由 .pip-header-spacer 的 auto 弹性推到右端。 */
+  flex: 0 1 auto;
   min-width: 0;
   font-size: var(--fs-xs, 12px);
   font-weight: 600;
@@ -1226,9 +1246,15 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* 有右侧按钮时：把按钮组推到右端，文件名+状态留在左侧成组。
+   无按钮（浏览器 Document PiP 由 Chrome 供框）时不留空档，整条左对齐。 */
 .viewer-pip-header .liveb {
   flex: none;
   padding: 0 7px;
+}
+.viewer-pip-header .pip-header-spacer {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 .viewer-pip-header .ghost-button.icon-button {
   flex: none;

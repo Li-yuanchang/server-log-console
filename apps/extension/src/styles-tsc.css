@@ -542,8 +542,9 @@
 }
 
 .tsc-textarea:focus {
-  border-color: rgba(129,140,248,0.42);
-  box-shadow: 0 0 0 3px rgba(99,102,241,0.12);
+  border-color: var(--line-strong);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--line-strong) 12%, transparent);
+  outline: none;
 }
 
 .tsc-textarea::placeholder {
@@ -617,8 +618,9 @@
 }
 
 .tsc-input:focus {
-  border-color: rgba(245, 158, 11, 0.42);
-  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.12);
+  border-color: var(--line-strong);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--line-strong) 12%, transparent);
+  outline: none;
 }
 
 .tsc-settings-check {
@@ -1105,8 +1107,9 @@
 }
 
 .tai-textarea:focus {
-  border-color: rgba(59, 130, 246, 0.42);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+  border-color: var(--line-strong);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--line-strong) 12%, transparent);
+  outline: none;
 }
 
 .tai-textarea::placeholder {
@@ -1179,8 +1182,9 @@
 }
 
 .tai-input:focus {
-  border-color: rgba(59, 130, 246, 0.42);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+  border-color: var(--line-strong);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--line-strong) 12%, transparent);
+  outline: none;
 }
 
 .tai-settings-check {

@@ -355,11 +355,13 @@
   font-weight: 600;
 }
 
+/* 控件统一规范：hover/focus = --line-strong 灰边 + 12% 浅灰光环（token 随主题联动） */
 input:focus,
 select:focus,
 textarea:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(45, 91, 137, 0.1);
+  border-color: var(--line-strong);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--line-strong) 12%, transparent);
+  outline: none;
 }
 
 textarea {
@@ -455,8 +457,7 @@ button:disabled {
 
 .toolbar-summary span,
 .status-bar span,
-.compact-meta span,
-.search-progress-meta span {
+.compact-meta span {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
