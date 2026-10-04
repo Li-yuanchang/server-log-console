@@ -12,6 +12,7 @@ import {
   apiTestConnection,
 } from "./api.js";
 import { looksLikeJumpServer } from "./terminal-utils.js";
+import { writeLastDirectory } from "./storage.js";
 
 export type ServerConnectionAPI = {
   fetchCredentialStatus: (targetServerId: string) => Promise<void>;
@@ -442,6 +443,24 @@ export function useServerConnection(deps: {
         setFileEntries(directoryPayload.entries);
         rememberDirectoryIfUseful(requestServerId, directoryPayload.directoryPath, directoryPayload.entries.length);
         pushActivity(`连接测试后已读取目录：${directoryPayload.directoryPath}，共 ${directoryPayload.entries.length} 项。`);
+      } else if (payload.connected && !payload.directoryReadable) {
+        /* 恢复的目录（last-directories）已失效/不属于本机：回落 basePath 或根目录，
+           并覆盖持久化值，避免终端与面包屑继续停留在不存在的目录。自动连接同样适用。 */
+        const fallbackDirectory = selectedServer?.basePath?.trim() || "/";
+        setDirectoryPath(fallbackDirectory);
+        setDirectoryInput(fallbackDirectory);
+        writeLastDirectory(requestServerId, fallbackDirectory);
+        try {
+          const directoryPayload = await fetchDirectoryListing(fallbackDirectory);
+          if (serverIdRef.current !== requestServerId) {
+            return;
+          }
+          setFileEntries(directoryPayload.entries);
+          pushActivity(`目录 ${payload.directoryPath} 不可读，已回退到 ${directoryPayload.directoryPath}。`);
+        } catch {
+          setFileEntries([]);
+          pushActivity(`目录 ${payload.directoryPath} 不可读，已回退到 ${fallbackDirectory}。`);
+        }
       }
     } catch (error) {
       if (serverIdRef.current !== requestServerId) {

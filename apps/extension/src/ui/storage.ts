@@ -411,6 +411,65 @@ export function getShortcutCommandsForServer(serverId: string): ShortcutCommand[
   );
 }
 
+// ---------------------------------------------------------------------------
+// 连接服务（Gateway）地址与访问令牌
+// ---------------------------------------------------------------------------
+
+const gatewayConfigStorageKey = "server-log-console:gateway-config";
+
+export interface GatewayConfig {
+  baseUrl: string;
+  token: string;
+}
+
+export function readGatewayConfig(): GatewayConfig {
+  try {
+    const raw = globalThis.localStorage?.getItem(gatewayConfigStorageKey);
+    if (!raw) {
+      return { baseUrl: "", token: "" };
+    }
+    const parsed = JSON.parse(raw) as Partial<GatewayConfig>;
+    return {
+      baseUrl: typeof parsed.baseUrl === "string" ? parsed.baseUrl : "",
+      token: typeof parsed.token === "string" ? parsed.token : ""
+    };
+  } catch {
+    return { baseUrl: "", token: "" };
+  }
+}
+
+export function writeGatewayConfig(config: GatewayConfig) {
+  try {
+    globalThis.localStorage?.setItem(gatewayConfigStorageKey, JSON.stringify(config));
+  } catch { /* ignore */ }
+}
+
+export function clearGatewayConfig() {
+  try {
+    globalThis.localStorage?.removeItem(gatewayConfigStorageKey);
+  } catch { /* ignore */ }
+}
+
+const settingsViewStorageKey = "server-log-console:settings-view";
+const SETTINGS_VIEW_VALUES = ["connections", "gateway", "preferences", "update"] as const;
+type SettingsViewValue = (typeof SETTINGS_VIEW_VALUES)[number];
+
+/* 设置中心记住上次停留的视图；无有效记录时回退「偏好设置」 */
+export function readLastSettingsView(): SettingsViewValue {
+  try {
+    const raw = globalThis.localStorage?.getItem(settingsViewStorageKey);
+    return SETTINGS_VIEW_VALUES.includes(raw as SettingsViewValue) ? (raw as SettingsViewValue) : "preferences";
+  } catch {
+    return "preferences";
+  }
+}
+
+export function writeLastSettingsView(view: SettingsViewValue) {
+  try {
+    globalThis.localStorage?.setItem(settingsViewStorageKey, view);
+  } catch { /* ignore */ }
+}
+
 const searchHistoryKey = "search-history";
 const SEARCH_HISTORY_MAX = 20;
 

@@ -1,13 +1,22 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
-import { MoreHorizontal, Terminal, Trash2 } from "lucide-react";
+import { ChevronLeft, MoreHorizontal, Terminal, Trash2 } from "lucide-react";
 import type { JumpServerAssetOption, LogProfile, ServerConnectionKind, ServerCredentialStatus, ServerSummary } from "@server-log-console/shared";
 import { looksLikeJumpServer } from "./terminal-utils.js";
 import { readDirectoryHistory } from "./storage.js";
 import { ThemedSelect } from "./ThemedSelect.js";
+import type { SlcDesktopUpdateState } from "../types/desktop-update.js";
+import { UpdateCenterPanel, type DesktopUpdateCheckLogEntry } from "./UpdateCenterPanel.js";
+import type { ToastState } from "./FeedbackOverlays.js";
 import type { MonoFontFamily, UiBackgroundLayer, UiDensity, UiFontFamily, UiMotionMode, UiThemePreset, UiToneMode, ThemePreset, TerminalColorScheme, TerminalColorSchemeId } from "./useUiTheme.js";
 
-export type SettingsWorkspaceView = "connections" | "preferences";
+export type SettingsWorkspaceView = "connections" | "gateway" | "preferences" | "update";
 export type SettingsConnectionPane = "detail" | "form";
+
+/** 连接服务「测试连接」结果（设置中心 → 连接服务） */
+export interface GatewayTestState {
+  tone: "success" | "danger" | "neutral";
+  text: string;
+}
 /** S14：水印作用范围（原型 1143-1168「日志/预览区 / 全局」） */
 export type WatermarkScope = "content" | "global";
 
@@ -34,6 +43,16 @@ interface Props {
   isBusy: boolean;
   localServiceState: "checking" | "online" | "offline";
   localServiceStatusText: string;
+  /* 软件更新（update-center-v1）：状态由 App 级 useDesktopUpdate 订阅，面板仅消费 */
+  updateSection: {
+    state: SlcDesktopUpdateState;
+    updateAvailable: boolean;
+    checkLog: DesktopUpdateCheckLogEntry[];
+    onCheck: () => void;
+    onDownload: () => void;
+    onInstall: () => void;
+    showToast: (type: ToastState["type"], message: string) => void;
+  };
   preferenceSection: {
     uiTheme: "classic" | "modern";
     uiDensity: UiDensity;
@@ -104,6 +123,17 @@ interface Props {
     onSliceLengthModeChange: (mode: "auto" | "manual") => void;
     onSliceLengthChange: (bytes: number) => void;
     onToggleServerStatusAutoRefresh: () => void;
+  };
+  gatewaySection: {
+    draftBaseUrl: string;
+    draftToken: string;
+    effectiveBase: string;
+    testState: GatewayTestState | null;
+    onDraftBaseUrlChange: (value: string) => void;
+    onDraftTokenChange: (value: string) => void;
+    onTest: () => void;
+    onSave: () => void;
+    onReset: () => void;
   };
   importSection: {
     selectedTool: "finalshell" | "xshell";
@@ -451,6 +481,9 @@ export function ConnectionSettingsWorkspace(props: Props) {
   const [listFilter, setListFilter] = useState("");
   const [pickedListId, setPickedListId] = useState("");
   const [detailPane, setDetailPane] = useState<SettingsConnectionPane | "import">("detail");
+  /* 侧栏移动档下钻：清单 ⇄ 详情。宽档忽略（两栏始终并排，由 CSS 挡位决定显隐）。
+     纯导航状态，非宽度分支——宽度判断只发生在 CSS 容器查询里。 */
+  const [mobileShowDetail, setMobileShowDetail] = useState(false);
   const [currentAnchor, setCurrentAnchor] = useState(PREF_ANCHORS[0].id);
   const backgroundImageInputRef = useRef<HTMLInputElement | null>(null);
   const prefScrollRef = useRef<HTMLDivElement | null>(null);
@@ -601,22 +634,34 @@ export function ConnectionSettingsWorkspace(props: Props) {
         </button>
         <button
           type="button"
+          className={props.activeView === "gateway" ? "settings-rail-item settings-rail-item-active" : "settings-rail-item"}
+          onClick={() => props.onViewChange("gateway")}
+        >
+          <svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" aria-hidden="true"><rect x="1.8" y="4.2" width="12.4" height="3.4" rx="1.4" /><rect x="1.8" y="9.4" width="12.4" height="3.4" rx="1.4" /><circle cx="4.4" cy="5.9" r="0.5" fill="currentColor" /><circle cx="4.4" cy="11.1" r="0.5" fill="currentColor" /></svg>
+          连接服务
+          <span className={`settings-service-rail-dot settings-service-rail-dot-${props.localServiceState}`} title={props.localServiceStatusText} aria-hidden="true" />
+        </button>
+        <button
+          type="button"
           className={props.activeView === "preferences" ? "settings-rail-item settings-rail-item-active" : "settings-rail-item"}
           onClick={() => props.onViewChange("preferences")}
         >
           <svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" aria-hidden="true"><circle cx="8" cy="8" r="2" /><path d="M8 2.3v1.4M8 12.3v1.4M13.7 8h-1.4M3.7 8H2.3M11.9 4.1l-1 1M5.1 10.9l-1 1M11.9 11.9l-1-1M5.1 5.1l-1-1" /></svg>
           偏好设置
         </button>
-        <div className="settings-rail-note">
-          连接管理负责服务器清单、凭证与堡垒机路由；偏好设置只影响本机软件体验。
-        </div>
-        <div className="settings-rail-foot">
-          <span className={`settings-pill settings-pill-${serviceTone(props.localServiceState)}`}>{props.localServiceStatusText}</span>
-        </div>
+        <button
+          type="button"
+          className={props.activeView === "update" ? "settings-rail-item settings-rail-item-active" : "settings-rail-item"}
+          onClick={() => props.onViewChange("update")}
+        >
+          <svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" aria-hidden="true"><path d="M8 13.5V5M4.8 8.2L8 5l3.2 3.2M3.2 13h9.6" /></svg>
+          软件更新
+          {props.updateSection.updateAvailable ? <span className="settings-update-rail-dot" aria-hidden="true" /> : null}
+        </button>
       </nav>
 
       {props.activeView === "connections" ? (
-        <div className="conn-layout">
+        <div className={mobileShowDetail ? "conn-layout sp-drill-detail" : "conn-layout sp-drill-list"}>
           <aside className="conn-list-pane">
             <div className="conn-list-search">
               <input
@@ -632,6 +677,7 @@ export function ConnectionSettingsWorkspace(props: Props) {
                 onClick={() => {
                   props.connectionSection.onStartCreate();
                   setDetailPane("form");
+                  setMobileShowDetail(true);
                 }}
               >
                 ＋ 新增
@@ -652,6 +698,7 @@ export function ConnectionSettingsWorkspace(props: Props) {
                           setPickedListId(server.id);
                           setMoreMenuOpen(false);
                           setDetailPane("detail");
+                          setMobileShowDetail(true);
                         }}
                       >
                         <span className="conn-server-meta">
@@ -678,7 +725,17 @@ export function ConnectionSettingsWorkspace(props: Props) {
 
           <div className="conn-detail-pane">
             <div className="conn-detail-head">
-              <div>
+              {/* 侧栏移动档下钻返回（宽档 CSS 隐藏）：回服务器清单 */}
+              <button
+                type="button"
+                className="ghost-button icon-button sp-drill-back"
+                title="返回服务器清单"
+                aria-label="返回服务器清单"
+                onClick={() => setMobileShowDetail(false)}
+              >
+                <ChevronLeft size={16} strokeWidth={1.8} />
+              </button>
+              <div className="conn-detail-title">
                 <h2>{detailPane === "form" ? (props.connectionSection.draft.id ? "编辑连接" : "新增手动连接") : detailPane === "import" ? "导入来源" : activeListServer?.name || "连接管理"}</h2>
                 {detailPane === "detail" && activeListServer ? (
                   <p className="conn-head-sub">
@@ -1035,6 +1092,75 @@ export function ConnectionSettingsWorkspace(props: Props) {
             ) : null}
           </div>
         </div>
+      ) : props.activeView === "gateway" ? (
+        <div className="gateway-view">
+          <div className="conn-detail-head">
+            <div>
+              <h2>连接服务（Gateway）
+                <span className={`chip ${serviceTone(props.localServiceState) === "success" ? "grn" : serviceTone(props.localServiceState) === "danger" ? "red" : ""}`}>
+                  {props.localServiceStatusText}
+                </span>
+              </h2>
+              <p>目录浏览、终端、传输都由 Gateway 代理执行。留空地址 = 使用本地服务（随桌面应用自动启动）。</p>
+            </div>
+          </div>
+          <div className="gateway-stack">
+            <section className="settings-card">
+              <div className="settings-card-head">
+                <div>
+                  <span className="settings-card-kicker">当前生效地址</span>
+                  <strong className="mono">{props.gatewaySection.effectiveBase}</strong>
+                </div>
+                <div className="settings-inline-actions">
+                  <button className="ghost-button" type="button" onClick={props.gatewaySection.onTest}>测试连接</button>
+                  <button className="ghost-button settings-primary-action" type="button" onClick={props.gatewaySection.onSave}>保存并重载</button>
+                  <button className="ghost-button" type="button" onClick={props.gatewaySection.onReset}>恢复默认</button>
+                </div>
+              </div>
+              <div className="settings-form-grid settings-form-grid-two">
+                <label className="settings-field">
+                  <span>Gateway 地址</span>
+                  <input
+                    value={props.gatewaySection.draftBaseUrl}
+                    onChange={(event) => props.gatewaySection.onDraftBaseUrlChange(event.target.value)}
+                    placeholder="http://localhost:4040（留空 = 默认本地服务）"
+                  />
+                </label>
+                <label className="settings-field">
+                  <span>访问令牌（可选）</span>
+                  <input
+                    type="password"
+                    value={props.gatewaySection.draftToken}
+                    onChange={(event) => props.gatewaySection.onDraftTokenChange(event.target.value)}
+                    placeholder="远程服务启用鉴权时填写（Bearer Token）"
+                  />
+                </label>
+              </div>
+              {props.gatewaySection.testState ? (
+                <div className="settings-meta-grid">
+                  <span>测试结果：
+                    <span className={props.gatewaySection.testState.tone === "success" ? "chip grn" : props.gatewaySection.testState.tone === "danger" ? "chip red" : "chip"}>
+                      {props.gatewaySection.testState.text}
+                    </span>
+                  </span>
+                </div>
+              ) : null}
+              <div className="settings-note-box">
+                <strong>远程部署</strong>
+                <span>远程地址必须使用 https（浏览器会拦截不安全的远程 WebSocket）；localhost 可用 http。保存后页面会重载以重建全部连接。</span>
+              </div>
+            </section>
+          </div>
+        </div>
+      ) : props.activeView === "update" ? (
+        <UpdateCenterPanel
+          state={props.updateSection.state}
+          checkLog={props.updateSection.checkLog}
+          onCheck={props.updateSection.onCheck}
+          onDownload={props.updateSection.onDownload}
+          onInstall={props.updateSection.onInstall}
+          showToast={props.updateSection.showToast}
+        />
       ) : (
         <div className="settings-pref-view">
           <div className="conn-detail-head">

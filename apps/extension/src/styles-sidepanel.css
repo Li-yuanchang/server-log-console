@@ -1,41 +1,149 @@
 /* ============================================================
-   styles-sidepanel.css — Chrome 扩展侧栏环境覆盖层
+   styles-sidepanel.css — 响应式档位层（容器查询，全宿主通用）
    ------------------------------------------------------------
-   作用范围：仅 body.extension-sidepanel（MV3 side_panel，popup.html），
-   桌面/网页模式完全不受影响。
+   2026-10-03 架构修正（此前版本把档位锁在 body.extension-sidepanel
+   宿主上，popup.html 直接以浏览器标签打开时全宽也走侧栏固定布局——死板）：
 
-   2026-10-02 重写（自 theme-modern.css 迁出并去主题化）：
-   1. 去主题化：旧 22 条规则全部带 `.theme-modern` 前缀，classic 主题下
-      侧栏零适配（base 200px 固定列塞进 ~360px 侧栏）。侧栏涉及的组件
-      类名与 token 跨主题共用，去掉前缀即双主题同时生效。
-   2. 修正 flex→grid 语义漂移：旧规则写于布局 flex 时代（2026-04），其后
-      `.shell-layout` / `.browser-grid` / `.workspace-strip` / `.pane-section`
-      相继 grid 化，旧规则里的 flex-direction / flex-basis / flex-wrap 均
-      已是 no-op（侧栏里侧栏宽实际由 base 的 200px 栅格决定，180px 意图
-      从未生效）。本版按 grid 语义重写同一意图。
-   3. `.toolbar-commandbar` 在 classic 下是 grid、modern 下被覆写为 flex
-      （theme-modern.css 两处），故此处显式 display:grid 单列堆叠，对两种
-      主题给出同一确定行为。
-   4. token 回落：--sidebar-line 是 theme-modern 专属变量，classic 下
-      回落 var(--line)。
+     档位只由【容器宽度】决定，与宿主无关。容器名 slc-sp 声明在
+     .app-shell 与 body（兜底 portal 浮层），桌面/网页/侧栏同一套：
+       ├── <560px   移动档：app bar + 服务器 chip + 底部 tab 导航 +
+       │            全屏选服层 + 目录底部 sheet，单列，文件表 3 列
+       ├── 560-799  桌面布局收缩档：侧栏 200px（沿用桌面规则）+
+       │            树列 132px，文件表 4 列（64/80，类型列隐藏）
+       └── ≥800px   桌面原生布局（本文件基本不参与）
 
-   加载顺序：main.tsx 末尾（环境覆盖层，最后加载）。选择器统一
-   `body.extension-sidepanel` 前缀（≥(0,2,1)），稳定压过 base / align 批次。
+     body.extension-sidepanel 仅保留「侧栏皮肤」：去圆角/铺满/描边、
+     设置中心与连接管理窄档适配、移动档组件的显示规则。
+     桌面 Electron（index.html，body 无该类）：≥800 布局不变；
+     720-799 窗口树列 132 / 文件表 4 列与收缩档一致
+     （原 56px 图标栏断点已删，桌面窄窗改用 200px 侧栏）。
+
+   【教训（2026-10-02 两轮回归）】档位规则的作用域与特异性必须成对考虑：
+     ① 隐藏类规则不能带宿主前缀（前缀在另一宿主不成立 → 反向泄漏）；
+     ② 移动档规则**必须**带宿主前缀或足量特异性（popup.html body 恒有
+        extension-sidepanel，去前缀会让 (0,1,0) 被 theme-modern (0,2,0)+
+        的 display/flex 规则反杀，出现「半移动半桌面」精神分裂）；
+     ③ 宽档不得写死宽度（172px 侧栏在 2000px 全屏就是错的），交给
+        桌面宽度规则（200/240 随视口）。
+
+   已删除：theme-modern.css media ≤1024 的 56px 图标栏档（被 <560 移动档
+   与 200px 侧栏取代）；media ≤799.9 文件表档改写为容器查询。
+   token 约束见 docs/style-architecture.md §10/§11。
    ============================================================ */
 
-/* ---------- 1. 外壳：去圆角外框呼吸边，铺满侧栏 ---------- */
+/* ---------- 1. 外壳：去圆角外框呼吸边，铺满侧栏；声明档位容器 ---------- */
+/* 全宿主声明（去宿主门槛）：桌面/网页/侧栏统一按容器宽度分档 */
+.app-shell {
+  container: slc-sp / inline-size;
+}
+
+body {
+  container: slc-sp / inline-size;
+}
+
+/* 侧栏皮肤：铺满、去呼吸边（仅扩展侧栏/浏览器标签的 popup 宿主） */
 body.extension-sidepanel .app-shell {
   padding: 0;
   height: 100vh;
 }
 
-/* ---------- 2. 主栅格：侧栏压到 180px（桌面 200/198px） ---------- */
-body.extension-sidepanel .shell-layout {
-  grid-template-columns: 180px minmax(0, 1fr);
-  height: 100vh;
+/* 会话标签条的 -6px 出血边是桌面卡片内嵌设计；侧栏贴边形态无内嵌可出血，
+   负边距会把右缘顶出视口 6px（实测 320px：strip 右缘 326 > 320） */
+body.extension-sidepanel .workspace-session-strip {
+  margin: 0;
 }
 
-/* ---------- 3. 服务器侧栏：竖排卡，右描边替代桌面态下描边 ---------- */
+.sp-appbar,
+.sp-statusbar {
+  display: none;
+}
+
+/* ---------- 1b. 顶栏 app bar（全档位）：[chip 服务器上下文][弹性][⌘][⚙] ----------
+   v3：chip 并入顶栏（砍独立 chip 行与视图标题——视图名由底部 tab / 视图切换承担）。
+   桌面 index.html 无此组件（下方默认 display:none，§9 不含 sp-appbar）。 */
+body.extension-sidepanel .sp-appbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+}
+
+body.extension-sidepanel .sp-top-sp {
+  flex: 1 1 auto;
+}
+
+body.extension-sidepanel .srv-chip {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 320px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 10px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-s);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+body.extension-sidepanel .srv-chip:hover {
+  border-color: var(--line-strong);
+}
+
+body.extension-sidepanel .srv-chip-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--line-strong);
+}
+
+body.extension-sidepanel .srv-chip-dot.is-ok {
+  background: var(--green-dot);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--green-dot) 14%, transparent);
+}
+
+body.extension-sidepanel .srv-chip-text {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+body.extension-sidepanel .srv-chip-name {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+body.extension-sidepanel .srv-chip-host {
+  font-family: var(--mono-font-family);
+  font-size: var(--fs-2xs);
+  font-weight: 400;
+  color: var(--ink-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+body.extension-sidepanel .srv-chip-caret {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  stroke: var(--ink-muted);
+  fill: none;
+  stroke-width: 1.8;
+}
+
+/* ---------- 3. 服务器侧栏（宽档）：竖排卡，右描边替代桌面态下描边 ---------- */
 body.extension-sidepanel .sidebar-panel {
   width: auto;
   max-height: none;
@@ -54,108 +162,138 @@ body.extension-sidepanel .server-groups {
   min-height: 120px;
 }
 
+/* 侧栏过滤输入框：input 默认固有宽度 ~170px（size=20ch），在 172px 侧栏里
+   把 .pane-section 撑出 7px（实测 scrollWidth 179 > 172），
+   「服务器 27 台」计数的「台」被裁掉竖切一半。放开收缩、铺满行宽。 */
+body.extension-sidepanel .pane-section > input {
+  width: 100%;
+  min-width: 0;
+}
+
+body.extension-sidepanel .pane-section {
+  min-width: 0;
+}
+
 body.extension-sidepanel .compact-activity-panel {
   height: 132px !important;
 }
 
-/* ---------- 4. 工具栏：命令行压成单列纵向堆叠 ---------- */
+/* ---------- 3c. 服务器行几何（侧栏 200px 密度） ----------
+   反制 theme-modern-v2.css media ≤1024 塌缩态的 padding/gap 0 !important
+   （侧栏 viewport 恒 ≤1024，必须保留）；显示类反制随 56px 图标栏档删除。 */
+body.extension-sidepanel .theme-modern .sidebar-panel .server-item {
+  width: auto;
+  min-width: 0;
+  padding-left: 14px !important;
+  padding-right: 0 !important;
+  /* 10px：状态点带 3px 光环（box-shadow），8px 视觉上只剩 ~5px，点贴文字 */
+  gap: 10px !important;
+}
+
+/* ---------- 4. 工具栏皮肤：仅内边距（布局跟随桌面/容器档位） ---------- */
 body.extension-sidepanel .toolbar-panel {
   padding: 12px;
 }
 
-body.extension-sidepanel .toolbar-commandbar {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  align-items: stretch;
-  overflow-x: visible;
+/* ---------- 6. 文件浏览（560-799 收缩档） ----------
+   侧栏 200px + 树列 132px 并存时，文件表固定列 90/130 会把名称列压扁
+   （实测 620px：名称列 0px），收窄为 64/80 并隐藏类型列；
+   ≥800 交还桌面原生模板。树列 classic 走 grid 模板、modern 走 flex。 */
+@container slc-sp (max-width: 799.9px) {
+  :is(body.extension-sidepanel, .app-shell) .browser-grid {
+    grid-template-columns: 132px 6px minmax(0, 1fr);
+  }
+
+  :is(body.extension-sidepanel, .app-shell) .browser-grid > .browser-column:first-child {
+    min-width: 120px;
+    border-right: 1px solid var(--line);
+    border-bottom: none;
+  }
+
+  :is(body.extension-sidepanel, .app-shell) .browser-resizer {
+    display: block;
+  }
+
+  .theme-modern .browser-grid > .browser-tree-column {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    flex: 0 0 132px;
+    min-width: 0;
+  }
+
+  /* modern：无宿主前缀（桌面 720-799 窗口同样收缩）；classic 走 body 前缀行 */
+  .theme-modern .file-table .file-table-head,
+  .theme-modern .file-table .file-row {
+    grid-template-columns: 28px minmax(0, 1fr) 64px 80px;
+  }
+
+  .theme-modern .file-table .file-table-head:has(.file-transfer-head-cell),
+  .theme-modern .file-table .file-row:has(.file-transfer-cell) {
+    grid-template-columns: 28px minmax(0, 1fr) 72px 64px 80px;
+  }
+
+  .theme-modern .file-table .file-table-head > :last-child,
+  .theme-modern .file-table .file-row > :last-child {
+    display: none;
+  }
+
+  :is(body.extension-sidepanel, .app-shell) .file-table .file-table-head,
+  :is(body.extension-sidepanel, .app-shell) .file-table .file-row {
+    grid-template-columns: 22px minmax(0, 1fr) 58px 96px;
+  }
+
+  :is(body.extension-sidepanel, .app-shell) .file-table .file-table-head > :last-child,
+  :is(body.extension-sidepanel, .app-shell) .file-table .file-row > :last-child {
+    display: none;
+  }
+
+  /* 文件行悬浮操作：窄档名称列有限，hover / focus-within 才占位
+     （桌面宽列下常驻占位无碍，≥800 交还桌面行为） */
+  :is(body.extension-sidepanel, .app-shell) .file-row .file-row-actions {
+    display: none;
+  }
+
+  :is(body.extension-sidepanel, .app-shell) .file-row:hover .file-row-actions,
+  :is(body.extension-sidepanel, .app-shell) .file-row-active .file-row-actions,
+  :is(body.extension-sidepanel, .app-shell) .file-row:focus-within .file-row-actions {
+    display: flex;
+  }
 }
 
-body.extension-sidepanel .toolbar-view-switch {
-  width: fit-content;
-}
+/* ---------- 7. 设置中心 v2（容器 ≤1023.9 收缩档，去宿主前缀） ----------
+   rail 164px +（conn-list 268 / pref-anchor 116）在窄容器里详情列只剩负空间。
+   收缩档：导轨横排置顶、连接清单 132px、偏好锚点 92px。 */
+@container slc-sp (max-width: 1023.9px) {
+  .settings-workspace-v2 {
+    flex-direction: column;
+  }
 
-body.extension-sidepanel .toolbar-search-row {
-  grid-template-columns: minmax(0, 1fr);
-}
+  .settings-rail {
+    flex: none;
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 10px;
+    border-right: none;
+    border-bottom: 1px solid var(--line);
+  }
 
-body.extension-sidepanel .toolbar-search-row .command-input-keyword {
-  min-width: 0;
-  width: 100%;
-}
+  .settings-rail-item {
+    flex: none;
+  }
 
-body.extension-sidepanel .toolbar-search-actions {
-  justify-content: flex-start;
-}
+  .settings-rail-note,
+  .settings-rail-foot {
+    display: none;
+  }
 
-body.extension-sidepanel .advanced-row-main,
-body.extension-sidepanel .advanced-row-time,
-body.extension-sidepanel .time-pair {
-  grid-template-columns: minmax(0, 1fr);
-}
+  .conn-list-pane {
+    flex: 0 0 132px;
+  }
 
-/* ---------- 5. 工作区条：标题/操作竖排，过滤框放开宽度 ---------- */
-body.extension-sidepanel .workspace-strip {
-  grid-template-columns: minmax(0, 1fr);
-  align-items: stretch;
-}
-
-body.extension-sidepanel .workspace-actions {
-  flex-wrap: wrap;
-  justify-content: flex-start;
-}
-
-body.extension-sidepanel .directory-filter-input {
-  max-width: none;
-}
-
-/* ---------- 6. 文件浏览：树列压到 148px，保留拖拽手柄 ---------- */
-body.extension-sidepanel .browser-grid {
-  grid-template-columns: 148px 6px minmax(0, 1fr);
-}
-
-body.extension-sidepanel .browser-grid > .browser-column:first-child {
-  min-width: 120px;
-  border-right: 1px solid var(--line);
-  border-bottom: none;
-}
-
-body.extension-sidepanel .browser-resizer {
-  display: block;
-}
-
-/* ---------- 7. 设置中心 v2：导轨转顶部横条，固定列压窄（2026-10-02） ----------
-   桌面布局 rail 164px +（conn-list 268px / pref-anchor 116px）在 ~360px 侧栏里
-   详情列只剩负空间（实测 360px 截图详情列被挤成竖排字）。侧栏下改为：
-   导轨横排置顶、连接清单 132px、偏好锚点 92px，详情列拿到全部剩余宽度。 */
-body.extension-sidepanel .settings-workspace-v2 {
-  flex-direction: column;
-}
-
-body.extension-sidepanel .settings-rail {
-  flex: none;
-  flex-direction: row;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 10px;
-  border-right: none;
-  border-bottom: 1px solid var(--sidebar-line, var(--line));
-}
-
-body.extension-sidepanel .settings-rail-item {
-  flex: none;
-}
-
-body.extension-sidepanel .settings-rail-note,
-body.extension-sidepanel .settings-rail-foot {
-  display: none;
-}
-
-body.extension-sidepanel .conn-list-pane {
-  flex: 0 0 132px;
-}
-
-body.extension-sidepanel .settings-pref-anchor {
-  flex: 0 0 92px;
+  .settings-pref-anchor {
+    flex: 0 0 92px;
+  }
 }
 
 /* ---------- 8. 空态启动卡：classic 侧栏下转居中竖排 ----------
@@ -163,7 +301,7 @@ body.extension-sidepanel .settings-pref-anchor {
    theme-modern-v2.css §12 转居中竖排；classic 在 ~150px 主区里横幅被挤成
    一字一行（实测 360px 截图标题竖排）。此处按 modern 同款意图转竖排，
    仅作用于侧栏，classic 桌面横幅不受影响。 */
-body.extension-sidepanel .workspace-startup-card {
+:is(body.extension-sidepanel, .app-shell) .workspace-startup-card {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -173,6 +311,834 @@ body.extension-sidepanel .workspace-startup-card {
   padding: 0 16px;
 }
 
-body.extension-sidepanel .workspace-startup-card > span {
+:is(body.extension-sidepanel, .app-shell) .workspace-startup-card > span {
   max-width: 320px;
+}
+
+/* ---------- 8b. 终端视图：命令行整条退位（≤799.9 收缩档） ----------
+   终端视图下 isFileMode 仍为 true，命令行里的文件工具行/检索行会照常渲染，
+   把终端压扁。终端有自己的动作栏/会话条/快捷命令，按 sp-view-term 状态类
+   整条退位。≥800 桌面保持原行为。 */
+@container slc-sp (max-width: 799.9px) {
+  /* 仅 popup 宿主：桌面 720-799 无底部导航，藏命令栏会无路可回 */
+  body.extension-sidepanel .sp-view-term .toolbar-commandbar {
+    display: none;
+  }
+}
+
+/* ---------- 9. 移动档专属常驻组件：全局默认隐藏 ----------
+   app bar / 服务器 chip 行 / 底部 tab 导航 / 目录触发按钮 / 启动卡主按钮
+   只在侧栏移动档出现。注意**不能**带 body.extension-sidepanel 前缀：
+   桌面 Electron 加载 index.html（body 无该类）同样引用本文件，带前缀会让
+   隐藏规则在桌面失效，移动组件漏进 PC 界面（2026-10-02 回归）。故去前缀
+   全局隐藏，只在下方 @container slc-sp 移动档内重新 display。
+   选服层与目录浮层是开关型覆盖层（开闭由 JSX 挂载控制，关闭时返回 null），
+   不在此 display:none。 */
+.sp-tabbar,
+.sp-dir-trigger,
+.sp-startup-cta,
+.sp-drill-back,
+/* 返回键在设置模态（.settings-exclusive）内时，会被主题层
+   .theme-modern .settings-exclusive .ghost-button{display:inline-flex}（0,3,0）
+   反杀 (0,1,0) 的全局隐藏——同特异性对位压制（本文件更晚加载） */
+.settings-exclusive .sp-drill-back,
+.theme-modern .settings-exclusive .sp-drill-back {
+  display: none;
+}
+
+/* 开闭兜底：JSX 若用 hidden 属性控制浮层开闭，UA 的 [hidden]{display:none}
+   (0,1,0) 会被 §10/§11 的 display:flex (0,2,1) 压掉，这里显式恢复 */
+:is(body.extension-sidepanel, .app-shell) .sp-picker[hidden],
+:is(body.extension-sidepanel, .app-shell) .sp-picker-scrim[hidden],
+:is(body.extension-sidepanel, .app-shell) .sp-dir-sheet[hidden],
+:is(body.extension-sidepanel, .app-shell) .sp-dir-scrim[hidden] {
+  display: none;
+}
+
+/* ---------- 10. 选服层 sp-picker（宽档 = 左侧 272px 覆盖抽屉） ----------
+   内部服务器行复用 sidebar 同款 class（server-group/server-group-title/
+   server-list/server-item-wrap/server-item/server-status-dot/server-item-main/
+   server-item-host/server-item-meta/server-item-quick-actions），media ≤1024
+   的隐藏/钉死均作用域 .sidebar-panel，不命中本层。 */
+:is(body.extension-sidepanel, .app-shell) .sp-picker-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 8600;
+  background: color-mix(in srgb, var(--ink) 28%, transparent);
+}
+
+:is(body.extension-sidepanel, .app-shell) .sp-picker {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 272px;
+  z-index: 8601;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border-right: 1px solid var(--line);
+  box-shadow: 8px 0 28px color-mix(in srgb, var(--ink) 12%, transparent);
+}
+
+:is(body.extension-sidepanel, .app-shell) .sp-picker-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+:is(body.extension-sidepanel, .app-shell) .sp-picker-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+:is(body.extension-sidepanel, .app-shell) .sp-picker-filter {
+  flex: none;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+/* 输入控件规范：docs/style-architecture.md §11（line/--line-strong/outline none） */
+:is(body.extension-sidepanel, .app-shell) .sp-picker-filter input {
+  width: 100%;
+  height: 30px;
+  padding: 0 10px;
+  font: inherit;
+  font-size: var(--fs-sm);
+  color: var(--ink);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-s);
+  outline: none;
+}
+
+:is(body.extension-sidepanel, .app-shell) .sp-picker-filter input:hover {
+  border-color: var(--line-strong);
+}
+
+:is(body.extension-sidepanel, .app-shell) .sp-picker-filter input:focus {
+  border-color: var(--line-strong);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--line-strong) 12%, transparent);
+}
+
+:is(body.extension-sidepanel, .app-shell) .sp-picker-groups {
+  flex: 1 1 0%;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 6px 8px 10px;
+}
+
+/* 选服层行转清单行（classic 基础卡式行在覆盖层里转平铺下边框行） */
+:is(body.extension-sidepanel, .app-shell) .sp-picker .server-item {
+  border: none;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+}
+
+:is(body.extension-sidepanel, .app-shell) .sp-picker .server-status-dot {
+  position: static;
+  transform: none;
+}
+
+:is(body.extension-sidepanel, .app-shell) .sp-picker .server-item strong,
+:is(body.extension-sidepanel, .app-shell) .sp-picker .server-item .server-item-main strong {
+  font-size: var(--fs-sm);
+}
+
+/* ---------- 11. 目录浮层 sp-dir-sheet（宽档 = 居中偏上下拉浮层） ----------
+   .sp-dir-body 内复用 FileBrowserTreeColumn（.browser-tree-column）。 */
+:is(body.extension-sidepanel, .app-shell) .sp-dir-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 8610;
+  background: color-mix(in srgb, var(--ink) 28%, transparent);
+}
+
+:is(body.extension-sidepanel, .app-shell) .sp-dir-sheet {
+  position: fixed;
+  left: 10px;
+  right: 10px;
+  top: 96px;
+  bottom: 96px;
+  z-index: 8611;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-m);
+  box-shadow: 0 16px 44px color-mix(in srgb, var(--ink) 14%, transparent);
+  overflow: hidden;
+}
+
+:is(body.extension-sidepanel, .app-shell) .sp-dir-handle {
+  display: none;
+}
+
+:is(body.extension-sidepanel, .app-shell) .sp-dir-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+:is(body.extension-sidepanel, .app-shell) .sp-dir-path {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: var(--mono-font-family);
+  font-size: var(--fs-sm);
+  font-weight: 650;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+:is(body.extension-sidepanel, .app-shell) .sp-dir-body {
+  flex: 1 1 0%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+:is(body.extension-sidepanel, .app-shell) .sp-dir-body .browser-tree-column {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  border-right: none;
+}
+
+/* ============================================================
+   12. 移动档 @container slc-sp (max-width: 559.9px)
+   几何/密度参照原型 400px 态（docs/prototypes/sidepanel-responsive.html）
+   ============================================================ */
+@container slc-sp (max-width: 559.9px) {
+  /* --- 12a. 侧栏退位 → 单列 --- */
+  :is(body.extension-sidepanel, .app-shell) .shell-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  :is(body.extension-sidepanel, .app-shell) .sidebar-panel {
+    display: none;
+  }
+
+  /* --- 12b. 主区转纵向流：app bar / chip 顶部，tabbar 贴底 ---
+     main-panel 的 grid-template-rows 各变体（styles-layout.css 105-115）按
+     4 个子元素写死行数，移动档插入 app bar / chip / tabbar 后行数不再匹配；
+     此处统一转 flex column（modern 本就是 flex，classic 由本规则接管），
+     display:none 的子元素不参与布局，宽档不受影响。 */
+  :is(body.extension-sidepanel, .app-shell) .main-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  :is(body.extension-sidepanel, .app-shell) .workspace-panel {
+    flex: 1 1 0%;
+    min-height: 0;
+  }
+
+  :is(body.extension-sidepanel, .app-shell) .terminal-bottom-panel {
+    flex: 0 0 auto;
+    min-height: 120px;
+    max-height: 280px;
+    overflow: hidden;
+  }
+
+  /* app bar：chip 占满弹性宽度（v3：chip 并入顶栏，砍独立 chip 行与标题） */
+  :is(body.extension-sidepanel, .app-shell) .sp-appbar {
+    padding: 7px 10px;
+  }
+
+  :is(body.extension-sidepanel, .app-shell) .sp-appbar .ghost-button {
+    flex: none;
+  }
+
+  :is(body.extension-sidepanel, .app-shell) .srv-chip {
+    flex: 1 1 auto;
+    max-width: none;
+  }
+
+  :is(body.extension-sidepanel, .app-shell) .srv-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
+    padding: 0 10px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--r-s);
+    color: var(--ink);
+    font-size: var(--fs-sm);
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  :is(body.extension-sidepanel, .app-shell) .srv-chip:hover {
+    border-color: var(--line-strong);
+  }
+
+  :is(body.extension-sidepanel, .app-shell) .srv-chip-dot {
+    flex: none;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--green-dot);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--green-dot) 14%, transparent);
+  }
+
+  :is(body.extension-sidepanel, .app-shell) .srv-chip-text {
+    display: flex;
+    align-items: baseline;
+    gap: 5px;
+    min-width: 0;
+  }
+
+  :is(body.extension-sidepanel, .app-shell) .srv-chip-name {
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  :is(body.extension-sidepanel, .app-shell) .srv-chip-host {
+    font-family: var(--mono-font-family);
+    font-size: var(--fs-2xs);
+    font-weight: 400;
+    color: var(--ink-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  :is(body.extension-sidepanel, .app-shell) .srv-chip-caret {
+    display: block;
+    flex: none;
+    width: 12px;
+    height: 12px;
+    color: var(--ink-muted);
+  }
+
+  /* 底部三 tab：图标 17px + 标签（--fs-2xs），激活 accent/accent-soft */
+  :is(body.extension-sidepanel, .app-shell) .sp-tabbar {
+    display: flex;
+    flex: none;
+    align-items: stretch;
+    gap: 2px;
+    padding: 4px 8px 6px;
+    background: var(--panel);
+    border-top: 1px solid var(--line);
+  }
+
+  :is(body.extension-sidepanel, .app-shell) .sp-tabbar-btn {
+    flex: 1 1 0%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    min-width: 0;
+    height: auto;   /* 全局 :where(.theme-modern) button 会钉 28px（--ctl-h），纵向 icon+文字必须放开 */
+    padding: 5px 0 3px;
+    background: none;
+    border: none;
+    border-radius: var(--r-m);
+    color: var(--ink-muted);
+    font-family: inherit;
+    font-size: var(--fs-2xs);
+    cursor: pointer;
+  }
+
+  :is(body.extension-sidepanel, .app-shell) .sp-tabbar-btn svg {
+    display: block;
+    flex: none;
+    width: 17px;
+    height: 17px;
+  }
+
+  :is(body.extension-sidepanel, .app-shell) .sp-tabbar-btn.is-active {
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  /* 目录触发按钮（文件工具行内）与启动卡主按钮：移动档显示。
+     必须显式居中：改成 flex 容器后文字变 flex 子项，不再吃 UA 的原生按钮居中
+     （否则实测文字间距 top=3 / bottom=11，明显偏上）。 */
+  :is(body.extension-sidepanel, .app-shell) .sp-dir-trigger,
+  :is(body.extension-sidepanel, .app-shell) .sp-startup-cta {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* --- 12c. 文件浏览：树列/分隔条退位，目录改底部 sheet --- */
+  :is(body.extension-sidepanel, .app-shell) .browser-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  :is(body.extension-sidepanel, .app-shell) .browser-grid > .browser-tree-column,
+  :is(body.extension-sidepanel, .app-shell) .browser-grid > .browser-resizer {
+    display: none;
+  }
+
+  :is(body.extension-sidepanel, .app-shell) .theme-modern .browser-grid > .browser-tree-column,
+  :is(body.extension-sidepanel, .app-shell) .theme-modern .browser-grid > .browser-resizer {
+    display: none;
+  }
+
+  /* --- 12d. 文件表：3 列（选择+名称+大小），隐藏时间列，44px 行距 ---
+     压过 theme-modern.css media ≤799.9 的 .theme-modern .file-table .file-row
+     4 列模板 (0,3,0) 与 :has 传输列变体 (0,4,0)。时间列 = 头/行的
+     :nth-last-child(2)（类型列 :last-child 已由宽档规则与 media 隐藏）。 */
+  :is(body.extension-sidepanel, .app-shell) .file-table .file-table-head,
+  :is(body.extension-sidepanel, .app-shell) .file-table .file-row {
+    grid-template-columns: 22px minmax(0, 1fr) 64px;
+  }
+
+  :is(body.extension-sidepanel, .app-shell) .theme-modern .file-table .file-table-head,
+  :is(body.extension-sidepanel, .app-shell) .theme-modern .file-table .file-row {
+    grid-template-columns: 22px minmax(0, 1fr) 64px;
+  }
+
+  :is(body.extension-sidepanel, .app-shell) .theme-modern .file-table .file-table-head:has(.file-transfer-head-cell),
+  :is(body.extension-sidepanel, .app-shell) .theme-modern .file-table .file-row:has(.file-transfer-cell) {
+    grid-template-columns: 28px minmax(0, 1fr) 200px 64px;
+  }
+
+  :is(body.extension-sidepanel, .app-shell) .file-table .file-table-head > :nth-last-child(2),
+  :is(body.extension-sidepanel, .app-shell) .file-table .file-row > :nth-last-child(2),
+  :is(body.extension-sidepanel, .app-shell) .file-table .file-mtime-cell {
+    display: none;
+  }
+
+  :is(body.extension-sidepanel, .app-shell) .file-table .file-row {
+    min-height: 44px;
+  }
+
+  :is(body.extension-sidepanel, .app-shell) .theme-modern .file-table .file-row {
+    height: auto;
+    min-height: 44px;
+  }
+
+  :is(body.extension-sidepanel, .app-shell) .file-table .file-row strong {
+    font-size: var(--fs-sm);
+  }
+
+  /* --- 12e. 选服层转全屏 push 层，行距加大 --- */
+  :is(body.extension-sidepanel, .app-shell) .sp-picker {
+    inset: 0;
+    width: auto;
+    border-right: none;
+    box-shadow: none;
+  }
+
+  :is(body.extension-sidepanel, .app-shell) .sp-picker-head {
+    padding: 13px 14px 9px;
+  }
+
+  :is(body.extension-sidepanel, .app-shell) .sp-picker-title {
+    font-size: var(--fs-base);
+  }
+
+  :is(body.extension-sidepanel, .app-shell) .sp-picker-filter {
+    padding: 4px 14px 10px;
+  }
+
+  :is(body.extension-sidepanel, .app-shell) .sp-picker-filter input {
+    height: 32px;
+  }
+
+  :is(body.extension-sidepanel, .app-shell) .sp-picker-groups {
+    padding: 4px 8px 10px;
+  }
+
+  :is(body.extension-sidepanel, .app-shell) .sp-picker .server-group-title {
+    padding: 10px 6px 4px;
+  }
+
+  /* 反制 theme-modern-v2 §17 的 height:40px / padding !important（(0,3,1)!important
+     > (0,2,0)!important），对齐原型选服层 46px 完整行 */
+  :is(body.extension-sidepanel, .app-shell) .sp-picker .server-item {
+    height: auto !important;
+    min-height: 46px !important;
+    padding: 9px 10px !important;
+    gap: 10px !important;
+  }
+
+  /* --- 12f. 目录浮层转底部 sheet（顶角 --r-l、下拉把手、遮罩） --- */
+  :is(body.extension-sidepanel, .app-shell) .sp-dir-sheet {
+    left: 0;
+    right: 0;
+    top: auto;
+    bottom: 0;
+    height: 64%;
+    border-left: none;
+    border-right: none;
+    border-bottom: none;
+    border-radius: var(--r-l) var(--r-l) 0 0;
+    box-shadow: 0 -12px 40px color-mix(in srgb, var(--ink) 16%, transparent);
+  }
+
+  :is(body.extension-sidepanel, .app-shell) .sp-dir-handle {
+    display: block;
+    flex: none;
+    width: 36px;
+    height: 4px;
+    margin: 8px auto 0;
+    border-radius: var(--r-l);
+    background: var(--line-strong);
+  }
+  /* --- 12g. 工具行收缩 + 冗余切换隐藏（集成实测修正 2026-10-02） ---
+     fb-filter-input 固定 170px（align-s4-s6.css:140），320px 下把工具行撑出视口；
+     顶部视图切换与底部 tabbar 功能重复，移动档隐藏（树列入口在工具行「目录」）。 */
+  :is(body.extension-sidepanel, .app-shell) .file-tools-inline {
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+
+  :is(body.extension-sidepanel, .app-shell) .file-browser-workbench .workspace-actions .fb-filter-input {
+    flex: 1 1 120px;
+    width: auto;
+    min-width: 0;
+  }
+
+  /* 过滤行靠左铺满：桌面 v2:1833 的 margin-left:auto（过滤组靠右）在窄档
+     会把过滤框顶到行中间，左侧留一截空白（用户实测反馈）——改整行占满、靠左 */
+  :is(body.extension-sidepanel, .app-shell) .file-browser-workbench .workspace-actions {
+    margin-left: 0;
+    flex: 1 1 100%;
+    justify-content: flex-start;
+  }
+
+  :is(body.extension-sidepanel, .app-shell) .toolbar-view-switch {
+    display: none;
+  }
+
+  /* 终端视图 chip 行退位（服务器身份由会话条+状态行承担，chip 是第三重冗余） */
+  :is(body.extension-sidepanel, .app-shell) .sp-view-term .srv-chip-row {
+    display: none;
+  }
+
+  /* --- 12l. 命令行换行与堆叠（自 theme-modern 侧栏特例迁入，<560 生效） --- */
+  .theme-modern .toolbar-commandbar {
+    flex-wrap: wrap;
+    align-items: stretch;
+    overflow-x: visible;
+  }
+
+  .theme-modern .toolbar-search-actions {
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  .theme-modern .toolbar-search-row {
+    flex-wrap: wrap;
+  }
+
+  .theme-modern .toolbar-search-row .command-input-keyword {
+    min-width: 0;
+    flex-basis: 100%;
+  }
+
+  .theme-modern .advanced-row-main,
+  .theme-modern .advanced-row-time,
+  .theme-modern .time-pair {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .theme-modern .workspace-strip {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .theme-modern .workspace-actions {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  .theme-modern .directory-filter-input {
+    max-width: none;
+  }
+
+  /* --- 12i. 设置中心：窄档内部多列转单列（集成实测修正 2026-10-02） ---
+     §7 只调了外层导轨/连接清单宽度；内部还有两处桌面并排在窄档挤爆：
+     ① 偏好设置 settings-pref-layout 锚点列(116px)+内容列；
+     ② 外观 slc-appearance-cols 配置列 + 右侧 320px 实时预览列——
+        实测 442px：预览列吃掉全部宽度，主题卡片被压成 40px 竖条
+        （themeGrid grid-template-columns 解析为 0px 0px，文字竖排）。
+     窄档统一转竖排：锚点横排置顶、预览列移到配置列下方占满宽度。 */
+  :is(body.extension-sidepanel, .app-shell) .settings-pref-layout {
+    flex-direction: column;
+  }
+
+  :is(body.extension-sidepanel, .app-shell) .settings-pref-anchor {
+    flex: none;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 8px 10px;
+    border-right: none;
+    border-bottom: 1px solid var(--line);
+  }
+
+  :is(body.extension-sidepanel, .app-shell) .settings-pref-anchor a {
+    padding: 4px 9px;
+    border-left: none;
+    border-radius: var(--r-s);
+  }
+
+  :is(body.extension-sidepanel, .app-shell) .settings-pref-anchor a.current {
+    border-left-color: transparent;
+  }
+
+  :is(body.extension-sidepanel, .app-shell) .slc-appearance-cols {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  :is(body.extension-sidepanel, .app-shell) .slc-appearance-preview {
+    flex: none;
+    width: 100%;
+    position: static;
+    padding: 0 16px 12px;
+  }
+
+  :is(body.extension-sidepanel, .app-shell) .slc-theme-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding: 10px 16px;
+  }
+
+  /* --- 12j. 连接管理：主从两栏 → 移动下钻（清单 ⇄ 详情）（2026-10-02） ---
+     桌面是 268px 清单列 + 详情列并排；窄档并排会把两边都压扁。
+     改移动范式：默认整屏显示清单，点条目/新增 → 整屏详情，头部返回键回清单。
+     显隐由 .conn-layout 的 sp-drill-list / sp-drill-detail 状态类切换（JSX 已挂）。 */
+  :is(body.extension-sidepanel, .app-shell) .conn-layout {
+    position: relative;
+  }
+
+  :is(body.extension-sidepanel, .app-shell) .conn-list-pane {
+    flex: 1 1 auto;
+    border-right: none;
+  }
+
+  :is(body.extension-sidepanel, .app-shell) .conn-detail-pane {
+    flex: 1 1 auto;
+  }
+
+  /* 清单态：隐藏详情；详情态：隐藏清单 */
+  :is(body.extension-sidepanel, .app-shell) .sp-drill-list .conn-detail-pane {
+    display: none;
+  }
+
+  :is(body.extension-sidepanel, .app-shell) .sp-drill-detail .conn-list-pane {
+    display: none;
+  }
+
+  /* 返回键：§9 已全局默认隐藏，此处仅在下钻详情态恢复显示 */
+  :is(body.extension-sidepanel, .app-shell) .sp-drill-detail .sp-drill-back {
+    display: inline-flex;
+    flex: none;
+  }
+
+  :is(body.extension-sidepanel, .app-shell) .conn-detail-title {
+    min-width: 0;
+  }
+
+  /* 详情头部：标题与操作在窄档换行堆叠，操作组换行靠左 */
+  :is(body.extension-sidepanel, .app-shell) .conn-detail-head {
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 8px 10px;
+    padding: 10px 12px;
+  }
+
+  :is(body.extension-sidepanel, .app-shell) .conn-head-actions {
+    margin-left: 0;
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  :is(body.extension-sidepanel, .app-shell) .conn-detail-body .settings-card,
+  :is(body.extension-sidepanel, .app-shell) .conn-detail-body .conn-detail-stack {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  /* 清单列头部搜索行：搜索框 + 新增按钮在窄档换行，各自可点 */
+  :is(body.extension-sidepanel, .app-shell) .conn-list-search {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px 12px;
+  }
+
+  :is(body.extension-sidepanel, .app-shell) .conn-list-search input {
+    flex: 1 1 100%;
+  }
+
+  :is(body.extension-sidepanel, .app-shell) .conn-list-search .conn-list-add {
+    flex: 1 1 auto;
+  }
+
+  /* --- 12k. 软件更新：头部/hero/设置行在窄档转竖排（2026-10-02） --- */
+  :is(body.extension-sidepanel, .app-shell) .settings-update-scroll {
+    padding: 12px 12px 20px;
+  }
+
+  :is(body.extension-sidepanel, .app-shell) .settings-update-card-body {
+    padding: 12px;
+  }
+
+  /* hero：图标 + 版本 + 右侧操作，窄档改竖排（操作组靠左、占满） */
+  :is(body.extension-sidepanel, .app-shell) .settings-update-hero {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  :is(body.extension-sidepanel, .app-shell) .settings-update-hero-side {
+    flex: 1 1 100%;
+    align-items: flex-start;
+  }
+
+  :is(body.extension-sidepanel, .app-shell) .settings-update-host-note {
+    max-width: none;
+    text-align: left;
+  }
+
+  /* 设置行：标签在上、控件在下 */
+  :is(body.extension-sidepanel, .app-shell) .settings-update-pref-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  :is(body.extension-sidepanel, .app-shell) .settings-update-pref-ctl {
+    justify-content: flex-start;
+  }
+
+  /* 更新源地址行：地址换行、按钮独立一行 */
+  :is(body.extension-sidepanel, .app-shell) .settings-update-src-line {
+    flex-wrap: wrap;
+  }
+
+  :is(body.extension-sidepanel, .app-shell) .settings-update-src-url {
+    flex: 1 1 100%;
+    word-break: break-all;
+  /* --- 12l-b. 目录行尾 ›（v3 设计④）：仅移动档显示 ---
+     守卫必须 ≥ .app-shell svg / .theme-modern svg 类全局规则（0,2,0+），
+     否则 SVG 失去尺寸约束渲染成黑三角并挤掉文件名（教训同 :where button 高度） */
+  .app-shell .f-go {
+    display: none;
+    width: 12px;
+    height: 12px;
+  }
+
+  :is(body.extension-sidepanel, .app-shell) .file-table .file-row .f-go {
+    display: inline-flex;
+    flex: none;
+    margin-left: auto;
+    stroke: var(--ink-muted);
+    fill: none;
+    stroke-width: 2;
+  }
+
+/* --- 12m. 状态条（tabbar 上方一行连接概览）+ 展开卡 --- */
+:is(body.extension-sidepanel, .app-shell) .sp-statusbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 10px;
+  background: var(--panel);
+  border-top: 1px solid var(--line);
+  font-size: var(--fs-2xs);
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+:is(body.extension-sidepanel, .app-shell) .sp-statusbar .dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--line-strong);
+}
+
+:is(body.extension-sidepanel, .app-shell) .sp-statusbar .dot.ok {
+  background: var(--green-dot);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--green-dot) 14%, transparent);
+}
+
+:is(body.extension-sidepanel, .app-shell) .sp-statusbar .st-txt {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+:is(body.extension-sidepanel, .app-shell) .sp-statusbar .st-detail {
+  flex: none;
+  padding: 2px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: var(--fs-2xs);
+  color: var(--ink-soft);
+  background: var(--panel);
+  cursor: pointer;
+}
+
+:is(body.extension-sidepanel, .app-shell) .sp-statusbar .st-detail:hover {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+body.extension-sidepanel .sp-status-detail {
+  display: grid;
+  gap: 4px;
+  padding: 8px 10px;
+  background: var(--panel-muted);
+  border-top: 1px solid var(--line);
+  font-size: var(--fs-2xs);
+  color: var(--ink-soft);
+}
+
+body.extension-sidepanel .sp-status-kv {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+body.extension-sidepanel .sp-status-kv span {
+  color: var(--ink-muted);
+  flex: none;
+}
+
+body.extension-sidepanel .sp-status-kv b {
+  font-weight: 550;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+  }
 }

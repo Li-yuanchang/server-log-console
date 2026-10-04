@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>侧栏响应式演示 · Server Log Console</title>
+<!--
+  侧栏响应式演示包装页（开发用）。
+  放在 public/ 下 → vite dev 可直接访问 /__preview.html。
+  注意：Chrome 禁止扩展包含 "_" 开头的文件名，vite 构建时会自动从 dist 剔除本文件，
+  不要把它移出 public/ 或改回随产物打包。
+  必须与 popup.html 同源（iframe.contentDocument 需同源才能注入演示动作）。
+  用法：#w=400&view=files&do=chip,pick:1,log  —— 也可直接拖浏览器窗口宽度，面板自动跟随切档。
+  do 序列：chip=开选服层 | pick:N=选第 N 台 | log/files/term=切视图 | dir=开目录 sheet
+-->
+<style>
+  html, body { margin: 0; height: 100%; background: #eef1f4;
+    font: 12px -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; color: #555; }
+  #hint { padding: 6px 10px; background: #fff; border-bottom: 1px solid #e3e6ea;
+    display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+  #hint b { color: #111; }
+  #hint .k { font-family: ui-monospace, Menlo, monospace; background: #f2f4f7;
+    border-radius: 4px; padding: 1px 6px; }
+  #hint .presets { display: flex; gap: 4px; }
+  #hint .presets button { font: inherit; border: 1px solid #d9dde2; background: #fff;
+    color: #555; border-radius: 5px; padding: 2px 8px; cursor: pointer; }
+  #hint .presets button.on { background: #e8f1fe; border-color: #9cc3f5; color: #0070f3; font-weight: 600; }
+  #stage { height: calc(100vh - 34px); overflow: hidden; }
+  #f { display: block; border: 0; height: 100%; background: #fff;
+    box-shadow: 0 0 0 1px #d9dde2; will-change: width; }
+</style>
+</head>
+<body>
+  <div id="hint">
+    <span>侧栏响应式演示 · <b>拖浏览器窗口边缘即自动切档</b></span>
+    <span>视口 <b id="vw">-</b>px</span>
+    <span>面板宽 <b id="pw">-</b>px</span>
+    <span>当前 <b id="tier">-</b></span>
+    <span class="k">&lt;560 移动档 · ≥560 宽档</span>
+    <span class="presets" id="presets"></span>
+  </div>
+  <div id="stage"><iframe id="f" src="./popup.html"></iframe></div>
+<script>
+  var f = document.getElementById('f');
+  var vw = document.getElementById('vw'), pw = document.getElementById('pw'), tier = document.getElementById('tier');
+  var raf = 0, settle = 0, lastW = 0, fixedW = 0;
+
+  // 拖拽期间冻结 iframe 内的过渡/动画，避免动画与重排抢帧（跟手性）
+  function freeze(on) {
+    try {
+      var d = f.contentDocument; if (!d || !d.body) return;
+      d.body.classList.toggle('sp-resizing', on);
+      if (!d.getElementById('__rz')) {
+        var s = d.createElement('style'); s.id = '__rz';
+        s.textContent = 'body.sp-resizing *,body.sp-resizing *::before,body.sp-resizing *::after{transition:none !important;animation:none !important}';
+        d.head.appendChild(s);
+      }
+    } catch (e) {}
+  }
+
+  function targetWidth() {
+    return fixedW || Math.max(320, window.innerWidth - 40);
+  }
+  function commit() {
+    raf = 0;
+    var w = targetWidth();
+    if (w === lastW) return;
+    lastW = w;
+    f.style.width = w + 'px';
+    vw.textContent = window.innerWidth;
+    pw.textContent = w;
+    tier.textContent = w >= 560 ? '宽档 · 侧栏常驻' : '移动档 · 底部导航';
+    var btns = document.querySelectorAll('#presets button');
+    for (var i = 0; i < btns.length; i++) btns[i].classList.toggle('on', +btns[i].dataset.w === w);
+  }
+  function onResize() {
+    freeze(true);
+    clearTimeout(settle);
+    settle = setTimeout(function () { freeze(false); }, 180);
+    if (!raf) raf = requestAnimationFrame(commit);
+  }
+
+  // 宽度预设（也用于无头截图）
+  var PRESETS = [320, 400, 500, 620, 700];
+  var box = document.getElementById('presets');
+  PRESETS.forEach(function (w) {
+    var b = document.createElement('button');
+    b.textContent = w; b.dataset.w = w;
+    b.onclick = function () { fixedW = (fixedW === w ? 0 : w); commit(); };
+    box.appendChild(b);
+  });
+
+  window.addEventListener('resize', onResize, { passive: true });
+
+  /* ---- 演示动作：#do=chip,pick:1,log ---- */
+  var q = new URLSearchParams(location.hash.slice(1));
+  if (q.get('w')) fixedW = +q.get('w');
+  var doSeq = (q.get('do') || '').split(',');
+
+  f.addEventListener('load', function () {
+    var t = 1500;
+    var steps = function (ms, fn) { setTimeout(fn, ms); };
+    for (var i = 0; i < doSeq.length; i++) {
+      (function (tok) {
+        if (!tok) return;
+        if (tok === 'chip') steps(t, function () { f.contentDocument.querySelector('.srv-chip') && f.contentDocument.querySelector('.srv-chip').click(); });
+        else if (tok.indexOf('pick') === 0) { var n = +(tok.split(':')[1] || 0); steps(t, function () { var r = f.contentDocument.querySelectorAll('.sp-picker .server-item'); (r[n] || r[0]) && (r[n] || r[0]).click(); }); }
+        else if (tok === 'log' || tok === 'files' || tok === 'term') steps(t, function () { var b = [].slice.call(f.contentDocument.querySelectorAll('.sp-tabbar-btn')).filter(function (x) { return x.dataset.go === tok || x.textContent.indexOf({ log: '日志', files: '文件', term: '终端' }[tok]) >= 0; })[0]; b && b.click(); });
+        else if (tok === 'dir') steps(t, function () { f.contentDocument.querySelector('.sp-dir-trigger') && f.contentDocument.querySelector('.sp-dir-trigger').click(); });
+        t += 2200;
+      })(doSeq[i]);
+    }
+  });
+
+  commit();
+</script>
+</body>
+</html>

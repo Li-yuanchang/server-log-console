@@ -208,7 +208,6 @@ export function ServerPickerOverlay(props: ServerPickerOverlayProps) {
 }
 
 export type SidepanelMobileTopProps = {
-  viewTitle: string;
   onOpenPalette: () => void;
   onOpenSettings: () => void;
   showSettingsActive?: boolean;
@@ -219,10 +218,10 @@ export type SidepanelMobileTopProps = {
   uiTheme?: "classic" | "modern";
 };
 
-/* 移动档顶栏 app bar：当前视图名 + 命令面板/设置，服务器 chip 常驻（点击开选服层）。 */
+/* 顶栏 app bar（全档位）：chip = 服务器上下文 + 选服入口（v3 并入顶栏，砍掉独立 chip 行），
+   命令面板/设置靠右。视图名不在此重复（移动档由底部 tab 承担、宽档由视图切换承担）。 */
 export function SidepanelMobileTop(props: SidepanelMobileTopProps) {
   const {
-    viewTitle,
     onOpenPalette,
     onOpenSettings,
     showSettingsActive,
@@ -233,41 +232,81 @@ export function SidepanelMobileTop(props: SidepanelMobileTopProps) {
   } = props;
 
   return (
+    <div className="sp-appbar">
+      <button
+        type="button"
+        className="srv-chip"
+        onClick={onOpenServerPicker}
+        title="切换服务器"
+        aria-label={selectedServer ? `当前服务器 ${selectedServer.name}，点击切换` : "选择服务器"}
+      >
+        <span className={`srv-chip-dot${selectedServer && connectionTestStatus?.connected ? " is-ok" : ""}`} />
+        <span className="srv-chip-text">
+          <span className="srv-chip-name">{selectedServer ? selectedServer.name : "选择服务器"}</span>
+          {selectedServer ? (
+            <span className="srv-chip-host">{selectedServer.username}@{selectedServer.host}</span>
+          ) : null}
+        </span>
+        <ChevronDown className="srv-chip-caret" size={12} strokeWidth={1.8} aria-hidden="true" />
+      </button>
+      <span className="sp-top-sp" />
+      <button
+        className="ghost-button icon-button"
+        title="命令面板 (Cmd+K)"
+        aria-label="命令面板"
+        onClick={onOpenPalette}
+      >
+        <CommandIcon size={14} strokeWidth={1.8} />
+      </button>
+      <button
+        className="ghost-button icon-button"
+        title={showSettingsActive ? "关闭设置中心" : "打开设置中心"}
+        onClick={onOpenSettings}
+      >
+        <ToolIcon theme={uiTheme} kind="settings" />
+      </button>
+    </div>
+  );
+}
+
+export type SidepanelStatusbarProps = {
+  connected: boolean;
+  serverLine: string;
+  pathLine: string;
+  detailLines: Array<[string, string]>;
+};
+
+/* 状态条（移动档）：tabbar 上方一行 [● 摘要][详情]；点详情展开连接概览。
+   修复移动档连接概览随侧栏一起消失的缺口（v3 设计⑥）。 */
+export function SidepanelStatusbar(props: SidepanelStatusbarProps) {
+  const { connected, serverLine, pathLine, detailLines } = props;
+  const [expanded, setExpanded] = useState(false);
+
+  return (
     <>
-      <div className="sp-appbar">
-        <span className="sp-appbar-title">{viewTitle}</span>
-        <button
-          className="ghost-button icon-button"
-          title="命令面板 (Cmd+K)"
-          aria-label="命令面板"
-          onClick={onOpenPalette}
-        >
-          <CommandIcon size={14} strokeWidth={1.8} />
-        </button>
-        <button
-          className="ghost-button icon-button"
-          title={showSettingsActive ? "关闭设置中心" : "打开设置中心"}
-          onClick={onOpenSettings}
-        >
-          <ToolIcon theme={uiTheme} kind="settings" />
-        </button>
-      </div>
-      <div className="srv-chip-row">
+      {expanded ? (
+        <div className="sp-status-detail">
+          {detailLines.map(([k, v]) => (
+            <div key={k} className="sp-status-kv"><span>{k}</span><b>{v}</b></div>
+          ))}
+        </div>
+      ) : null}
+      <div
+        className="sp-statusbar"
+        onClick={() => setExpanded((current) => !current)}
+        title={expanded ? "收起连接概览" : "展开连接概览"}
+      >
+        <span className={`dot${connected ? " ok" : ""}`} />
+        <span className="st-txt">{serverLine}{pathLine ? ` · ${pathLine}` : ""}</span>
         <button
           type="button"
-          className="srv-chip"
-          onClick={onOpenServerPicker}
-          title="切换服务器"
-          aria-label={selectedServer ? `当前服务器 ${selectedServer.name}，点击切换` : "选择服务器"}
+          className="st-detail"
+          onClick={(event) => {
+            event.stopPropagation();
+            setExpanded((current) => !current);
+          }}
         >
-          <span className={`srv-chip-dot${selectedServer && connectionTestStatus?.connected ? " is-ok" : ""}`} />
-          <span className="srv-chip-text">
-            <span className="srv-chip-name">{selectedServer ? selectedServer.name : "选择服务器"}</span>
-            {selectedServer ? (
-              <span className="srv-chip-host">{selectedServer.username}@{selectedServer.host}</span>
-            ) : null}
-          </span>
-          <ChevronDown className="srv-chip-caret" size={12} strokeWidth={1.8} aria-hidden="true" />
+          {expanded ? "收起" : "详情"}
         </button>
       </div>
     </>

@@ -7,7 +7,10 @@
     <script type="module" src="./src/main.tsx"></script>
     <style>
       /* 侧栏形态首屏骨架：几何对齐 body.extension-sidepanel 真实布局
-         （侧栏 180px + 主区工具栏 45px，同 styles-sidepanel.css / 主题命令行条）。
+         （双档容器查询，档位常量同 styles-sidepanel.css：≥560 宽档 =
+         侧栏 172px + 主区；<560 移动档 = app bar + 内容 + 底部 tab 条）。
+         #app-loading 为 sk-sp 查询容器，宽档显示 #sk-side+#sk-main，
+         移动档改显自包含的 #sk-mobile（消除挂载跳变）。
          注意：MV3 CSP script-src 'self' 禁内联脚本，故不做 index.html 那套
          localStorage 主题跟随，骨架固定浅色（React 挂载后由应用接管）。
          #app-loading 由 App.tsx 挂载 effect 淡出移除（与 index.html 同一约定）。 */
@@ -16,11 +19,12 @@
         --sk-bg:#fafafa;--sk-panel:#ffffff;--sk-muted:#f2f2f2;--sk-line:#eaeaea;
         --sk-ink:#171717;--sk-ink-muted:#8f8f8f;--sk-ink-soft:#666666;--sk-accent:#0070f3;
         position:fixed;inset:0;z-index:9999;display:flex;
+        container:sk-sp / inline-size;
         background:var(--sk-bg);color:var(--sk-ink-muted);
         font-family:-apple-system,BlinkMacSystemFont,'Geist Sans','PingFang SC',sans-serif;
         transition:opacity .25s ease;
       }
-      #sk-side{flex:0 0 180px;background:var(--sk-panel);border-right:1px solid var(--sk-line);display:flex;flex-direction:column}
+      #sk-side{flex:0 0 172px;background:var(--sk-panel);border-right:1px solid var(--sk-line);display:flex;flex-direction:column}
       #sk-side-head{flex:none;height:45px;display:flex;align-items:center;gap:6px;padding:0 12px;border-bottom:1px solid var(--sk-line)}
       #sk-side-head .sk-block{width:26px;height:26px;border-radius:6px}
       #sk-side-head .sk-block+ .sk-block{width:52px;height:12px}
@@ -41,11 +45,28 @@
       .sk-spin{width:14px;height:14px;margin-top:10px;border:2px solid var(--sk-muted);border-top-color:var(--sk-accent);border-radius:50%;animation:sk-spin .8s linear infinite}
       @keyframes sk-spin{to{transform:rotate(360deg)}}
       .sk-block{border-radius:6px;background:var(--sk-muted)}
+      /* 移动档骨架（默认隐藏，@container sk-sp <560px 反转）：app bar 44px +
+         内容占位 + 底部 tab 条，几何对齐 styles-sidepanel.css §12 移动档 */
+      #sk-mobile{display:none;flex:1;min-width:0;flex-direction:column;background:var(--sk-bg)}
+      #sk-appbar{flex:none;height:44px;display:flex;align-items:center;gap:6px;padding:0 10px;background:var(--sk-panel);border-bottom:1px solid var(--sk-line)}
+      #sk-appbar .sk-appbar-title{width:72px;height:13px}
+      #sk-appbar .sk-sp{flex:1}
+      #sk-appbar .sk-appbar-ico{width:26px;height:26px}
+      #sk-appbar .sk-appbar-chip{flex:1 1 auto;min-width:0;height:30px;border:1px solid var(--sk-line);border-radius:6px;background:var(--sk-panel)}
+      #sk-mobile-content{flex:1;display:flex;align-items:center;justify-content:center}
+      #sk-status{flex:none;height:28px;display:flex;align-items:center;padding:0 10px;background:var(--sk-bg);border-top:1px solid var(--sk-line)}
+      #sk-status .sk-block{width:58%;height:8px}
+      #sk-tabbar{flex:none;display:flex;align-items:stretch;gap:2px;padding:4px 8px 6px;background:var(--sk-panel);border-top:1px solid var(--sk-line)}
+      #sk-tabbar .sk-block{flex:1;height:34px;border-radius:8px}
+      @container sk-sp (max-width:559.9px){
+        #sk-side,#sk-main{display:none}
+        #sk-mobile{display:flex}
+      }
     </style>
   </head>
   <body class="extension-sidepanel">
     <div id="app-loading">
-      <!-- Skeleton: 侧栏（几何对齐 extension-sidepanel 的 180px 侧栏 + sidebar-head 45px） -->
+      <!-- Skeleton: 侧栏（宽档 ≥560px；几何对齐 extension-sidepanel 的 172px 侧栏 + sidebar-head 45px） -->
       <div id="sk-side">
         <div id="sk-side-head">
           <div class="sk-block"></div>
@@ -72,6 +93,32 @@
             <span>正在等待本地连接服务就绪</span>
             <div class="sk-spin"></div>
           </div>
+        </div>
+      </div>
+      <!-- Skeleton: 移动档（<560px；app bar + 内容占位 + 底部 tab 条，
+           与 styles-sidepanel.css §12 移动档同构，宽档 display:none） -->
+      <div id="sk-mobile">
+        <div id="sk-appbar">
+          <span class="sk-block sk-appbar-chip"></span>
+          <span class="sk-sp"></span>
+          <span class="sk-block sk-appbar-ico"></span>
+          <span class="sk-block sk-appbar-ico"></span>
+        </div>
+        <div id="sk-mobile-content">
+          <div class="sk-startup">
+            <div class="sk-startup-icon">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>
+            </div>
+            <strong>正在连接服务…</strong>
+            <span>正在等待本地连接服务就绪</span>
+            <div class="sk-spin"></div>
+          </div>
+        </div>
+        <div id="sk-status"><span class="sk-block"></span></div>
+        <div id="sk-tabbar">
+          <span class="sk-block"></span>
+          <span class="sk-block"></span>
+          <span class="sk-block"></span>
         </div>
       </div>
     </div>

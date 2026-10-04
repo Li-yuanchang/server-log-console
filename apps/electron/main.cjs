@@ -249,6 +249,257 @@ async function startGateway() {
   return gatewayStartPromise;
 }
 
+// --- Desktop auto update ---
+let autoUpdater = null;
+try {
+  autoUpdater = require("electron-updater").autoUpdater;
+} catch (error) {
+  probe(`electron-updater load failed ${error && error.stack ? error.stack : String(error)}`);
+}
+
+const DESKTOP_UPDATE_URL = resolveDesktopUpdateUrl();
+let desktopUpdateState = buildInitialDesktopUpdateState();
+let desktopUpdaterConfigured = false;
+
+configureDesktopUpdater();
+registerDesktopUpdateIpc();
+
+function buildInitialDesktopUpdateState() {
+  if (!app.isPackaged) {
+    return { status: "unavailable", error: "开发模式不支持自动更新", updateInfo: null, progress: null };
+  }
+  if (!DESKTOP_UPDATE_URL || !autoUpdater) {
+    return { status: "unavailable", error: autoUpdater ? "未配置更新源" : "更新组件不可用", updateInfo: null, progress: null };
+  }
+  return { status: "idle", error: null, updateInfo: null, progress: null };
+}
+
+function isDesktopUpdateSupported() {
+  return Boolean(app.isPackaged && DESKTOP_UPDATE_URL && autoUpdater);
+}
+
+function buildDesktopUpdateSnapshot() {
+  return {
+    status: desktopUpdateState.status,
+    error: desktopUpdateState.error,
+    appInfo: {
+      version: app.getVersion(),
+      platform: process.platform,
+      arch: process.arch,
+      packaged: app.isPackaged,
+    },
+    updateInfo: desktopUpdateState.updateInfo,
+    progress: desktopUpdateState.progress,
+    updateUrl: DESKTOP_UPDATE_URL || null,
+  };
+}
+
+function updateDesktopUpdateState(patch) {
+  desktopUpdateState = { ...desktopUpdateState, ...patch };
+  const snapshot = buildDesktopUpdateSnapshot();
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) {
+      win.webContents.send("slc:update:state", snapshot);
+    }
+  }
+}
+
+function configureDesktopUpdater() {
+  if (desktopUpdaterConfigured || !autoUpdater) return;
+  desktopUpdaterConfigured = true;
+
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.allowPrerelease = false;
+  if (DESKTOP_UPDATE_URL) {
+    ensureDesktopUpdaterConfig();
+    autoUpdater.setFeedURL({ provider: "generic", url: DESKTOP_UPDATE_URL, channel: "latest" });
+  }
+
+  autoUpdater.on("checking-for-update", () => {
+    updateDesktopUpdateState({ status: "checking", error: null });
+  });
+  autoUpdater.on("update-available", (info) => {
+    updateDesktopUpdateState({
+      status: "available",
+      error: null,
+      updateInfo: {
+        version: info?.version || "",
+        releaseDate: info?.releaseDate || "",
+        releaseNotes: normalizeReleaseNotes(info?.releaseNotes),
+      },
+      progress: null,
+    });
+  });
+  autoUpdater.on("update-not-available", () => {
+    updateDesktopUpdateState({ status: "up-to-date", error: null, updateInfo: null, progress: null });
+  });
+  autoUpdater.on("download-progress", (progress) => {
+    updateDesktopUpdateState({
+      status: "downloading",
+      error: null,
+      progress: {
+        percent: normalizeUpdatePercent(progress?.percent),
+        transferred: Number(progress?.transferred) || 0,
+        total: Number(progress?.total) || 0,
+        bytesPerSecond: Number(progress?.bytesPerSecond) || 0,
+      },
+    });
+  });
+  autoUpdater.on("update-downloaded", (info) => {
+    const lastProgress = desktopUpdateState.progress;
+    updateDesktopUpdateState({
+      status: "ready",
+      error: null,
+      updateInfo: {
+        version: info?.version || desktopUpdateState.updateInfo?.version || "",
+        releaseDate: info?.releaseDate || desktopUpdateState.updateInfo?.releaseDate || "",
+        releaseNotes: normalizeReleaseNotes(info?.releaseNotes) || desktopUpdateState.updateInfo?.releaseNotes || "",
+      },
+      progress: lastProgress ? { ...lastProgress, percent: 100 } : null,
+    });
+  });
+  autoUpdater.on("error", (error) => {
+    // check/download 的失败主要由 IPC 的 try/catch 结算，这里兜底处理事件先于 promise reject 的场景
+    if (desktopUpdateState.status === "checking") {
+      settleDesktopUpdateFailure(error, "check");
+    } else if (desktopUpdateState.status === "downloading") {
+      settleDesktopUpdateFailure(error, "download");
+    }
+  });
+}
+
+// IPC 独立注册：即使 electron-updater 加载失败（autoUpdater 为 null），渲染层仍能拿到状态快照
+function registerDesktopUpdateIpc() {
+  ipcMain.handle("slc:update:get-state", () => buildDesktopUpdateSnapshot());
+  ipcMain.handle("slc:update:check", async () => {
+    if (!isDesktopUpdateSupported()) return buildDesktopUpdateSnapshot();
+    try {
+      await autoUpdater.checkForUpdates();
+    } catch (error) {
+      settleDesktopUpdateFailure(error, "check");
+    }
+    return buildDesktopUpdateSnapshot();
+  });
+  ipcMain.handle("slc:update:download", async () => {
+    if (desktopUpdateState.status !== "available") return buildDesktopUpdateSnapshot();
+    updateDesktopUpdateState({ status: "downloading", error: null, progress: { percent: 0, transferred: 0, total: 0, bytesPerSecond: 0 } });
+    try {
+      await autoUpdater.downloadUpdate();
+    } catch (error) {
+      settleDesktopUpdateFailure(error, "download");
+    }
+    return buildDesktopUpdateSnapshot();
+  });
+  ipcMain.handle("slc:update:install", async () => {
+    if (desktopUpdateState.status !== "ready") return buildDesktopUpdateSnapshot();
+    // 先回包再退出安装，避免渲染层 invoke 悬空
+    setTimeout(() => {
+      try {
+        autoUpdater.quitAndInstall(false, true);
+      } catch (error) {
+        probe(`quitAndInstall failed ${error && error.stack ? error.stack : String(error)}`);
+      }
+    }, 0);
+    return buildDesktopUpdateSnapshot();
+  });
+}
+
+function settleDesktopUpdateFailure(error, operation) {
+  const message = readableDesktopUpdateError(error);
+  // 检查阶段失败降级为 unavailable（更新源可能只是暂时不可达），下载失败才进入 error
+  if (operation === "check") {
+    updateDesktopUpdateState({ status: "unavailable", error: message, updateInfo: null, progress: null });
+    return;
+  }
+  if (desktopUpdateState.status === "error") return;
+  updateDesktopUpdateState({ status: "error", error: message, progress: null });
+}
+
+function ensureDesktopUpdaterConfig() {
+  const packagedConfigPath = path.join(process.resourcesPath, "app-update.yml");
+  if (fs.existsSync(packagedConfigPath)) {
+    autoUpdater.updateConfigPath = packagedConfigPath;
+    return;
+  }
+
+  // 未配置 publish 时 electron-builder 不会生成 app-update.yml，运行时写 userData 兜底
+  const fallbackConfigPath = path.join(app.getPath("userData"), "app-update.yml");
+  const fallbackConfig = [
+    "provider: generic",
+    `url: ${JSON.stringify(DESKTOP_UPDATE_URL)}`,
+    "updaterCacheDirName: slc-updater",
+    "",
+  ].join("\n");
+  fs.mkdirSync(path.dirname(fallbackConfigPath), { recursive: true });
+  if (!fs.existsSync(fallbackConfigPath) || fs.readFileSync(fallbackConfigPath, "utf8") !== fallbackConfig) {
+    fs.writeFileSync(fallbackConfigPath, fallbackConfig, "utf8");
+  }
+  autoUpdater.updateConfigPath = fallbackConfigPath;
+}
+
+function resolveDesktopUpdateUrl() {
+  const envUrl = process.env.SLC_UPDATE_URL?.trim();
+  if (envUrl) return envUrl;
+
+  const candidates = [
+    app.isPackaged ? path.join(process.resourcesPath, "update-config", "update-config.json") : "",
+    path.join(__dirname, "update-config.local.json"),
+    path.resolve(__dirname, "..", "..", ".env.local"),
+  ].filter(Boolean);
+
+  for (const file of candidates) {
+    const url = readDesktopUpdateUrlFile(file);
+    if (url) return url;
+  }
+  return "";
+}
+
+function readDesktopUpdateUrlFile(file) {
+  try {
+    if (!fs.existsSync(file)) return "";
+    const content = fs.readFileSync(file, "utf8");
+    if (file.endsWith(".json")) {
+      const parsed = JSON.parse(content);
+      const url = typeof parsed === "string" ? parsed : parsed?.updateUrl;
+      return typeof url === "string" ? url.trim() : "";
+    }
+    const line = content
+      .split(/\r?\n/)
+      .map((item) => item.trim())
+      .find((item) => item && !item.startsWith("#") && item.startsWith("SLC_UPDATE_URL="));
+    if (!line) return "";
+    return line.slice("SLC_UPDATE_URL=".length).trim().replace(/^['"]|['"]$/g, "");
+  } catch {
+    return "";
+  }
+}
+
+function normalizeReleaseNotes(value) {
+  if (typeof value === "string") return value.trim();
+  if (!Array.isArray(value)) return "";
+  return value
+    .map((item) => (typeof item === "string" ? item : item?.note))
+    .filter((item) => typeof item === "string" && item.trim())
+    .join("\n")
+    .trim();
+}
+
+function normalizeUpdatePercent(value) {
+  const percent = Number(value);
+  if (!Number.isFinite(percent)) return 0;
+  return Math.max(0, Math.min(100, Math.round(percent * 10) / 10));
+}
+
+function readableDesktopUpdateError(error) {
+  const message = error instanceof Error ? error.message : String(error || "");
+  if (/checksum|sha512/i.test(message)) return "更新包校验失败";
+  if (/signature|code sign/i.test(message)) return "更新包签名验证失败";
+  if (/404|ENOENT/i.test(message)) return "更新源文件不存在";
+  if (/ETIMEDOUT|ENOTFOUND|ECONNREFUSED|EAI_AGAIN/i.test(message)) return "无法连接更新源";
+  return message || "更新失败，请稍后重试";
+}
+
 function buildMenu() {
   const template = [
     {

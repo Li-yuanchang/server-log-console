@@ -71,6 +71,8 @@ interface TerminalPanelProps {
   terminalFontFamily?: string;
   terminalBackgroundColor?: string;
   terminalScheme?: TerminalColorSchemeId;
+  /** 解析后的主题标识：变更时刷新 xterm ITheme（v3 色差修复，见 useTerminalSession.themeKey） */
+  terminalThemeKey?: string;
   terminalOverlay: "none" | "shortcuts" | "ai";
   onToggleTerminalOverlay: (overlay: "ai") => void;
   /** 弹出/收回独立小窗（App 组合 openDetachedTerminalWindow / restoreEmbeddedTerminalWindow） */
@@ -107,6 +109,8 @@ interface TerminalTabPaneProps {
   terminalFontFamily?: string;
   terminalBackgroundColor?: string;
   terminalScheme?: TerminalColorSchemeId;
+  /** 解析后的主题标识：变更时刷新 xterm ITheme（v3 色差修复） */
+  terminalThemeKey?: string;
   onSessionIdChange: (tabId: string, sessionId: string) => void;
   onTerminalInstance: (tabId: string, terminal: Terminal | null) => void;
   onSessionApi: (tabId: string, api: TerminalSessionApi | null) => void;
@@ -150,6 +154,7 @@ function TerminalTabPane(props: TerminalTabPaneProps) {
     terminalFontFamily: props.terminalFontFamily,
     terminalBackgroundColor: props.terminalBackgroundColor,
     terminalScheme: props.terminalScheme,
+    themeKey: props.terminalThemeKey,
   });
 
   useTerminalFit(session.containerRef, session.fitTerminal);
@@ -933,6 +938,7 @@ export function TerminalPanel(props: TerminalPanelProps) {
                         terminalFontSize={props.terminalFontSize}
                         terminalFontFamily={props.terminalFontFamily}
                         terminalBackgroundColor={props.terminalBackgroundColor}
+                        terminalThemeKey={props.terminalThemeKey}
                         onSessionIdChange={handleSessionIdChange}
                         onTerminalInstance={handleTerminalInstance}
                         onSessionApi={handleSessionApi}

@@ -7,6 +7,7 @@
   "main": "main.cjs",
   "workspaces": ["apps/*", "packages/*"],
   "scripts": {
-    "build:extension": "npm --prefix apps/extension run build"
+    "build:extension": "npm --prefix apps/extension run build",
+    "release:update": "node scripts/prepare-online-update-release.mjs"
   }
 }
