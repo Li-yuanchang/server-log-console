@@ -221,6 +221,8 @@ export function FileBrowserTableRows(props: Props) {
               ? <Folder size={14} strokeWidth={1.6} className="entry-icon-svg entry-icon-svg-dir" aria-hidden="true" />
               : <FileText size={14} strokeWidth={1.6} className="entry-icon-svg" aria-hidden="true" />}
             <strong>{entry.name}</strong>
+            {/* v3 设计④：目录行尾 ›（仅移动档显示，styles-sidepanel.css 容器查询控制） */}
+            {entry.kind === "directory" ? <ChevronRight size={12} strokeWidth={2} className="f-go" aria-hidden="true" /> : null}
             <span className="file-row-actions" onClick={(event) => event.stopPropagation()} onMouseDown={(event) => event.stopPropagation()}>
               {/* S6：目录行去掉冗余「打开」按钮（单击行即进入，图标与「移动」重复）；文件保留预览(搜索) */}
               {entry.kind === "file" ? (

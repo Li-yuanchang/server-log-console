@@ -1,6 +1,6 @@
 {
   "name": "@server-log-console/electron",
-  "version": "0.3.238",
+  "version": "0.3.240",
   "description": "Server Log Console desktop app",
   "author": "lyc",
   "private": true,
@@ -9,11 +9,12 @@
     "start": "node run-clean-electron-env.cjs electron .",
     "bump-version": "node bump-version.cjs",
     "prepare-gateway": "node prepare-gateway.cjs",
+    "prepare-update-config": "node prepare-update-config.cjs",
     "install:mac-app": "node install-mac-app.cjs",
-    "predist": "node bump-version.cjs && node prepare-gateway.cjs",
-    "predist:mac": "node bump-version.cjs && node prepare-gateway.cjs",
-    "predist:win": "node bump-version.cjs && node prepare-gateway.cjs",
-    "predist:linux": "node bump-version.cjs && node prepare-gateway.cjs",
+    "predist": "node bump-version.cjs && node prepare-gateway.cjs && node prepare-update-config.cjs",
+    "predist:mac": "node bump-version.cjs && node prepare-gateway.cjs && node prepare-update-config.cjs",
+    "predist:win": "node bump-version.cjs && node prepare-gateway.cjs && node prepare-update-config.cjs",
+    "predist:linux": "node bump-version.cjs && node prepare-gateway.cjs && node prepare-update-config.cjs",
     "dist": "node run-clean-electron-env.cjs electron-builder",
     "dist:mac": "node run-clean-electron-env.cjs electron-builder --mac",
     "dist:win": "node run-clean-electron-env.cjs electron-builder --win",
@@ -48,6 +49,13 @@
           "**/*.icns",
           "**/*.ico"
         ]
+      },
+      {
+        "from": ".update-config",
+        "to": "update-config",
+        "filter": [
+          "update-config.json"
+        ]
       }
     ],
     "afterPack": "./afterPack.cjs",
@@ -76,11 +84,16 @@
         "AppImage"
       ],
       "category": "Development"
+    },
+    "publish": {
+      "provider": "generic",
+      "url": "http://192.168.2.208/desktop-updates/"
     }
   },
   "devDependencies": {
     "app-builder-bin": "^4.0.0",
     "electron": "32.2.7",
-    "electron-builder": "^25.1.8"
+    "electron-builder": "^25.1.8",
+    "electron-updater": "^6.6.2"
   }
 }

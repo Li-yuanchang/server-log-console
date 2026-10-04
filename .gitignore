@@ -29,3 +29,9 @@ tmp/
 
 # Extension packaged artifact
 apps/extension/*.zip
+
+# Desktop update source config (generated at packaging time)
+apps/electron/.update-config/
+
+# 在线更新发布产物（release:update 输出，上传 GitHub Release / 2.208 更新源用）
+release/

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { localServiceBase } from "./api.js";
+import { getGatewayToken, localServiceBase } from "./api.js";
 import { trimLiveContent } from "./utils.js";
 import type { VirtualLogViewerHandle } from "./VirtualLogViewer.js";
 
@@ -119,7 +119,8 @@ export function useLiveFollow(opts: UseLiveFollowOptions): UseLiveFollowReturn {
     setLiveFollowEnabled(true);
     setLiveFollowContent((current) => trimLiveContent(current || sliceContentRef.current || ""));
 
-    const wsUrl = localServiceBase.replace(/^http/, "ws") + "/ws/live";
+    const wsToken = getGatewayToken();
+    const wsUrl = localServiceBase.replace(/^http/, "ws") + "/ws/live" + (wsToken ? `?token=${encodeURIComponent(wsToken)}` : "");
     const socket = new WebSocket(wsUrl);
     liveSocketRef.current = socket;
 

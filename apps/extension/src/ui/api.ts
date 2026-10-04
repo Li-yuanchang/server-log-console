@@ -23,8 +23,93 @@ import type {
   ServerSummary
 } from "@server-log-console/shared";
 
+import { readGatewayConfig } from "./storage.js";
+
 const runtimeOrigin = globalThis.location?.origin ?? "";
-export const localServiceBase = !runtimeOrigin || !/:4040$/.test(runtimeOrigin) ? "http://localhost:4040" : runtimeOrigin;
+export const DEFAULT_GATEWAY_BASE = "http://localhost:4040";
+
+export function normalizeGatewayBase(input: string): string | null {
+  const trimmed = input.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const candidate = /^https?:\/\//i.test(trimmed) ? trimmed : `http://${trimmed}`;
+  try {
+    const url = new URL(candidate);
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      return null;
+    }
+    return `${url.protocol}//${url.host}`;
+  } catch {
+    return null;
+  }
+}
+
+/* 连接服务地址解析顺序：显式配置 > 同源（页面由 gateway 托管、origin 以 :4040 结尾）> 默认 localhost:4040。
+   ESM live binding：本模块内重新赋值后，其余文件的 `${localServiceBase}` 调用点读取的都是当前值。 */
+export let localServiceBase = (() => {
+  const configured = normalizeGatewayBase(readGatewayConfig().baseUrl);
+  if (configured) {
+    return configured;
+  }
+  return runtimeOrigin && /:4040$/.test(runtimeOrigin) ? runtimeOrigin : DEFAULT_GATEWAY_BASE;
+})();
+
+let gatewayToken = readGatewayConfig().token.trim();
+
+export function getGatewayToken(): string {
+  return gatewayToken;
+}
+
+/* 保存/恢复默认配置时调用：重算地址与令牌（调用方负责持久化 storage 并 reload 页面） */
+export function applyGatewayConfig(config: { baseUrl: string; token: string }) {
+  gatewayToken = config.token.trim();
+  const configured = normalizeGatewayBase(config.baseUrl);
+  localServiceBase = configured
+    ?? (runtimeOrigin && /:4040$/.test(runtimeOrigin) ? runtimeOrigin : DEFAULT_GATEWAY_BASE);
+}
+
+/* 统一网关请求入口：注入 Bearer 令牌；401 时给出可引导到设置的报错文案 */
+export async function gatewayFetch(input: string, init?: RequestInit): Promise<Response> {
+  const headers = new Headers(init?.headers || {});
+  if (gatewayToken && !headers.has("Authorization")) {
+    headers.set("Authorization", `Bearer ${gatewayToken}`);
+  }
+  const response = await fetch(input, { ...init, headers });
+  if (response.status === 401) {
+    throw new Error("连接服务需要访问令牌：设置中心 → 连接服务");
+  }
+  return response;
+}
+
+/* 供 XHR 等无法走 gatewayFetch 的调用方手动注入鉴权头 */
+export function gatewayAuthHeaders(): Record<string, string> {
+  return gatewayToken ? { Authorization: `Bearer ${gatewayToken}` } : {};
+}
+
+/* 设置中心「测试连接」：探测草稿地址（不依赖当前 localServiceBase），区分 网络不通 / 401 / 在线 */
+export async function apiProbeGateway(baseUrl: string, token: string): Promise<{ ok: boolean; message: string }> {
+  const normalized = normalizeGatewayBase(baseUrl);
+  if (!normalized) {
+    return { ok: false, message: baseUrl.trim() ? "地址格式无效" : "地址为空" };
+  }
+  const headers: Record<string, string> = {};
+  if (token.trim()) {
+    headers.Authorization = `Bearer ${token.trim()}`;
+  }
+  try {
+    const response = await fetch(`${normalized}/health`, { cache: "no-store", headers });
+    if (response.status === 401) {
+      return { ok: false, message: "服务要求访问令牌，或令牌不正确" };
+    }
+    if (!response.ok) {
+      return { ok: false, message: `HTTP ${response.status}` };
+    }
+    return { ok: true, message: "连接服务在线" };
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : "无法连接" };
+  }
+}
 
 export type FilePreviewResponse = {
   filePath: string;
@@ -98,11 +183,16 @@ export async function apiHealthCheck(timeoutMs = 1500): Promise<boolean> {
   const controller = new AbortController();
   const timer = globalThis.setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const response = await fetch(`${localServiceBase}/health`, {
+    const response = await gatewayFetch(`${localServiceBase}/health`, {
       signal: controller.signal,
       cache: "no-store"
     });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    if (!response.ok) {
+      if (response.status === 401) {
+        throw new Error("连接服务需要访问令牌：设置中心 → 连接服务");
+      }
+      throw new Error(`HTTP ${response.status}`);
+    }
     return true;
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") {
@@ -115,12 +205,12 @@ export async function apiHealthCheck(timeoutMs = 1500): Promise<boolean> {
 }
 
 export async function apiGetServers(): Promise<ServerSummary[]> {
-  const response = await fetch(`${localServiceBase}/api/servers`);
+  const response = await gatewayFetch(`${localServiceBase}/api/servers`);
   return (await response.json()) as ServerSummary[];
 }
 
 export async function apiUpsertManualServer(payload: ManualServerUpsertRequest): Promise<ManualServerUpsertResponse> {
-  const response = await fetch(`${localServiceBase}/api/servers/manual`, {
+  const response = await gatewayFetch(`${localServiceBase}/api/servers/manual`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload)
@@ -129,7 +219,7 @@ export async function apiUpsertManualServer(payload: ManualServerUpsertRequest):
 }
 
 export async function apiDeleteServer(serverId: string): Promise<{ ok: boolean; serverId: string }> {
-  const response = await fetch(`${localServiceBase}/api/servers/${encodeURIComponent(serverId)}`, {
+  const response = await gatewayFetch(`${localServiceBase}/api/servers/${encodeURIComponent(serverId)}`, {
     method: "DELETE"
   });
   return readPayload<{ ok: boolean; serverId: string }>(response, "删除服务器失败");
@@ -140,7 +230,7 @@ export async function apiGetDirectoryListing(params: {
   bastionId?: string;
   directoryPath: string;
 }): Promise<LogFileListResponse> {
-  const response = await fetch(`${localServiceBase}/api/logs/files`, {
+  const response = await gatewayFetch(`${localServiceBase}/api/logs/files`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(params)
@@ -163,7 +253,7 @@ export async function apiListSubdirectories(params: DirectoryListingTarget & {
 }
 
 export async function apiGetLogMeta(serverId: string, filePath: string): Promise<LogFileMetaResponse> {
-  const response = await fetch(`${localServiceBase}/api/logs/meta`, {
+  const response = await gatewayFetch(`${localServiceBase}/api/logs/meta`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ serverId, filePath })
@@ -177,7 +267,7 @@ export async function apiGetLogSlice(
   offset: number,
   length: number
 ): Promise<LogSliceResponse> {
-  const response = await fetch(`${localServiceBase}/api/logs/slice`, {
+  const response = await gatewayFetch(`${localServiceBase}/api/logs/slice`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ serverId, filePath, offset, length })
@@ -191,7 +281,7 @@ export async function apiGetLineContext(
   lineNumber: number,
   contextLines = 12
 ): Promise<LogLineContextResponse> {
-  const response = await fetch(`${localServiceBase}/api/logs/line-context`, {
+  const response = await gatewayFetch(`${localServiceBase}/api/logs/line-context`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ serverId, filePath, lineNumber, contextLines })
@@ -213,7 +303,7 @@ export async function apiCreateSearchTask(params: {
   contextLines: number;
   useRegex: boolean;
 }): Promise<LogSearchTaskResponse> {
-  const response = await fetch(`${localServiceBase}/api/logs/search/tasks`, {
+  const response = await gatewayFetch(`${localServiceBase}/api/logs/search/tasks`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(params)
@@ -222,17 +312,17 @@ export async function apiCreateSearchTask(params: {
 }
 
 export async function apiPollSearchTask(taskId: string): Promise<LogSearchTaskResponse> {
-  const response = await fetch(`${localServiceBase}/api/logs/search/tasks/${encodeURIComponent(taskId)}`, { cache: "no-store" });
+  const response = await gatewayFetch(`${localServiceBase}/api/logs/search/tasks/${encodeURIComponent(taskId)}`, { cache: "no-store" });
   return readPayload<LogSearchTaskResponse>(response, "读取搜索进度失败");
 }
 
 export async function apiGetFinalShellSettings(): Promise<FinalShellSettingsResponse> {
-  const response = await fetch(`${localServiceBase}/api/import/finalshell/settings`);
+  const response = await gatewayFetch(`${localServiceBase}/api/import/finalshell/settings`);
   return readPayload<FinalShellSettingsResponse>(response, "读取 FinalShell 配置失败");
 }
 
 export async function apiSaveFinalShellPath(configuredPath: string): Promise<FinalShellSettingsResponse> {
-  const response = await fetch(`${localServiceBase}/api/import/finalshell/settings`, {
+  const response = await gatewayFetch(`${localServiceBase}/api/import/finalshell/settings`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ configuredPath })
@@ -241,12 +331,12 @@ export async function apiSaveFinalShellPath(configuredPath: string): Promise<Fin
 }
 
 export async function apiGetCredentialStatus(serverId: string): Promise<ServerCredentialStatus> {
-  const response = await fetch(`${localServiceBase}/api/servers/${encodeURIComponent(serverId)}/credential`);
+  const response = await gatewayFetch(`${localServiceBase}/api/servers/${encodeURIComponent(serverId)}/credential`);
   return readPayload<ServerCredentialStatus>(response, "读取凭证状态失败");
 }
 
 export async function apiGetCredentialSecret(serverId: string): Promise<ServerCredentialSecret> {
-  const response = await fetch(`${localServiceBase}/api/servers/${encodeURIComponent(serverId)}/credential/secret`, { cache: "no-store" });
+  const response = await gatewayFetch(`${localServiceBase}/api/servers/${encodeURIComponent(serverId)}/credential/secret`, { cache: "no-store" });
   return readPayload<ServerCredentialSecret>(response, "读取已保存凭证失败");
 }
 
@@ -254,7 +344,7 @@ export async function apiSaveCredential(
   serverId: string,
   creds: { username?: string; password?: string; privateKey?: string }
 ): Promise<ServerCredentialStatus> {
-  const response = await fetch(`${localServiceBase}/api/servers/${encodeURIComponent(serverId)}/credential`, {
+  const response = await gatewayFetch(`${localServiceBase}/api/servers/${encodeURIComponent(serverId)}/credential`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(creds)
@@ -263,14 +353,14 @@ export async function apiSaveCredential(
 }
 
 export async function apiClearCredential(serverId: string): Promise<ServerCredentialStatus> {
-  const response = await fetch(`${localServiceBase}/api/servers/${encodeURIComponent(serverId)}/credential`, {
+  const response = await gatewayFetch(`${localServiceBase}/api/servers/${encodeURIComponent(serverId)}/credential`, {
     method: "DELETE"
   });
   return readPayload<ServerCredentialStatus>(response, "清除凭证失败");
 }
 
 export async function apiGetServerRoute(serverId: string): Promise<ServerRouteConfig> {
-  const response = await fetch(`${localServiceBase}/api/servers/${encodeURIComponent(serverId)}/route`);
+  const response = await gatewayFetch(`${localServiceBase}/api/servers/${encodeURIComponent(serverId)}/route`);
   return readPayload<ServerRouteConfig>(response, "读取二跳配置失败");
 }
 
@@ -278,7 +368,7 @@ export async function apiSaveServerRoute(
   serverId: string,
   route: { preferredBastionId?: string; jumpMode?: string; jumpSearchKeyword?: string; jumpAssetId?: string }
 ): Promise<ServerRouteConfig> {
-  const response = await fetch(`${localServiceBase}/api/servers/${encodeURIComponent(serverId)}/route`, {
+  const response = await gatewayFetch(`${localServiceBase}/api/servers/${encodeURIComponent(serverId)}/route`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(route)
@@ -291,7 +381,7 @@ export async function apiSearchJumpServerAssets(
   bastionId: string | undefined,
   keyword: string
 ): Promise<JumpServerAssetSearchResponse> {
-  const response = await fetch(`${localServiceBase}/api/servers/${encodeURIComponent(serverId)}/jumpserver/assets`, {
+  const response = await gatewayFetch(`${localServiceBase}/api/servers/${encodeURIComponent(serverId)}/jumpserver/assets`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ bastionId, keyword })
@@ -300,7 +390,7 @@ export async function apiSearchJumpServerAssets(
 }
 
 export async function apiGetServerSystemProfile(serverId: string, timeoutMs = 30000, contextPath?: string): Promise<ServerSystemProfileResponse> {
-  const response = await fetch(`${localServiceBase}/api/servers/${encodeURIComponent(serverId)}/system-profile`, {
+  const response = await gatewayFetch(`${localServiceBase}/api/servers/${encodeURIComponent(serverId)}/system-profile`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ timeoutMs, contextPath }),
@@ -313,7 +403,7 @@ export async function apiTestConnection(
   serverId: string,
   directoryPath: string
 ): Promise<ServerConnectionTestResponse> {
-  const response = await fetch(`${localServiceBase}/api/servers/${encodeURIComponent(serverId)}/test-connection`, {
+  const response = await gatewayFetch(`${localServiceBase}/api/servers/${encodeURIComponent(serverId)}/test-connection`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ directoryPath })
@@ -322,7 +412,7 @@ export async function apiTestConnection(
 }
 
 export async function apiImportFromTool(toolId: string): Promise<FinalShellImportResponse> {
-  const response = await fetch(`${localServiceBase}/api/import/${toolId}`);
+  const response = await gatewayFetch(`${localServiceBase}/api/import/${toolId}`);
   return readPayload<FinalShellImportResponse>(response, `导入 ${toolId} 失败`);
 }
 
@@ -350,7 +440,7 @@ export async function apiStartLogRecording(
   filePath: string,
   directoryPath?: string,
 ): Promise<LogRecordingSessionResponse> {
-  const response = await fetch(`${localServiceBase}/api/logs/recordings/start`, {
+  const response = await gatewayFetch(`${localServiceBase}/api/logs/recordings/start`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ serverId, filePath, directoryPath }),
@@ -359,7 +449,7 @@ export async function apiStartLogRecording(
 }
 
 export async function apiStopLogRecording(sessionId: string): Promise<LogRecordingStopResponse> {
-  const response = await fetch(`${localServiceBase}/api/logs/recordings/stop`, {
+  const response = await gatewayFetch(`${localServiceBase}/api/logs/recordings/stop`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ sessionId }),
@@ -372,7 +462,7 @@ export async function apiDownloadFile(
   filePath: string,
   onProgress?: (downloaded: number, total: number, speed: number) => void
 ): Promise<Blob> {
-  const response = await fetch(`${localServiceBase}/api/files/download`, {
+  const response = await gatewayFetch(`${localServiceBase}/api/files/download`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ serverId, filePath })
@@ -413,7 +503,7 @@ export async function apiDownloadFile(
 }
 
 export async function apiDeleteFile(serverId: string, filePath: string): Promise<void> {
-  const response = await fetch(`${localServiceBase}/api/files/delete`, {
+  const response = await gatewayFetch(`${localServiceBase}/api/files/delete`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ serverId, filePath })
@@ -425,7 +515,7 @@ export async function apiDeleteFile(serverId: string, filePath: string): Promise
 }
 
 export async function apiRenameFile(serverId: string, oldPath: string, newPath: string): Promise<void> {
-  const response = await fetch(`${localServiceBase}/api/files/rename`, {
+  const response = await gatewayFetch(`${localServiceBase}/api/files/rename`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ serverId, oldPath, newPath })
@@ -440,7 +530,7 @@ export async function apiPreviewFile(
   serverId: string,
   filePath: string
 ): Promise<FilePreviewResponse> {
-  const response = await fetch(`${localServiceBase}/api/files/preview`, {
+  const response = await gatewayFetch(`${localServiceBase}/api/files/preview`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ serverId, filePath })
@@ -457,7 +547,7 @@ export async function apiPreviewArchiveEntry(
   filePath: string,
   entryName: string
 ): Promise<FilePreviewResponse> {
-  const response = await fetch(`${localServiceBase}/api/files/archive-entry-preview`, {
+  const response = await gatewayFetch(`${localServiceBase}/api/files/archive-entry-preview`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ serverId, filePath, entryName })
@@ -470,7 +560,7 @@ export async function apiPreviewArchiveEntry(
 }
 
 export async function apiSaveFile(serverId: string, filePath: string, content: string): Promise<void> {
-  const response = await fetch(`${localServiceBase}/api/files/save`, {
+  const response = await gatewayFetch(`${localServiceBase}/api/files/save`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ serverId, filePath, content })
@@ -495,6 +585,9 @@ function uploadFormData(
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("POST", url);
+    for (const [name, value] of Object.entries(gatewayAuthHeaders())) {
+      xhr.setRequestHeader(name, value);
+    }
     xhr.upload.onprogress = (event) => {
       if (!event.lengthComputable) return;
       onProgress?.({ loaded: event.loaded, total: event.total });
@@ -537,7 +630,7 @@ export async function apiUploadLocalFile(
   onProgress?: (payload: { transferred: number; chunkBytes: number; totalBytes: number }) => void,
 ): Promise<{ filePath: string; size: number }> {
   if (!onProgress) {
-    const res = await fetch(`${localServiceBase}/api/files/upload/local`, {
+    const res = await gatewayFetch(`${localServiceBase}/api/files/upload/local`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ serverId, filePath, localPath })
@@ -549,7 +642,7 @@ export async function apiUploadLocalFile(
     return res.json() as Promise<{ filePath: string; size: number }>;
   }
 
-  const res = await fetch(`${localServiceBase}/api/files/upload/local/stream`, {
+  const res = await gatewayFetch(`${localServiceBase}/api/files/upload/local/stream`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ serverId, filePath, localPath })
@@ -608,7 +701,7 @@ export async function apiUploadLocalFile(
 }
 
 export async function apiUploadStart(serverId: string, filePath: string): Promise<string> {
-  const res = await fetch(`${localServiceBase}/api/files/upload/start`, {
+  const res = await gatewayFetch(`${localServiceBase}/api/files/upload/start`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ serverId, filePath })
@@ -633,7 +726,7 @@ export async function apiUploadChunk(
 }
 
 export async function apiUploadFinish(uploadId: string): Promise<void> {
-  const res = await fetch(`${localServiceBase}/api/files/upload/finish`, {
+  const res = await gatewayFetch(`${localServiceBase}/api/files/upload/finish`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ uploadId })
@@ -648,7 +741,7 @@ export async function apiMkdir(
   serverId: string,
   directoryPath: string
 ): Promise<{ directoryPath: string }> {
-  const response = await fetch(`${localServiceBase}/api/files/mkdir`, {
+  const response = await gatewayFetch(`${localServiceBase}/api/files/mkdir`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ serverId, directoryPath })
@@ -666,7 +759,7 @@ export async function apiCompress(
   archiveType?: "tar.gz" | "zip",
   targetDir?: string
 ): Promise<{ archivePath: string; output: string }> {
-  const response = await fetch(`${localServiceBase}/api/files/compress`, {
+  const response = await gatewayFetch(`${localServiceBase}/api/files/compress`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ serverId, sourcePath, archiveType, targetDir })
@@ -683,7 +776,7 @@ export async function apiExtractZip(
   filePath: string,
   targetDir?: string
 ): Promise<{ filePath: string; targetDir: string; output: string }> {
-  const response = await fetch(`${localServiceBase}/api/files/extract`, {
+  const response = await gatewayFetch(`${localServiceBase}/api/files/extract`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ serverId, filePath, targetDir })
@@ -696,27 +789,27 @@ export async function apiExtractZip(
 }
 
 export async function apiCreateSshTunnel(req: SshTunnelRequest): Promise<SshTunnelResponse> {
-  const res = await fetch(`${localServiceBase}/api/ssh/tunnel`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(req) });
+  const res = await gatewayFetch(`${localServiceBase}/api/ssh/tunnel`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(req) });
   return res.json();
 }
 
 export async function apiCloseSshTunnel(tunnelId: string): Promise<SshTunnelResponse> {
-  const res = await fetch(`${localServiceBase}/api/ssh/tunnel/${encodeURIComponent(tunnelId)}`, { method: "DELETE" });
+  const res = await gatewayFetch(`${localServiceBase}/api/ssh/tunnel/${encodeURIComponent(tunnelId)}`, { method: "DELETE" });
   return res.json();
 }
 
 export async function apiListSshTunnels(): Promise<SshTunnelListResponse> {
-  const res = await fetch(`${localServiceBase}/api/ssh/tunnels`);
+  const res = await gatewayFetch(`${localServiceBase}/api/ssh/tunnels`);
   return res.json();
 }
 
 export async function apiBatchExec(req: BatchCommandRequest): Promise<BatchCommandResponse> {
-  const res = await fetch(`${localServiceBase}/api/batch/exec`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(req) });
+  const res = await gatewayFetch(`${localServiceBase}/api/batch/exec`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(req) });
   return res.json();
 }
 
 export async function apiMultiFileSearch(params: Record<string, unknown>): Promise<MultiFileLogSearchResponse> {
-  const response = await fetch(`${localServiceBase}/api/logs/search/multi`, {
+  const response = await gatewayFetch(`${localServiceBase}/api/logs/search/multi`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(params)

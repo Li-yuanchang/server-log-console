@@ -12,7 +12,8 @@ import { FileBrowserTreeColumn } from "./FileBrowserTreeColumn.js";
 import { looksLikeJumpServer } from "./terminal-utils.js";
 import type { PreviewDialogState } from "./FilePreviewDialog.js";
 import type { ConfirmDialogState } from "./ModalDialogs.js";
-import { ConnectionSettingsWorkspace, WatermarkOverlay, type ManualServerDraft, type SettingsWorkspaceView } from "./ConnectionSettingsWorkspace.js";
+import { ConnectionSettingsWorkspace, WatermarkOverlay, type GatewayTestState, type ManualServerDraft, type SettingsWorkspaceView } from "./ConnectionSettingsWorkspace.js";
+import { useDesktopUpdate } from "./UpdateCenterPanel.js";
 import { SearchQueryPanel } from "./SearchQueryPanel.js";
 import { SearchToolbarActions } from "./SearchToolbarActions.js";
 import { SshTunnelPanel } from "./SshTunnelPanel.js";
@@ -80,7 +81,7 @@ import { isSpecialPreviewFile, useFileOperations } from "./useFileOperations.js"
 import { useServerManagement } from "./useServerManagement.js";
 import { useLogRecording } from "./useLogRecording.js";
 import { SidebarPanel } from "./SidebarPanel.js";
-import { ServerPickerOverlay, SidepanelMobileTop, SidepanelMobileTabBar, DirectorySheet } from "./SidepanelMobile.js";
+import { ServerPickerOverlay, SidepanelMobileTop, SidepanelStatusbar, SidepanelMobileTabBar, DirectorySheet } from "./SidepanelMobile.js";
 import { WorkspaceTabContextMenu, type WorkspaceTabMenuState } from "./WorkspaceTabContextMenu.js";
 import { WorkspaceSessionTabs } from "./WorkspaceSessionTabs.js";
 import { SettingsModalOverlay } from "./SettingsModalOverlay.js";
@@ -93,10 +94,14 @@ import { useKeyboardShortcuts } from "./useKeyboardShortcuts.js";
 import { useWorkspaceSessionManager, type WorkspaceSessionSetters } from "./useWorkspaceSessionManager.js";
 import { useLogViewer } from "./useLogViewer.js";
 import {
+  DEFAULT_GATEWAY_BASE,
   localServiceBase,
   apiGetLogMeta,
   apiGetLogSlice,
   apiGetServerSystemProfile,
+  apiProbeGateway,
+  applyGatewayConfig,
+  normalizeGatewayBase,
 } from "./api.js";
 import {
   buildConnectionSummary,
@@ -123,11 +128,16 @@ import {
   readActivityPanelHeight,
   readBrowserTreeWidth,
   readDirectoryHistory,
+  readGatewayConfig,
   readLastDirectoryMap,
+  readLastSettingsView,
   readTransferHistory,
   rememberDirectoryIfUseful,
   writeActivityPanelHeight,
   writeBrowserTreeWidth,
+  writeGatewayConfig,
+  clearGatewayConfig,
+  writeLastSettingsView,
 } from "./storage.js";
 
 
@@ -273,6 +283,83 @@ export function App() {
   const { toasts, showToast, updateToast, dismissToast } = useToasts();
   const { isBusy, actionStatus, activityLines, setIsBusy, setActionStatus, pushActivity, withBusy } = useAsyncStatus({ showToast, updateToast, dismissToast });
   const { localServiceState, localServiceStatusText, checkLocalServiceHealth } = useLocalService({ isElectron, setActionStatus, pushActivity, onServiceRestored: async () => { await fetchServers(); await fetchFinalShellSettings(); } });
+  /* 在线更新（update-center-v1）：App 级订阅桌面更新状态；含启动自动检查（每会话一次）与红点来源 */
+  const desktopUpdate = useDesktopUpdate();
+  /* 连接服务（Gateway）设置：草稿地址/令牌 + 测试结果；保存后持久化并重载页面 */
+  const initialGatewayConfig = useMemo(() => readGatewayConfig(), []);
+  const [gatewayDraftBaseUrl, setGatewayDraftBaseUrl] = useState(initialGatewayConfig.baseUrl);
+  const [gatewayDraftToken, setGatewayDraftToken] = useState(initialGatewayConfig.token);
+  const [gatewayTestState, setGatewayTestState] = useState<GatewayTestState | null>(null);
+
+  const isLocalGatewayHost = useCallback((baseUrl: string) => {
+    if (!baseUrl) return true;
+    try {
+      const host = new URL(baseUrl).hostname.toLowerCase();
+      return host === "localhost" || host === "127.0.0.1" || host === "::1" || host === "[::1]";
+    } catch {
+      return false;
+    }
+  }, []);
+
+  /* 扩展访问远程网关需要动态 host 权限；localhost 已在静态 host_permissions 中，桌面端无权限体系 */
+  const requestGatewayHostPermission = useCallback(async (normalizedBase: string): Promise<boolean> => {
+    if (!normalizedBase || isElectron || isLocalGatewayHost(normalizedBase)) {
+      return true;
+    }
+    const chromeApi = (globalThis as { chrome?: { permissions?: { request?: (permissions: { origins: string[] }) => Promise<boolean> } } }).chrome;
+    if (!chromeApi?.permissions?.request) {
+      return true;
+    }
+    try {
+      return Boolean(await chromeApi.permissions.request({ origins: [`${normalizedBase}/*`] }));
+    } catch {
+      return false;
+    }
+  }, [isElectron, isLocalGatewayHost]);
+
+  const testGatewayConfig = useCallback(async () => {
+    setGatewayTestState({ tone: "neutral", text: "正在测试连接服务..." });
+    const result = await apiProbeGateway(gatewayDraftBaseUrl.trim() || DEFAULT_GATEWAY_BASE, gatewayDraftToken);
+    setGatewayTestState({ tone: result.ok ? "success" : "danger", text: result.message });
+  }, [gatewayDraftBaseUrl, gatewayDraftToken]);
+
+  const saveGatewayConfig = useCallback(async () => {
+    const trimmedBase = gatewayDraftBaseUrl.trim();
+    let normalized = "";
+    if (trimmedBase) {
+      normalized = normalizeGatewayBase(trimmedBase) || "";
+      if (!normalized) {
+        setGatewayTestState({ tone: "danger", text: "地址格式无效，示例：https://gw.example.com 或 http://localhost:4040" });
+        return;
+      }
+      const protocol = new URL(normalized).protocol;
+      if (!isLocalGatewayHost(normalized) && protocol === "http:") {
+        setGatewayTestState({ tone: "danger", text: "远程地址必须使用 https（浏览器会拦截不安全的远程 WebSocket）" });
+        return;
+      }
+      if (!(await requestGatewayHostPermission(normalized))) {
+        setGatewayTestState({ tone: "danger", text: "浏览器站点权限被拒绝，无法访问该地址" });
+        return;
+      }
+      writeGatewayConfig({ baseUrl: normalized, token: gatewayDraftToken });
+      applyGatewayConfig({ baseUrl: normalized, token: gatewayDraftToken });
+    } else {
+      /* 地址留空 = 默认本地服务；令牌仍要保留（本地服务也可能开启 GATEWAY_TOKEN） */
+      writeGatewayConfig({ baseUrl: "", token: gatewayDraftToken });
+      applyGatewayConfig({ baseUrl: "", token: gatewayDraftToken });
+    }
+    pushActivity(`连接服务已更新：${localServiceBase}，页面即将重载。`);
+    window.location.reload();
+  }, [gatewayDraftBaseUrl, gatewayDraftToken, isLocalGatewayHost, pushActivity, requestGatewayHostPermission]);
+
+  const resetGatewayConfig = useCallback(() => {
+    clearGatewayConfig();
+    applyGatewayConfig({ baseUrl: "", token: "" });
+    setGatewayDraftBaseUrl("");
+    setGatewayDraftToken("");
+    pushActivity("连接服务已恢复默认（本地服务），页面即将重载。");
+    window.location.reload();
+  }, [pushActivity]);
   const [preserveTerminalOnInactive, setPreserveTerminalOnInactive] = useState(false);
   const [pendingLiveFollowRestore, setPendingLiveFollowRestore] = useState<WorkspaceSessionState | null>(null);
   const isWorkspaceSwitchLocked = isBusy || searchTask?.status === "queued" || searchTask?.status === "running";
@@ -337,9 +424,28 @@ export function App() {
      移动/宽档的显隐由 styles-sidepanel.css 容器查询决定，组件 DOM 常驻。 */
   const [serverPickerOpen, setServerPickerOpen] = useState(false);
   const [dirSheetOpen, setDirSheetOpen] = useState(false);
+  /* Esc 关闭侧栏移动档浮层（选服层 / 目录 sheet），与桌面弹层习惯一致 */
+  useEffect(() => {
+    if (!serverPickerOpen && !dirSheetOpen) {
+      return;
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") {
+        return;
+      }
+      event.stopPropagation();
+      setServerPickerOpen(false);
+      setDirSheetOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [serverPickerOpen, dirSheetOpen]);
   const [settingsWorkspaceView, setSettingsWorkspaceView] = useState<SettingsWorkspaceView>(() => {
     const param = new URLSearchParams(window.location.search).get("settings");
-    return param === "connections" || param === "preferences" ? param : "preferences";
+    if (param === "connections" || param === "gateway" || param === "preferences" || param === "update") {
+      return param;
+    }
+    return readLastSettingsView();
   });
   const [manualServerDraft, setManualServerDraft] = useState<ManualServerDraft>(() => createManualServerDraft());
   const [showQueryAdvanced, setShowQueryAdvanced] = useState(false);
@@ -1474,8 +1580,16 @@ export function App() {
   }
 
   function openSettingsWorkspace(view?: SettingsWorkspaceView) {
-    setSettingsWorkspaceView(view || "preferences");
+    /* 无参调用保持上次视图（未打开过 = localStorage 记录），不再强制回偏好设置 */
+    const next = view || settingsWorkspaceView;
+    writeLastSettingsView(next);
+    setSettingsWorkspaceView(next);
     setShowConnectionSettings(true);
+  }
+
+  function changeSettingsWorkspaceView(view: SettingsWorkspaceView) {
+    writeLastSettingsView(view);
+    setSettingsWorkspaceView(view);
   }
 
   function closeSettingsWorkspace() {
@@ -3196,6 +3310,7 @@ export function App() {
             terminalFontFamily={monoFontFamilyValue(terminalFontFamily)}
             terminalBackgroundColor={terminalScheme.theme.background}
             terminalScheme={uiTerminalScheme}
+            terminalThemeKey={resolvedTheme.id}
             terminalOverlay={terminalOverlay}
             onToggleTerminalOverlay={toggleTerminalOverlay}
             onTogglePopup={() => undefined}
@@ -3276,7 +3391,6 @@ export function App() {
       <span>检查 FinalShell 目录后导入，或手动补录连接信息。</span>
     </div>
   );
-  const sidepanelMobileViewTitle = terminalAsWorkspaceView ? "终端" : isFileMode ? "文件" : "日志";
   const sidepanelMobileActiveView: "log" | "files" | "term" =
     showingLogPreview && !terminalAsWorkspaceView
       ? "log"
@@ -3314,9 +3428,10 @@ export function App() {
           onOpenPalette={() => setPaletteOpen(true)}
           onCloseSettingsWorkspace={closeSettingsWorkspace}
           onActivityPanelResizeStart={handleActivityPanelResizeStart}
+          hasPendingUpdate={desktopUpdate.updateAvailable}
         />
 
-      <section className={`main-panel ${isFileMode ? "main-panel-files" : ""}`}>
+      <section className={`main-panel ${isFileMode ? "main-panel-files" : ""} sp-view-${sidepanelMobileActiveView}`}>
           {!isStandalonePipWindow && workspaceSessions.length > 0 ? (
             <WorkspaceSessionTabs
               workspaceSessions={workspaceSessions}
@@ -3339,7 +3454,6 @@ export function App() {
           <section className="toolbar-panel">
             {/* 侧栏移动档顶栏（sp-appbar + 服务器 chip）：宽档由 CSS display:none 隐藏，DOM 常驻 */}
             <SidepanelMobileTop
-              viewTitle={sidepanelMobileViewTitle}
               onOpenPalette={() => setPaletteOpen(true)}
               onOpenSettings={() => {
                 if (showConnectionSettings) {
@@ -4225,7 +4339,7 @@ export function App() {
                     <span className={isBusy ? "connect-status-busy" : "connect-status-idle"}>
                       {isBusy ? actionStatus : (selectedServer
                         ? "等待系统自动建立 SSH 连接..."
-                        : "先在左侧选择服务器，系统会自动连接并打开目录。")}
+                        : "先选择服务器，系统会自动连接并打开目录。")}
                     </span>
                     {/* 侧栏移动档：未选服务器时给一个打开选服层的主按钮（与上方提示同级行，宽档 CSS 隐藏） */}
                     {!selectedServer ? (
@@ -4494,6 +4608,23 @@ export function App() {
             </div>
           ) : null}
 
+          {/* 侧栏移动档状态条（sp-statusbar）：tabbar 上方一行连接概览，宽档由 CSS 隐藏 */}
+          <SidepanelStatusbar
+            connected={Boolean(selectedServer) && Boolean(connectionTestStatus?.connected)}
+            serverLine={
+              selectedServer
+                ? `${connectionTestStatus?.connected ? "已连接" : "未连接"} · ${selectedServer.username}@${selectedServer.host}`
+                : connectionStateText || "未连接"
+            }
+            pathLine={directoryPath || "/"}
+            detailLines={[
+              ["本地服务", localServiceStatusText],
+              ["服务器", selectedServer ? `${selectedServer.name} · ${connectionStateText || "--"}` : "--"],
+              ["主机", selectedServer ? `${selectedServer.username}@${selectedServer.host}` : "--"],
+              ["路径", directoryPath || "/"],
+            ]}
+          />
+
           {/* 侧栏移动档底部 tab 导航（sp-tabbar）：main-panel 最后一个子元素，宽档由 CSS 隐藏 */}
           <SidepanelMobileTabBar
             activeView={sidepanelMobileActiveView}
@@ -4509,10 +4640,30 @@ export function App() {
         <SettingsModalOverlay open={showConnectionSettings && !isStandalonePipWindow} onClose={closeSettingsWorkspace}>
             <ConnectionSettingsWorkspace
               activeView={settingsWorkspaceView}
-              onViewChange={setSettingsWorkspaceView}
+              onViewChange={changeSettingsWorkspaceView}
               isBusy={isBusy}
               localServiceState={localServiceState}
               localServiceStatusText={localServiceStatusText}
+              gatewaySection={{
+                draftBaseUrl: gatewayDraftBaseUrl,
+                draftToken: gatewayDraftToken,
+                effectiveBase: localServiceBase,
+                testState: gatewayTestState,
+                onDraftBaseUrlChange: setGatewayDraftBaseUrl,
+                onDraftTokenChange: setGatewayDraftToken,
+                onTest: () => { void testGatewayConfig(); },
+                onSave: () => { void saveGatewayConfig(); },
+                onReset: resetGatewayConfig,
+              }}
+              updateSection={{
+                state: desktopUpdate.state,
+                updateAvailable: desktopUpdate.updateAvailable,
+                checkLog: desktopUpdate.checkLog,
+                onCheck: desktopUpdate.check,
+                onDownload: desktopUpdate.download,
+                onInstall: desktopUpdate.install,
+                showToast,
+              }}
               preferenceSection={{
                 uiTheme,
                 uiDensity,
@@ -4793,7 +4944,10 @@ export function App() {
         filteredGroupedServers={filteredGroupedServers}
         serverId={serverId}
         connectionTestStatus={connectionTestStatus}
-        onSelectServer={selectServerById}
+        onSelectServer={(id) => {
+          selectServerById(id);
+          setServerPickerOpen(false);
+        }}
         onDeleteServer={requestDeleteServer}
         onOpenSettingsWorkspace={openSettingsWorkspace}
         emptyState={sidepanelServerEmptyState}

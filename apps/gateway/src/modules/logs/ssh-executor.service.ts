@@ -100,9 +100,70 @@ function buildJumpServerCwdMarker() {
   return `__SLC_CWD_READY_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}__`;
 }
 
+/**
+ * 终端初始目录命令：目录存在则进入；不存在/不可读时逐级回退（$HOME → /），
+ * 不向用户暴露内部标记（[slc]），也绝不让 cd 失败把终端留在半途。
+ * 绝不使用 clear —— 真 clear 会连滚动缓冲一起清掉（\e[3J），把 SSH 登录横幅
+ * （Last login … from …）也抹掉；用户需要看到上次访问时间/IP。
+ * 命令末尾只在“本行”擦除回显（上移一行 + 清除到屏幕尾），不触及上方横幅。
+ *
+ * 注意：必须在登录横幅/首个提示符出现之后再注入本命令，否则回显会落在横幅
+ * 之前，“上移一行擦除”就会擦掉横幅本身（见 primeTerminalCwd）。
+ */
 function buildTerminalCwdCommand(cwd: string) {
   const escapedCwd = escapeShellSingleQuotes(cwd);
-  return `cd -- '${escapedCwd}' >/dev/null 2>&1 && clear || printf '\\n[slc] 无法进入目录: %s\\n' '${escapedCwd}'`;
+  return `cd -- '${escapedCwd}' 2>/dev/null || cd -- "$HOME" 2>/dev/null || cd / 2>/dev/null; printf '\\033[1A\\r\\033[J'`;
+}
+
+/** 提示符行尾（`root@x:~# ` / `$ `）：用于判断登录横幅已输出、可以注入命令 */
+const SHELL_PROMPT_TAIL_PATTERN = /[#$]\s*$/;
+/** 本命令擦除序列的“真”ESC 输出（回显里只是字面 \033 文本，不会误命中） */
+const CWD_ERASE_OUTPUT_PATTERN = /\x1b\[J/;
+
+/**
+ * 新开 shell 的初始目录注入：先等到登录横幅 + 首个提示符出现，再写 cd 命令，
+ * 这样回显落在横幅下方、擦除不会波及横幅；并把横幅/回显/擦除的完整字节
+ * 作为 initialBuffer 返回，交由调用方回放，避免“注入后到 WS 附加监听”之间丢包。
+ */
+function primeTerminalCwd(stream: ClientChannel, cwd: string | undefined, timeoutMs = 5000): Promise<string> {
+  const targetCwd = cwd?.trim();
+  if (!targetCwd) {
+    return Promise.resolve("");
+  }
+  return new Promise((resolve) => {
+    let buffer = "";
+    let sent = false;
+    let settled = false;
+    let settleTimer: ReturnType<typeof setTimeout> | undefined;
+
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(hardTimer);
+      if (settleTimer) clearTimeout(settleTimer);
+      stream.off("data", onData);
+      resolve(buffer);
+    };
+
+    const onData = (chunk: Buffer | string) => {
+      buffer += chunk.toString();
+      if (!sent) {
+        if (SHELL_PROMPT_TAIL_PATTERN.test(buffer)) {
+          sent = true;
+          stream.write(`${buildTerminalCwdCommand(targetCwd)}\r`);
+        }
+        return;
+      }
+      // 命令擦除输出到达后，稍等提示符重绘完成即收尾
+      if (CWD_ERASE_OUTPUT_PATTERN.test(buffer)) {
+        if (settleTimer) clearTimeout(settleTimer);
+        settleTimer = setTimeout(finish, 200);
+      }
+    };
+
+    const hardTimer = setTimeout(finish, timeoutMs);
+    stream.on("data", onData);
+  });
 }
 
 function applyTerminalCwd(stream: ClientChannel, cwd?: string) {
@@ -951,19 +1012,22 @@ export class SshExecutorService {
 
     return new Promise<ManagedSshConnection>((resolve, reject) => {
       const shellOpts: Record<string, unknown> = { term: "xterm", cols: 160, rows: 48 };
-      connection.client.shell(shellOpts, (error, stream) => {
+      connection.client.shell(shellOpts, async (error, stream) => {
         if (error) {
           connection.cleanup();
           reject(error);
           return;
         }
 
-        applyTerminalCwd(stream, cwd);
+        // 等登录横幅 + 首个提示符出现后再注入 cd，避免回显落在横幅之前、
+        // 擦除时误擦横幅；返回的字节由调用方作为 initialBuffer 回放。
+        const initialBuffer = await primeTerminalCwd(stream, cwd);
 
         resolve({
           client: connection.client,
           mode: connection.mode,
           shellStream: stream,
+          initialBuffer,
           cleanup: () => {
             stream.end("exit\r");
             connection.cleanup();
@@ -1791,9 +1855,10 @@ export class SshExecutorService {
               const targetCwd = cwd?.trim();
               if (targetCwd) {
                 const marker = buildJumpServerCwdMarker();
+                // 目标目录失效不应中断会话：失败时逐级回退（$HOME → /），仅记录日志。
                 const cdOutput = await sendAndWaitForPatterns(
                   stream,
-                  `cd -- '${escapeShellSingleQuotes(targetCwd)}' >/dev/null 2>&1; printf '\\n${marker}:%s:%s\\n' "$?" "$PWD"\r`,
+                  `cd -- '${escapeShellSingleQuotes(targetCwd)}' >/dev/null 2>&1 || cd -- "$HOME" >/dev/null 2>&1 || cd / >/dev/null 2>&1; printf '\\n${marker}:%s:%s\\n' "$?" "$PWD"\r`,
                   [
                     { key: "target-shell", pattern: TARGET_SHELL_PROMPT_PATTERN }
                   ],
@@ -1802,7 +1867,7 @@ export class SshExecutorService {
                 );
                 const markerMatch = cdOutput.buffer.match(new RegExp(`${marker}:(\\d+):([^\\r\\n]*)`));
                 if (!markerMatch || markerMatch[1] !== "0") {
-                  throw new Error(`JumpServer 已进入目标资产，但无法切换到目录：${targetCwd}`);
+                  console.warn(`[jumpserver] 目标目录不存在，已回退：${targetCwd}`);
                 }
               }
 

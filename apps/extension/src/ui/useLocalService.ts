@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { LOCAL_SERVICE_RETRY_INTERVAL_MS } from "./types.js";
-import { apiHealthCheck } from "./api.js";
+import { apiHealthCheck, localServiceBase } from "./api.js";
 
 export type LocalServiceAPI = {
   localServiceState: "checking" | "online" | "offline";
@@ -22,21 +22,21 @@ export function useLocalService(params: {
   async function checkLocalServiceHealth(options?: { silentFailure?: boolean; background?: boolean }) {
     if (!options?.background) {
       setLocalServiceState("checking");
-      setLocalServiceStatusText("正在检查本地连接服务...");
+      setLocalServiceStatusText("正在检查连接服务...");
     }
 
     try {
       await apiHealthCheck();
       setLocalServiceState("online");
-      setLocalServiceStatusText("本地连接服务已启动");
+      setLocalServiceStatusText("连接服务已就绪");
       return true;
     } catch (error) {
       const detail = error instanceof Error ? error.message : "未知错误";
       setLocalServiceState("offline");
-      setLocalServiceStatusText(isElectron ? "正在等待内置连接服务启动..." : "本地连接服务未启动");
+      setLocalServiceStatusText(isElectron ? "正在等待内置连接服务启动..." : `连接服务不可达：${localServiceBase}`);
       if (!options?.silentFailure) {
-        setActionStatus(isElectron ? "正在等待内置连接服务启动..." : "本地连接服务未启动，请先启动本地服务。");
-        pushActivity(`本地连接服务不可用：${detail}`);
+        setActionStatus(isElectron ? "正在等待内置连接服务启动..." : `连接服务不可达：${localServiceBase}（${detail}）`);
+        pushActivity(`连接服务不可用：${detail}`);
       }
       return false;
     }

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { TERMINAL_SCHEMES, type TerminalColorSchemeId } from "./useUiTheme.js";
 import type { ServerSummary } from "@server-log-console/shared";
 import { looksLikeJumpServer } from "./terminal-utils.js";
+import { getGatewayToken } from "./api.js";
 import { createTerminalColorizer, type TerminalColorizer } from "./terminal-decorations.js";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
@@ -39,6 +40,9 @@ interface UseTerminalSessionOptions {
   terminalBackgroundColor?: string;
   /** 终端配色（独立槽位）：映射 xterm ITheme（背景/前景/光标/选区 + ANSI 16 色） */
   terminalScheme?: TerminalColorSchemeId;
+  /** 解析后的主题标识（v3 色差修复）：ui 主题/明暗变更时触发 xterm ITheme 刷新，
+      否则画布/视口底色停留在创建时的旧值，与 CSS 链路（--terminal-background 实时值）色差 */
+  themeKey?: string;
   /** 终端客户端着色开关（默认 true）：纯客户端读 buffer + xterm registerDecoration 上色，
       绝不向 PTY 写入任何字节（JumpServer 红线：不能发不可见字符），跳板机会话同样安全。 */
   enableClientColoring?: boolean;
@@ -329,7 +333,7 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
     /* 终端配色：整套 ITheme 替换（ANSI 16 色随方案切换） */
     terminal.options.theme = buildTerminalTheme(options.terminalScheme, shellBg, shellInk);
     scheduleFit([0, 24, 96]);
-  }, [options.terminalBackgroundColor, options.terminalFontSize, options.terminalFontFamily, options.terminalScheme, scheduleFit]);
+  }, [options.terminalBackgroundColor, options.terminalFontSize, options.terminalFontFamily, options.terminalScheme, options.themeKey, scheduleFit]);
 
   useEffect(() => {
     if (!options.active || !containerRef.current) {
@@ -586,7 +590,8 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
       }
 	    });
 
-    const wsUrl = options.localServiceBase.replace(/^http/, "ws") + "/ws/terminal";
+    const wsToken = getGatewayToken();
+    const wsUrl = options.localServiceBase.replace(/^http/, "ws") + "/ws/terminal" + (wsToken ? `?token=${encodeURIComponent(wsToken)}` : "");
     const socket = new WebSocket(wsUrl);
     socketRef.current = socket;
     expectedCloseRef.current = false;

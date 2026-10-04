@@ -30,6 +30,7 @@ export type SidebarPanelProps = {
   onOpenPalette: () => void;
   onCloseSettingsWorkspace: () => void;
   onActivityPanelResizeStart: (event: React.PointerEvent<HTMLDivElement>) => void;
+  hasPendingUpdate?: boolean;
 };
 
 export function SidebarPanel(props: SidebarPanelProps) {
@@ -59,6 +60,7 @@ export function SidebarPanel(props: SidebarPanelProps) {
     onCloseSettingsWorkspace,
     onOpenPalette,
     onActivityPanelResizeStart,
+    hasPendingUpdate,
   } = props;
 
   return (
@@ -79,7 +81,7 @@ export function SidebarPanel(props: SidebarPanelProps) {
               <CommandIcon size={14} strokeWidth={1.8} />
             </button>
             <button
-              className="ghost-button icon-button"
+              className="ghost-button icon-button settings-gear-button"
               title={showConnectionSettings ? "关闭设置中心" : "打开设置中心"}
               onClick={() => {
                 if (showConnectionSettings) {
@@ -90,6 +92,7 @@ export function SidebarPanel(props: SidebarPanelProps) {
               }}
             >
               <ToolIcon theme={uiTheme} kind="settings" />
+              {hasPendingUpdate ? <span className="settings-gear-badge" aria-label="有新版本可更新" /> : null}
             </button>
           </div>
         </div>

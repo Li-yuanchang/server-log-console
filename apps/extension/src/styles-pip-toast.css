@@ -166,6 +166,14 @@
   background-color: var(--terminal-background, var(--shell)) !important;
 }
 
+/* xterm 会在 .xterm-scrollable-element 上写行内 background-color（= 终端配色底色，
+   如 rgb(46,52,64)）。它与容器/主题底色不一致时，就会在终端区形成一块异色。
+   行内样式盖不过 CSS 普通规则，故用 !important 去掉该行内底色，露出容器统一底色。
+   （内联的 position/overflow 等由 xterm 自身管理，保持不动） */
+.xterm-container .xterm-scrollable-element {
+  background-color: transparent !important;
+}
+
 .workspace-startup-card {
   display: flex;
   align-items: center;

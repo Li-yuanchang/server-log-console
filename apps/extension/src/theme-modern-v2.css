@@ -1605,8 +1605,19 @@
   display: flex;
   flex-direction: column;
 }
+/* main-shell/tab-panes 必须纵向撑满：否则 xterm 内容（按行渲染，高度=行数×行高）
+   之后的面板剩余区域露出面板底色（--shell），形成「下方色差带」（2026-10-03） */
 .theme-modern .terminal-main-shell {
   flex: 1 1 0%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.theme-modern .terminal-tab-panes {
+  flex: 1 1 0%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 /* AI 抽屉（终端右侧，非模态伴生） */
 .theme-modern .terminal-side-panel {

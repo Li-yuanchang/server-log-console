@@ -26,6 +26,7 @@
   },
   "permissions": ["downloads", "sidePanel"],
   "host_permissions": ["http://localhost:4040/*", "http://127.0.0.1:4040/*"],
+  "optional_host_permissions": ["http://*/*", "https://*/*"],
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'"
   }

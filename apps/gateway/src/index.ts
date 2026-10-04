@@ -36,6 +36,8 @@ import multer from "multer";
 import { shellEscape } from "./modules/logs/remote-shell.js";
 import { buildJumpServerAssetKeyword, parseJumpServerAssetRootPath, parseJumpServerSftpPath } from "./modules/logs/jumpserver-path.js";
 import { registerTerminalWebsocket } from "./modules/terminals/terminal-websocket.js";
+import { AuthService } from "./modules/auth/auth.service.js";
+import { createDesktopUpdateStatic, resolveDesktopUpdateDir } from "./desktopUpdateStatic.js";
 
 const bootStart = performance.now();
 function logPhase(label: string, start: number) {
@@ -109,6 +111,14 @@ const serverSystemProfileService = new ServerSystemProfileService(serverRegistry
 logPhase("Service layer", t);
 
 t = performance.now();
+const authService = new AuthService();
+await authService.initialize();
+if (authService.isEnabled()) {
+  console.log("  ✓ Gateway auth enabled (GATEWAY_TOKEN or gateway-auth.json)");
+}
+logPhase("Auth service", t);
+
+t = performance.now();
 const importResolver = new ImportStrategyResolver();
 importResolver.register(new FinalShellImportStrategy());
 importResolver.register(new XshellImportStrategy());
@@ -117,6 +127,32 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: upl
 logPhase("Import strategies & middleware", t);
 
 app.use(cors());
+
+/* Bearer Token 鉴权：/health 保持开放（离线状态展示依赖它）；未配置令牌时完全放行（本地模式）。
+   浏览器 WebSocket 无法携带请求头，upgrade 阶段用 ?token= 校验，这里同样接受该参数。 */
+app.use((req, res, next) => {
+  if (!authService.isEnabled() || req.path === "/health") {
+    next();
+    return;
+  }
+  const ip = req.socket.remoteAddress || "unknown";
+  if (authService.isRateLimited(ip)) {
+    res.status(429).json({ message: "认证失败次数过多，请稍后再试" });
+    return;
+  }
+  const candidate = authService.extractBearer(req.headers.authorization)
+    ?? (typeof req.query.token === "string" ? req.query.token : null);
+  if (authService.verify(candidate)) {
+    next();
+    return;
+  }
+  authService.recordFailure(ip);
+  res.status(401).json({ message: "需要访问令牌：请求头 Authorization: Bearer <token>" });
+});
+
+/* 共享部署加固：GATEWAY_HIDE_SECRETS=1 时关闭凭证明文导出接口 */
+const secretsExportEnabled = process.env.GATEWAY_HIDE_SECRETS !== "1";
+
 app.use(express.json({ limit: "50mb" }));
 
 app.get("/health", (_req, res) => {
@@ -137,6 +173,10 @@ app.get("/api/servers/:serverId/credential", (req, res) => {
 });
 
 app.get("/api/servers/:serverId/credential/secret", (req, res) => {
+  if (!secretsExportEnabled) {
+    res.status(403).json({ message: "凭证明文导出已被服务端禁用（GATEWAY_HIDE_SECRETS=1）" });
+    return;
+  }
   try {
     const server = serverRegistryService.getServer(req.params.serverId);
     res.json(credentialResolverService.reveal(server));
@@ -894,6 +934,17 @@ app.post("/api/logs/line-context", async (req, res) => {
 });
 
 t = performance.now();
+const desktopUpdateStatic = createDesktopUpdateStatic();
+if (desktopUpdateStatic) {
+  app.use("/desktop-updates", desktopUpdateStatic);
+  // 目录已挂载但文件不存在时返回 404，避免落到前端 SPA fallback
+  app.get("/desktop-updates/*", (_req, res) => res.status(404).end());
+  logPhase(`Desktop update source (${resolveDesktopUpdateDir()})`, t);
+} else {
+  app.get("/desktop-updates/*", (_req, res) => res.status(404).end());
+}
+
+t = performance.now();
 if (existsSync(extensionIndexFile)) {
   app.use(express.static(extensionDistDir));
 
@@ -1127,7 +1178,14 @@ wsServer.on("connection", (socket: WebSocket) => {
 registerTerminalWebsocket(terminalWsServer, sshExecutorService);
 
 httpServer.on("upgrade", (request, socket, head) => {
-  const pathname = new URL(request.url || "/", "http://127.0.0.1").pathname;
+  const upgradeUrl = new URL(request.url || "/", "http://127.0.0.1");
+  const pathname = upgradeUrl.pathname;
+
+  /* 浏览器 WebSocket 带不了请求头：鉴权走 ?token= 查询参数 */
+  if (authService.isEnabled() && !authService.verify(upgradeUrl.searchParams.get("token"))) {
+    socket.destroy();
+    return;
+  }
 
   if (pathname === "/ws/live") {
     wsServer.handleUpgrade(request, socket, head, (upgradedSocket) => {

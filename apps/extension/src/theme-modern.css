@@ -1952,7 +1952,11 @@
   gap: 4px;
 }
 
-.theme-modern .browser-resizer { flex: 0 0 1px; background: var(--line); }
+.theme-modern .browser-resizer {
+  flex: 0 0 1px;
+  /* background: var(--line); —— 2026-10-03 用户要求去掉分隔线底色 */
+  background: transparent;
+}
 .theme-modern .browser-resizer::before { display: none; }
 
 .theme-modern .browser-column {
@@ -2291,6 +2295,32 @@
 .theme-modern .file-table {
   padding: 0 4px 4px;
   background: var(--panel);
+}
+
+/* --- 20a. 终端视图背景同源（2026-10-03 色差修复） ---
+   xterm 画布按字符网格渲染，四周/底部会露出容器底色；终端视图链路里
+   工作区面板/面板体等层的底色（半透明工作区层、soft 变体）与 xterm 主题
+   底色（--terminal-background）不同值时，形成「两条深浅不一的蓝灰」色差
+   （实测 102,128,163 vs 89,113,145）。终端视图链路统一钉
+   var(--terminal-background)，与 xtheme 渲染底色同源，缝隙不可见。 */
+/* 背景带 --shell 兜底：Geist 等部分主题预设未定义 --terminal-background，
+   无兜底时整条链路退化为透明，露出工作区背景层（色差依旧） */
+.theme-modern .workspace-panel.workspace-panel-terminal,
+.theme-modern .workspace-panel.workspace-panel-terminal .terminal-bottom-panel,
+.theme-modern .workspace-panel.workspace-panel-terminal .terminal-body-layout,
+.theme-modern .workspace-panel.workspace-panel-terminal .terminal-main-shell,
+.theme-modern .workspace-panel.workspace-panel-terminal .terminal-tab-panes,
+.theme-modern .workspace-panel.workspace-panel-terminal .terminal-tab-pane,
+.theme-modern .workspace-panel.workspace-panel-terminal .terminal-panel-body,
+.theme-modern .workspace-panel.workspace-panel-terminal .xterm-container,
+.theme-modern .main-panel-with-terminal .terminal-bottom-panel,
+.theme-modern .main-panel-with-terminal .terminal-body-layout,
+.theme-modern .main-panel-with-terminal .terminal-main-shell,
+.theme-modern .main-panel-with-terminal .terminal-tab-panes,
+.theme-modern .main-panel-with-terminal .terminal-tab-pane,
+.theme-modern .main-panel-with-terminal .terminal-panel-body,
+.theme-modern .main-panel-with-terminal .xterm-container {
+  background: var(--terminal-background, var(--shell));
 }
 
 /* --- 20. 终端面板 --- */
@@ -3834,183 +3864,25 @@
   .theme-modern .browser-grid > .browser-column:first-child { flex: 0 0 180px; }
 }
 
-/* 800 – 1024：侧栏折叠成 56px 图标列（服务器头像/状态点竖排，只留图标）。
-   用 max-width: 1024px 精确匹配原型「800 – 1024」档的上界（含 1024）。
-   类名以实际渲染的 DOM 为准（sidebar-head-title / pane-title-row /
-   server-item-main 等），隐藏一切文字型节点，保证 56px 内不横向溢出。 */
-@media (max-width: 1024px) {
-  .theme-modern .sidebar-panel {
-    flex: 0 0 56px;
-    width: 56px;
-    overflow: hidden;
-  }
-  .theme-modern .sidebar-panel .sidebar-head,
-  .theme-modern .sidebar-panel .pane-section {
-    padding-left: 4px;
-    padding-right: 4px;
-  }
-  /* 只留图标：标题、计数、搜索框、分组标题全部隐藏 */
-  .theme-modern .sidebar-panel .sidebar-head-title,
-  .theme-modern .sidebar-panel .pane-title-row,
-  .theme-modern .sidebar-panel .server-group-title,
-  .theme-modern .sidebar-panel .pane-section > input {
-    display: none;
-  }
-  .theme-modern .sidebar-panel .sidebar-head-row {
-    flex-direction: column;
-    align-items: center;
-    gap: 4px;
-  }
-  .theme-modern .sidebar-panel .sidebar-head-buttons {
-    flex-direction: column;
-    align-items: center;
-  }
-  /* 服务器项：只留状态点，名称、地址、端口与悬浮快捷操作都隐藏 */
-  .theme-modern .sidebar-panel .server-item-main,
-  .theme-modern .sidebar-panel .server-item-meta,
-  .theme-modern .sidebar-panel .server-item-host,
-  .theme-modern .sidebar-panel .server-item-quick-actions {
-    display: none;
-  }
-  .theme-modern .sidebar-panel .server-groups,
-  .theme-modern .sidebar-panel .server-list,
-  .theme-modern .sidebar-panel .server-item-wrap,
-  .theme-modern .sidebar-panel .server-item {
-    align-items: center;
-    justify-content: center;
-  }
-  .theme-modern .sidebar-panel .server-item-wrap {
-    width: 100%;
-  }
-  .theme-modern .sidebar-panel .server-item {
-    width: 40px;
-    min-width: 0;
-    padding-left: 0;
-    padding-right: 0;
-  }
-  /* 文件树在 <1024 隐藏（原型：目录改下拉） */
-  .theme-modern .browser-grid > .browser-tree-column,
-  .theme-modern .browser-grid > .browser-resizer {
-    display: none;
-  }
-}
+/* 800 – 1024 桌面窄窗：原「56px 图标栏」档已删除——窄容器统一走
+   styles-sidepanel.css 的容器查询档位（<560 移动档 / 560-799 侧栏 200 +
+   树列 132），避免两套窄窗行为并存（2026-10-03 响应式统一）。 */
 
-/* < 800：文件表隐藏「类型」列；工具栏搜索框收缩为 6px 图标。
-   注意：本文件后面还有一条同特异性的 .theme-modern .file-row 列模板规则，
-   媒体查询不加特异性，靠后那条会赢。故这里统一挂到 .file-table 上
-   （文件表行必然位于 .file-table 内）把特异性提到 0,3,0。 */
-@media (max-width: 799.9px) {
-  .theme-modern .file-table .file-table-head,
-  .theme-modern .file-table .file-row {
-    grid-template-columns: 28px minmax(0, 1fr) 90px 130px;
-  }
-  .theme-modern .file-table .file-table-head:has(.file-transfer-head-cell),
-  .theme-modern .file-table .file-row:has(.file-transfer-cell) {
-    grid-template-columns: 28px minmax(0, 1fr) 200px 90px 130px;
-  }
-  .theme-modern .file-table .file-table-head > :last-child,
-  .theme-modern .file-table .file-row > :last-child {
-    display: none;
-  }
-}
 
-body.extension-sidepanel .app-shell.theme-modern {
-  padding: 0;
-  height: 100vh;
-}
+/* < 800：文件表隐藏「类型」列 + 4 列模板——已改写为容器查询
+   （styles-sidepanel.css ≤799.9 档），随容器宽度而非视口宽度生效。 */
 
-body.extension-sidepanel .theme-modern .shell-layout {
-  flex-direction: row;
-  height: 100vh;
-}
 
-body.extension-sidepanel .theme-modern .sidebar-panel {
-  flex: 0 0 180px;
-  width: auto;
-  max-height: none;
-  min-height: 0;
-  border-right: 1px solid var(--sidebar-line);
-  border-bottom: none;
-}
+/* 注：原 body.extension-sidepanel .app-shell/.shell-layout/.sidebar-panel/
+   .sidebar-head/.pane-section/.server-groups/.compact-activity-panel 侧栏特例块
+   （旧 3917-3948 行）已于 2026-10-02 迁入 styles-sidepanel.css 环境覆盖层并删除，
+   留在这里会以更高特异性覆盖双档容器查询层。 */
 
-body.extension-sidepanel .theme-modern .sidebar-head,
-body.extension-sidepanel .theme-modern .pane-section {
-  padding-left: 12px;
-  padding-right: 12px;
-}
-
-body.extension-sidepanel .theme-modern .server-groups {
-  min-height: 120px;
-}
-
-body.extension-sidepanel .theme-modern .compact-activity-panel {
-  height: 132px !important;
-}
-
-body.extension-sidepanel .theme-modern .toolbar-panel {
-  padding: 12px;
-}
-
-body.extension-sidepanel .theme-modern .toolbar-commandbar {
-  flex-wrap: wrap;
-  align-items: stretch;
-  overflow-x: visible;
-}
-
-body.extension-sidepanel .theme-modern .toolbar-view-switch {
-  width: fit-content;
-}
-
-body.extension-sidepanel .theme-modern .toolbar-search-actions {
-  flex: 1 1 100%;
-  flex-wrap: wrap;
-  justify-content: flex-start;
-}
-
-body.extension-sidepanel .theme-modern .toolbar-search-row {
-  flex-wrap: wrap;
-}
-
-body.extension-sidepanel .theme-modern .toolbar-search-row .command-input-keyword {
-  min-width: 0;
-  flex-basis: 100%;
-}
-
-body.extension-sidepanel .theme-modern .advanced-row-main,
-body.extension-sidepanel .theme-modern .advanced-row-time,
-body.extension-sidepanel .theme-modern .time-pair {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-body.extension-sidepanel .theme-modern .workspace-strip {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-}
-
-body.extension-sidepanel .theme-modern .workspace-actions {
-  flex-wrap: wrap;
-  justify-content: flex-start;
-}
-
-body.extension-sidepanel .theme-modern .directory-filter-input {
-  max-width: none;
-}
-
-body.extension-sidepanel .theme-modern .browser-grid {
-  flex-direction: row;
-}
-
-body.extension-sidepanel .theme-modern .browser-grid > .browser-column:first-child {
-  flex: 0 0 148px;
-  min-width: 120px;
-  border-right: 1px solid var(--line);
-  border-bottom: none;
-}
-
-body.extension-sidepanel .theme-modern .browser-resizer {
-  display: block;
-}
+/* 注：原 body.extension-sidepanel .toolbar-panel/.toolbar-commandbar/
+   .toolbar-search-row/.advanced-row/.workspace-strip/.browser-grid 等
+   侧栏特例块（3851-3915 行）已于 2026-10-03 迁入 styles-sidepanel.css
+   的移动档容器查询（<560 才生效）——留在这里会以宿主前缀在【任何宽度】
+   强制换行/堆叠，全宽 popup 首当其冲（2026-10-03 修复）。 */
 
 .theme-modern .workspace-session-strip {
   background: var(--panel);
@@ -4443,6 +4315,24 @@ body.is-electron .settings-exclusive-head input {
   flex-direction: column;
   gap: 12px;
   max-width: 760px;
+}
+
+/* 连接服务（Gateway）设置视图：单卡纵排，滚动行为与 connections 一致 */
+.gateway-view {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.gateway-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 760px;
+  padding: 16px 20px 20px;
 }
 
 /* 设置区按钮语义（压过默认黑色按钮） */
@@ -5622,3 +5512,672 @@ body.is-electron .settings-exclusive-head input {
 .palette-item-sub { color: var(--ink-muted); font-size: var(--fs-xs); }
 .palette-item-hint { flex: none; font-family: var(--mono-font-family); font-size: var(--fs-2xs); color: var(--ink-muted); }
 .palette-empty { padding: 28px 12px; text-align: center; color: var(--ink-muted); font-size: var(--fs-xs); }
+
+/* ============================================================
+   设置中心 · 软件更新面板（settings-update-*，对齐 docs/prototypes/update-center-v1.html；
+   方案 docs/在线更新与打包方案.md §4.3。颜色/字号一律走 token。）
+   ============================================================ */
+.settings-update-view {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.settings-update-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 24px 26px;
+  min-height: 0;
+}
+
+.settings-update-inner {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+/* 卡片（原型 .card） */
+.settings-update-card {
+  border: 1px solid var(--line);
+  border-radius: var(--r-l);
+  margin-bottom: 14px;
+  background: var(--panel);
+  overflow: hidden;
+}
+
+.settings-update-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel-muted);
+}
+
+.settings-update-kicker {
+  font-size: var(--fs-2xs);
+  font-weight: 650;
+  letter-spacing: 0.07em;
+  color: var(--ink-muted);
+  text-transform: uppercase;
+}
+
+.settings-update-hint {
+  margin-left: auto;
+  font-size: var(--fs-2xs);
+  color: var(--ink-muted);
+}
+
+.settings-update-card-body {
+  padding: 14px 16px;
+}
+
+/* 徽标（原型 .badge：ok / warn / err / info / dim） */
+.settings-update-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--fs-2xs);
+  border-radius: 999px;
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  color: var(--ink-soft);
+  background: var(--panel);
+  white-space: nowrap;
+}
+
+.settings-update-badge-dot {
+  flex: 0 0 auto;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--line-strong);
+}
+
+.settings-update-badge-ok {
+  color: var(--green);
+  border-color: color-mix(in srgb, var(--green) 25%, transparent);
+  background: color-mix(in srgb, var(--green) 6%, transparent);
+}
+.settings-update-badge-ok .settings-update-badge-dot {
+  background: var(--green-dot);
+  box-shadow: 0 0 0 2.5px color-mix(in srgb, var(--green-dot) 18%, transparent);
+}
+
+.settings-update-badge-warn {
+  color: var(--amber);
+  border-color: color-mix(in srgb, var(--amber) 25%, transparent);
+  background: var(--amber-soft);
+}
+.settings-update-badge-warn .settings-update-badge-dot { background: var(--amber); }
+
+.settings-update-badge-err {
+  color: var(--red);
+  border-color: color-mix(in srgb, var(--red) 25%, transparent);
+  background: var(--red-soft);
+}
+.settings-update-badge-err .settings-update-badge-dot { background: var(--red); }
+
+.settings-update-badge-info {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 25%, transparent);
+  background: var(--accent-soft);
+}
+.settings-update-badge-info .settings-update-badge-dot {
+  background: var(--accent);
+  animation: settings-update-pulse 1.1s infinite;
+}
+@keyframes settings-update-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+.settings-update-badge-dim { color: var(--ink-muted); }
+
+/* 状态主卡（原型 .hero） */
+.settings-update-hero {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.settings-update-app-icon {
+  flex: 0 0 52px;
+  width: 52px;
+  height: 52px;
+  border-radius: 12px;
+  background: linear-gradient(145deg, var(--ink), var(--shell));
+  color: var(--on-ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: var(--fs-md);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--on-ink) 14%, transparent), var(--shadow-sm);
+}
+
+.settings-update-hero-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.settings-update-hero-ver {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.settings-update-ver-cur {
+  font-family: var(--mono-font-family);
+  font-size: var(--fs-xl);
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+
+.settings-update-ver-arrow {
+  color: var(--line-strong);
+  font-size: var(--fs-md);
+}
+
+.settings-update-ver-next {
+  font-family: var(--mono-font-family);
+  font-size: var(--fs-xl);
+  font-weight: 650;
+  color: var(--accent);
+}
+
+.settings-update-hero-meta {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 5px;
+  flex-wrap: wrap;
+}
+
+.settings-update-hero-side {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.settings-update-last-check {
+  font-size: var(--fs-2xs);
+  color: var(--ink-muted);
+}
+
+/* Web / 扩展宿主：主按钮位置改为各自更新方式说明 */
+.settings-update-host-note {
+  max-width: 220px;
+  font-size: var(--fs-2xs);
+  color: var(--ink-muted);
+  text-align: right;
+  line-height: 1.55;
+}
+
+/* 主按钮（原型 .btn-primary / .btn-ghost） */
+.settings-update-btn {
+  font: inherit;
+  font-size: var(--fs-xs);
+  letter-spacing: -0.01em;
+  border-radius: var(--ctl-radius);
+  padding: 6px 12px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ctl-icon-gap);
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+
+.settings-update-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.settings-update-btn-primary {
+  background: var(--accent);
+  color: var(--on-accent);
+  border: 1px solid var(--accent);
+  font-weight: 550;
+}
+.settings-update-btn-primary:hover:not(:disabled) { background: var(--accent-strong); }
+
+.settings-update-btn-ghost {
+  background: var(--panel);
+  color: var(--ink);
+  border: 1px solid var(--line);
+}
+.settings-update-btn-ghost:hover:not(:disabled) { background: var(--panel-muted); }
+
+/* unavailable / error 的原因行 */
+.settings-update-status-reason {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--line);
+  font-size: var(--fs-xs);
+  color: var(--ink-muted);
+}
+.settings-update-status-reason-err { color: var(--red); }
+
+/* 下载进度（原型 .progress-wrap） */
+.settings-update-progress-wrap {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--line);
+}
+
+.settings-update-progress-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 7px;
+}
+
+.settings-update-progress-title {
+  font-size: var(--fs-xs);
+  font-weight: 550;
+  color: var(--ink);
+}
+
+.settings-update-progress-bytes {
+  margin-left: auto;
+  font-family: var(--mono-font-family);
+  font-size: var(--fs-2xs);
+  color: var(--ink-muted);
+}
+
+.settings-update-progress-track {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--panel-muted);
+  overflow: hidden;
+  border: 1px solid var(--line);
+}
+
+.settings-update-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 72%, var(--on-accent)));
+  transition: width 0.18s linear;
+}
+
+.settings-update-sha-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 9px;
+  font-family: var(--mono-font-family);
+  font-size: var(--fs-2xs);
+  color: var(--green);
+}
+.settings-update-sha-line svg { flex: 0 0 auto; }
+
+/* 版本说明（原型 .notes-ver / .note-group） */
+.settings-update-notes-ver {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.settings-update-notes-v {
+  font-family: var(--mono-font-family);
+  font-size: var(--fs-sm);
+  font-weight: 650;
+  color: var(--ink);
+}
+
+.settings-update-notes-d {
+  font-size: var(--fs-2xs);
+  color: var(--ink-muted);
+}
+
+.settings-update-note-group {
+  margin-bottom: 10px;
+}
+.settings-update-note-group:last-child { margin-bottom: 0; }
+
+.settings-update-note-group-label {
+  font-size: var(--fs-2xs);
+  font-weight: 650;
+  color: var(--ink-muted);
+  letter-spacing: 0.05em;
+  margin-bottom: 4px;
+}
+
+.settings-update-note-group ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.settings-update-note-group li {
+  position: relative;
+  padding: 2.5px 0 2.5px 16px;
+  font-size: var(--fs-xs);
+  color: var(--ink);
+}
+.settings-update-note-group li::before {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 9px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--line-strong);
+}
+.settings-update-note-group-feat li::before { background: var(--accent); }
+.settings-update-note-group-fix li::before { background: var(--green-dot); }
+
+/* 更新设置行（原型 .pref-row / .seg / .switch / .src-url） */
+.settings-update-pref-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 11px 0;
+}
+.settings-update-pref-row + .settings-update-pref-row {
+  border-top: 1px solid var(--line);
+}
+
+.settings-update-pref-label {
+  flex: 1;
+  min-width: 0;
+}
+.settings-update-pref-label strong {
+  display: block;
+  font-size: var(--fs-xs);
+  font-weight: 550;
+  color: var(--ink);
+}
+.settings-update-pref-label span {
+  font-size: var(--fs-2xs);
+  color: var(--ink-muted);
+}
+
+.settings-update-pref-ctl {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings-update-seg {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: var(--r-s);
+  overflow: hidden;
+}
+.settings-update-seg button {
+  font: inherit;
+  font-size: var(--fs-2xs);
+  padding: 4px 12px;
+  border: none;
+  background: var(--panel);
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.settings-update-seg button + button { border-left: 1px solid var(--line); }
+.settings-update-seg button.on {
+  background: var(--ink);
+  color: var(--on-ink);
+  font-weight: 550;
+}
+.settings-update-seg button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.settings-update-switch {
+  position: relative;
+  width: 34px;
+  height: 20px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: var(--panel-muted);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  flex: 0 0 auto;
+  padding: 0;
+}
+.settings-update-switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--panel-strong);
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--ink) 25%, transparent);
+  transition: left 0.15s;
+}
+.settings-update-switch.on {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.settings-update-switch.on::after { left: 16px; }
+
+.settings-update-src-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  max-width: 420px;
+}
+
+.settings-update-src-url {
+  flex: 1;
+  font-family: var(--mono-font-family);
+  font-size: var(--fs-2xs);
+  color: var(--ink-soft);
+  border: 1px solid var(--line);
+  border-radius: var(--r-s);
+  padding: 6px 10px;
+  background: var(--panel-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 各形态如何更新（原型 .host-row） */
+.settings-update-host-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 11px 0;
+}
+.settings-update-host-row + .settings-update-host-row { border-top: 1px solid var(--line); }
+.settings-update-host-row.settings-update-host-dim { opacity: 0.62; }
+
+.settings-update-host-ico {
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  border: 1px solid var(--line);
+  background: var(--panel-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-soft);
+}
+.settings-update-host-ico svg { display: block; }
+
+.settings-update-host-row.settings-update-host-cur .settings-update-host-ico {
+  border-color: color-mix(in srgb, var(--accent) 30%, transparent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.settings-update-host-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.settings-update-host-name {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.settings-update-host-desc {
+  font-size: var(--fs-2xs);
+  color: var(--ink-muted);
+  margin-top: 2px;
+  line-height: 1.55;
+}
+
+/* 检查记录（原型 .log-row） */
+.settings-update-log-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  font-size: var(--fs-xs);
+}
+.settings-update-log-row + .settings-update-log-row { border-top: 1px dashed var(--line); }
+
+.settings-update-log-time {
+  font-family: var(--mono-font-family);
+  font-size: var(--fs-2xs);
+  color: var(--ink-muted);
+  flex: 0 0 132px;
+}
+
+.settings-update-log-msg {
+  color: var(--ink-soft);
+  flex: 1;
+  min-width: 0;
+}
+
+.settings-update-log-empty {
+  padding: 4px 0;
+  font-size: var(--fs-xs);
+  color: var(--ink-muted);
+}
+
+/* 关于本软件（原型 .about-grid） */
+.settings-update-about-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 24px;
+}
+
+.settings-update-about-item {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-size: var(--fs-xs);
+}
+
+.settings-update-about-key {
+  flex: 0 0 92px;
+  color: var(--ink-muted);
+}
+
+.settings-update-about-value {
+  font-family: var(--mono-font-family);
+  font-size: var(--fs-2xs);
+  color: var(--ink);
+  word-break: break-all;
+}
+
+/* rail 红点（原型 #rail-dot）：有更新时挂在「软件更新」rail 按钮右上角 */
+.settings-rail-item { position: relative; }
+
+.settings-update-rail-dot {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--red);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--red) 15%, transparent);
+}
+
+/* 连接服务状态点：行尾垂直居中（在线绿 / 离线红 / 检查中琥珀），非角标——避免与更新提醒红点混淆 */
+.settings-service-rail-dot {
+  flex: 0 0 auto;
+  margin-left: auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--amber);
+}
+
+.settings-service-rail-dot-online {
+  background: var(--green);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--green) 15%, transparent);
+}
+
+.settings-service-rail-dot-offline {
+  background: var(--red);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--red) 15%, transparent);
+}
+
+.settings-service-rail-dot-checking {
+  background: var(--amber);
+}
+
+/* 侧栏设置齿轮入口的更新角标（有可用更新时显示） */
+.settings-gear-button {
+  position: relative;
+}
+
+.settings-gear-badge {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--red);
+  box-shadow: 0 0 0 2px var(--panel, #fff);
+}
+
+/* 重启遮罩（原型 .restart-overlay）：全屏毛玻璃 + spinner */
+.settings-update-restart-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
+  backdrop-filter: blur(4px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+}
+
+.settings-update-restart-spinner {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 2.5px solid var(--line);
+  border-top-color: var(--accent);
+  animation: settings-update-spin 0.9s linear infinite;
+}
+@keyframes settings-update-spin {
+  to { transform: rotate(360deg); }
+}
+
+.settings-update-restart-title {
+  font-size: var(--fs-base);
+  font-weight: 650;
+  color: var(--ink);
+}
+
+.settings-update-restart-sub {
+  font-size: var(--fs-xs);
+  color: var(--ink-muted);
+}

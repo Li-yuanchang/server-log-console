@@ -30,3 +30,16 @@ contextBridge.exposeInMainWorld("electronAPI", {
   localPickFiles: () => ipcRenderer.invoke("local-pick-files"),
   getPathForFile: (file) => webUtils.getPathForFile(file),
 });
+
+// 桌面端自动更新：状态查询、检查、下载、安装与状态订阅
+contextBridge.exposeInMainWorld("slcDesktopUpdate", {
+  getState: () => ipcRenderer.invoke("slc:update:get-state"),
+  check: () => ipcRenderer.invoke("slc:update:check"),
+  download: () => ipcRenderer.invoke("slc:update:download"),
+  install: () => ipcRenderer.invoke("slc:update:install"),
+  onUpdateState: (callback) => {
+    const handler = (_event, state) => callback(state);
+    ipcRenderer.on("slc:update:state", handler);
+    return () => ipcRenderer.removeListener("slc:update:state", handler);
+  },
+});
