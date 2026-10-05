@@ -53,8 +53,7 @@ body.extension-sidepanel .workspace-session-strip {
   margin: 0;
 }
 
-.sp-appbar,
-.sp-statusbar {
+.sp-appbar {
   display: none;
 }
 
@@ -315,16 +314,12 @@ body.extension-sidepanel .toolbar-panel {
   max-width: 320px;
 }
 
-/* ---------- 8b. 终端视图：命令行整条退位（≤799.9 收缩档） ----------
-   终端视图下 isFileMode 仍为 true，命令行里的文件工具行/检索行会照常渲染，
-   把终端压扁。终端有自己的动作栏/会话条/快捷命令，按 sp-view-term 状态类
-   整条退位。≥800 桌面保持原行为。 */
-@container slc-sp (max-width: 799.9px) {
-  /* 仅 popup 宿主：桌面 720-799 无底部导航，藏命令栏会无路可回 */
-  body.extension-sidepanel .sp-view-term .toolbar-commandbar {
-    display: none;
-  }
-}
+/* ---------- 8b. 终端视图：文件工具行退位（2026-10-04 一套策略） ----------
+   终端视图下 isFileMode 仍为 true，文件工具行会照常渲染、把终端压扁。
+   现改为 JSX 层不渲染（App.tsx file-tools-inline 条件加 !terminalAsWorkspaceView），
+   全宿主（扩展侧栏 / 浏览器 / Electron 桌面）一致；命令栏保留视图切换 seg，
+   任何档位都有路可回。原「仅 popup 宿主 + ≤799.9 藏整条命令栏」的规则删除——
+   宿主门槛 + 档位双条件正是大小屏策略不一的根源。 */
 
 /* ---------- 9. 移动档专属常驻组件：全局默认隐藏 ----------
    app bar / 服务器 chip 行 / 底部 tab 导航 / 目录触发按钮 / 启动卡主按钮
@@ -558,6 +553,8 @@ body.extension-sidepanel .toolbar-panel {
     min-height: 120px;
     max-height: 280px;
     overflow: hidden;
+    /* 2026-10-04：黑窗口直角 → 按主题轻度圆角（--r-m），与外层面板观感一致 */
+    border-radius: var(--r-m);
   }
 
   /* app bar：chip 占满弹性宽度（v3：chip 并入顶栏，砍独立 chip 行与标题） */
@@ -1060,78 +1057,9 @@ body.extension-sidepanel .toolbar-panel {
     stroke-width: 2;
   }
 
-/* --- 12m. 状态条（tabbar 上方一行连接概览）+ 展开卡 --- */
-:is(body.extension-sidepanel, .app-shell) .sp-statusbar {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 6px 10px;
-  background: var(--panel);
-  border-top: 1px solid var(--line);
-  font-size: var(--fs-2xs);
-  color: var(--ink-soft);
-  cursor: pointer;
-}
+/* --- 12m. 状态条已移除（2026-10-04）：400px 下过挤，连接概览并入选服层
+   .sp-picker-overview（styles-empty-workbench.css §4）--- */
 
-:is(body.extension-sidepanel, .app-shell) .sp-statusbar .dot {
-  flex: none;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--line-strong);
-}
-
-:is(body.extension-sidepanel, .app-shell) .sp-statusbar .dot.ok {
-  background: var(--green-dot);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--green-dot) 14%, transparent);
-}
-
-:is(body.extension-sidepanel, .app-shell) .sp-statusbar .st-txt {
-  flex: 1 1 auto;
-  min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-:is(body.extension-sidepanel, .app-shell) .sp-statusbar .st-detail {
-  flex: none;
-  padding: 2px 9px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  font-size: var(--fs-2xs);
-  color: var(--ink-soft);
-  background: var(--panel);
-  cursor: pointer;
-}
-
-:is(body.extension-sidepanel, .app-shell) .sp-statusbar .st-detail:hover {
-  color: var(--accent);
-  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
-}
-
-body.extension-sidepanel .sp-status-detail {
-  display: grid;
-  gap: 4px;
-  padding: 8px 10px;
-  background: var(--panel-muted);
-  border-top: 1px solid var(--line);
-  font-size: var(--fs-2xs);
-  color: var(--ink-soft);
-}
-
-body.extension-sidepanel .sp-status-kv {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  min-width: 0;
-}
-
-body.extension-sidepanel .sp-status-kv span {
-  color: var(--ink-muted);
-  flex: none;
-}
 
 body.extension-sidepanel .sp-status-kv b {
   font-weight: 550;

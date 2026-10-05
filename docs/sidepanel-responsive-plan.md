@@ -46,13 +46,10 @@
     TerminalWorkspace/TerminalTabPane 透传），主题变更触发 ITheme 整体刷新
     （既有 useEffect，deps 增 themeKey）。遗留：TerminalPane（分屏）未接
     terminalScheme/themeKey 透传，split 会话暂不跟随终端配色槽位。
-13. **4040 终端右缘「色差带」（2026-10-03）**——用户实测：终端视图右侧出现 16px #0a0a0a 竖条。
-    像素采样定位：终端区域本体完全均匀（#30343F，xterm 与容器同色），竖条在 app-shell
-    右缘之外——是【页面级滚动条】（布局被会话/面板状态撑高时出现，深色主题下 Chrome
-    把滚动条画成 #0a0a0a，与终端区相邻形成色差观感）。修复：styles-base.css 给
-    html/body/#root 加 `overflow: hidden`（固定视口工作台与 popup 侧栏同款；
-    内部滚动容器各自负责）。实测 4040 终端流程：docScrollH == clientH、
-    appShellW == innerW，滚动条带不可能再现。
+13. **4040 终端右缘「色差带」（2026-10-03）→ 后被 14/15 取代**：最初定位为页面级
+    滚动条带（overflow:hidden 修复，保留）；真正的常驻色差是 14（xterm 主题不随
+    ui 主题刷新）+ 15（终端链路纵向塌缩露出 --shell）+ 20a 方向错误（链路涂黑
+    吞掉圆角）——最终形态：链路透明、黑 = xterm 视口内联主题底色、黑块自身圆角。
 11. **移动档覆盖全宿主（2026-10-03）**：4040 网关页（index.html 桌面宿主）在 <560 窗口没有移动档——
    移动档规则带 body.extension-sidepanel 前缀而桌面宿主 body 无该类。修复：容器块内前缀统一改写为
    `:is(body.extension-sidepanel, .app-shell)`（特异性不变 0,2,1/0,4,1，双宿主覆盖），121 条规则清扫；

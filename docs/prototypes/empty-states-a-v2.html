@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Server Log Console — 空状态方案 A · v2 优化稿</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;650;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+:root{
+  --panel:#ffffff; --panel-muted:#f5f5f5; --bg:#fafafa;
+  --ink:#171717; --ink-soft:#666666; --ink-muted:#8f8f8f;
+  --line:#eaeaea; --line-strong:#d4d4d4;
+  --accent:#0070f3; --accent-h:#0060df; --accent-soft:rgba(0,112,243,.08);
+  --green-dot:#22c55e; --red:#d41313; --red-soft:rgba(212,19,19,.07); --amber:#b45309; --amber-soft:rgba(180,83,9,.09);
+  --shell:#0a0a0a; --shell-soft:#111111; --shell-ink:#e8e8e8; --shell-mut:#5c6b7a; --shell-line:#21262d;
+  --on-accent:#ffffff;
+  --r-s:6px; --r-m:8px; --r-l:10px;
+  --mono:"Geist Mono","SFMono-Regular","Menlo","Consolas",monospace;
+  --font:"Geist","Inter",-apple-system,"SF Pro Text","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  --shadow-pop:0 12px 40px rgba(0,0,0,.14),0 2px 8px rgba(0,0,0,.06);
+}
+#viewport.dark{
+  --bg:#0a0a0a; --panel:#141414; --panel-muted:#1b1b1b;
+  --ink:#ededed; --ink-soft:#a3a3a3; --ink-muted:#707070;
+  --line:#262626; --line-strong:#3d3d3d;
+  --accent:#3b82f6; --accent-h:#2f6fe4; --accent-soft:rgba(59,130,246,.16);
+  --shadow-pop:0 16px 44px rgba(0,0,0,.55),0 2px 8px rgba(0,0,0,.4);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%}
+body{font-family:var(--font);letter-spacing:-.01em;font-size:12.5px;color:var(--ink);background:#f0f0ee;display:flex;overflow:hidden}
+svg{display:block;flex:none}
+button{font:inherit;letter-spacing:inherit;color:inherit;background:none;border:none;cursor:pointer}
+kbd{font-family:var(--mono)}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* ---------- 索引 ---------- */
+#index{flex:0 0 196px;border-right:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;padding:12px 8px;gap:1px;overflow-y:auto}
+#index h1{font-size:12px;font-weight:700;padding:4px 8px 2px}
+#index .sub{font-size:10px;color:var(--ink-muted);padding:0 8px 10px;line-height:1.6;border-bottom:1px dashed var(--line);margin-bottom:8px}
+#index button{display:flex;align-items:center;gap:8px;width:100%;padding:5.5px 9px;font-size:12px;color:var(--ink-soft);text-align:left;border-radius:var(--r-s)}
+#index button:hover{background:var(--panel-muted);color:var(--ink)}
+#index button.on{background:var(--ink);color:#fff;font-weight:600}
+#index .sid{font-family:var(--mono);font-size:9.5px;opacity:.6;width:16px}
+#index .foot{margin-top:auto;padding:10px 8px 4px;font-size:10px;color:var(--ink-muted);line-height:1.7;border-top:1px dashed var(--line)}
+
+/* ---------- 舞台 ---------- */
+#stage{flex:1;display:flex;flex-direction:column;min-width:0}
+#desc{flex:none;display:flex;align-items:center;gap:12px;padding:9px 18px;border-bottom:1px solid var(--line);background:var(--panel)}
+#desc .n{font-weight:700;font-size:13px;white-space:nowrap}
+#desc .d{font-size:11.5px;color:var(--ink-muted);flex:1}
+#skin-toggle{display:flex;border:1px solid var(--line);border-radius:7px;overflow:hidden}
+#skin-toggle button{height:22px;padding:0 10px;font-size:10.5px;color:var(--ink-soft)}
+#skin-toggle button.on{background:var(--ink);color:#fff}
+#viewport{flex:1;overflow-y:auto;background:var(--bg);position:relative;color:var(--ink)}
+.page{display:none;padding:18px 22px 70px;max-width:1240px;margin:0 auto}
+.page.on{display:block}
+
+/* ---------- 章节 ---------- */
+.sec{display:flex;align-items:baseline;gap:10px;margin:22px 0 4px}
+.sec:first-child{margin-top:4px}
+.sec .no{font-family:var(--mono);font-size:10px;color:var(--accent);font-weight:600}
+.sec b{font-size:14px;font-weight:650;letter-spacing:-.01em}
+.sec span{font-size:11px;color:var(--ink-muted)}
+.cap{font-size:11px;color:var(--ink-muted);margin:8px 2px 0;line-height:1.7}
+.cap b{color:var(--ink-soft);font-weight:600}
+.note{margin:10px 2px 0;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r-m);background:var(--panel);font-size:11px;color:var(--ink-soft);line-height:1.8}
+.note b{color:var(--ink)}
+
+/* ---------- 设计系统 ---------- */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:28px;padding:0 12px;font-size:12px;font-weight:500;
+  border:1px solid var(--line);border-radius:var(--r-m);background:var(--panel);color:var(--ink);cursor:pointer;white-space:nowrap;
+  transition:background .15s ease,border-color .15s ease,color .15s ease,box-shadow .15s ease}
+.btn:hover{background:var(--accent-soft);border-color:color-mix(in srgb,var(--accent) 26%,transparent)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent);font-weight:550}
+.btn.pri:hover{background:var(--accent-h);border-color:var(--accent-h);box-shadow:0 2px 8px color-mix(in srgb,var(--accent) 28%,transparent)}
+.btn.sm{height:24px;padding:0 9px;gap:5px;font-size:11px;border-radius:var(--r-s)}
+.btn.ghost{border-color:transparent;background:transparent;color:var(--ink-soft)}
+.btn.ghost:hover{background:var(--panel-muted);border-color:var(--line)}
+.kbd{font-family:var(--mono);font-size:10px;color:var(--ink-soft);border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:1.5px 5.5px;background:var(--panel);white-space:nowrap}
+.chip{height:24px;padding:0 10px;border:1px solid var(--line);border-radius:999px;font-size:11px;background:var(--panel);display:inline-flex;align-items:center;gap:6px;color:var(--ink-soft);white-space:nowrap}
+.dot{width:6px;height:6px;border-radius:999px;background:var(--green-dot);display:inline-block;flex:none}
+.dot.idle{background:color-mix(in srgb,var(--ink) 22%,transparent)}
+.dot.accent{background:var(--accent)}
+.dot.red{background:var(--red)}
+
+/* ---------- 应用窗口壳 ---------- */
+.app{position:relative;display:grid;grid-template-columns:198px 1fr;grid-template-rows:37px 1fr 27px;height:var(--fh,520px);
+  background:var(--bg);border:1px solid var(--line);border-radius:12px;overflow:hidden;
+  box-shadow:0 1px 2px rgba(0,0,0,.04),0 14px 36px rgba(0,0,0,.05)}
+.app.narrow{grid-template-columns:1fr}
+.side{grid-column:1;grid-row:1/3;background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+.main{grid-column:2;grid-row:1/3;display:flex;flex-direction:column;min-width:0;min-height:0}
+.app.narrow .main{grid-column:1}
+.status{grid-column:1/3;grid-row:3;border-top:1px solid var(--line);background:var(--panel);display:flex;align-items:center;gap:8px;padding:0 12px;font-size:10.5px;color:var(--ink-muted)}
+.app.narrow .status{grid-column:1}
+.status .st-dot{width:6px;height:6px;border-radius:999px;background:#f5a623}
+.status .st-dot.ok{background:var(--green-dot)}
+.status .st-dot.err{background:var(--red)}
+.status .st-pill{display:inline-flex;align-items:center;gap:6px;padding:2px 8px;border:1px solid var(--line);border-radius:999px;background:var(--panel-muted)}
+.status .st-link{color:var(--accent);font-weight:550;cursor:pointer}
+.status .ver{margin-left:auto;font-family:var(--mono);font-size:9.5px;opacity:.7}
+
+/* 侧栏 */
+.sb-head{height:37px;flex:none;display:flex;align-items:center;gap:7px;padding:0 11px}
+.tl{width:10px;height:10px;border-radius:999px}
+.tl.r{background:#ff5f57}.tl.y{background:#febc2e}.tl.g{background:#28c840}
+.sb-head .gear{margin-left:auto;display:flex;gap:8px;color:var(--ink-muted)}
+.sb-title{padding:10px 12px 7px;font-size:13.5px;font-weight:650;letter-spacing:-.01em}
+.sb-cap{display:flex;justify-content:space-between;align-items:baseline;padding:0 12px 6px;font-size:10.5px;color:var(--ink-muted)}
+.sb-cap b{font-weight:600;color:var(--ink-soft)}
+.sb-search{margin:0 10px 9px;height:26px;flex:none;border:1px solid var(--line);border-radius:6px;display:flex;align-items:center;gap:6px;padding:0 8px;color:var(--ink-muted);font-size:11px;background:var(--panel)}
+.sb-groups{flex:1;overflow:hidden;padding-bottom:6px}
+.sb-group{padding:7px 12px 3px;font-size:10px;color:var(--ink-muted);font-weight:600}
+.sb-item{padding:4px 12px 4px 13px;display:flex;flex-direction:column;gap:1px;position:relative}
+.sb-item.on{background:var(--panel-muted)}
+.sb-item.on::before{content:"";position:absolute;left:0;top:5px;bottom:5px;width:2px;border-radius:2px;background:var(--accent)}
+.sb-item .r1{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.sb-item .r1 .nm{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--ink-soft);min-width:0}
+.sb-item .r1 .nm b{font-weight:450;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sb-item.on .r1 .nm b{font-weight:650;color:var(--ink)}
+.sb-item .pt{font-family:var(--mono);font-size:9.5px;color:var(--ink-muted)}
+.sb-item .r2{padding-left:12px;font-family:var(--mono);font-size:9.5px;color:var(--ink-muted)}
+
+/* 顶栏 */
+.tbar{height:37px;flex:none;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;padding:0 10px;background:var(--panel)}
+.seg{display:flex;border:1px solid var(--line);border-radius:8px;background:var(--panel-muted);padding:2px;gap:2px}
+.seg .tab{height:22px;padding:0 11px;font-size:11.5px;color:var(--ink-soft);border-radius:6px;display:inline-flex;align-items:center}
+.seg .tab.on{background:var(--panel);color:var(--ink);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.06),0 0 0 1px rgba(0,0,0,.02)}
+.crumb{font-family:var(--mono);font-size:11px;color:var(--ink-soft);border:1px solid var(--line);border-radius:6px;padding:3px 9px;background:var(--panel)}
+.tbar .sp{flex:1}
+.tin{height:26px;width:170px;border:1px solid var(--line);border-radius:6px;display:flex;align-items:center;gap:6px;padding:0 8px;font-size:11px;color:var(--ink-muted);background:var(--panel)}
+.tbtn{width:26px;height:26px;border:1px solid var(--line);border-radius:6px;display:grid;place-items:center;color:var(--ink-soft);background:var(--panel)}
+.svpill{height:26px;display:inline-flex;align-items:center;gap:7px;padding:0 11px;border:1px solid var(--line);border-radius:999px;background:var(--panel);font-size:11px;color:var(--ink);font-weight:550}
+.content{flex:1;min-height:0;position:relative;display:flex;flex-direction:column}
+
+/* ================= A-v2 工作台 ================= */
+.wa{height:100%;overflow:auto;padding:42px 46px 28px;display:flex;justify-content:center;position:relative}
+/* 顶部极淡聚光：给内容一个「锚」 */
+.wa::before{content:"";position:absolute;inset:0 0 auto 0;height:190px;pointer-events:none;
+  background:radial-gradient(58% 130% at 50% 0%,color-mix(in srgb,var(--accent) 5%,transparent),transparent 70%)}
+.wa-grid{position:relative;width:800px;display:grid;grid-template-columns:minmax(0,1fr) 266px;gap:22px;align-content:start}
+.wa-grid.no-side{grid-template-columns:minmax(0,1fr)}
+.wa-grid.narrow{width:520px;grid-template-columns:1fr}
+
+.wa-eyebrow{display:inline-flex;align-items:center;gap:6px;font-size:10.5px;letter-spacing:.06em;color:var(--accent);font-weight:600;
+  border:1px solid color-mix(in srgb,var(--accent) 24%,transparent);border-radius:999px;padding:3px 10px;background:var(--accent-soft)}
+.wa-title{font-size:20px;font-weight:650;letter-spacing:-.02em;margin:13px 0 5px}
+.wa-sub{font-size:12.5px;color:var(--ink-soft);line-height:1.65;max-width:46em}
+
+/* 步骤时间线 */
+.wa-steps{margin-top:20px;border:1px solid var(--line);border-radius:12px;background:var(--panel);position:relative;box-shadow:0 1px 2px rgba(0,0,0,.03)}
+.wa-steps::before{content:"";position:absolute;left:27px;top:24px;bottom:24px;width:1px;background:var(--line)}
+.wa-step{position:relative;display:flex;align-items:center;gap:12px;padding:12px 14px 12px 16px;border-bottom:1px solid var(--line)}
+.wa-step:last-child{border-bottom:none}
+.st-num{position:relative;z-index:1;width:24px;height:24px;flex:none;border-radius:999px;background:var(--panel);border:1px solid var(--line);
+  display:grid;place-items:center;font-family:var(--mono);font-size:10.5px;color:var(--ink-soft)}
+.wa-step.cur .st-num{background:var(--accent);color:var(--on-accent);border-color:var(--accent);animation:pulse 2.2s ease-out infinite}
+.wa-step.cur{background:var(--accent-soft)}
+.wa-step.cur{border-radius:0}
+@keyframes pulse{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--accent) 32%,transparent)}70%{box-shadow:0 0 0 7px transparent}100%{box-shadow:0 0 0 0 transparent}}
+.st-num.done{background:var(--accent-soft);color:var(--accent);border-color:color-mix(in srgb,var(--accent) 30%,transparent)}
+.st-num.wait{border-color:transparent;background:transparent}
+.st-num.wait::before{content:"";width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.wa-tx{min-width:0}
+.wa-tx b{display:block;font-size:12.5px;font-weight:600}
+.wa-tx span{font-size:11px;color:var(--ink-muted);line-height:1.5}
+.wa-step .btn,.wa-step .wa-arr{margin-left:auto;flex:none}
+.wa-arr{color:var(--ink-muted);font-size:12px}
+
+/* 实时状态行（连接中） */
+.live{display:inline-flex;align-items:center;gap:8px;margin-top:14px;padding:6px 11px;border:1px solid var(--line);border-radius:8px;
+  background:var(--panel);font-family:var(--mono);font-size:10.5px;color:var(--ink-soft);white-space:nowrap;overflow:hidden;max-width:100%}
+.live .dot{animation:pulse 1.6s ease-out infinite}
+.ellip::after{content:"";animation:dots 1.2s steps(1) infinite}
+@keyframes dots{0%{content:""}25%{content:"·"}50%{content:"··"}75%{content:"···"}}
+
+/* 键位行 */
+.wa-keys{display:flex;gap:14px;flex-wrap:wrap;margin-top:16px;padding-top:12px;border-top:1px solid var(--line);font-size:11px;color:var(--ink-soft)}
+.wa-keys .kbd{margin-right:4px}
+
+/* 右栏：情境面板 */
+.wsp{border:1px solid var(--line);border-radius:12px;background:var(--panel);overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,.03)}
+.wsp-h{display:flex;align-items:center;justify-content:space-between;padding:9px 12px;border-bottom:1px solid var(--line);font-size:11px;font-weight:600;color:var(--ink-soft)}
+.wsp-h a{font-size:10.5px;color:var(--accent);font-weight:550;cursor:pointer;text-decoration:none}
+.wsp-h a:hover{text-decoration:underline}
+.rc-row{display:flex;align-items:center;gap:9px;padding:8.5px 12px;border-bottom:1px solid var(--line);cursor:pointer;transition:background .12s ease,border-color .12s ease}
+.rc-row:last-child{border-bottom:none}
+.rc-row:hover,.rc-row.hover{background:var(--accent-soft)}
+.rc-row:hover .rc-go,.rc-row.hover .rc-go{opacity:1;transform:none}
+.rc-row .rc-nm{min-width:0;flex:1}
+.rc-row .rc-nm b{display:flex;align-items:center;gap:6px;font-size:11.5px;font-weight:550;color:var(--ink)}
+.rc-row .rc-nm span{display:block;font-family:var(--mono);font-size:9.5px;color:var(--ink-muted);margin-top:1px}
+.rc-go{opacity:0;transform:translateX(-3px);transition:all .15s ease;color:var(--accent);font-size:11px}
+.rc-time{font-size:9.5px;color:var(--ink-muted);flex:none}
+.tip{margin-top:12px;border:1px solid var(--line);border-radius:12px;background:var(--panel-muted);padding:11px 12px;display:flex;gap:9px;font-size:10.5px;color:var(--ink-soft);line-height:1.65}
+.tip .ic{width:24px;height:24px;flex:none;border-radius:8px;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center}
+.tip a{color:var(--accent);font-weight:550;cursor:pointer;white-space:nowrap}
+
+/* 入场动效 */
+.rv{opacity:0;transform:translateY(8px);animation:rise .5s cubic-bezier(.2,.7,.3,1) forwards}
+.d1{animation-delay:.03s}.d2{animation-delay:.09s}.d3{animation-delay:.15s}.d4{animation-delay:.21s}.d5{animation-delay:.27s}.d6{animation-delay:.33s}
+@keyframes rise{to{opacity:1;transform:none}}
+
+/* 小态 · 内联档（极窄下拉 / 单行占位） */
+.minis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:14px}
+.mini{border:1px solid var(--line);border-radius:12px;background:var(--panel);overflow:hidden;display:flex;flex-direction:column}
+.mini-h{height:30px;flex:none;display:flex;align-items:center;gap:7px;padding:0 10px;border-bottom:1px solid var(--line);font-size:11px;font-weight:600;color:var(--ink-soft)}
+.mini-b{flex:1;min-height:118px;position:relative;display:flex}
+.mini-cap{padding:7px 10px;border-top:1px dashed var(--line);font-size:10px;color:var(--ink-muted);line-height:1.5}
+.em-a{flex:1;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:5px;padding:12px 14px}
+.em-a .ic{width:26px;height:26px;border:1px solid var(--line);border-radius:8px;display:grid;place-items:center;color:var(--ink-soft);background:var(--panel-muted);margin-bottom:2px}
+.em-a b{font-size:12px;font-weight:600}
+.em-a span{font-size:10.5px;color:var(--ink-muted);line-height:1.5}
+.em-a .btn{margin-top:6px}
+
+/* ---------- SP 移动档（≤560px 容器查询对应的真实结构） ---------- */
+.app.narrow{display:flex;flex-direction:column}
+.app.narrow .main{flex:1;display:flex;flex-direction:column;min-height:0}
+.app.narrow .content{flex:1}
+.app.narrow .status{display:none}
+.sp-appbar{flex:none;height:40px;display:flex;align-items:center;gap:8px;padding:0 10px;border-bottom:1px solid var(--line);background:var(--panel)}
+.sp-appbar .tbtn{border-radius:999px;flex:none}
+.srv-chip{flex:1;min-width:0;display:inline-flex;align-items:center;gap:7px;height:28px;padding:0 10px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r-s);font-size:12px;font-weight:600;color:var(--ink);cursor:pointer}
+.srv-chip:hover{border-color:var(--line-strong)}
+.srv-chip .cdot{flex:none;width:7px;height:7px;border-radius:50%;background:var(--green-dot);box-shadow:0 0 0 3px color-mix(in srgb,var(--green-dot) 14%,transparent)}
+.srv-chip .cdot.idle{background:color-mix(in srgb,var(--ink) 28%,transparent);box-shadow:none}
+.srv-chip .cname{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.srv-chip .chost{font-family:var(--mono);font-size:10px;font-weight:400;color:var(--ink-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.srv-chip .ccaret{flex:none;color:var(--ink-muted);font-size:9px}
+.sp-statusbar{display:none}   /* v2.1 移除：400px 下过挤，连接概览并入 srv-chip 弹层 */
+.sp-tabbar{flex:none;display:flex;border-top:1px solid var(--line);background:var(--panel);height:54px}
+.sp-tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:10px;color:var(--ink-muted);cursor:pointer;border:none;background:none;font-family:var(--font)}
+.sp-tab .ic{width:36px;height:24px;display:grid;place-items:center;border-radius:8px;transition:background .15s ease}
+.sp-tab.on{color:var(--accent);font-weight:600}
+.sp-tab.on .ic{background:var(--accent-soft)}
+.sp-tab[disabled]{opacity:.38;cursor:default}
+/* 窄档内容压缩 */
+.app.narrow .wa{padding:24px 20px 18px}
+.app.narrow .wa-grid{width:100%;gap:0}
+.app.narrow .wa-title{font-size:16.5px;margin:11px 0 4px}
+.app.narrow .wa-sub{font-size:11.5px}
+.app.narrow .wa-steps{margin-top:15px}
+.app.narrow .wa-step{padding:10px 12px}
+.app.narrow .wa-tx span{font-size:10.5px}
+.app.narrow .wa-keys{display:none}   /* 触屏宿主无键盘：键位行隐藏 */
+.sp-cta{display:flex;gap:8px;margin-top:14px}
+.sp-cta .btn{flex:1;height:32px;font-size:12.5px}
+.wn-chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px}
+.wn-hint{margin-top:12px;padding-top:11px;border-top:1px solid var(--line);font-size:10.5px;color:var(--ink-muted);line-height:1.65}
+.wn-hint a{color:var(--accent);font-weight:550}
+/* 小态 · 内联档（极窄下拉 / 单行占位） */
+.em-inline{flex:1;display:flex;align-items:center;justify-content:center;gap:7px;padding:10px 12px;color:var(--ink-muted);font-size:10.5px;text-align:center}
+.em-inline b{color:var(--ink-soft);font-weight:550}
+.em-inline .ic{color:var(--ink-muted);opacity:.75}
+
+/* ---------- 底部状态条（宽屏侧栏 footer） ---------- */
+.fs{border:1px solid var(--line);border-radius:10px;background:var(--panel);overflow:hidden;cursor:pointer;transition:border-color .15s ease,background .15s ease}
+.fs:hover{border-color:var(--line-strong);background:var(--panel-muted)}
+.fs-bar{height:2px;position:relative;overflow:hidden;background:var(--line);display:none}
+.fs.connecting .fs-bar{display:block}
+.fs-bar::after{content:"";position:absolute;top:0;bottom:0;width:40%;background:linear-gradient(90deg,transparent,var(--accent),transparent);animation:fslide 1.2s ease-in-out infinite}
+@keyframes fslide{0%{transform:translateX(-110%)}100%{transform:translateX(360%)}}
+.fs-l1{display:flex;align-items:center;gap:7px;padding:8px 10px 0;font-size:11.5px}
+.fs-l1 .st{flex:none;width:7px;height:7px;border-radius:999px;background:color-mix(in srgb,var(--ink) 26%,transparent)}
+.fs.ok .st{background:var(--green-dot)}
+.fs.err .st{background:var(--red)}
+.fs.warn .st{background:#f5a623}
+.fs.connecting .st{width:12px;height:12px;border:1.5px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;background:none}
+.fs .w{flex:none;font-weight:650;letter-spacing:0}
+.fs.connecting .w{color:var(--accent)}
+.fs.ok .w{color:var(--ink)}
+.fs.err .w{color:var(--red)}
+.fs.warn .w{color:var(--amber)}
+.fs .nm{min-width:0;font-weight:500;color:var(--ink-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fs .chev{margin-left:auto;flex:none;color:var(--ink-muted);font-size:8.5px;transition:transform .18s ease}
+.fs:hover .chev{color:var(--ink)}
+.fs.open .chev{transform:rotate(180deg)}
+.fs-l2{display:flex;align-items:center;gap:6px;padding:3px 10px 9px;font-size:10px;color:var(--ink-muted);white-space:nowrap;overflow:hidden}
+.fs-l2 .mono{font-family:var(--mono);font-size:9.5px;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.fs-l2 a{color:var(--accent);font-weight:550;flex:none;cursor:pointer}
+.fs-l2 .sp{width:9px;height:9px;border:1.5px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;flex:none}
+/* 展开态 · 连接概览 */
+.fs-open{padding:9px 10px 10px;display:flex;flex-direction:column;gap:7px}
+.fs-open .hd{display:flex;align-items:center;justify-content:space-between;font-size:10px;color:var(--ink-muted);font-weight:600}
+.fs-open .hd .collapse{color:var(--accent);font-weight:550;cursor:pointer}
+.fs-kv{display:grid;grid-template-columns:50px 1fr;gap:5px 8px;font-size:10.5px;align-items:baseline}
+.fs-kv span{color:var(--ink-muted)}
+.fs-kv b{font-weight:500;color:var(--ink);font-family:var(--mono);font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fs-kv b.sans{font-family:var(--font);font-size:10.5px}
+.fs-open .acts{display:flex;gap:6px;padding-top:7px;border-top:1px dashed var(--line)}
+/* 现状对照 */
+.old-status{display:inline-flex;align-items:center;gap:7px;height:26px;padding:0 10px;border-radius:999px;background:var(--panel);border:1px solid var(--line);font-size:11px;color:var(--ink-soft);max-width:220px}
+.old-status .st{width:6px;height:6px;border-radius:999px;background:#f5a623;flex:none}
+.old-status .tx{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.old-status .dt{color:var(--accent);font-weight:550;flex:none}
+
+/* 优化说明页 */
+.chg{display:flex;flex-direction:column;gap:10px;margin-top:14px}
+.chg-item{display:grid;grid-template-columns:34px 170px 1fr;gap:14px;border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:13px 15px;align-items:start}
+.chg-item .cn{font-family:var(--mono);font-size:10px;color:var(--accent);border:1px solid color-mix(in srgb,var(--accent) 24%,transparent);background:var(--accent-soft);border-radius:999px;padding:2px 0;text-align:center;margin-top:1px}
+.chg-item .ct b{display:block;font-size:12px;font-weight:650;margin-bottom:3px}
+.chg-item .ct span{font-size:10px;color:var(--ink-muted)}
+.chg-item p{font-size:11.5px;color:var(--ink-soft);line-height:1.7}
+.chg-item p em{font-style:normal;color:var(--ink);font-weight:550}
+</style>
+</head>
+<body>
+
+<nav id="index">
+  <h1>空状态 · 方案 A v2</h1>
+  <div class="sub">引导式工作台 · 优化稿<br/>8 优化点 + 状态条专项 · 10 屏 · 亮 / 暗双态</div>
+  <button data-page="s0" class="on"><span class="sid">00</span>优化说明</button>
+  <button data-page="s1"><span class="sid">01</span>等待选择服务器</button>
+  <button data-page="s2"><span class="sid">02</span>连接中 · 进度态</button>
+  <button data-page="s3"><span class="sid">03</span>检索空态</button>
+  <button data-page="s4"><span class="sid">04</span>终端 · 无会话</button>
+  <button data-page="s5"><span class="sid">05</span>目录为空</button>
+  <button data-page="s6"><span class="sid">06</span>还没有服务器</button>
+  <button data-page="s7"><span class="sid">07</span>服务离线</button>
+  <button data-page="s8"><span class="sid">08</span>SP 移动档 ×3</button>
+  <button data-page="s9"><span class="sid">09</span>小态全谱 ×12</button>
+  <button data-page="s10"><span class="sid">10</span>底部状态条</button>
+  <div class="foot">方案 A 定稿方向：锚定顶部 + 三步引导<br/>v2 重点：右栏情境化 · 时间线 · 进度态<br/>token：ink / line / accent / shell</div>
+</nav>
+
+<div id="stage">
+  <div id="desc">
+    <span class="n" id="desc-n">00</span>
+    <span class="d" id="desc-d">方案 A v2 相对 v1 的 8 个优化点</span>
+    <div id="skin-toggle">
+      <button data-skin="light" class="on">亮色</button>
+      <button data-skin="dark">暗色</button>
+    </div>
+  </div>
+  <div id="viewport">
+    <div class="page on" id="s0"></div>
+    <div class="page" id="s1"></div>
+    <div class="page" id="s2"></div>
+    <div class="page" id="s3"></div>
+    <div class="page" id="s4"></div>
+    <div class="page" id="s5"></div>
+    <div class="page" id="s6"></div>
+    <div class="page" id="s7"></div>
+    <div class="page" id="s8"></div>
+    <div class="page" id="s9"></div>
+  <div class="page" id="s10"></div>
+  </div>
+</div>
+
+<script>
+/* ================= 图标 ================= */
+const P = {
+  folder:'<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>',
+  search:'<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',
+  term:'<polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>',
+  server:'<rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/>',
+  upload:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>',
+  plug:'<path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z"/>',
+  clock:'<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+  bkmk:'<path d="M19 21l-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/>',
+  inbox:'<polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>',
+  activity:'<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>',
+  cmd:'<path d="M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3"/>',
+  arrL:'<line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>',
+  bulb:'<path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.4 1 2.3h6c0-.9.4-1.8 1-2.3A7 7 0 0 0 12 2z"/>',
+  check:'<polyline points="20 6 9 17 4 12"/>',
+  arrR:'<line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>',
+  shield:'<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>',
+  file:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>'
+};
+const ic=(n,s=16,w=1.7)=>`<svg viewBox="0 0 24 24" width="${s}" height="${s}" fill="none" stroke="currentColor" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round">${P[n]}</svg>`;
+
+/* ================= 窗口壳 ================= */
+const GROUPS=[
+  {g:"堡垒机",items:[{n:"堡垒机-演示",ip:"192.168.130.3",p:2222,on:1}]},
+  {g:"测试",items:[{n:"127.122",ip:"192.168.127.122",p:22,on:1},{n:"127.38",ip:"192.168.127.38",p:22},{n:"2.137",ip:"192.168.2.137",p:22},{n:"2.203",ip:"192.168.2.203",p:22}]},
+  {g:"服务器",items:[{n:"127.31",ip:"192.168.127.31",p:22},{n:"127.32",ip:"192.168.127.32",p:22},{n:"2.90",ip:"192.168.2.90",p:22}]},
+  {g:"开发",items:[{n:"2.208",ip:"192.168.2.208",p:22}]},
+  {g:"望鹏920",items:[{n:"127.101",ip:"192.168.127.101",p:22},{n:"2.20 望鹏",ip:"192.168.2.20",p:22},{n:"2.26 望鹏",ip:"192.168.2.26",p:22}]},
+  {g:"生产",items:[{n:"2.150",ip:"192.168.2.150",p:22},{n:"2.151",ip:"192.168.2.151",p:22}]}
+];
+function sidebarHtml(){
+  let h=`<div class="sb-head"><span class="tl r"></span><span class="tl y"></span><span class="tl g"></span>
+    <span class="gear">${ic("cmd",13,1.5)}${ic("clock",13,1.5)}</span></div>
+    <div class="sb-title">日志控制台</div>
+    <div class="sb-cap"><b>服务器</b><span>27 台</span></div>
+    <div class="sb-search">${ic("search",11,1.6)}输入名称、分组或地址</div><div class="sb-groups">`;
+  for(const g of GROUPS){
+    h+=`<div class="sb-group">${g.g}</div>`;
+    for(const it of g.items){
+      h+=`<div class="sb-item${it.on?" on":""}"><div class="r1"><span class="nm"><i class="dot${it.on?"":" idle"}"></i><b>${it.n}</b></span><span class="pt">${it.p}</span></div><div class="r2">${it.ip}</div></div>`;
+    }
+  }
+  return h+`</div>`;
+}
+function sidebarEmptyHtml(){
+  return `<div class="sb-cap" style="margin-top:6px"><b>服务器</b><span>0 台</span></div>
+  <div class="sb-search">${ic("search",11,1.6)}输入名称、分组或地址</div>
+  <div style="flex:1;display:flex;flex-direction:column;border-top:1px dashed var(--line);margin-top:8px">
+    <div class="em-a" style="padding:16px 12px"><span class="ic">${ic("server",13)}</span><b>还没有服务器</b><span>导入 FinalShell 连接后自动出现</span><button class="btn sm pri">立即导入</button></div>
+  </div>`;
+}
+function topbarHtml(mode,narrow){
+  if(narrow)return `<span class="svpill"><i class="dot idle"></i>选择服务器 ▾</span>
+    <div class="seg"><span class="tab${mode==="log"?" on":""}">日志</span><span class="tab${mode==="files"?" on":""}">文件</span></div><span class="sp"></span>
+    <span class="tbtn">${ic("upload",13)}</span><span class="tbtn">${ic("cmd",13)}</span>`;
+  return `<div class="seg"><span class="tab${mode==="log"?" on":""}">日志预览</span><span class="tab${mode==="files"?" on":""}">文件目录</span>${mode==="term"?'<span class="tab on">终端</span>':""}</div>
+  <span class="crumb">/</span><span class="sp"></span>
+  <span class="tin">${ic("search",11,1.6)}${mode==="files"?"过滤当前目录…":"过滤检索结果…"}</span>
+  <span class="tbtn">${ic("upload",13)}</span><span class="tbtn">${ic("activity",13)}</span><span class="tbtn">${ic("cmd",13)}</span>`;
+}
+function frame(content,{mode="files",status="请先选择服务器",sbEmpty=false,narrow=false,h=520,stCls=""}={}){
+  return `<div class="app${narrow?" narrow":""}" style="--fh:${h}px">
+    ${narrow?"":`<div class="side">${sbEmpty?sidebarEmptyHtml():sidebarHtml()}</div>`}
+    <div class="main"><div class="tbar">${topbarHtml(mode,narrow)}</div><div class="content">${content}</div></div>
+    <div class="status"><span class="st-dot ${stCls}"></span><span class="st-pill">${status}</span><span class="st-link">详情</span><span class="ver">slcc v0.3.240</span></div>
+  </div>`;
+}
+
+/* ================= A-v2 组件 ================= */
+function eyebrow(iconn,txt){return `<span class="wa-eyebrow rv d1">${ic(iconn,11)} ${txt}</span>`}
+function step(n,{state="",cur=false,title,desc,btn}){
+  const num=state==="wait"?'<span class="st-num wait"></span>':state==="done"?`<span class="st-num done">${ic("check",11,2.2)}</span>`:`<span class="st-num">${n}</span>`;
+  return `<div class="wa-step${cur?" cur":""}">${num}<div class="wa-tx"><b>${title}</b><span>${desc}</span></div>${btn||`<span class="wa-arr">→</span>`}</div>`;
+}
+function steps(html){return `<div class="wa-steps rv d4">${html}</div>`}
+function keys(html){return `<div class="wa-keys rv d5">${html}</div>`}
+function panel(header,link,rows){return `<div class="wsp rv d6"><div class="wsp-h"><span>${header}</span>${link?`<a>${link}</a>`:""}</div>${rows}</div>`}
+function tip(iconn,html){return `<div class="tip rv d6"><span class="ic">${ic(iconn,12)}</span><div>${html}</div></div>`}
+function rcRow(name,meta,tag,time,go,extra){return `<div class="rc-row${extra||""}"><div class="rc-nm"><b><i class="dot${tag==="on"?"":tag==="idle"?" idle":tag==="red"?" red":""}"></i>${name}</b><span>${meta}</span></div><span class="rc-time">${time}</span><span class="rc-go">${go||"连接 →"}</span></div>`}
+function wa(mainHtml,sideHtml,narrow){
+  return `<div class="wa"><div class="wa-grid${narrow?" narrow":""}${sideHtml?"":" no-side"}"><div>${mainHtml}</div>${sideHtml?`<aside style="display:flex;flex-direction:column;gap:0">${sideHtml}</aside>`:""}</div></div>`;
+}
+
+/* ================= 各屏 ================= */
+const S1_MAIN=`
+  ${eyebrow("folder","文件目录 · 开始")}
+  <div class="wa-title rv d2">选择一台服务器，开始浏览远程目录</div>
+  <p class="wa-sub rv d3">连接成功后系统会自动展开目录树、记住最近位置，并接管过滤、上传与右键菜单。</p>
+  ${steps(
+    step(1,{cur:1,title:"选择服务器",desc:"点击右侧任意一台最近连接，或按 ⌘K 全局检索",btn:`<button class="btn sm pri">打开检索</button>`})+
+    step(2,{title:"浏览目录",desc:"目录树自动挂载根目录，双击进入子目录"})+
+    step(3,{title:"查看日志",desc:"点击 .log / .txt 文件直接进入日志预览"})
+  )}
+  ${keys(`<span><span class="kbd">⌘K</span>服务器检索</span><span><span class="kbd">⌘T</span>新建终端</span><span><span class="kbd">⌘/</span>全部快捷键</span>`)}`;
+const S1_SIDE=
+  panel("最近连接","全部 27 台 →",
+    rcRow("堡垒机-演示","192.168.130.3 : 2222","on","3 分钟前")+
+    rcRow("127.122","192.168.127.122 : 22","on","12 分钟前",""," hover")+
+    rcRow("2.203","192.168.2.203 : 22","idle","昨天")+
+    rcRow("127.101","192.168.127.101 : 22 · 望鹏920","idle","3 天前")
+  )+
+  tip("bulb",`凭证过期？导入的密码可在设置中心重新获取，<a>打开连接设置</a>。`);
+
+const S2_MAIN=`
+  ${eyebrow("plug","文件目录 · 连接中")}
+  <div class="wa-title rv d2">正在连接 堡垒机-演示</div>
+  <p class="wa-sub rv d3">正在建立 SSH 连接，通常 2 秒内完成；成功后会自动打开目录并记住位置。</p>
+  <div class="live rv d3"><i class="dot accent"></i>ssh 堡垒机-演示 · 192.168.130.3:2222 · SSH 握手中<span class="ellip"></span></div>
+  ${steps(
+    step(1,{state:"wait",title:"建立连接",desc:"SSH 握手与凭证校验",btn:`<button class="btn sm ghost">取消</button>`})+
+    step(2,{title:"读取根目录",desc:"连接成功后自动挂载目录树"})+
+    step(3,{title:"记住位置",desc:"下次启动直达最近目录"})
+  )}
+  ${keys(`<span><span class="kbd">⌘,</span>连接设置</span><span><span class="kbd">Esc</span>取消连接</span>`)}`;
+const S2_SIDE=
+  panel("连接目标",null,
+    rcRow("堡垒机-演示","192.168.130.3 : 2222","on","跳板机","")+
+    rcRow("2.150","192.168.2.150 : 22 · 生产","idle","待命")
+  )+
+  tip("shield",`连接慢或失败？多为网络或凭证问题，<a>重新测试连接</a>。`);
+
+const S3_MAIN=`
+  ${eyebrow("search","日志检索 · 空结果")}
+  <div class="wa-title rv d2">还没有检索结果</div>
+  <p class="wa-sub rv d3">输入关键字回车开始检索；实时跟随开启时会持续等待新日志写入。</p>
+  ${steps(
+    step(1,{cur:1,title:"输入关键字",desc:"回车执行；打开文件后可读取尾部",btn:`<button class="btn sm pri">聚焦输入框</button>`})+
+    step(2,{title:"语法限定",desc:"/ERROR 精确匹配 · /time 10:00 时间段"})+
+    step(3,{title:"实时跟随",desc:"⌥L 开启后自动滚动到最新写入"})
+  )}
+  ${keys(`<span><span class="kbd">⌘F</span>检索</span><span><span class="kbd">⌥L</span>实时跟随</span><span><span class="kbd">⌘E</span>检索示例</span>`)}`;
+const S3_SIDE=
+  panel("最近检索","清空 →",
+    rcRow('<span style="font-family:var(--mono);font-size:11px">ERROR timeout</span>',"命中 128 · access.log","on","2 分钟前","重新检索")+
+    rcRow('<span style="font-family:var(--mono);font-size:11px">/time 09:3</span>',"时间段 09:30 – 09:39","on","1 小时前","重新检索")+
+    rcRow('<span style="font-family:var(--mono);font-size:11px">500</span>',"命中 32 · nginx/error.log","idle","昨天","重新检索")
+  )+
+  tip("activity",`实时跟随已开启时，新日志写入会自动出现在结果里，无需手动刷新。`);
+
+const S4_MAIN=`
+  ${eyebrow("term","终端 · 空会话")}
+  <div class="wa-title rv d2">未建立终端会话</div>
+  <p class="wa-sub rv d3">选择服务器后在这里建立 SSH 会话；断线时网关保活 90 秒并自动重连。</p>
+  ${steps(
+    step(1,{cur:1,title:"选择服务器",desc:"左侧列表点击，或 ⌘K 检索",btn:`<button class="btn sm pri">新建会话</button>`})+
+    step(2,{title:"多标签并行",desc:"⌘T 新建，⌘W 关闭当前"})+
+    step(3,{title:"AI 辅助",desc:"右上 ⚙ 配置后可唤起命令建议"})
+  )}
+  ${keys(`<span><span class="kbd">⌘T</span>新建</span><span><span class="kbd">⌘W</span>关闭</span><span><span class="kbd">⌘F</span>终端内查找</span>`)}`;
+const S4_SIDE=
+  panel("最近会话",null,
+    rcRow("堡垒机-演示","zsh · 上次 42 分钟","on","3 分钟前","重开")+
+    rcRow("127.122","bash · 上次 18 分钟","on","2 小时前","重开")
+  )+
+  tip("plug",`断线自动重连：网关保活 90 秒，期间恢复网络即可无缝续上。`);
+
+const S5_MAIN=`
+  ${eyebrow("folder","目录 · 空目录")}
+  <div class="wa-title rv d2">这个目录是空的</div>
+  <p class="wa-sub rv d3">当前路径没有任何文件或子目录；返回上一级，或直接把文件拖进来。</p>
+  ${steps(
+    step(1,{cur:1,title:"返回上一级",desc:"回到上层目录继续浏览",btn:`<button class="btn sm pri">返回上一级</button>`})+
+    step(2,{title:"上传文件",desc:"拖拽到窗口任意位置，或右上角上传按钮"})+
+    step(3,{title:"跳转常用位置",desc:"右侧一键前往 /var/log 等目录"})
+  )}
+  ${keys(`<span><span class="kbd">⌘↑</span>上一级</span><span><span class="kbd">⌘⇧U</span>上传</span>`)}`;
+const S5_SIDE=
+  panel("常用位置",null,
+    rcRow('<span style="font-family:var(--mono);font-size:11px">/var/log</span>',"系统日志 · 最常访问","on","前往")+
+    rcRow('<span style="font-family:var(--mono);font-size:11px">/data/logs</span>',"应用日志","on","前往")+
+    rcRow('<span style="font-family:var(--mono);font-size:11px">/etc/nginx</span>',"配置目录","idle","前往")
+  )+
+  tip("upload",`拖放即可上传到当前目录；大文件支持分片与断点续传。`);
+
+const S6_MAIN=`
+  ${eyebrow("server","首次配置")}
+  <div class="wa-title rv d2">还没有服务器</div>
+  <p class="wa-sub rv d3">从 FinalShell / Xshell 一键导入连接，或手动新增；导入后左侧自动生成分组列表。</p>
+  ${steps(
+    step(1,{cur:1,title:"导入连接",desc:"识别 FinalShell / Xshell 配置",btn:`<button class="btn sm pri">立即导入</button>`})+
+    step(2,{title:"检查连接服务",desc:"本地服务未启动时先检查",btn:`<button class="btn sm">检查服务</button>`})+
+    step(3,{title:"选择服务器开始使用",desc:"连接后即可浏览目录与查看日志"})
+  )}
+  ${keys(`<span><span class="kbd">⌘,</span>设置中心</span><span><span class="kbd">⌘R</span>刷新列表</span>`)}`;
+const S6_SIDE=
+  panel("支持的导入来源",null,
+    rcRow("FinalShell","自动识别连接与分组","on","导入")+
+    rcRow("Xshell","读取会话配置","on","导入")+
+    rcRow("手动新增","逐台填写主机与凭证","idle","新增")
+  )+
+  tip("shield",`导入只读取配置文件，不会改动或上传原始数据。`);
+
+const S7_MAIN=`
+  ${eyebrow("plug","连接服务 · 离线")}
+  <div class="wa-title rv d2">正在等待内置连接服务启动</div>
+  <p class="wa-sub rv d3">安装版会自动拉起内置连接服务；恢复后页面会自动刷新服务器与目录状态。</p>
+  ${steps(
+    step(1,{state:"wait",title:"等待服务就绪",desc:"每 5 秒自动重试，无需手动刷新"})+
+    step(2,{title:"检查服务",desc:"立即探测一次服务状态",btn:`<button class="btn sm pri">检查服务</button>`})+
+    step(3,{title:"打开服务设置",desc:"修改服务地址或端口",btn:`<button class="btn sm">连接服务设置</button>`})
+  )}
+  ${keys(`<span><span class="kbd">⌘,</span>设置中心</span><span><span class="kbd">⌘R</span>手动刷新</span>`)}`;
+const S7_SIDE=
+  panel("服务诊断",null,
+    rcRow('<span style="font-family:var(--mono);font-size:11px">127.0.0.1:7345</span>',"连接服务地址","idle","—")+
+    rcRow("状态","未响应 · 自动重试中","red","5s")+
+    rcRow("上一次在线","今天 19:02","idle","—")
+  )+
+  tip("bulb",`长时间未恢复？检查安装目录是否完整，或是否有防火墙拦截本地端口。`);
+
+/* 窄容器 SP 移动档（真实结构：sp-appbar + srv-chip / 内容 / sp-statusbar / sp-tabbar） */
+function srvChip(on,name,host){return on
+  ?`<span class="srv-chip"><i class="cdot"></i><span class="cname">${name}</span><span class="chost">${host}</span><span class="ccaret">▾</span></span>`
+  :`<span class="srv-chip"><i class="cdot idle"></i><span class="cname">选择服务器</span><span class="ccaret">▾</span></span>`}
+function spTabbar(tab,{disabled=false,term=true}={}){
+  const t=(id,icon,label,dis)=>`<button class="sp-tab${tab===id?" on":""}"${dis?" disabled":""}><span class="ic">${ic(icon,15)}</span><span>${label}</span></button>`;
+  let h=`<nav class="sp-tabbar">${t("log","file","日志",disabled)}${t("files","folder","文件",disabled)}`;
+  if(term)h+=t("term","term","终端",disabled);
+  return h+`</nav>`;
+}
+function frameNarrow(content,{chip,status,tab="files",tabDisabled=false,term=true,h=560}={}){
+  return `<div class="app narrow" style="--fh:${h}px">
+    <div class="main">
+      <div class="sp-appbar"><button class="tbtn">${ic("cmd",13)}</button>${chip}</div>
+      <div class="content">${content}</div>
+    </div>
+    ${spTabbar(tab,{disabled:tabDisabled,term})}
+  </div>`;
+}
+function narrowWa({eyebrowI,eyebrowT,title,sub,stepsHtml,cta,chips,hint}){
+  return `<div class="wa"><div class="wa-grid narrow">
+    ${eyebrow(eyebrowI,eyebrowT)}
+    <div class="wa-title rv d2">${title}</div>
+    <p class="wa-sub rv d3">${sub}</p>
+    ${steps(stepsHtml)}
+    ${cta?`<div class="sp-cta rv d5">${cta}</div>`:""}
+    ${chips?`<div class="wn-chips rv d5">${chips}</div>`:""}
+    ${hint?`<div class="wn-hint rv d6">${hint}</div>`:""}
+  </div></div>`;
+}
+const S8A=narrowWa({
+  eyebrowI:"folder",eyebrowT:"文件目录 · 开始",
+  title:"选择服务器开始使用",
+  sub:"连接后自动打开目录树；也可以先看看最近连接。",
+  stepsHtml:step(1,{cur:1,title:"选择服务器",desc:"顶部胶囊打开选服层"})+step(2,{title:"浏览目录 · 查看日志",desc:"与宽屏一致"}),
+  cta:`<button class="btn pri">选择服务器</button>`,
+  chips:`<span class="chip"><i class="dot"></i>堡垒机-演示</span><span class="chip"><i class="dot"></i>127.122</span><span class="chip"><i class="dot idle"></i>2.203</span>`,
+  hint:`提示：键位在触屏宿主隐藏，捷径改为明链；未选服务器时底部「日志 / 文件」标签为禁用态，终端不出现。`
+});
+const S8B=narrowWa({
+  eyebrowI:"search",eyebrowT:"日志检索 · 空结果",
+  title:"还没有检索结果",
+  sub:"输入关键字回车；实时跟随开启时等待新日志写入。",
+  stepsHtml:step(1,{cur:1,title:"输入关键字",desc:"回车执行"})+step(2,{title:"实时跟随",desc:"⌥L / 底部开关，自动滚动到最新"}),
+  cta:`<button class="btn pri">聚焦输入框</button>`,
+  chips:`<span class="chip" style="font-family:var(--mono);font-size:10.5px">ERROR timeout</span><span class="chip" style="font-family:var(--mono);font-size:10.5px">/time 09:3</span>`,
+  hint:`提示：检索历史保存在本机；点顶部服务器胶囊可展开连接概览。`
+});
+const S8C=narrowWa({
+  eyebrowI:"term",eyebrowT:"终端 · 空会话",
+  title:"未建立终端会话",
+  sub:"连接服务器后在这里建立 SSH 会话，断线自动重连。",
+  stepsHtml:step(1,{cur:1,title:"连接服务器",desc:"从最近连接选择，或顶部胶囊"})+step(2,{title:"多标签",desc:"会话保持保活 90s"}),
+  cta:`<button class="btn pri">新建会话</button>`,
+  chips:`<span class="chip"><i class="dot"></i>堡垒机-演示</span><span class="chip"><i class="dot"></i>127.122</span>`,
+  hint:`提示：终端标签仅在已连接服务器时出现在底部标签栏。`
+});
+const S8_NOTE=`<b>SP 移动档（容器查询 ≤560px，与 styles-sidepanel.css §12 对应）结构：</b>顶部 sp-appbar = 幽灵按钮 + srv-chip 服务器胶囊（状态点 + 名称 + mono 主机 + ▾）；内容单列；底部 sp-tabbar（日志 / 文件 / 终端）。<br/><b>空态细节规则：</b>① 右栏情境面板整体折叠，「最近连接」降级为 chips 行保留可点；② 步骤压缩为两步、描述砍到一行；③ <b>主按钮全宽 32px</b>（触达面积，对应现有 .sp-startup-cta 位置）；④ 键位行在触屏宿主隐藏，捷径改明链提示；⑤ 未选服务器时 tabbar 日志/文件禁用、终端不渲染——禁用态本身就是空态的一部分；⑥ <b>底部不设常驻状态行</b>：400px 下「● 摘要 · 详情」过挤，连接概览并入顶部 srv-chip 弹层（选服 + 概览二合一），未连接时胶囊本身即空态诊断（灰点 + 「选择服务器」）。`;
+
+const MINIS=[
+  {icon:"cmd",name:"命令面板 ⌘K",cap:"抽屉档 · 主按钮可点",body:`<div style="flex:1;display:flex;flex-direction:column"><div style="height:30px;flex:none;display:flex;align-items:center;gap:6px;padding:0 10px;border-bottom:1px solid var(--line);color:var(--ink-muted);font-size:11px">${ic("search",11)}zzz</div><div class="em-a" style="flex:1;justify-content:center"><span class="ic">${ic("cmd",13)}</span><b>没有匹配项</b><span>试试更短的关键词</span><button class="btn sm">清空重输</button></div></div>`},
+  {icon:"inbox",name:"传输历史抽屉",cap:"抽屉档 · 行高 ≥32px",body:`<div class="em-a"><span class="ic">${ic("inbox",13)}</span><b>暂无传输记录</b><span>上传 / 下载完成后在这里留存</span><button class="btn sm">打开传输面板</button></div>`},
+  {icon:"cmd",name:"快捷键管理",cap:"抽屉档 · 按钮承接空态动作",body:`<div class="em-a"><span class="ic">${ic("cmd",13)}</span><b>还没有自定义命令</b><span>预设 12 条已内置，可新增覆盖</span><button class="btn sm">新增命令</button></div>`},
+  {icon:"shield",name:"SSH 隧道面板",cap:"抽屉档",body:`<div class="em-a"><span class="ic">${ic("shield",13)}</span><b>暂无活跃隧道</b><span>新建后在这里监控转发状态</span><button class="btn sm">新建隧道</button></div>`},
+  {icon:"activity",name:"更新中心 · 未检查",cap:"面板档 · 附着于页签",body:`<div class="em-a"><span class="ic">${ic("activity",13)}</span><b>尚未检查更新</b><span>检查后展示当前版本与更新说明</span><button class="btn sm">检查更新</button></div>`},
+  {icon:"bkmk",name:"书签面板",cap:"面板档 · 依附日志查看器",body:`<div class="em-a"><span class="ic">${ic("bkmk",13)}</span><b>还没有书签</b><span>双击日志行即可添加</span><button class="btn sm">查看快捷键</button></div>`},
+  {icon:"activity",name:"监控 · 采样积累",cap:"面板档 · 图表内空态",body:`<div class="em-a"><span class="ic">${ic("activity",13)}</span><b>采样积累中…</b><span>连接后每 5s 采集，样本 ≥ 2 绘制</span></div>`},
+  {icon:"search",name:"连接清单 · 搜索无匹配",cap:"内联档 · 单行无按钮",body:`<div class="em-inline"><span class="ic">${ic("search",13)}</span><span>没有匹配的服务器，<b>试试更短关键词</b></span></div>`},
+  {icon:"clock",name:"路径历史下拉",cap:"内联档 · 极窄容器 200px",body:`<div class="em-inline"><span class="ic">${ic("clock",13)}</span><span>暂无历史记录</span></div>`},
+  {icon:"inbox",name:"传输历史下拉",cap:"内联档",body:`<div class="em-inline"><span class="ic">${ic("inbox",13)}</span><span>暂无传输记录</span></div>`},
+  {icon:"folder",name:"压缩包 · 无子文件夹",cap:"内联档 · 预览对话框侧栏",body:`<div class="em-inline"><span class="ic">${ic("folder",13)}</span><span>无子文件夹</span></div>`},
+  {icon:"file",name:"class 大纲 · 空",cap:"内联档 · 替换「无」字",body:`<div class="em-inline"><span class="ic">${ic("file",13)}</span><span>未读取到 class 结构</span></div>`}
+];
+
+/* ================= 页面 ================= */
+const CHG=[
+  ["1","右栏情境化","v1 右半区是纯空白；v2 变成「情境面板」——最近连接 / 最近检索 / 常用位置 / 导入来源 / 服务诊断，每个场景不同，行可点击直接执行。空态从「提示海报」变成<em>可操作的工作台</em>。"],
+  ["2","步骤时间线","步骤升级为竖向导轨串联的节点，支持四种节点态：默认 / 当前（强调色+呼吸光环）/ 完成（✓）/ 进行中（spinner）。视觉上讲清「流程走到哪了」。"],
+  ["3","连接中进度态","v1 里「连接中」与「未选服」共用一张卡；v2 独立成进度变体：spinner 节点 + mono 实时状态行（ssh 握手中···）+ 取消按钮，右侧是连接目标与诊断提示。"],
+  ["4","入场动效","内容按 eyebrow → 标题 → 副文案 → 步骤 → 键位 → 右栏 依次上浮入场（60ms 步进），页眉有极淡的强调色聚光。prefers-reduced-motion 自动关闭。"],
+  ["5","键位收口","所有快捷键收口到左栏底部 hairline 行，kbd 采用双层描边的按键质感；每屏只出现与当前场景相关的 2-3 个键位。"],
+  ["6","hover / 焦点态","最近连接行 hover 时浮现「连接 →」箭头动作（01 屏第二行静态演示 hover 态）；所有可点元素统一 150ms 过渡。"],
+  ["7","窄容器适配","SP 两档布局下右栏折叠为 chips 行、步骤压缩为两步、提示卡隐藏，顶部新增选服 pill。窄而高不做居中海报。"],
+  ["8","全 token 亮暗","全部颜色走 ink / line / accent / panel token，右上角切换亮暗即可验收；暗色下聚光、光环、hover 同步适配。"]
+];
+document.getElementById("s0").innerHTML=`
+  <div class="sec"><span class="no">00</span><b>方案 A v2 · 优化说明</b><span>在 v1「锚定顶部 + 三步引导」骨架上的 8 个深化点</span></div>
+  <div class="chg">${CHG.map(c=>`<div class="chg-item"><span class="cn">${c[0]}</span><div class="ct"><b>${c[1]}</b><span>v1 → v2</span></div><p>${c[2]}</p></div>`).join("")}</div>
+  <div class="sec"><span class="no">00.1</span><b>不变的部分</b><span>已获认可的骨架</span></div>
+  <div class="note">顶部锚定（不绝对居中）· eyebrow + 标题 + 一句话副文案 · 「诊断 + 主行动 + 捷径」三件套 · 大屏 / 面板 / 内联三档规格 · 全 token 化。</div>`;
+
+/* 组装 1-9 屏 */
+function mount(id,html){document.getElementById(id).innerHTML=html}
+mount("s1",`
+  <div class="sec"><span class="no">01</span><b>等待选择服务器</b><span>场景 01 · 大屏痛点 · 双栏结构</span></div>
+  ${frame(wa(S1_MAIN,S1_SIDE),{mode:"files",h:520})}
+  <div class="cap"><b>v2 结构：</b>左栏步骤时间线 + 键位，右栏「最近连接」4 行（第 2 行为 hover 态静态演示）+ 情境提示卡；整体 800px 居中、锚定顶部，右栏把剩余空白变成可点击内容。</div>`);
+mount("s2",`
+  <div class="sec"><span class="no">02</span><b>连接中 · 进度态</b><span>场景 02 · 独立进度变体</span></div>
+  ${frame(wa(S2_MAIN,S2_SIDE),{mode:"files",status:"正在连接 堡垒机-演示…",h:520})}
+  <div class="cap">spinner 节点 + mono 实时状态行（打点动画）+ 取消；步骤 2/3 预告连接后会发生什么，等待不再空洞；右栏是连接目标与诊断提示。</div>`);
+mount("s3",`
+  <div class="sec"><span class="no">03</span><b>检索空态</b><span>场景 03 · 右栏 = 最近检索</span></div>
+  ${frame(wa(S3_MAIN,S3_SIDE),{mode:"log",h:480})}
+  <div class="cap">最近检索行带命中数与时间，hover 出现「重新检索」；提示卡解释实时跟随行为。</div>`);
+mount("s4",`
+  <div class="sec"><span class="no">04</span><b>终端 · 无会话</b><span>场景 08 · 右栏 = 最近会话</span></div>
+  ${frame(wa(S4_MAIN,S4_SIDE),{mode:"term",h:480})}
+  <div class="cap">顶栏第三个「终端」标签为示意（实际入口在终端工作区）；右栏最近会话可一键重开。</div>`);
+mount("s5",`
+  <div class="sec"><span class="no">05</span><b>目录为空</b><span>场景 04 · 右栏 = 常用位置</span></div>
+  ${frame(wa(S5_MAIN,S5_SIDE),{mode:"files",status:"/data/apps/logs",h:480})}
+  <div class="cap">主行动「返回上一级」，右栏常用位置一键跳转；比 v1 的静态 chips 更可点。</div>`);
+mount("s6",`
+  <div class="sec"><span class="no">06</span><b>还没有服务器</b><span>场景 07 · 侧栏同步空态（场景 09）</span></div>
+  ${frame(wa(S6_MAIN,S6_SIDE),{mode:"files",sbEmpty:true,status:"0 台服务器",h:500})}
+  <div class="cap">右栏列出三种导入来源；侧栏与主区同一语言（A 档小卡）。</div>`);
+mount("s7",`
+  <div class="sec"><span class="no">07</span><b>服务离线</b><span>场景 06 · 右栏 = 服务诊断</span></div>
+  ${frame(wa(S7_MAIN,S7_SIDE),{mode:"files",status:"服务离线 · 自动重试中",stCls:"err",h:500})}
+  <div class="cap">步骤 1 为 spinner 等待态（每 5s 自动重试），右栏服务诊断卡给出地址、状态与上次在线时间。</div>`);
+mount("s8",`
+  <div class="sec"><span class="no">08</span><b>SP 移动档 · 三视图空态</b><span>容器查询 ≤560px · 真实 sp-appbar / sp-statusbar / sp-tabbar 结构</span></div>
+  <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin-top:12px">
+    <div>${frameNarrow(S8A,{chip:srvChip(false),tabDisabled:true,term:false,h:600})}
+      <div class="cap"><b>文件 · 未选服：</b>主按钮全宽 32px；tabbar 日志/文件禁用，终端 tab 不渲染。</div></div>
+    <div>${frameNarrow(S8B,{chip:srvChip(true,"127.122","192.168.127.122"),tab:"log",h:600})}
+      <div class="cap"><b>日志 · 检索空态：</b>chips 为最近检索（mono）；服务器与路径上收进顶部胶囊。</div></div>
+    <div>${frameNarrow(S8C,{chip:srvChip(true,"堡垒机-演示","192.168.130.3"),tab:"term",h:600})}
+      <div class="cap"><b>终端 · 无会话：</b>终端 tab 仅已连接时出现在标签栏。</div></div>
+  </div>
+  <div class="note" style="margin-top:14px">${S8_NOTE}</div>`);
+mount("s9",`
+  <div class="sec"><span class="no">09</span><b>小态全谱</b><span>12 处 · 两档规格：抽屉/面板档（26px tile + 按钮）与内联档（单行无按钮）</span></div>
+  <div class="minis" style="grid-template-columns:repeat(4,1fr)">
+    ${MINIS.map(m=>`<div class="mini"><div class="mini-h">${ic(m.icon,12)}${m.name}</div><div class="mini-b">${m.body}</div><div class="mini-cap">${m.cap}</div></div>`).join("")}
+  </div>
+  <div class="note" style="margin-top:14px"><b>小屏 / 小态规格总表：</b><br/>
+  · <b>抽屉 / 面板档</b>（命令面板、抽屉、附着面板、图表）：26px 图标 tile + 标题 12px + 一句话 10.5px + 可选按钮 24px；可点行高 ≥32px（触达面积）；内容受限时按钮转全宽。<br/>
+  · <b>内联档</b>（下拉、侧栏小列、对话框内嵌）：14px 裸图标 + 单行 10.5px，无按钮；宽度 <220px 时文字截断省略，hover 由宿主行承接。<br/>
+  · 触屏宿主（SP / 移动档）一律隐藏键位行，捷径改为明链或并入状态条「详情」；<b>禁用 tab / 置灰入口本身也是空态文案的一部分</b>，必须让用户看懂「为什么灰」。<br/>
+  · 覆盖场景：12 / 13 / 14 / 15 / 16 / 17 / 18 / 19 / 20 / 22 / 24 / 25（总账编号）。</div>`);
+
+/* ---------- 10 · 底部状态条 ---------- */
+function fsCard(state,{word,obj,l2,openHtml}={}){
+  return `<div class="fs ${state}${openHtml?" open":""}">${openHtml||`
+    <div class="fs-l1"><span class="st"></span><span class="w">${word}</span><span class="nm">${obj||""}</span><span class="chev">▾</span></div>
+    <div class="fs-l2">${l2}</div>`}</div>`;
+}
+const FS_CARDS=[
+  fsCard("idle",{word:"待命",l2:`选择服务器后自动连接`}),
+  fsCard("connecting",{word:"连接中",obj:"",l2:`<span class="sp"></span><span class="mono">SSH 握手中 · 堡垒机-演示</span>`}),
+  fsCard("ok",{word:"已连接",l2:`<span class="mono">堡垒机-演示 · /data/apps/logs</span>`}),
+  fsCard("err",{word:"连接失败",l2:`<span class="mono">192.168.130.3 : 2222</span> 认证失败 · <a>重试</a>`}),
+  fsCard("warn",{word:"服务离线",l2:`5s 后重试 · <span class="mono">127.0.0.1:7345</span> <a>检查</a>`})
+];
+const FS_OPEN=fsCard("ok",{openHtml:`<div class="fs-open">
+    <div class="hd"><span>连接概览</span><span class="collapse">收起</span></div>
+    <div class="fs-kv">
+      <span>本地服务</span><b class="sans">运行中</b>
+      <span>服务器</span><b class="sans">堡垒机-演示 · 已连接</b>
+      <span>主机</span><b>deploy@192.168.130.3:2222</b>
+      <span>路径</span><b>/data/apps/logs</b>
+    </div>
+    <div class="acts"><button class="btn sm">重新连接</button><button class="btn sm">连接设置</button></div>
+  </div>`});
+mount("s10",`
+  <div class="sec"><span class="no">10</span><b>底部状态条 · 重设计</b><span>宽屏侧栏 footer（SidebarPanel compact-connection-card）</span></div>
+  <div class="note"><b>现状问题（对照实装）：</b>${`<span class="old-status"><span class="st"></span><span class="tx">正在连接 堡垒机-演示…</span><span class="dt">详情</span></span>`}
+  &nbsp;① 一行塞「名称 · 用户 · 路径」，198px 侧栏必截断成「正在连接 堡垒机-演示…」；② dot 只有绿 / 灰两态，连接中、失败、离线无法区分；③「详情」是孤立小字按钮，触达差；④ 展开后 4 行 label 密排，无动作。</div>
+
+  <div class="sec"><span class="no">10.1</span><b>五态卡（真实 198px 侧栏宽度）</b><span>状态词固定 3-4 字永不截断，截断让给第二行</span></div>
+  <div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-top:12px">${FS_CARDS.map(c=>`<div>${c}</div>`).join("")}</div>
+  <div class="cap"><b>两行结构：</b>L1 = 状态指示 + 状态词 + chevron；L2 = 对象 / 上下文（mono 只用于 host · path / 阶段），可截断。<b>语义五色：</b>灰待命 · 蓝连接中 · 绿已连接 · 红失败 · amber 离线。<b>连接中</b>卡片顶部有 2px 流光进度条（有生命感）；<b>失败 / 离线</b>在 L2 给 inline 动作（重试 / 检查），不用点开概览就能自救。</div>
+
+  <div class="sec"><span class="no">10.2</span><b>展开态 · 连接概览</b><span>整卡可点，chevron 旋转；沿用现有 statusExpanded 记忆</span></div>
+  <div style="max-width:240px;margin-top:12px">${FS_OPEN}</div>
+  <div class="cap">概览改为 kv 网格（mono 值可截断）+ 底部动作行（重新连接 / 连接设置）；「收起」与整卡点击均可折叠。</div>
+
+  <div class="sec"><span class="no">10.3</span><b>装回侧栏（连接中态 · 1:1）</b><span>服务器列表 → 状态卡 → 操作记录</span></div>
+  <div style="margin-top:12px"><div class="app" style="--fh:500px">
+    <div class="side">
+      <div class="sb-head"><span class="tl r"></span><span class="tl y"></span><span class="tl g"></span><span class="gear">${ic("cmd",13,1.5)}${ic("clock",13,1.5)}</span></div>
+      <div class="sb-title">日志控制台</div>
+      <div class="sb-cap"><b>服务器</b><span>27 台</span></div>
+      <div class="sb-search">${ic("search",11,1.6)}输入名称、分组或地址</div>
+      <div class="sb-groups">${GROUPS.slice(0,3).map(g=>`<div class="sb-group">${g.g}</div>`+g.items.map(it=>`<div class="sb-item${it.n==="堡垒机-演示"?" on":""}"><div class="r1"><span class="nm"><i class="dot${it.on?"":" idle"}"></i><b>${it.n}</b></span><span class="pt">${it.p}</span></div><div class="r2">${it.ip}</div></div>`).join("")).join("")}</div>
+      <div style="flex:none;padding:0 10px 8px">${fsCard("connecting",{word:"连接中",l2:`<span class="sp"></span><span class="mono">SSH 握手中 · 堡垒机-演示</span>`})}</div>
+      <section style="flex:none;margin:0 10px 10px;border-top:1px solid var(--line);padding-top:8px">
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--ink-muted);font-weight:600;padding:0 2px 6px"><span>操作记录</span><span>3 条</span></div>
+        <div style="display:flex;flex-direction:column;gap:4px;font-size:10px;color:var(--ink-muted)">
+          <span style="font-family:var(--mono);font-size:9.5px">19:13:02 已载入 27 台服务器</span>
+          <span style="font-family:var(--mono);font-size:9.5px">19:13:05 正在连接 堡垒机-演示…</span>
+          <span style="font-family:var(--mono);font-size:9.5px">19:13:05 SSH 握手中</span>
+        </div>
+      </section>
+    </div>
+    <div class="main"><div class="tbar">${topbarHtml("files")}</div><div class="content">${wa(S2_MAIN,null)}</div></div>
+  </div></div>
+  <div class="cap">与内容区联动：连接中时内容区是进度工作台（02 屏），底部卡同步 spinner 与阶段词；连接完成后卡片转绿、L2 换 host · 路径，全程无截断。</div>
+  <div class="note" style="margin-top:10px"><b>落地映射：</b>收起态 = 重写 sidebar-status-summary 为两行结构；展开态 = 沿用 statusExpanded，概览改 kv 网格 + 动作行；状态源已有（isBusy / connectionTestStatus / showServiceOfflineState / hasDirectoryConnectionError），只需映射到五态 class；进度条为纯 CSS 动画，reduced-motion 下退化为静态 2px 强调色条。</div>`);
+
+/* 导航 / 暗色 / hash */
+const NAVDESC={
+  s0:["00 优化说明","方案 A v2 相对 v1 的 8 个优化点"],
+  s1:["01 等待选择服务器","双栏：步骤时间线 + 最近连接情境面板"],
+  s2:["02 连接中 · 进度态","spinner 节点 + mono 实时状态行 + 取消"],
+  s3:["03 检索空态","右栏 = 最近检索（命中数 / 时间 / 重新检索）"],
+  s4:["04 终端 · 无会话","右栏 = 最近会话，一键重开"],
+  s5:["05 目录为空","右栏 = 常用位置一键跳转"],
+  s6:["06 还没有服务器","右栏 = 导入来源；侧栏同步空态"],
+  s7:["07 服务离线","步骤等待态 + 右栏服务诊断"],
+  s8:["08 SP 移动档 · 三视图","srv-chip + 全宽主按钮 + tabbar 禁用态 · 真实 ≤560px 结构"],
+  s9:["09 小态全谱","12 处两档规格：抽屉/面板档（tile+按钮）与内联档（单行）"],
+  s10:["10 底部状态条","五态卡：状态词不截断 · 语义五色 · 展开概览 kv 网格"]
+};
+document.querySelectorAll("#index button").forEach(b=>{
+  b.addEventListener("click",()=>{
+    document.querySelectorAll("#index button").forEach(x=>x.classList.remove("on"));
+    b.classList.add("on");
+    document.querySelectorAll(".page").forEach(p=>p.classList.remove("on"));
+    document.getElementById(b.dataset.page).classList.add("on");
+    const d=NAVDESC[b.dataset.page];
+    document.getElementById("desc-n").textContent=d[0];
+    document.getElementById("desc-d").textContent=d[1];
+    document.getElementById("viewport").scrollTop=0;
+  });
+});
+document.querySelectorAll("#skin-toggle button").forEach(b=>{
+  b.addEventListener("click",()=>{
+    document.querySelectorAll("#skin-toggle button").forEach(x=>x.classList.remove("on"));
+    b.classList.add("on");
+    document.getElementById("viewport").classList.toggle("dark",b.dataset.skin==="dark");
+  });
+});
+(function(){
+  const h=location.hash.replace("#","");
+  if(!h)return;
+  const [pg,skin]=h.split("-");
+  const nav=document.querySelector(`#index button[data-page="${pg}"]`);
+  if(nav)nav.click();
+  if(skin==="dark")document.querySelector('#skin-toggle button[data-skin="dark"]').click();
+})();
+</script>
+</body>
+</html>

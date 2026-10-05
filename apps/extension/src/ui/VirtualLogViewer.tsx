@@ -287,26 +287,8 @@ const VirtualLogViewerImpl = forwardRef<VirtualLogViewerHandle, Props>(
       [errorLineKinds, lines],
     );
 
-    // 时间列宽自适应（log 视图）：取当前内容里最长的时间戳文本作为列字符数，
-    // 短时间戳不再残留大段空白，长时间戳（如 CLF 带时区）也不会溢出；
-    // 整个内容都没有行首时间戳时归零，行首不再保留固定时间列留白。
-    const logTimeColumnChars = useMemo(() => {
-      if (variant !== "log") return 0;
-      let max = 0;
-      for (const line of lines) {
-        const match = LOG_LINE_TIME_RE.exec(line);
-        if (match) max = Math.max(max, match[1].length);
-      }
-      return Math.min(max, 40);
-    }, [variant, lines]);
-
-    const rootStyle = useMemo(() => {
-      if (variant !== "log") return undefined;
-      return {
-        "--log-time-ch": logTimeColumnChars,
-        ...(logTimeColumnChars > 0 ? null : { "--log-time-gap": "0px" }),
-      } as React.CSSProperties;
-    }, [variant, logTimeColumnChars]);
+    // 时间戳内联模式（2026-10-04）：时间列固定宽已废弃（theme-modern-v2 §日志行时间戳），
+    // 时间戳就地渲染、堆栈续行顶格 —— 不再按视口测宽注入 --log-time-ch。
 
     const rawHighlightRegex = useMemo(() => {
       const normalized = [...new Set(keywordTerms.map((t) => t.trim()).filter(Boolean))];
@@ -719,7 +701,6 @@ const VirtualLogViewerImpl = forwardRef<VirtualLogViewerHandle, Props>(
     return (
       <div
         className={className}
-        style={rootStyle}
         tabIndex={0}
         onKeyDown={handleKeyDown}
         onWheel={onWheel}

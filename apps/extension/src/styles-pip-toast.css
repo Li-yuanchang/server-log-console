@@ -161,9 +161,26 @@
   width: 100% !important;
 }
 
+/* 视口底色以 xterm 内联主题底色为准（terminalScheme.theme.background，
+   随「终端配色」槽位实时刷新）——CSS 不再强制覆盖，避免与行渲染底色两套值 */
 .xterm-container .xterm-viewport {
   overflow-y: auto;
-  background-color: var(--terminal-background, var(--shell)) !important;
+  /* 隐藏纵向滚动条（2026-10-04）：保留滚轮/触摸滚动能力，但不要可见滚动条——
+     窄终端里那条灰条既占宽又碍眼。scrollbar-width + webkit 伪元素双覆盖，
+     压过 theme-modern 全局 ::-webkit-scrollbar{width:6px}。 */
+  scrollbar-width: none;
+}
+
+.xterm-container .xterm-viewport::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+/* xterm 6 自绘的覆盖式滚动条（.xterm-scrollable-element > .scrollbar）一并隐藏 */
+.xterm-container .xterm-scrollable-element > .scrollbar,
+.xterm-container .xterm-scrollable-element > .scrollbar > .slider {
+  display: none !important;
 }
 
 /* xterm 会在 .xterm-scrollable-element 上写行内 background-color（= 终端配色底色，

@@ -17,8 +17,10 @@ type DocumentPictureInPictureWindowApi = {
 
 const browserPipSupported = typeof window !== "undefined" && "documentPictureInPicture" in window;
 
-/** 搬入 PiP 后的 xterm 重排时刻表（ms）：新窗口首轮布局 / 字体加载 / 尺寸稳定各补一次 fit */
-const FIT_SCHEDULE_MS = [80, 240, 600, 1200] as const;
+/** 搬入 PiP 后的 xterm 重排时刻表（ms）：新窗口首轮布局 / 字体加载 / 尺寸稳定各补一次 fit。
+    build 产物下样式表是异步 <link>，样式就绪前容器高度塌陷、canApplyTerminalFit 会跳过 fit，
+    因此时刻表必须拉长到样式加载完成后仍能补发（另监听 PiP window 的 load 事件，见 open()）。 */
+const FIT_SCHEDULE_MS = [80, 240, 600, 1200, 2500, 5000] as const;
 
 export interface BrowserTerminalPipOpenOptions {
   /** 被搬进 PiP 的单个元素（容器传 .terminal-main-shell） */
@@ -64,6 +66,12 @@ export function useBrowserTerminalPip(): {
     const next = anchorNextRef.current;
     anchorParentRef.current = null;
     anchorNextRef.current = null;
+    /* 清除 PiP 预 fit 期间的临时内联尺寸与 flex 覆盖，交还主文档布局 */
+    try {
+      el?.style.removeProperty("flex");
+      el?.style.removeProperty("width");
+      el?.style.removeProperty("height");
+    } catch {}
     if (!el || !parent) {
       return;
     }
@@ -155,10 +163,30 @@ export function useBrowserTerminalPip(): {
         anchorNextRef.current = el.nextSibling;
         movedElRef.current = el;
         onFitRef.current = onFit ?? null;
+
+        /* 预 fit（关键修复 2026-10-05）：搬入之前在主文档按 PiP 目标尺寸重排 xterm。
+           一旦搬入 PiP，addon-fit 的尺寸测量跨窗口失效（fit() 静默无效），
+           PiP 内的任何补发都改不了列数 —— 所以必须在主文档（渲染器度量健康）
+           先把 shell 定为 PiP 尺寸 → fit 算准 cols/rows → 再搬入（布局一致）。
+           注意 .terminal-main-shell 是 flex: 1 1 0% 项，flex-basis 优先于 width，
+           必须连 flex 一起覆盖，否则 inline 宽度被 flex 布局吞掉（实测踩坑）。 */
+        try {
+          el.style.flex = "0 0 auto";
+          el.style.width = pip.innerWidth + "px";
+          el.style.height = pip.innerHeight + "px";
+        } catch {}
+        onFitRef.current?.();
+
         const wrapper = pip.document.createElement("div");
         wrapper.className = "pip-terminal-root";
         wrapper.appendChild(el);
         pip.document.body.appendChild(wrapper);
+        /* 清除临时内联尺寸与 flex 覆盖，交由 PiP 布局接管 */
+        try {
+          el.style.removeProperty("flex");
+          el.style.removeProperty("width");
+          el.style.removeProperty("height");
+        } catch {}
 
         /* PiP 窗口尺寸变化 → xterm 重新 fit（主文档 ResizeObserver 收不到新窗口的布局通知） */
         pip.addEventListener("resize", () => onFitRef.current?.());
@@ -175,15 +203,32 @@ export function useBrowserTerminalPip(): {
 
         pipWindowRef.current = pip;
         setIsPip(true);
+        try {
+          console.info("[slc-pip] opened", {
+            wW: pip.innerWidth, wH: pip.innerHeight,
+            styleLinks: pip.document.querySelectorAll('link[rel=stylesheet]').length,
+            styleTags: pip.document.querySelectorAll('style').length,
+          });
+        } catch {}
 
-        /* 修复①：搬入新窗口后 xterm 不会自动重新 fit，按 [80,240,600,1200]ms 连发补齐 */
+        /* 修复①：搬入新窗口后 xterm 不会自动重新 fit，按 FIT_SCHEDULE_MS 连发补齐。
+           修复③：build 产物样式表是异步 <link>，PiP window 的 load 事件 =
+           样式全部就绪 —— 此刻再补一轮 fit（样式就绪前容器高度塌陷，fit 会被
+           canApplyTerminalFit 的最小尺寸护栏跳过，导致 xterm 停留在弹出前的窄列数）。 */
         for (const delay of FIT_SCHEDULE_MS) {
           window.setTimeout(() => {
             if (pipWindowRef.current === pip) {
+              console.info("[slc-pip] scheduled fit fired", delay);
               onFitRef.current?.();
             }
           }, delay);
         }
+        pip.addEventListener("load", () => {
+          console.info("[slc-pip] pip window loaded → refit");
+          if (pipWindowRef.current === pip) {
+            runFitSequence();
+          }
+        });
       } catch (error) {
         console.error("Failed to open terminal PiP:", error);
       } finally {

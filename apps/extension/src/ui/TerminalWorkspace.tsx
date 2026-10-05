@@ -20,6 +20,7 @@ import { TerminalSplitView, type FocusedPaneSnapshot, type PaneStateSnapshot } f
 import { useBrowserTerminalPip } from "./useBrowserTerminalPip.js";
 import { TerminalAI } from "./TerminalAI.js";
 import { PipExpandIcon } from "./PipExpandIcon.js";
+import { EmptyWorkbench } from "./EmptyWorkbench.js";
 import type { TerminalTabState } from "./types.js";
 
 /**
@@ -844,7 +845,12 @@ export function TerminalPanel(props: TerminalPanelProps) {
                     el: shellRef.current,
                     title: terminalTitle,
                     onFit: () => {
-                      sessionApisRef.current[activeTabIdRef.current]?.fitTerminal();
+                      /* PiP 内 addon-fit 的 proposeDimensions 跨窗口失效 → 优先手动量尺寸 resize */
+                      const api = sessionApisRef.current[activeTabIdRef.current];
+                      if (api?.resizeToContainer?.()) {
+                        return;
+                      }
+                      api?.fitTerminal();
                     },
                   });
                 }
@@ -902,17 +908,33 @@ export function TerminalPanel(props: TerminalPanelProps) {
         <div className="terminal-body-layout">
           <div ref={shellRef} className="terminal-main-shell">
             {!hasTabs ? (
-              /* T8 空态：单一主按钮，动作禁用态 */
-              <div className="terminal-empty">
-                <span className="terminal-empty-icon" aria-hidden="true">
-                  <TerminalIcon size={20} />
-                </span>
-                <span className="terminal-empty-title">未建立终端会话</span>
-                <span className="terminal-empty-sub">连接当前服务器，或从左侧列表选择</span>
-                <button type="button" className="terminal-empty-connect" onClick={() => newTab()} disabled={!props.serverId}>
-                  连接 {terminalTitle}
-                </button>
-              </div>
+              /* T8 空态 → 方案 A 引导式工作台（原型 empty-states-a-v2 04 屏）：
+                 三步时间线 + 键位；主按钮 = 新建会话（未选服时禁用）。 */
+              <EmptyWorkbench
+                className="in-terminal"
+                icon={<TerminalIcon size={13} strokeWidth={1.8} />}
+                eyebrow="终端 · 空会话"
+                title="未建立终端会话"
+                sub="连接服务器后在这里建立 SSH 会话；断线时网关保活 90 秒并自动重连。"
+                steps={[
+                  { title: "选择服务器", desc: "左侧列表点击，或 ⌘K 检索", state: "cur" },
+                  {
+                    title: "新建会话",
+                    desc: "⌘T 多标签并行，⌘W 关闭当前",
+                    actions: [{ label: `连接 ${terminalTitle}`, kind: "pri", onClick: () => newTab(), disabled: !props.serverId }],
+                  },
+                  { title: "AI 辅助", desc: "右上 ⚙ 配置后可在终端内唤起 AI 命令建议" },
+                ]}
+                keys={
+                  isElectronRuntime
+                    ? [
+                        { kbd: "⌘T", label: "新建" },
+                        { kbd: "⌘W", label: "关闭" },
+                        { kbd: "⌘F", label: "终端内查找" },
+                      ]
+                    : undefined
+                }
+              />
             ) : (
               <>
                 <div

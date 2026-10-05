@@ -210,20 +210,20 @@
 .theme-modern .terminal-panel-bar-info strong {
   color: var(--ink);
 }
-/* 工具行按钮 = 原型 .btn.sm（prototype 54 行）：24px 高 / padding 0 8 / 字号 11 /
-   1px var(--line) 描边白底 / 圆角 var(--r-s) / --ink 字。字号走 --fs-2xs(11px) token。
+/* 工具行按钮（2026-10-04 用户要求：去掉框）—— 覆盖旧原型 .btn.sm 带框白底规则：
+   背景透明、边框透明占位，hover = panel-muted + ink（与 v2 §终端工具钮一致）。
    须显式复位 theme-modern.css 2214-2237 深色块的白 8% 填充与 shell-ink 字。 */
 .theme-modern .terminal-panel-bar-actions button,
 .theme-modern .terminal-panel-bar-actions .terminal-toolbar-button {
-  background: var(--panel);
-  border: 1px solid var(--line);
+  background: transparent;
+  border: 1px solid transparent;
   color: var(--ink);
   font-size: var(--fs-2xs);
 }
 .theme-modern .terminal-panel-bar-actions button:hover:not(:disabled),
 .theme-modern .terminal-panel-bar-actions .terminal-toolbar-button:hover:not(:disabled) {
-  background: var(--accent-soft);
-  border-color: color-mix(in srgb, var(--accent) 26%, transparent);
+  background: var(--panel-muted);
+  border-color: transparent;
   color: var(--ink);
 }
 /* 激活态（快捷命令面板 / AI 抽屉展开）：accent-soft 底 + accent 字（浅色版） */
@@ -540,13 +540,18 @@
   flex: 1 1 0%;
   min-width: 0;
 }
-/* 父级经 children 传入的 kbd 提示（原型 .ttabs .hint 141 行） */
+/* 父级经 children 传入的 kbd 提示（原型 .ttabs .hint 141 行）
+   次要文案：--fs-xs(12px) + --ink-muted，行高 1 + flex 居中，避免在 31px 标签条里显大显眼 */
 .theme-modern .terminal-tabs-hint {
   display: flex;
   align-items: center;
   gap: 6px;
   flex: none;
   padding: 0 8px 0 4px;
+  font-size: var(--fs-xs);
+  line-height: 1;
+  color: var(--ink-muted);
+  white-space: nowrap;
 }
 
 /* 标签（原型 .ttab 130 行：24px 高 / padding 0 7px 0 10px / radius 6 / 11.5px 字

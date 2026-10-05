@@ -658,7 +658,7 @@ export function UpdateCenterPanel(props: UpdateCenterPanelProps) {
                   </div>
                 ))
               ) : (
-                <div className="settings-update-log-empty">尚未检查；点击上方「检查更新」开始。</div>
+                <div className="settings-update-log-empty">尚未检查更新 — 点击页头「检查更新」开始，记录保留最近 5 条。</div>
               )}
             </div>
           </section>

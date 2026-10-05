@@ -37,7 +37,7 @@ import type {
   ServerSystemProfileResponse,
   ServerSummary
 } from "@server-log-console/shared";
-import { ArrowDown, ArrowLeft, Settings, Download, Copy, Bug, Bookmark, X, AlertTriangle, Search, Folder, ServerOff, FolderSearch } from "lucide-react";
+import { ArrowDown, ArrowLeft, Settings, Download, Copy, Bug, Bookmark, X, AlertTriangle, Search, Folder, ServerOff, FolderSearch, Lightbulb, ShieldCheck } from "lucide-react";
 import { TerminalPanel, type TerminalPaneSessionState } from "./TerminalWorkspace.js";
 import { ToolIcon } from "./ToolIcon.js";
 import { PipExpandIcon } from "./PipExpandIcon.js";
@@ -81,11 +81,12 @@ import { isSpecialPreviewFile, useFileOperations } from "./useFileOperations.js"
 import { useServerManagement } from "./useServerManagement.js";
 import { useLogRecording } from "./useLogRecording.js";
 import { SidebarPanel } from "./SidebarPanel.js";
-import { ServerPickerOverlay, SidepanelMobileTop, SidepanelStatusbar, SidepanelMobileTabBar, DirectorySheet } from "./SidepanelMobile.js";
+import { ServerPickerOverlay, SidepanelMobileTop, SidepanelMobileTabBar, DirectorySheet } from "./SidepanelMobile.js";
 import { WorkspaceTabContextMenu, type WorkspaceTabMenuState } from "./WorkspaceTabContextMenu.js";
 import { WorkspaceSessionTabs } from "./WorkspaceSessionTabs.js";
 import { SettingsModalOverlay } from "./SettingsModalOverlay.js";
 import { WorkspaceStartupCards } from "./WorkspaceStartupCards.js";
+import { EmptyWorkbench } from "./EmptyWorkbench.js";
 import { CommandPalette } from "./CommandPalette.js";
 import { ImmediateTooltip } from "./ImmediateTooltip.js";
 import { DialogOverlays } from "./DialogOverlays.js";
@@ -301,6 +302,22 @@ export function App() {
     }
   }, []);
 
+  /* 局域网/本机地址（私网 IP、localhost、无点主机名、.local）允许 http；
+     公网地址才强制 https（混合内容拦截只对 https 页面 + 不可信目标生效） */
+  const isPrivateGatewayHost = useCallback((baseUrl: string) => {
+    if (!baseUrl) return true;
+    try {
+      const host = new URL(baseUrl).hostname.toLowerCase();
+      if (host === "localhost" || host === "::1" || host === "[::1]") return true;
+      if (/^127\./.test(host) || /^10\./.test(host) || /^192\.168\./.test(host)) return true;
+      if (/^172\.(1[6-9]|2\d|3[01])\./.test(host)) return true;
+      if (host.endsWith(".local") || !host.includes(".")) return true;
+      return false;
+    } catch {
+      return false;
+    }
+  }, []);
+
   /* 扩展访问远程网关需要动态 host 权限；localhost 已在静态 host_permissions 中，桌面端无权限体系 */
   const requestGatewayHostPermission = useCallback(async (normalizedBase: string): Promise<boolean> => {
     if (!normalizedBase || isElectron || isLocalGatewayHost(normalizedBase)) {
@@ -333,8 +350,8 @@ export function App() {
         return;
       }
       const protocol = new URL(normalized).protocol;
-      if (!isLocalGatewayHost(normalized) && protocol === "http:") {
-        setGatewayTestState({ tone: "danger", text: "远程地址必须使用 https（浏览器会拦截不安全的远程 WebSocket）" });
+      if (!isPrivateGatewayHost(normalized) && protocol === "http:") {
+        setGatewayTestState({ tone: "danger", text: "公网地址必须使用 https（浏览器会拦截不安全的远程 WebSocket）；局域网地址可用 http" });
         return;
       }
       if (!(await requestGatewayHostPermission(normalized))) {
@@ -350,7 +367,7 @@ export function App() {
     }
     pushActivity(`连接服务已更新：${localServiceBase}，页面即将重载。`);
     window.location.reload();
-  }, [gatewayDraftBaseUrl, gatewayDraftToken, isLocalGatewayHost, pushActivity, requestGatewayHostPermission]);
+  }, [gatewayDraftBaseUrl, gatewayDraftToken, isPrivateGatewayHost, pushActivity, requestGatewayHostPermission]);
 
   const resetGatewayConfig = useCallback(() => {
     clearGatewayConfig();
@@ -528,6 +545,7 @@ export function App() {
     focusTerminal: () => {},
     focusTerminalSoon: () => {},
     fitTerminal: () => {},
+    resizeToContainer: () => false,
     getSelection: () => "",
     clearSelection: () => {},
     pasteToTerminal: () => {},
@@ -930,8 +948,19 @@ export function App() {
     // Fade out and remove the inline loading overlay from index.html
     const splash = document.getElementById("app-loading");
     if (splash) {
-      splash.style.opacity = "0";
-      setTimeout(() => splash.remove(), 350);
+      if ((window as any).__SLC_HOLD_SPLASH__) {
+        /* ?splash 预览模式：保持启动页可见（供设计走查），不影响正常入口 */
+      } else {
+        /* 最短展示 700ms（大屏/小屏同一策略）：本地服务就绪过快时启动页
+           不至于只闪一下；超出部分立即淡出，不人为拖慢启动 */
+        const MIN_SPLASH_MS = 700;
+        const shownAt = Number((window as any).__SLC_SPLASH_SHOWN_AT__) || 0;
+        const remaining = Math.max(0, MIN_SPLASH_MS - (Date.now() - shownAt));
+        setTimeout(() => {
+          splash.style.opacity = "0";
+          setTimeout(() => splash.remove(), 350);
+        }, remaining);
+      }
     }
   }, []);
 
@@ -3429,6 +3458,9 @@ export function App() {
           onCloseSettingsWorkspace={closeSettingsWorkspace}
           onActivityPanelResizeStart={handleActivityPanelResizeStart}
           hasPendingUpdate={desktopUpdate.updateAvailable}
+          isBusy={isBusy}
+          onRetryConnect={() => { void testServerConnection(selectedServer?.basePath?.trim() || "/"); }}
+          onCheckService={() => { void checkLocalServiceHealth(); }}
         />
 
       <section className={`main-panel ${isFileMode ? "main-panel-files" : ""} sp-view-${sidepanelMobileActiveView}`}>
@@ -3503,11 +3535,13 @@ export function App() {
                   </button>
                 ) : null}
               </div>
-              {isFileMode ? (
+              {isFileMode && !terminalAsWorkspaceView ? (
                 /* 文件模式：原型 tbar 一行式 —— seg 之后紧跟目录层级（面包屑），
                    过滤框 + 图标组靠右；检索/LIVE 等日志工具不显示（用户反馈 2026-09-30）。
-                   容器复用 .file-browser-workbench 作用域以继承面包屑紧凑等既有规则。 */
-                <div className="file-tools-inline file-browser-workbench">
+                   容器复用 .file-browser-workbench 作用域以继承面包屑紧凑等既有规则。
+                   终端视图不渲染（一套策略：终端有自己的动作栏/会话条，
+                   视图切换 seg 保留在命令栏——所有宿主/档位都有路可回，2026-10-04）。 */
+                <div className={`file-tools-inline file-browser-workbench${isConnectingWorkspace ? " is-idle" : ""}`}>
                   <FileBrowserPathbar
                     mode={pathbarMode}
                     directoryInput={directoryInput}
@@ -4294,28 +4328,36 @@ export function App() {
                     </div>
                   </>
                 ) : (
-                  <div className="viewer-empty-state">
-                    {/* S12 原型空态模板：44×44 描边图标 + 一句话 + 副文案 + 主按钮，整体居中。
-                        按钮文案对齐原型 1037 行「查看检索示例」/「打开文件目录」。 */}
-                    <span className="viewer-empty-state-icon" aria-hidden="true">
-                      <Search size={18} strokeWidth={1.8} />
-                    </span>
-                    <strong>{viewerEmptyTitle}</strong>
-                    <span>{viewerEmptyHint}</span>
-                    <div className="toolbar-inline">
-                      <button className="ghost-button" type="button" onClick={() => { void handleViewerEmptyPrimary(); }}>
-                        查看检索示例
-                      </button>
-                      <button className="ghost-button" type="button" onClick={() => setActiveLogView("files")}>
-                        打开文件目录
-                      </button>
-                      {filePath ? (
-                        <button className="ghost-button" onClick={() => { void loadTailSlice(); }} disabled={isBusy}>
-                          读取尾部
-                        </button>
-                      ) : null}
-                    </div>
-                  </div>
+                  /* 方案 A 空态工作台（原型 empty-states-a-v2 03 屏）：
+                     eyebrow + 标题 + 副文案 + 三步时间线 + 键位 + 提示卡。
+                     「最近检索」无真实数据源，右栏只放实时跟随提示（偏差③）。 */
+                  <EmptyWorkbench
+                    className="viewer-empty-host"
+                    icon={<Search size={13} strokeWidth={1.8} />}
+                    tipIcon={<Lightbulb size={12} strokeWidth={1.8} />}
+                    eyebrow="日志检索 · 空结果"
+                    title={viewerEmptyTitle}
+                    sub={viewerEmptyHint}
+                    steps={[
+                      {
+                        title: "输入关键字",
+                        desc: "回车执行；打开文件后可读取尾部",
+                        state: "cur",
+                        actions: [
+                          { label: "打开文件目录", kind: "ghost", onClick: () => setActiveLogView("files") },
+                          { label: "查看检索示例", kind: "pri", onClick: () => { handleViewerEmptyPrimary(); } },
+                        ],
+                      },
+                      { title: "语法限定", desc: "/ERROR 精确匹配 · /time 10:00 时间段 · 多词逗号拆分" },
+                      { title: "实时跟随", desc: "⌥L 开启后自动滚动到最新写入" },
+                    ]}
+                    keys={[
+                      { kbd: "⌘F", label: "检索" },
+                      { kbd: "⌥L", label: "实时跟随" },
+                      { kbd: "⌘E", label: "检索示例" },
+                    ]}
+                    tip="实时跟随已开启时，新日志写入会自动出现在结果里，无需手动刷新。"
+                  />
                 )}
                 </div>
                 </div>
@@ -4331,35 +4373,60 @@ export function App() {
                     此处不再渲染独立 FileBrowserStrip（原型 = tbar 一行式） */}
 
                 {isConnectingWorkspace ? (
-                  <div className="workspace-placeholder workspace-startup-card">
-                    <div className="workspace-startup-icon" aria-hidden="true">
-                      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>
-                    </div>
-                    <strong>{selectedServer ? `正在连接 ${selectedServer.name}` : "等待选择服务器"}</strong>
-                    <span className={isBusy ? "connect-status-busy" : "connect-status-idle"}>
-                      {isBusy ? actionStatus : (selectedServer
-                        ? "等待系统自动建立 SSH 连接..."
-                        : "先选择服务器，系统会自动连接并打开目录。")}
-                    </span>
-                    {/* 侧栏移动档：未选服务器时给一个打开选服层的主按钮（与上方提示同级行，宽档 CSS 隐藏） */}
-                    {!selectedServer ? (
-                      <div className="toolbar-inline">
-                        <button type="button" className="ghost-button sp-startup-cta" onClick={() => setServerPickerOpen(true)}>
+                  selectedServer ? (
+                    /* 方案 A 连接中进度态（原型 02 屏）：spinner 节点 + mono 实时行；
+                       进度文案取真实 actionStatus，不造假进度。 */
+                    <EmptyWorkbench
+                      icon={<Folder size={13} strokeWidth={1.8} />}
+                      tipIcon={<ShieldCheck size={12} strokeWidth={1.8} />}
+                      eyebrow="文件目录 · 连接中"
+                      title={`正在连接 ${selectedServer.name}`}
+                      sub="正在建立 SSH 连接，通常 2 秒内完成；成功后会自动打开目录并记住位置。"
+                      live={isBusy ? (actionStatus || "SSH 握手中") : "等待系统自动建立 SSH 连接"}
+                      steps={[
+                        { title: "建立连接", desc: "SSH 握手与凭证校验", state: "wait" },
+                        { title: "读取根目录", desc: "连接成功后自动挂载目录树" },
+                        { title: "记住位置", desc: "下次启动直达最近目录" },
+                      ]}
+                      keys={[{ kbd: "⌘,", label: "连接设置" }]}
+                      tip="连接慢或失败？多为网络或凭证问题；导入的密码可在设置中心重新获取。"
+                    />
+                  ) : (
+                    /* 方案 A 未选服务器（原型 01 屏）：右栏「快速连接」= 真实服务器列表前 4 台；
+                       窄档降级 chips + 全宽「选择服务器」按钮（打开选服层）。 */
+                    <EmptyWorkbench
+                      icon={<Folder size={13} strokeWidth={1.8} />}
+                      eyebrow="文件目录 · 开始"
+                      title="选择一台服务器，开始浏览远程目录"
+                      sub="连接成功后系统会自动展开目录树、记住最近位置，并接管过滤、上传与右键菜单。"
+                      steps={[
+                        { title: "选择服务器", desc: "点击左侧列表任意一台；窄档可用下方按钮或最近连接", state: "cur" },
+                        { title: "浏览目录", desc: "目录树自动挂载根目录，双击进入子目录" },
+                        { title: "查看日志", desc: "点击 .log / .txt 文件直接进入日志预览" },
+                      ]}
+                      keys={[
+                        { kbd: "⌘K", label: "服务器检索" },
+                        { kbd: "⌘T", label: "新建终端" },
+                        { kbd: "⌘/", label: "全部快捷键" },
+                      ]}
+                      panel={{
+                        title: "快速连接",
+                        rows: servers.slice(0, 4).map((server) => ({
+                          dot: "idle" as const,
+                          title: server.name,
+                          meta: `${server.username}@${server.host}:${server.port}`,
+                          action: "连接",
+                          onAction: () => selectServerById(server.id),
+                          onClick: () => selectServerById(server.id),
+                        })),
+                      }}
+                      footerNarrow={
+                        <button type="button" className="ghost-button ewb-cta-full" onClick={() => setServerPickerOpen(true)}>
                           选择服务器
                         </button>
-                      </div>
-                    ) : null}
-                    {selectedServer ? (
-                      <div className="toolbar-inline connect-progress-actions">
-                        <span className="connect-progress-host">{selectedServer.username}@{selectedServer.host}:{selectedServer.port}</span>
-                        {isBusy ? <span className="connect-spinner" /> : (
-                          <button className="ghost-button" onClick={() => testServerConnection(selectedServer.basePath?.trim() || "/")} disabled={isBusy}>
-                            重新连接
-                          </button>
-                        )}
-                      </div>
-                    ) : null}
-                  </div>
+                      }
+                    />
+                  )
                 ) : hasDirectoryConnectionError ? (
                   /* S12 原型：连接错误用内容区顶部横幅（不挡内容），
                      含图标 + 中文原因 + 主机上下文 + [重连][连接设置] */
@@ -4608,22 +4675,8 @@ export function App() {
             </div>
           ) : null}
 
-          {/* 侧栏移动档状态条（sp-statusbar）：tabbar 上方一行连接概览，宽档由 CSS 隐藏 */}
-          <SidepanelStatusbar
-            connected={Boolean(selectedServer) && Boolean(connectionTestStatus?.connected)}
-            serverLine={
-              selectedServer
-                ? `${connectionTestStatus?.connected ? "已连接" : "未连接"} · ${selectedServer.username}@${selectedServer.host}`
-                : connectionStateText || "未连接"
-            }
-            pathLine={directoryPath || "/"}
-            detailLines={[
-              ["本地服务", localServiceStatusText],
-              ["服务器", selectedServer ? `${selectedServer.name} · ${connectionStateText || "--"}` : "--"],
-              ["主机", selectedServer ? `${selectedServer.username}@${selectedServer.host}` : "--"],
-              ["路径", directoryPath || "/"],
-            ]}
-          />
+          {/* 侧栏移动档连接概览：原底部 sp-statusbar（400px 下过挤）已移除，
+              概览并入顶部 srv-chip 选服层（ServerPickerOverlay.overview）——2026-10-04 */}
 
           {/* 侧栏移动档底部 tab 导航（sp-tabbar）：main-panel 最后一个子元素，宽档由 CSS 隐藏 */}
           <SidepanelMobileTabBar
@@ -4951,6 +5004,12 @@ export function App() {
         onDeleteServer={requestDeleteServer}
         onOpenSettingsWorkspace={openSettingsWorkspace}
         emptyState={sidepanelServerEmptyState}
+        overview={([
+          ["本地服务", localServiceStatusText],
+          ["服务器", selectedServer ? `${selectedServer.name} · ${connectionStateText || "--"}` : ""],
+          ["主机", selectedServer ? `${selectedServer.username}@${selectedServer.host}` : ""],
+          ["路径", directoryPath && directoryPath !== "/" ? directoryPath : ""],
+        ] as Array<[string, string]>).filter(([, value]) => Boolean(value))}
       />
       <DirectorySheet
         open={dirSheetOpen}

@@ -731,6 +731,50 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
     }
   }
 
+  /**
+   * 跨窗口安全的手动重排（PiP 弹出场景专用，2026-10-04）：
+   * DOM 搬入 PiP 窗口后，addon-fit 的 proposeDimensions 读取主 window 上下文的
+   * 计算样式会失效 → fit() 静默 return，xterm 列数停留在弹出前的窄列数。
+   * 这里绕过 fit 插件：直接量 PiP 内容器尺寸 + 用渲染器已缓存的字符单元尺寸
+   * 手动 terminal.resize()（渲染画布在 PiP document 中仍可正常绘制）。
+   */
+  function resizeToContainer() {
+    const terminal = terminalRef.current;
+    const container = containerRef.current;
+    if (!terminal || !container || !terminal.element) {
+      console.info("[slc-pip] resizeToContainer skip: no terminal/container/element", {
+        hasTerminal: !!terminal, hasContainer: !!container, hasElement: !!terminal?.element,
+      });
+      return false;
+    }
+    const core = (terminal as unknown as { _core?: { _renderService?: { dimensions?: { css?: { cell?: { width?: number; height?: number } } } } } })._core;
+    const cellW = core?._renderService?.dimensions?.css?.cell?.width;
+    const cellH = core?._renderService?.dimensions?.css?.cell?.height;
+    const availW = container.clientWidth;
+    const availH = container.clientHeight;
+    if (!cellW || !cellH || cellW <= 0 || cellH <= 0) {
+      /* 字符单元尺寸不可读（渲染器未就绪）→ 交给 fit 插件兜底 */
+      console.info("[slc-pip] resizeToContainer: cell dims unreadable → fit fallback", { availW, availH });
+      fitAddonRef.current?.fit();
+      syncResizeToSocket();
+      return true;
+    }
+    if (availW < MIN_TERMINAL_FIT_WIDTH || availH < MIN_TERMINAL_FIT_HEIGHT) {
+      console.info("[slc-pip] resizeToContainer skip: container too small", { availW, availH });
+      return false;
+    }
+    /* .xterm-container 无内边距（v2 §日志区 padding 落在 .xterm 上，忽略不计） */
+    const cols = Math.max(2, Math.floor(availW / cellW));
+    const rows = Math.max(2, Math.floor(availH / cellH));
+    const changed = cols !== terminal.cols || rows !== terminal.rows;
+    console.info("[slc-pip] resizeToContainer", { availW, availH, cellW, cellH, cols, rows, changed, oldCols: terminal.cols, oldRows: terminal.rows });
+    if (changed) {
+      terminal.resize(cols, rows);
+    }
+    syncResizeToSocket();
+    return true;
+  }
+
   function getSelection(): string {
     const terminal = terminalRef.current;
     if (!terminal) {
@@ -791,6 +835,7 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
     focusTerminal,
     focusTerminalSoon,
     fitTerminal,
+    resizeToContainer,
     getSelection,
     clearSelection,
     pasteToTerminal,

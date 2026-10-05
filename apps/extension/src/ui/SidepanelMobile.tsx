@@ -146,6 +146,8 @@ export type ServerPickerOverlayProps = {
   onDeleteServer: (server: ServerSummary) => void;
   onOpenSettingsWorkspace: (view?: SettingsWorkspaceView) => void;
   emptyState?: ReactNode;
+  /** 连接概览（kv 行）：原底部 sp-statusbar 移除后并入选服层顶部（2026-10-04） */
+  overview?: Array<[string, string]>;
 };
 
 /* 移动档整屏选服层（scrim + aside），宽档由 CSS display:none 隐藏，DOM 常驻。 */
@@ -162,6 +164,7 @@ export function ServerPickerOverlay(props: ServerPickerOverlayProps) {
     onDeleteServer,
     onOpenSettingsWorkspace,
     emptyState,
+    overview,
   } = props;
 
   if (!open) {
@@ -184,6 +187,16 @@ export function ServerPickerOverlay(props: ServerPickerOverlayProps) {
             <X size={14} strokeWidth={1.8} />
           </button>
         </div>
+        {overview?.length ? (
+          <div className="sp-picker-overview">
+            <div className="sp-picker-overview-hd">连接概览</div>
+            <div className="sp-picker-overview-grid">
+              {overview.map(([key, value]) => (
+                <div key={key} className="sp-status-kv"><span>{key}</span><b>{value}</b></div>
+              ))}
+            </div>
+          </div>
+        ) : null}
         <div className="sp-picker-filter">
           <input
             value={serverFilter}
@@ -266,50 +279,6 @@ export function SidepanelMobileTop(props: SidepanelMobileTopProps) {
         <ToolIcon theme={uiTheme} kind="settings" />
       </button>
     </div>
-  );
-}
-
-export type SidepanelStatusbarProps = {
-  connected: boolean;
-  serverLine: string;
-  pathLine: string;
-  detailLines: Array<[string, string]>;
-};
-
-/* 状态条（移动档）：tabbar 上方一行 [● 摘要][详情]；点详情展开连接概览。
-   修复移动档连接概览随侧栏一起消失的缺口（v3 设计⑥）。 */
-export function SidepanelStatusbar(props: SidepanelStatusbarProps) {
-  const { connected, serverLine, pathLine, detailLines } = props;
-  const [expanded, setExpanded] = useState(false);
-
-  return (
-    <>
-      {expanded ? (
-        <div className="sp-status-detail">
-          {detailLines.map(([k, v]) => (
-            <div key={k} className="sp-status-kv"><span>{k}</span><b>{v}</b></div>
-          ))}
-        </div>
-      ) : null}
-      <div
-        className="sp-statusbar"
-        onClick={() => setExpanded((current) => !current)}
-        title={expanded ? "收起连接概览" : "展开连接概览"}
-      >
-        <span className={`dot${connected ? " ok" : ""}`} />
-        <span className="st-txt">{serverLine}{pathLine ? ` · ${pathLine}` : ""}</span>
-        <button
-          type="button"
-          className="st-detail"
-          onClick={(event) => {
-            event.stopPropagation();
-            setExpanded((current) => !current);
-          }}
-        >
-          {expanded ? "收起" : "详情"}
-        </button>
-      </div>
-    </>
   );
 }
 

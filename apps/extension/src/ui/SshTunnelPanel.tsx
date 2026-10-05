@@ -115,7 +115,18 @@ export function SshTunnelPanel({ visible, serverId, onClose, onStatus }: Props) 
 
       <div className="ssh-tunnel-list">
         {loading ? <div className="ssh-tunnel-loading">加载中...</div> : null}
-        {!loading && tunnels.length === 0 ? <div className="ssh-tunnel-empty">暂无活跃隧道</div> : null}
+        {!loading && tunnels.length === 0 ? (
+          /* 小态 · 抽屉档（empty-states-a-v2 09 屏）：tile + 一句话 + 主行动 */
+          <div className="mini-empty">
+            <span className="mini-empty-ic" aria-hidden="true"><Plug size={13} strokeWidth={1.7} /></span>
+            <b>暂无活跃隧道</b>
+            <span>新建后在这里监控转发状态</span>
+            <button type="button" className="ghost-button" onClick={() => setShowForm(true)}>
+              <Plus size={12} />
+              新建隧道
+            </button>
+          </div>
+        ) : null}
         {!loading && tunnels.map((t) => (
           <div key={t.tunnelId} className={`ssh-tunnel-entry ssh-tunnel-${t.status}`}>
             <Plug size={12} />

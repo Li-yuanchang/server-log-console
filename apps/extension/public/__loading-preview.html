@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>启动页重设计 · 3 方案（loading-splash-v1）</title>
+<!--
+  启动页原型预览（开发用）：public/ 下 → vite dev 直接访问 /__loading-preview.html。
+  方案 A 已实装进 index.html；B / C 备选，选定后同样替换 index.html 的 #app-loading 段。
+  所有方案均为「品牌居中」类，与宽度无关 —— 旧骨架布局（模拟侧栏+工具栏）已废弃：
+  窄容器下侧栏不存在，骨架是幻觉布局。
+-->
+<style>
+:root{
+  --bg:#fafafa;--panel:#fff;--muted:#f2f2f2;--line:#eaeaea;
+  --ink:#171717;--ink-soft:#666;--ink-muted:#8f8f8f;--accent:#0070f3;
+  --mono:"Geist Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"Geist Sans","PingFang SC",sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#eef1f4;font:12.5px var(--sans);color:var(--ink);padding:22px}
+h1{font-size:15px;font-weight:650;letter-spacing:-.01em}
+h1 small{font-weight:400;color:var(--ink-muted);font-size:11.5px;margin-left:8px}
+.note{margin:8px 0 16px;color:var(--ink-soft);line-height:1.7;max-width:70em}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.stage{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--bg)}
+.frame{position:relative;height:420px;display:flex;align-items:center;justify-content:center}
+.cap{padding:9px 12px;border-top:1px solid var(--line);background:var(--panel);font-size:11px;color:var(--ink-soft);line-height:1.6}
+.cap b{color:var(--ink)}
+.cap .tag{float:right;font-family:var(--mono);font-size:9.5px;color:var(--accent)}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes rise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@keyframes flow{0%{left:-40%}100%{left:110%}}
+@keyframes blink{50%{opacity:0}}
+/* —— 方案 A：品牌居中（已实装） —— */
+.splash{display:flex;flex-direction:column;align-items:center;text-align:center;animation:rise .45s cubic-bezier(.2,.7,.3,1)}
+.logo{width:56px;height:56px;border-radius:14px;overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,.08),0 8px 24px rgba(15,32,51,.14);margin-bottom:14px}
+.logo img,.logo svg{width:100%;height:100%;display:block}
+.word{font-size:15px;font-weight:650;letter-spacing:-.01em}
+.sub{margin-top:2px;font-size:10.5px;font-family:var(--mono);letter-spacing:.08em;color:var(--ink-muted)}
+.row{display:flex;align-items:center;gap:8px;margin-top:18px}
+.spin{width:13px;height:13px;border:2px solid var(--muted);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
+.status{font-size:12px;color:var(--ink-muted)}
+/* —— 方案 B：流光细条 —— */
+.splash-b{display:flex;flex-direction:column;align-items:center;width:min(320px,72%)}
+.splash-b .logo{margin-bottom:12px}
+.splash-b .bar{position:relative;width:100%;height:2px;border-radius:2px;background:var(--muted);margin-top:20px;overflow:hidden}
+.splash-b .bar::after{content:"";position:absolute;top:0;bottom:0;width:40%;border-radius:2px;background:linear-gradient(90deg,transparent,var(--accent),transparent);animation:flow 1.2s ease-in-out infinite}
+.splash-b .status{margin-top:9px;font-family:var(--mono);font-size:10.5px;letter-spacing:.04em}
+/* —— 方案 C：终端拟态（黑底 mono） —— */
+.stage.dark .frame{background:#0a0a0a}
+.term{width:min(340px,78%);background:#111;border:1px solid #23272d;border-radius:10px;padding:14px 16px 16px;font-family:var(--mono);font-size:11.5px;line-height:1.9;color:#5c6b7a;box-shadow:0 12px 32px rgba(0,0,0,.45)}
+.term .t-head{display:flex;gap:5px;margin-bottom:10px}
+.term .t-head i{width:8px;height:8px;border-radius:50%;background:#2a3038}
+.term .t-body .ok{color:#7ec8e3}
+.term .t-body .cur{display:inline-block;width:7px;height:12px;background:#e8e8e8;vertical-align:-2px;margin-left:2px;animation:blink 1.1s steps(1) infinite}
+.term .t-body .cmd{color:#d7dde5}
+.term .t-brand{margin-top:10px;font-family:var(--sans);font-size:12px;color:#e8e8e8;font-weight:600;letter-spacing:-.01em}
+.term .t-brand span{color:#5c6b7a;font-weight:400;font-size:10.5px;margin-left:6px}
+/* 暗色舞台预览 */
+.stage.dark{--bg:#0a0a0a;--panel:#141414;--muted:rgba(126,200,227,.14);--line:rgba(126,200,227,.1);--ink:#ededed;--ink-soft:rgba(195,208,224,.72);--ink-muted:rgba(195,208,224,.6);--accent:#7ec8e3}
+.stage.dark .cap{background:#141414;border-top-color:rgba(126,200,227,.1);color:rgba(195,208,224,.6)}
+.stage.dark .cap b{color:#ededed}
+.stage.dark .logo{box-shadow:0 0 0 1px rgba(126,200,227,.18),0 8px 24px rgba(0,0,0,.5)}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}}
+</style>
+</head>
+<body>
+<h1>启动页重设计 · 3 方案<small>loading-splash-v1 · 方案 A 已实装 index.html</small></h1>
+<p class="note">背景：旧启动页用骨架条模拟「侧栏 + 工具栏」，但窄容器（≤799.9px）下侧栏根本不存在，骨架成了幻觉布局；宽屏观感也偏"低"。三个方案均为<b>品牌居中、与宽度无关</b>的单屏，主题底色跟随 8 套主题与明暗模式，pip 深色窗体自动适配。</p>
+<div class="grid">
+  <div class="stage">
+    <div class="frame">
+      <div class="splash">
+        <div class="logo"><img src="/icon.svg" alt="" /></div>
+        <div class="word">日志控制台</div>
+        <div class="sub">SERVER LOG CONSOLE</div>
+        <div class="row"><span class="spin"></span><span class="status">正在连接服务…</span></div>
+      </div>
+    </div>
+    <div class="cap"><span class="tag">A · 已实装</span><b>品牌居中 + 细 spinner</b> —— 应用图标做视觉锚，mono 英文副标压质感；与 EmptyWorkbench 的居中启动卡同源，挂载后无缝替换。</div>
+  </div>
+  <div class="stage">
+    <div class="frame">
+      <div class="splash-b">
+        <div class="logo"><img src="/icon.svg" alt="" /></div>
+        <div class="word">日志控制台</div>
+        <div class="bar"></div>
+        <div class="status">正在等待本地连接服务就绪</div>
+      </div>
+    </div>
+    <div class="cap"><span class="tag">B · 备选</span><b>流光细条</b> —— 与侧栏底部状态卡的 2px 流光同语言；进度感比旋转更强，适合启动耗时更长的部署形态。</div>
+  </div>
+  <div class="stage dark">
+    <div class="frame">
+      <div class="term">
+        <div class="t-head"><i></i><i></i><i></i></div>
+        <div class="t-body">
+          <div><span class="ok">●</span> 本地连接服务已就绪</div>
+          <div><span class="cmd">$ slcc --attach</span><span class="cur"></span></div>
+        </div>
+        <div class="t-brand">日志控制台<span>SERVER LOG CONSOLE</span></div>
+      </div>
+    </div>
+    <div class="cap"><span class="tag">C · 备选</span><b>终端拟态（恒定深色）</b> —— 与日志/终端视图同语言，工程师味最重；亮色主题下黑块对比强，作为全屏首屏略挑场景。</div>
+  </div>
+</div>
+</body>
+</html>

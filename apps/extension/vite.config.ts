@@ -1,6 +1,6 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
-import { readFileSync, rmSync, writeFileSync } from "node:fs";
+import { readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 // 版本唯一权威源：apps/electron/package.json（predist 由 bump-version.cjs 自动 +1 patch）。
@@ -34,8 +34,18 @@ export default defineConfig({
           `${JSON.stringify(manifest, null, 2)}\n`
         );
         // Chrome 保留 "_" 开头的文件名（_locales/_metadata 等），包含即拒绝加载整个扩展；
-        // public/__preview.html 仅供 vite dev 预览侧栏响应式，构建产物中必须剔除。
-        rmSync(resolve(__dirname, "dist", "__preview.html"), { force: true });
+        // public/ 下的 __*.html 仅供 vite dev 预览，构建后递归清除 dist 内所有 _ 开头的条目。
+        const stripReserved = (dir: string) => {
+          for (const entry of readdirSync(dir, { withFileTypes: true })) {
+            const full = resolve(dir, entry.name);
+            if (entry.name.startsWith("_")) {
+              rmSync(full, { recursive: true, force: true });
+            } else if (entry.isDirectory()) {
+              stripReserved(full);
+            }
+          }
+        };
+        stripReserved(resolve(__dirname, "dist"));
       }
     }
   ],
