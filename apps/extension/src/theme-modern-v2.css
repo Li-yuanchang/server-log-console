@@ -963,29 +963,31 @@
   color: var(--ink-muted);
 }
 
-/* === 日志行时间戳列 === */
-/* 时间列宽自适应：--log-time-ch 由 VirtualLogViewer 按当前内容里最长的时间戳写到容器上
-   （单位 ch，在 .log-line-time 自身等宽字体上解析，日志字号/字体族设置变化也不会溢出），
-   缺省 23 字符 = 完整日期时间（2026-09-20 16:55:16.793）。整个内容都没有行首时间戳时
-   JS 置 0 并把 gap 归零，行首不再保留固定列宽留白（如 access.log 时间在行中提取不了的场景）。
-   注意：变量默认值只能放 var() fallback，不能在 .log-line 上重声明——否则会盖掉容器注入值。 */
-/* 时间列（muted 等宽）+ 内容列，基线对齐；无时间戳行（堆栈 at ...、空行）渲染同样的
-   空时间占位，正文对齐上一条记录的内容列，不再用整行 padding 缩进 */
+/* === 日志行时间戳：内联模式（2026-10-04 重设计，宽窄一套） ===
+   旧实现：固定时间列（--log-time-ch 取视口最长时间戳 ≤23ch + 12px gap，堆栈续行
+   渲染空占位对齐）。缺陷：① 窄容器下固定列吃掉 40%+ 宽度；② Java 堆栈场景
+   几十行续行全部空占位，宽屏也留下一整列空白；③ 列宽取"当前视口最长"导致
+   滚动时列宽跳变。
+   新实现：时间戳就地内联（muted 等宽、自带尾随空格），无时间戳的堆栈/续行
+   顶格；同一文件时间戳定长时内容起点仍自然对齐（mono）。选择/高亮/复制不受影响。 */
+/* 时间行（有/无时间戳）统一 flex 行；无时间戳行（堆栈 at ...、空行）正文顶格 */
 .theme-modern .log-line-ts,
 .theme-modern .log-line-no-time {
   display: flex;
   align-items: baseline;
 }
 .theme-modern .log-line .log-line-time {
-  flex: 0 0 calc(var(--log-time-ch, 23) * 1ch + var(--log-time-gap, 12px));
-  width: calc(var(--log-time-ch, 23) * 1ch + var(--log-time-gap, 12px));
+  flex: 0 0 auto;
   box-sizing: border-box;
-  padding-right: var(--log-time-gap, 12px);
   color: var(--shell-mut);
   font-size: calc(var(--log-font-size, 12px) - 1px);
   letter-spacing: -0.2px;
   white-space: pre;
   user-select: text;
+}
+/* 空时间戳（堆栈 / 续行 / 空行）：隐藏空占位，正文顶格 */
+.theme-modern .log-line .log-line-time:empty {
+  display: none;
 }
 .theme-modern .log-line .log-line-body {
   flex: 1 1 auto;
@@ -1535,7 +1537,8 @@
   max-height: none;
   margin: 0;
   border: none;
-  border-radius: 0;
+  /* 2026-10-04：黑窗口直角 → 按主题轻度圆角（--r-m token，随主题圆角体系） */
+  border-radius: var(--r-m);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -1585,7 +1588,7 @@
   cursor: pointer;
   white-space: nowrap;
 }
-.theme-modern .terminal-toolbar-button:hover {
+.theme-modern .terminal-toolbar-button:hover:not(:disabled) {
   background: color-mix(in srgb, var(--ink) 8%, transparent);
   color: var(--shell-ink, var(--ink));
 }
@@ -2552,7 +2555,8 @@ body:has(.theme-modern) button:disabled {
   color: var(--ink-muted);
   white-space: nowrap;
 }
-/* 工具行按钮补齐文字按钮样式（原型「分屏 / 弹出窗口 / AI 助手」带文字） */
+/* 工具行按钮补齐文字按钮样式（原型「分屏 / 弹出窗口 / AI 助手」带文字）
+   2026-10-04：终端按钮保持无边框（用户要求：去掉框） */
 .theme-modern .terminal-toolbar-button {
   display: inline-flex;
   align-items: center;

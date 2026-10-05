@@ -715,7 +715,7 @@ export function ConnectionSettingsWorkspace(props: Props) {
                 </div>
               ))}
               {listServers.length === 0 ? (
-                <div className="conn-list-empty">没有匹配的服务器</div>
+                <div className="conn-list-empty">没有匹配的服务器 · 试试更短的关键词，或清空筛选</div>
               ) : null}
             </div>
             <div className="conn-list-foot">
@@ -1147,7 +1147,7 @@ export function ConnectionSettingsWorkspace(props: Props) {
               ) : null}
               <div className="settings-note-box">
                 <strong>远程部署</strong>
-                <span>远程地址必须使用 https（浏览器会拦截不安全的远程 WebSocket）；localhost 可用 http。保存后页面会重载以重建全部连接。</span>
+                <span>局域网 IP / localhost 可用 http；公网地址必须 https（浏览器会拦截不安全的远程 WebSocket）。保存后页面会重载以重建全部连接。</span>
               </div>
             </section>
           </div>

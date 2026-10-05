@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Server Log Console — 空状态占位符 · 4 版原型</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;650;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+:root{
+  --panel:#ffffff; --panel-muted:#f5f5f5; --bg:#fafafa;
+  --ink:#171717; --ink-soft:#666666; --ink-muted:#8f8f8f;
+  --line:#eaeaea; --line-strong:#d4d4d4;
+  --accent:#0070f3; --accent-h:#0060df; --accent-soft:rgba(0,112,243,.08);
+  --green-dot:#22c55e; --red:#d41313; --red-soft:rgba(212,19,19,.07); --amber:#b45309; --amber-soft:rgba(180,83,9,.09);
+  --shell:#0a0a0a; --shell-soft:#111111; --shell-ink:#e8e8e8; --shell-mut:#5c6b7a; --shell-line:#21262d;
+  --on-accent:#ffffff;
+  --r-s:6px; --r-m:8px; --r-l:10px;
+  --mono:"Geist Mono","SFMono-Regular","Menlo","Consolas",monospace;
+  --font:"Geist","Inter",-apple-system,"SF Pro Text","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  --shadow-pop:0 12px 40px rgba(0,0,0,.14),0 2px 8px rgba(0,0,0,.06);
+  --ghost:color-mix(in srgb,var(--ink) 7%,transparent);
+  --ghost-2:color-mix(in srgb,var(--ink) 11%,transparent);
+}
+#viewport.dark{
+  --bg:#0a0a0a; --panel:#141414; --panel-muted:#1b1b1b;
+  --ink:#ededed; --ink-soft:#a3a3a3; --ink-muted:#707070;
+  --line:#262626; --line-strong:#3d3d3d;
+  --accent:#3b82f6; --accent-h:#2f6fe4; --accent-soft:rgba(59,130,246,.16);
+  --shadow-pop:0 16px 44px rgba(0,0,0,.55),0 2px 8px rgba(0,0,0,.4);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%}
+body{font-family:var(--font);letter-spacing:-.01em;font-size:12.5px;color:var(--ink);background:#f0f0ee;display:flex;overflow:hidden}
+svg{display:block;flex:none}
+button{font:inherit;letter-spacing:inherit;color:inherit;background:none;border:none;cursor:pointer}
+kbd{font-family:var(--mono)}
+
+/* ---------- 索引 ---------- */
+#index{flex:0 0 196px;border-right:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;padding:12px 8px;gap:1px;overflow-y:auto}
+#index h1{font-size:12px;font-weight:700;padding:4px 8px 2px}
+#index .sub{font-size:10px;color:var(--ink-muted);padding:0 8px 10px;line-height:1.6;border-bottom:1px dashed var(--line);margin-bottom:8px}
+#index button{display:flex;align-items:center;gap:8px;width:100%;padding:6px 9px;font-size:12px;color:var(--ink-soft);text-align:left;border-radius:var(--r-s)}
+#index button:hover{background:var(--panel-muted);color:var(--ink)}
+#index button.on{background:var(--ink);color:#fff;font-weight:600}
+#index .sid{font-family:var(--mono);font-size:9.5px;opacity:.6;width:16px}
+#index .tag{margin-left:auto;font-size:9px;font-family:var(--mono);opacity:.55}
+#index .foot{margin-top:auto;padding:10px 8px 4px;font-size:10px;color:var(--ink-muted);line-height:1.7;border-top:1px dashed var(--line)}
+
+/* ---------- 舞台 ---------- */
+#stage{flex:1;display:flex;flex-direction:column;min-width:0}
+#desc{flex:none;display:flex;align-items:center;gap:12px;padding:9px 18px;border-bottom:1px solid var(--line);background:var(--panel)}
+#desc .n{font-weight:700;font-size:13px}
+#desc .d{font-size:11.5px;color:var(--ink-muted);flex:1}
+#skin-toggle{display:flex;border:1px solid var(--line);border-radius:7px;overflow:hidden}
+#skin-toggle button{height:22px;padding:0 10px;font-size:10.5px;color:var(--ink-soft)}
+#skin-toggle button.on{background:var(--ink);color:#fff}
+#viewport{flex:1;overflow-y:auto;background:var(--bg);position:relative;color:var(--ink)}
+.page{display:none;padding:18px 22px 70px;max-width:1240px;margin:0 auto}
+.page.on{display:block}
+
+/* ---------- 章节标题 / 说明 ---------- */
+.sec{display:flex;align-items:baseline;gap:10px;margin:30px 0 4px}
+.sec:first-child{margin-top:4px}
+.sec .no{font-family:var(--mono);font-size:10px;color:var(--accent);font-weight:600}
+.sec b{font-size:14px;font-weight:650;letter-spacing:-.01em}
+.sec span{font-size:11px;color:var(--ink-muted)}
+.cap{font-size:11px;color:var(--ink-muted);margin:8px 2px 0;line-height:1.6}
+.cap b{color:var(--ink-soft);font-weight:600}
+.note{margin:10px 2px 0;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r-m);background:var(--panel);font-size:11px;color:var(--ink-soft);line-height:1.8}
+.note b{color:var(--ink)}
+.note ul{margin-left:16px}
+
+/* ---------- 设计系统（与应用一致） ---------- */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:28px;padding:0 12px;font-size:12px;font-weight:500;
+  border:1px solid var(--line);border-radius:var(--r-m);background:var(--panel);color:var(--ink);cursor:pointer;white-space:nowrap;
+  transition:background .15s ease,border-color .15s ease,color .15s ease,box-shadow .15s ease}
+.btn:hover{background:var(--accent-soft);border-color:color-mix(in srgb,var(--accent) 26%,transparent)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent);font-weight:550}
+.btn.pri:hover{background:var(--accent-h);border-color:var(--accent-h);box-shadow:0 2px 8px color-mix(in srgb,var(--accent) 28%,transparent)}
+.btn.sm{height:24px;padding:0 9px;gap:5px;font-size:11px;border-radius:var(--r-s)}
+.btn[disabled]{opacity:.45;cursor:default;pointer-events:none}
+.kbd{font-family:var(--mono);font-size:10px;color:var(--ink-soft);border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:1.5px 5.5px;background:var(--panel);white-space:nowrap}
+.kbd.dk{background:#1a1a1a;border-color:#2c2c2c;color:#c9d2dc;border-bottom-color:#111}
+.chip{height:24px;padding:0 10px;border:1px solid var(--line);border-radius:999px;font-size:11px;background:var(--panel);display:inline-flex;align-items:center;gap:6px;color:var(--ink-soft);white-space:nowrap}
+.chip:hover{border-color:var(--line-strong);color:var(--ink)}
+.dot{width:6px;height:6px;border-radius:999px;background:var(--green-dot);display:inline-block;flex:none}
+.dot.idle{background:color-mix(in srgb,var(--ink) 22%,transparent)}
+.dot.warn{background:#f5a623}
+
+/* ---------- 应用窗口壳（1:1 复刻主界面） ---------- */
+.app{position:relative;display:grid;grid-template-columns:198px 1fr;grid-template-rows:37px 1fr 27px;height:var(--fh,520px);
+  background:var(--bg);border:1px solid var(--line);border-radius:12px;overflow:hidden;
+  box-shadow:0 1px 2px rgba(0,0,0,.04),0 14px 36px rgba(0,0,0,.05)}
+.side{grid-column:1;grid-row:1/3;background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+.main{grid-column:2;grid-row:1/3;display:flex;flex-direction:column;min-width:0;min-height:0}
+.status{grid-column:1/3;grid-row:3;border-top:1px solid var(--line);background:var(--panel);display:flex;align-items:center;gap:8px;padding:0 12px;font-size:10.5px;color:var(--ink-muted)}
+.status .st-dot{width:6px;height:6px;border-radius:999px;background:#f5a623}
+.status .st-pill{display:inline-flex;align-items:center;gap:6px;padding:2px 8px;border:1px solid var(--line);border-radius:999px;background:var(--panel-muted)}
+.status .st-link{color:var(--accent);font-weight:550;cursor:pointer}
+.status .ver{margin-left:auto;font-family:var(--mono);font-size:9.5px;opacity:.7}
+
+/* 侧栏 */
+.sb-head{height:37px;flex:none;display:flex;align-items:center;gap:7px;padding:0 11px}
+.tl{width:10px;height:10px;border-radius:999px}
+.tl.r{background:#ff5f57}.tl.y{background:#febc2e}.tl.g{background:#28c840}
+.sb-head .gear{margin-left:auto;display:flex;gap:8px;color:var(--ink-muted)}
+.sb-title{padding:10px 12px 7px;font-size:13.5px;font-weight:650;letter-spacing:-.01em}
+.sb-cap{display:flex;justify-content:space-between;align-items:baseline;padding:0 12px 6px;font-size:10.5px;color:var(--ink-muted)}
+.sb-cap b{font-weight:600;color:var(--ink-soft)}
+.sb-search{margin:0 10px 9px;height:26px;flex:none;border:1px solid var(--line);border-radius:6px;display:flex;align-items:center;gap:6px;padding:0 8px;color:var(--ink-muted);font-size:11px;background:var(--panel)}
+.sb-groups{flex:1;overflow:hidden;padding-bottom:6px}
+.sb-group{padding:7px 12px 3px;font-size:10px;color:var(--ink-muted);font-weight:600}
+.sb-item{padding:4px 12px 4px 13px;display:flex;flex-direction:column;gap:1px;position:relative}
+.sb-item.on{background:var(--panel-muted)}
+.sb-item.on::before{content:"";position:absolute;left:0;top:5px;bottom:5px;width:2px;border-radius:2px;background:var(--accent)}
+.sb-item .r1{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.sb-item .r1 .nm{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--ink-soft);min-width:0}
+.sb-item .r1 .nm b{font-weight:450;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sb-item.on .r1 .nm b{font-weight:650;color:var(--ink)}
+.sb-item .pt{font-family:var(--mono);font-size:9.5px;color:var(--ink-muted)}
+.sb-item .r2{padding-left:12px;font-family:var(--mono);font-size:9.5px;color:var(--ink-muted)}
+
+/* 顶栏 */
+.tbar{height:37px;flex:none;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;padding:0 10px;background:var(--panel)}
+.seg{display:flex;border:1px solid var(--line);border-radius:8px;background:var(--panel-muted);padding:2px;gap:2px}
+.seg .tab{height:22px;padding:0 11px;font-size:11.5px;color:var(--ink-soft);border-radius:6px;display:inline-flex;align-items:center}
+.seg .tab.on{background:var(--panel);color:var(--ink);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.06),0 0 0 1px rgba(0,0,0,.02)}
+.crumb{font-family:var(--mono);font-size:11px;color:var(--ink-soft);border:1px solid var(--line);border-radius:6px;padding:3px 9px;background:var(--panel)}
+.tbar .sp{flex:1}
+.tin{height:26px;width:170px;border:1px solid var(--line);border-radius:6px;display:flex;align-items:center;gap:6px;padding:0 8px;font-size:11px;color:var(--ink-muted);background:var(--panel)}
+.tbtn{width:26px;height:26px;border:1px solid var(--line);border-radius:6px;display:grid;place-items:center;color:var(--ink-soft);background:var(--panel)}
+.content{flex:1;min-height:0;position:relative;display:flex;flex-direction:column}
+
+/* ---------- 方案 A · 引导式工作台 ---------- */
+.ea{height:100%;overflow:auto;padding:40px 48px 28px;display:flex;justify-content:center}
+.ea-wrap{width:640px}
+.ea-eyebrow{display:inline-flex;align-items:center;gap:6px;font-size:10.5px;letter-spacing:.06em;color:var(--accent);font-weight:600;
+  border:1px solid color-mix(in srgb,var(--accent) 24%,transparent);border-radius:999px;padding:3px 10px;background:var(--accent-soft)}
+.ea-title{font-size:19px;font-weight:650;letter-spacing:-.02em;margin:13px 0 5px}
+.ea-sub{font-size:12.5px;color:var(--ink-soft);line-height:1.6}
+.ea-steps{margin-top:20px;border:1px solid var(--line);border-radius:12px;background:var(--panel);overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,.03)}
+.ea-step{display:flex;align-items:center;gap:12px;padding:11px 14px;border-bottom:1px solid var(--line)}
+.ea-step:last-child{border-bottom:none}
+.ea-num{width:22px;height:22px;flex:none;border-radius:999px;background:var(--panel-muted);border:1px solid var(--line);display:grid;place-items:center;font-family:var(--mono);font-size:10.5px;color:var(--ink-soft)}
+.ea-tx{min-width:0}
+.ea-tx b{display:block;font-size:12.5px;font-weight:600}
+.ea-tx span{font-size:11px;color:var(--ink-muted)}
+.ea-step .btn{margin-left:auto}
+.ea-arr{margin-left:auto;color:var(--ink-muted);font-size:12px}
+.ea-step.cur{background:var(--accent-soft)}
+.ea-step.cur .ea-num{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+.ea-foot{display:flex;justify-content:space-between;gap:28px;margin-top:16px}
+.ea-lab{font-size:10px;color:var(--ink-muted);font-weight:600;letter-spacing:.05em;margin-bottom:7px}
+.ea-chips{display:flex;gap:6px;flex-wrap:wrap}
+.ea-keys{display:flex;gap:12px;flex-wrap:wrap;font-size:11px;color:var(--ink-soft)}
+.ea-keys .kbd{margin-right:4px}
+
+/* ---------- 方案 B · 画布徽章 ---------- */
+.eb{position:relative;height:100%;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.eb::before{content:"";position:absolute;inset:0;
+  background-image:radial-gradient(color-mix(in srgb,var(--ink) 16%,transparent) 1px,transparent 1.3px);
+  background-size:22px 22px;
+  -webkit-mask-image:radial-gradient(ellipse 72% 64% at 50% 46%,#000 26%,transparent 76%);
+  mask-image:radial-gradient(ellipse 72% 64% at 50% 46%,#000 26%,transparent 76%);
+  opacity:.55}
+.eb::after{content:"";position:absolute;width:460px;height:280px;left:50%;top:45%;transform:translate(-50%,-50%);
+  background:radial-gradient(closest-side,color-mix(in srgb,var(--accent) 8%,transparent),transparent);filter:blur(6px)}
+.eb-card{position:relative;width:300px;background:var(--panel);border:1px solid var(--line);border-radius:14px;
+  box-shadow:var(--shadow-pop);padding:22px 24px 18px;display:flex;flex-direction:column;align-items:center;text-align:center}
+.eb-ic{width:40px;height:40px;border:1px solid var(--line);border-radius:12px;display:grid;place-items:center;color:var(--ink-soft);background:var(--panel-muted);margin-bottom:12px}
+.eb-card>b{font-size:13.5px;font-weight:650}
+.eb-card>span{font-size:11.5px;color:var(--ink-muted);line-height:1.55;margin-top:4px}
+.eb-act{display:flex;align-items:center;gap:8px;margin-top:14px}
+.eb-meta{margin-top:12px;padding-top:11px;border-top:1px dashed var(--line);font-size:10.5px;color:var(--ink-muted);width:100%}
+.eb-meta b{color:var(--ink-soft);font-weight:600}
+
+/* ---------- 方案 C · 终端拟态 ---------- */
+.ec{height:100%;padding:14px 16px;display:flex}
+.ec-term{flex:1;background:var(--shell);border-radius:10px;position:relative;overflow:hidden;font-family:var(--mono);display:flex;flex-direction:column;box-shadow:inset 0 0 0 1px rgba(255,255,255,.03)}
+.ec-head{display:flex;align-items:center;gap:5px;padding:9px 12px;border-bottom:1px solid var(--shell-line);color:var(--shell-mut);font-size:10px;flex:none}
+.ec-head i{width:9px;height:9px;border-radius:999px;background:#2a3038}
+.ec-head span{margin-left:6px}
+.ec-head em{margin-left:auto;font-style:normal;color:#3d4754}
+.ec-lines{padding:14px 16px 6px;display:flex;flex-direction:column;gap:8px;font-size:11.5px;line-height:1.5}
+.ec-line{display:flex;gap:10px;align-items:baseline;color:#8b96a5}
+.ec-line .t{color:#454f5b;font-size:10.5px}
+.ec-lv{width:34px;flex:none;text-align:center;font-size:9px;padding:1px 0;border-radius:4px;border:1px solid #26303c;color:#5c6b7a;letter-spacing:.05em}
+.ec-lv.cmd{color:#e8e8e8;border-color:transparent;width:auto}
+.ec-line .m{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ec-line.dim{color:#454f5b}
+.ec-line .lit{color:#d7dde5}
+.ec-line .ph{color:#5c6b7a;font-style:normal;border-bottom:1px dashed #3a4450}
+.ec-caret{display:inline-block;width:7px;height:12px;background:#e8e8e8;vertical-align:-2px;margin-left:2px;animation:blink 1.1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+.ec-cta{position:absolute;left:50%;bottom:21%;transform:translateX(-50%);display:inline-flex;align-items:center;gap:9px;height:30px;padding:0 14px;border-radius:999px;
+  background:#161616;border:1px solid #2c2c2c;color:#e8e8e8;font-size:12px;font-family:var(--font);white-space:nowrap;box-shadow:0 8px 24px rgba(0,0,0,.5)}
+.ec-cta:hover{background:#1f1f1f;border-color:#3a3a3a}
+.ec-corner{position:absolute;right:13px;bottom:12px;font-size:9.5px;color:#3d4754;display:flex;gap:10px}
+
+/* ---------- 方案 D · 形状幽灵 ---------- */
+.ed{position:relative;height:100%;overflow:hidden}
+.ed-ghost{position:absolute;inset:24px 30px 20px;display:flex;flex-direction:column;gap:14px}
+.ed-row{display:grid;grid-template-columns:14px 1fr 52px 70px;gap:16px;align-items:center;height:20px;flex:none}
+.ed-row.log{grid-template-columns:56px 34px 1fr}
+.ed-row .bar{position:relative;overflow:hidden;height:7px;border-radius:4px;background:var(--ghost)}
+.ed-row .bar::after{content:"";position:absolute;inset:0;transform:translateX(-100%);
+  background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--ink) 5%,transparent),transparent);
+  animation:shim 2.8s ease infinite}
+@keyframes shim{60%{transform:translateX(100%)}100%{transform:translateX(100%)}}
+.ed-row:nth-child(2n) .bar::after{animation-delay:.4s}
+.ed-row:nth-child(3n) .bar::after{animation-delay:.9s}
+.ed-row:nth-child(5n) .bar::after{animation-delay:1.5s}
+.ed-pill{position:absolute;left:50%;top:44%;transform:translate(-50%,-50%);display:flex;align-items:center;gap:12px;
+  padding:10px 12px 10px 13px;background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow-pop)}
+.ed-ic{width:30px;height:30px;border:1px solid var(--line);border-radius:9px;display:grid;place-items:center;color:var(--ink-soft);background:var(--panel-muted)}
+.ed-pill .tx b{display:block;font-size:12.5px;font-weight:650}
+.ed-pill .tx span{font-size:10.5px;color:var(--ink-muted)}
+.ed-pill .btn{margin-left:4px}
+.ed-drop{position:absolute;inset:22px 30px 20px;border:1.5px dashed var(--line-strong);border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;background:color-mix(in srgb,var(--panel) 40%,transparent)}
+.ed-drop .ed-ic{width:38px;height:38px;border-radius:11px;margin-bottom:6px}
+.ed-drop b{font-size:12.5px;font-weight:650}
+.ed-drop span{font-size:11px;color:var(--ink-muted)}
+.ed-drop .eb-act{margin-top:12px}
+
+/* ---------- 小态（下拉 / 抽屉 / 面板） ---------- */
+.minis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:14px}
+.mini{border:1px solid var(--line);border-radius:12px;background:var(--panel);overflow:hidden;display:flex;flex-direction:column}
+.mini-h{height:30px;flex:none;display:flex;align-items:center;gap:7px;padding:0 10px;border-bottom:1px solid var(--line);font-size:11px;font-weight:600;color:var(--ink-soft)}
+.mini-b{flex:1;min-height:118px;position:relative;display:flex}
+.mini-cap{padding:7px 10px;border-top:1px dashed var(--line);font-size:10px;color:var(--ink-muted);line-height:1.5}
+/* A 小态：左对齐小卡 */
+.em-a{flex:1;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:5px;padding:12px 14px}
+.em-a .ic{width:26px;height:26px;border:1px solid var(--line);border-radius:8px;display:grid;place-items:center;color:var(--ink-soft);background:var(--panel-muted);margin-bottom:2px}
+.em-a b{font-size:12px;font-weight:600}
+.em-a span{font-size:10.5px;color:var(--ink-muted);line-height:1.5}
+.em-a .btn{margin-top:6px}
+/* B 小态：居中一行 */
+.em-b{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:12px;text-align:center;color:var(--ink-muted)}
+.em-b .ic{color:var(--ink-muted);opacity:.8;margin-bottom:2px}
+.em-b b{font-size:11.5px;font-weight:600;color:var(--ink-soft)}
+.em-b span{font-size:10.5px;line-height:1.5}
+/* C 小态：mono 分隔线 */
+.em-c{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:12px;font-family:var(--mono);color:#5c6b7a}
+.em-c .ln{font-size:11px;display:flex;align-items:center;gap:8px}
+.em-c .ln::before,.em-c .ln::after{content:"";width:26px;height:1px;background:#26303c}
+.em-c .sub{font-family:var(--font);font-size:10px;color:var(--ink-muted)}
+/* D 小态：幽灵 + 文字 */
+.em-d{flex:1;position:relative;display:flex;flex-direction:column;gap:12px;padding:16px 16px}
+.em-d .bar{position:relative;overflow:hidden;height:7px;border-radius:4px;background:var(--ghost)}
+.em-d .bar::after{content:"";position:absolute;inset:0;transform:translateX(-100%);background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--ink) 5%,transparent),transparent);animation:shim 2.8s ease infinite}
+.em-d .tx{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;background:var(--panel);opacity:.92;text-align:center}
+.em-d .tx b{font-size:11px;font-weight:600;color:var(--ink-soft)}
+.em-d .tx span{font-size:10px;color:var(--ink-muted)}
+
+/* ---------- 场景总览 ---------- */
+.diag{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:12px 0 6px}
+.diag .dcard{border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:13px 15px}
+.diag .dcard b{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:650;margin-bottom:5px}
+.diag .dcard b .no{font-family:var(--mono);font-size:9.5px;color:var(--red);border:1px solid color-mix(in srgb,var(--red) 30%,transparent);background:var(--red-soft);border-radius:999px;padding:1px 7px}
+.diag .dcard p{font-size:11.5px;color:var(--ink-soft);line-height:1.7}
+.prin{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:12px 0 4px}
+.prin .pcard{border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:13px 15px}
+.prin .pcard .pn{font-family:var(--mono);font-size:10px;color:var(--accent);font-weight:600;margin-bottom:6px}
+.prin .pcard b{display:block;font-size:12px;font-weight:650;margin-bottom:4px}
+.prin .pcard p{font-size:10.5px;color:var(--ink-soft);line-height:1.65}
+table.inv{width:100%;border-collapse:collapse;margin-top:12px;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--panel);font-size:11px}
+.inv thead th{text-align:left;font-size:10px;color:var(--ink-muted);font-weight:600;letter-spacing:.04em;padding:8px 10px;border-bottom:1px solid var(--line);background:var(--panel-muted)}
+.inv td{padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:top;line-height:1.5}
+.inv tr:last-child td{border-bottom:none}
+.inv td.no{font-family:var(--mono);color:var(--ink-muted);font-size:10px;width:26px}
+.inv td.zone{color:var(--ink-soft);font-weight:600;white-space:nowrap}
+.inv td.sense b{font-weight:600}
+.inv td.sense span{display:block;color:var(--ink-muted);font-size:10px}
+.inv td.copy{font-family:var(--mono);font-size:10px;color:var(--ink-soft)}
+.inv td.lvl{white-space:nowrap}
+.inv .hot{display:inline-flex;align-items:center;gap:4px;font-size:9.5px;color:var(--red);border:1px solid color-mix(in srgb,var(--red) 26%,transparent);background:var(--red-soft);border-radius:999px;padding:1px 7px;font-weight:600}
+.inv .mid{display:inline-flex;align-items:center;font-size:9.5px;color:var(--amber);border:1px solid color-mix(in srgb,var(--amber) 26%,transparent);background:var(--amber-soft);border-radius:999px;padding:1px 7px}
+.inv .sml{display:inline-flex;align-items:center;font-size:9.5px;color:var(--ink-muted);border:1px solid var(--line);border-radius:999px;padding:1px 7px}
+
+/* 双列布局（中幅场景） */
+.duo{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:14px}
+.duo .app{--fh:400px}
+@media (max-width:1120px){.duo{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<nav id="index">
+  <h1>空状态占位符</h1>
+  <div class="sub">29 处空占位 · 8 大区域<br/>4 版重设计方案 · 亮 / 暗双态</div>
+  <button data-page="p0" class="on"><span class="sid">00</span>场景总览与诊断</button>
+  <button data-page="pa"><span class="sid">A</span>引导式工作台<span class="tag">结构</span></button>
+  <button data-page="pb"><span class="sid">B</span>画布徽章<span class="tag">极简</span></button>
+  <button data-page="pc"><span class="sid">C</span>终端拟态<span class="tag">品牌</span></button>
+  <button data-page="pd"><span class="sid">D</span>形状幽灵<span class="tag">预告</span></button>
+  <div class="foot">统一 token：ink / line / accent / shell<br/>字体：Geist · Geist Mono<br/>适配全部 8 套内置主题</div>
+</nav>
+
+<div id="stage">
+  <div id="desc">
+    <span class="n" id="desc-n">00</span>
+    <span class="d" id="desc-d">梳理全部空占位场景 → 问题诊断 → 共同设计原则</span>
+    <div id="skin-toggle">
+      <button data-skin="light" class="on">亮色</button>
+      <button data-skin="dark">暗色</button>
+    </div>
+  </div>
+  <div id="viewport">
+    <div class="page on" id="p0"></div>
+    <div class="page" id="pa"></div>
+    <div class="page" id="pb"></div>
+    <div class="page" id="pc"></div>
+    <div class="page" id="pd"></div>
+  </div>
+</div>
+
+<script>
+/* ================= 图标 ================= */
+const P = {
+  folder:'<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>',
+  search:'<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',
+  term:'<polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>',
+  server:'<rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/>',
+  upload:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>',
+  plug:'<path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z"/>',
+  clock:'<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+  bkmk:'<path d="M19 21l-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/>',
+  inbox:'<polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>',
+  activity:'<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>',
+  cmd:'<path d="M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3"/>',
+  arrL:'<line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>'
+};
+const ic=(n,s=16,w=1.7)=>`<svg viewBox="0 0 24 24" width="${s}" height="${s}" fill="none" stroke="currentColor" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round">${P[n]}</svg>`;
+
+/* ================= 窗口壳 ================= */
+const GROUPS=[
+  {g:"堡垒机",items:[{n:"堡垒机-演示",ip:"192.168.130.3",p:2222,on:1}]},
+  {g:"测试",items:[{n:"127.122",ip:"192.168.127.122",p:22,on:1},{n:"127.38",ip:"192.168.127.38",p:22},{n:"2.137",ip:"192.168.2.137",p:22},{n:"2.203",ip:"192.168.2.203",p:22}]},
+  {g:"服务器",items:[{n:"127.31",ip:"192.168.127.31",p:22},{n:"127.32",ip:"192.168.127.32",p:22},{n:"2.90",ip:"192.168.2.90",p:22}]},
+  {g:"开发",items:[{n:"2.208",ip:"192.168.2.208",p:22}]},
+  {g:"望鹏920",items:[{n:"127.101",ip:"192.168.127.101",p:22},{n:"2.20 望鹏",ip:"192.168.2.20",p:22},{n:"2.26 望鹏",ip:"192.168.2.26",p:22}]},
+  {g:"生产",items:[{n:"2.150",ip:"192.168.2.150",p:22},{n:"2.151",ip:"192.168.2.151",p:22}]}
+];
+function sidebarHtml(){
+  let h=`<div class="sb-head"><span class="tl r"></span><span class="tl y"></span><span class="tl g"></span>
+    <span class="gear">${ic("cmd",13,1.5)}${ic("clock",13,1.5)}</span></div>
+    <div class="sb-title">日志控制台</div>
+    <div class="sb-cap"><b>服务器</b><span>27 台</span></div>
+    <div class="sb-search">${ic("search",11,1.6)}输入名称、分组或地址</div><div class="sb-groups">`;
+  for(const g of GROUPS){
+    h+=`<div class="sb-group">${g.g}</div>`;
+    for(const it of g.items){
+      h+=`<div class="sb-item${it.on?" on":""}"><div class="r1"><span class="nm"><i class="dot${it.on?"":" idle"}"></i><b>${it.n}</b></span><span class="pt">${it.p}</span></div><div class="r2">${it.ip}</div></div>`;
+    }
+  }
+  return h+`</div>`;
+}
+function sidebarEmptyHtml(v){
+  const inner={
+    a:`<div class="em-a" style="padding:14px 12px"><span class="ic">${ic("server",13)}</span><b>还没有服务器</b><span>导入 FinalShell 连接后自动出现</span><button class="btn sm pri">立即导入</button></div>`,
+    b:`<div class="em-b" style="padding:22px 12px"><span class="ic">${ic("server",14)}</span><b>还没有服务器</b><span>导入 FinalShell 连接后<br/>自动出现在这里</span></div>`,
+    c:`<div class="em-c" style="padding:22px 12px"><span class="ln">暂无服务器</span><span class="sub">$ import --from finalshell</span></div>`,
+    d:`<div class="em-d" style="padding:16px 12px"><i class="bar" style="width:70%"></i><i class="bar" style="width:52%"></i><i class="bar" style="width:63%"></i><div class="tx"><b>还没有服务器</b><span>导入 FinalShell 连接</span></div></div>`
+  }[v];
+  return `<div class="sb-cap" style="margin-top:6px"><b>服务器</b><span>0 台</span></div><div class="sb-search">${ic("search",11,1.6)}输入名称、分组或地址</div><div style="flex:1;display:flex;flex-direction:column;border-top:1px dashed var(--line);margin-top:8px">${inner}</div>`;
+}
+function topbarHtml(mode){
+  return `<div class="seg"><span class="tab${mode==="log"?" on":""}">日志预览</span><span class="tab${mode==="files"?" on":""}">文件目录</span></div>
+  <span class="crumb">/</span><span class="sp"></span>
+  <span class="tin">${ic("search",11,1.6)}${mode==="files"?"过滤当前目录…":"过滤检索结果…"}</span>
+  <span class="tbtn">${ic("upload",13)}</span><span class="tbtn">${ic("activity",13)}</span><span class="tbtn">${ic("cmd",13)}</span>`;
+}
+function frame(content,{mode="files",status="请先选择服务器",sbEmpty=null,h=520}={}){
+  return `<div class="app" style="--fh:${h}px">
+    <div class="side">${sbEmpty?sidebarEmptyHtml(sbEmpty):sidebarHtml()}</div>
+    <div class="main"><div class="tbar">${topbarHtml(mode)}</div><div class="content">${content}</div></div>
+    <div class="status"><span class="st-dot"></span><span class="st-pill">${status}</span><span class="st-link">详情</span><span class="ver">slcc v0.3.240</span></div>
+  </div>`;
+}
+
+/* ================= 方案 A 内容 ================= */
+function eaStep(n,t,s,btn,arr,cur){return `<div class="ea-step${cur?" cur":""}"><span class="ea-num">${n}</span><div class="ea-tx"><b>${t}</b><span>${s}</span></div>${btn||`<span class="ea-arr">${arr||"→"}</span>`}</div>`}
+const A={
+  wait:()=>`<div class="ea"><div class="ea-wrap">
+    <span class="ea-eyebrow">${ic("folder",11)} 文件目录 · 开始</span>
+    <div class="ea-title">选择一台服务器，开始浏览远程目录</div>
+    <p class="ea-sub">连接成功后系统会自动展开目录树、记住最近位置，并接管过滤、上传与右键菜单。</p>
+    <div class="ea-steps">
+      ${eaStep(1,"选择服务器","点击左侧列表任意一台，或按 ⌘K 全局检索",`<button class="btn sm pri">打开检索</button>`,"",1)}
+      ${eaStep(2,"浏览目录","目录树自动挂载根目录，双击进入子目录")}
+      ${eaStep(3,"查看日志","点击 .log / .txt 文件直接进入日志预览")}
+    </div>
+    <div class="ea-foot">
+      <div><div class="ea-lab">最近连接</div><div class="ea-chips"><span class="chip"><i class="dot"></i>堡垒机-演示</span><span class="chip"><i class="dot"></i>127.122</span><span class="chip"><i class="dot idle"></i>2.203</span></div></div>
+      <div><div class="ea-lab">快捷键</div><div class="ea-keys"><span><span class="kbd">⌘K</span>服务器检索</span><span><span class="kbd">⌘T</span>新建终端</span><span><span class="kbd">⌘/</span>全部快捷键</span></div></div>
+    </div>
+  </div></div>`,
+  search:()=>`<div class="ea"><div class="ea-wrap">
+    <span class="ea-eyebrow">${ic("search",11)} 日志检索 · 空结果</span>
+    <div class="ea-title">还没有检索结果</div>
+    <p class="ea-sub">输入关键字回车开始检索；实时跟随开启时会持续等待新日志写入。</p>
+    <div class="ea-steps">
+      ${eaStep(1,"输入关键字","回车执行；打开文件后可读取尾部",`<button class="btn sm pri">聚焦输入框</button>`,"",1)}
+      ${eaStep(2,"语法限定","/ERROR 精确匹配 · /time 10:00 时间段 · 多词逗号拆分")}
+      ${eaStep(3,"实时跟随","⌥L 开启后自动滚动到最新写入")}
+    </div>
+    <div class="ea-foot">
+      <div><div class="ea-lab">最近检索</div><div class="ea-chips"><span class="chip">ERROR timeout</span><span class="chip">/time 09:3</span><span class="chip">access.log 500</span></div></div>
+      <div><div class="ea-lab">快捷键</div><div class="ea-keys"><span><span class="kbd">⌘F</span>检索</span><span><span class="kbd">⌥L</span>实时跟随</span><span><span class="kbd">⌘E</span>检索示例</span></div></div>
+    </div>
+  </div></div>`,
+  term:()=>`<div class="ea"><div class="ea-wrap">
+    <span class="ea-eyebrow">${ic("term",11)} 终端 · 空会话</span>
+    <div class="ea-title">未建立终端会话</div>
+    <p class="ea-sub">选择服务器后在这里建立 SSH 会话；断线时网关保活 90 秒并自动重连。</p>
+    <div class="ea-steps">
+      ${eaStep(1,"选择服务器","左侧列表点击，或 ⌘K 检索",`<button class="btn sm pri">新建会话</button>`,"",1)}
+      ${eaStep(2,"新建会话","⌘T 多标签并行，⌘W 关闭当前")}
+      ${eaStep(3,"AI 辅助","右上 ⚙ 配置后可在终端内唤起 AI 命令建议")}
+    </div>
+    <div class="ea-foot">
+      <div><div class="ea-lab">最近会话</div><div class="ea-chips"><span class="chip"><i class="dot"></i>堡垒机-演示</span><span class="chip"><i class="dot idle"></i>127.122</span></div></div>
+      <div><div class="ea-lab">快捷键</div><div class="ea-keys"><span><span class="kbd">⌘T</span>新建</span><span><span class="kbd">⌘W</span>关闭</span><span><span class="kbd">⌘F</span>终端内查找</span></div></div>
+    </div>
+  </div></div>`,
+  dirempty:()=>`<div class="ea"><div class="ea-wrap">
+    <span class="ea-eyebrow">${ic("folder",11)} 目录 · 空目录</span>
+    <div class="ea-title">这个目录是空的</div>
+    <p class="ea-sub">当前路径没有任何文件或子目录；返回上一级，或直接上传文件到这里。</p>
+    <div class="ea-steps">
+      ${eaStep(1,"返回上一级","回到上层目录继续浏览",`<button class="btn sm pri">返回上一级</button>`,"",1)}
+      ${eaStep(2,"上传文件","拖拽文件到窗口，或右上角上传按钮")}
+    </div>
+    <div class="ea-foot">
+      <div><div class="ea-lab">常用位置</div><div class="ea-chips"><span class="chip">/var/log</span><span class="chip">/data/logs</span><span class="chip">/etc/nginx</span></div></div>
+      <div><div class="ea-lab">快捷键</div><div class="ea-keys"><span><span class="kbd">⌘↑</span>上一级</span><span><span class="kbd">⌘⇧U</span>上传</span></div></div>
+    </div>
+  </div></div>`,
+  noservers:()=>`<div class="ea"><div class="ea-wrap">
+    <span class="ea-eyebrow">${ic("server",11)} 首次配置</span>
+    <div class="ea-title">还没有服务器</div>
+    <p class="ea-sub">从 FinalShell / Xshell 一键导入连接，或手动新增；导入后左侧自动生成分组列表。</p>
+    <div class="ea-steps">
+      ${eaStep(1,"导入连接","识别 FinalShell / Xshell 配置",`<button class="btn sm pri">立即导入</button>`,"",1)}
+      ${eaStep(2,"检查连接服务","本地服务未启动时先检查",`<button class="btn sm">检查服务</button>`)}
+      ${eaStep(3,"选择服务器开始使用","连接后即可浏览目录与查看日志")}
+    </div>
+    <div class="ea-foot">
+      <div><div class="ea-lab">支持的来源</div><div class="ea-chips"><span class="chip">FinalShell</span><span class="chip">Xshell</span><span class="chip">手动新增</span></div></div>
+      <div><div class="ea-lab">快捷键</div><div class="ea-keys"><span><span class="kbd">⌘,</span>设置中心</span><span><span class="kbd">⌘R</span>刷新列表</span></div></div>
+    </div>
+  </div></div>`
+};
+
+/* ================= 方案 B 内容 ================= */
+function ebCard(iconn,t,s,act,meta){return `<div class="eb"><div class="eb-card"><div class="eb-ic">${ic(iconn,19)}</div><b>${t}</b><span>${s}</span><div class="eb-act">${act}<span class="kbd">${meta.kbd}</span></div><div class="eb-meta">${meta.meta}</div></div></div>`}
+const B={
+  wait:()=>ebCard("folder","等待选择服务器","先选择服务器，系统会自动连接并打开目录。",`<button class="btn sm pri">选择服务器</button>`,{kbd:"⌘K",meta:"最近连接：<b>堡垒机-演示</b> · 192.168.130.3"}),
+  search:()=>ebCard("search","还没有检索结果","输入关键字回车，或用 /关键字 语法。",`<button class="btn sm pri">查看检索示例</button>`,{kbd:"⌘F",meta:"<b>/ERROR</b> 精确匹配 · <b>/time 10:00</b> 时间段"}),
+  term:()=>ebCard("term","未建立终端会话","连接当前服务器，或从左侧列表选择。",`<button class="btn sm pri">连接服务器</button>`,{kbd:"⌘T",meta:"未选择服务器 · 连接后可多标签并行"}),
+  dirempty:()=>ebCard("folder","目录为空","回到上一级，或切换其他服务器。",`<button class="btn sm pri">返回上一级</button><button class="btn sm">上传文件</button>`,{kbd:"⌘↑",meta:"当前路径 <b>/data/apps/logs</b>"}),
+  noservers:()=>ebCard("server","还没有服务器","导入 FinalShell 连接后，左侧会自动出现服务器列表。",`<button class="btn sm pri">立即导入</button><button class="btn sm">连接设置</button>`,{kbd:"⌘,",meta:"支持 FinalShell / Xshell / 手动新增"})
+};
+
+/* ================= 方案 C 内容 ================= */
+function ecFrame(lines,cta,kbd){
+  return `<div class="ec"><div class="ec-term">
+    <div class="ec-head"><i></i><i></i><i></i><span>slcc — log console</span><em>guest@local</em></div>
+    <div class="ec-lines">${lines}</div>
+    <button class="ec-cta">${cta}${kbd?`<span class="kbd dk">${kbd}</span>`:""}</button>
+    <div class="ec-corner"><span>SSH</span><span>·</span><span>等待中</span></div>
+  </div></div>`;
+}
+const C={
+  wait:()=>ecFrame(`
+    <div class="ec-line"><span class="t">19:13:02</span><span class="lv">SYS</span><span class="m">系统就绪，等待建立连接</span></div>
+    <div class="ec-line"><span class="t">19:13:02</span><span class="lv">HNT</span><span class="m">在左侧选择一台服务器，或按 ⌘K 检索</span></div>
+    <div class="ec-line"><span class="t">19:13:05</span><span class="lv cmd">$</span><span class="m lit">connect --server=<i class="ph">?</i><i class="ec-caret"></i></span></div>`,
+    `选择服务器`,"⌘K"),
+  search:()=>ecFrame(`
+    <div class="ec-line"><span class="t">19:13:02</span><span class="lv">SYS</span><span class="m">检索通道就绪 · 实时跟随 <span class="lit">已开启</span>，等待新日志写入</span></div>
+    <div class="ec-line"><span class="t">19:13:02</span><span class="lv">HNT</span><span class="m">输入关键字回车，或 /关键字 指定语法</span></div>
+    <div class="ec-line"><span class="t">19:13:05</span><span class="lv cmd">$</span><span class="m lit">grep -n "" *.log<i class="ec-caret"></i></span></div>`,
+    `查看检索示例`,"⌘F"),
+  term:()=>ecFrame(`
+    <div class="ec-line"><span class="t">19:13:02</span><span class="lv">SYS</span><span class="m">终端工作区就绪 · 断线自动重连（网关保活 90s）</span></div>
+    <div class="ec-line"><span class="t">19:13:02</span><span class="lv">HNT</span><span class="m">连接当前服务器，或从左侧列表选择</span></div>
+    <div class="ec-line"><span class="t">19:13:05</span><span class="lv cmd">$</span><span class="m lit">ssh <i class="ph">user@?</i><i class="ec-caret"></i></span></div>`,
+    `连接服务器`,"⌘T"),
+  dirempty:()=>ecFrame(`
+    <div class="ec-line"><span class="t">19:13:05</span><span class="lv cmd">$</span><span class="m lit">ls -la /data/apps/logs</span></div>
+    <div class="ec-line dim"><span class="t">19:13:05</span><span class="lv">OUT</span><span class="m">total 0</span></div>
+    <div class="ec-line"><span class="t">19:13:05</span><span class="lv">HNT</span><span class="m">目录为空：回到上一级，或切换其他服务器</span></div>`,
+    `返回上一级`,"⌘↑"),
+  noservers:()=>ecFrame(`
+    <div class="ec-line"><span class="t">19:13:02</span><span class="lv">SYS</span><span class="m">本地连接服务已就绪</span></div>
+    <div class="ec-line"><span class="t">19:13:05</span><span class="lv cmd">$</span><span class="m lit">servers list</span></div>
+    <div class="ec-line dim"><span class="t">19:13:05</span><span class="lv">OUT</span><span class="m">0 found — 导入 FinalShell 连接后自动出现在这里</span></div>`,
+    `导入连接`,"⌘,")
+};
+
+/* ================= 方案 D 内容 ================= */
+function fileGhostRows(n){
+  const w=[38,52,30,62,44,70,36,56,48];
+  let h="";
+  for(let i=0;i<n;i++){
+    h+=`<div class="ed-row"><i class="bar" style="width:14px"></i><i class="bar" style="width:${w[i%w.length]}%"></i><i class="bar"></i><i class="bar" style="width:70%"></i></div>`;
+  }
+  return h;
+}
+function logGhostRows(n){
+  const w=[46,62,34,74,52,40,66,58,44];
+  let h="";
+  for(let i=0;i<n;i++){
+    h+=`<div class="ed-row log"><i class="bar"></i><i class="bar" style="width:80%"></i><i class="bar" style="width:${w[i%w.length]}%"></i></div>`;
+  }
+  return h;
+}
+function edPill(iconn,t,s,btn){return `<div class="ed-pill"><span class="ed-ic">${ic(iconn,15)}</span><div class="tx"><b>${t}</b><span>${s}</span></div>${btn}</div>`}
+const D={
+  wait:()=>`<div class="ed"><div class="ed-ghost">${fileGhostRows(9)}</div>${edPill("folder","等待选择服务器","选择后自动连接并打开目录",`<button class="btn sm pri">选择服务器</button>`)}</div>`,
+  search:()=>`<div class="ed"><div class="ed-ghost">${logGhostRows(10)}</div>${edPill("search","还没有检索结果","输入关键字回车，或用 /关键字 语法",`<button class="btn sm pri">查看检索示例</button>`)}</div>`,
+  term:()=>`<div class="ed"><div class="ed-ghost">${logGhostRows(9)}</div>${edPill("term","未建立终端会话","连接当前服务器，或从左侧列表选择",`<button class="btn sm pri">连接服务器</button>`)}</div>`,
+  dirempty:()=>`<div class="ed"><div class="ed-drop"><span class="ed-ic">${ic("upload",17)}</span><b>拖放文件到此处上传</b><span>或点击右上角上传按钮 · 当前路径 /data/apps/logs</span><div class="eb-act"><button class="btn sm pri">返回上一级</button><button class="btn sm">选择文件</button></div></div></div>`,
+  noservers:()=>`<div class="ed"><div class="ed-ghost" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;flex:none">
+      ${[1,2,3].map(()=>`<div style="border:1px solid var(--line);border-radius:10px;padding:14px 13px;display:flex;flex-direction:column;gap:11px;background:var(--panel)">
+        <div style="display:flex;align-items:center;gap:8px"><i class="bar" style="display:block;width:22px;height:22px;border-radius:7px;background:var(--ghost-2)"></i><i class="bar" style="display:block;height:8px;width:44%"></i></div>
+        <i class="bar" style="display:block;height:7px;width:88%"></i>
+        <i class="bar" style="display:block;height:7px;width:72%"></i>
+        <i class="bar" style="display:block;height:7px;width:80%"></i>
+        <i class="bar" style="display:block;height:7px;width:52%"></i>
+        <div style="margin-top:auto;display:flex;gap:8px"><i class="bar" style="display:block;height:20px;width:56px;border-radius:6px;background:var(--ghost-2)"></i><i class="bar" style="display:block;height:20px;width:42px;border-radius:6px"></i></div>
+      </div>`).join("")}
+    </div>${edPill("server","还没有服务器","导入 FinalShell 连接后自动出现在这里",`<button class="btn sm pri">立即导入</button>`)}</div>`
+};
+
+/* ================= 小态 ================= */
+const MINIS=[
+  {key:"palette",icon:"cmd",name:"命令面板 ⌘K",copy:"没有匹配项",mock:`<div style="flex:1;display:flex;flex-direction:column"><div style="height:30px;flex:none;display:flex;align-items:center;gap:6px;padding:0 10px;border-bottom:1px solid var(--line);color:var(--ink-muted);font-size:11px">${ic("search",11)}zzz</div><div style="flex:1;display:flex"></div></div>`},
+  {key:"transfer",icon:"inbox",name:"传输历史抽屉",copy:"当前服务器暂无传输记录",mock:""},
+  {key:"bookmark",icon:"bkmk",name:"书签面板",copy:"双击日志行可添加书签",mock:""},
+  {key:"spark",icon:"activity",name:"监控 · 采样积累",copy:"采样积累中…",mock:""}
+];
+function miniBody(v,key){
+  const map={
+    palette:{a:{t:"没有匹配项",s:"试试更短的关键词",b:"清空重输",i:"cmd"},b:{t:"没有匹配项",s:"换个关键词试试",i:"cmd"},c:{t:"没有匹配项",s:"$ palette zzz"},d:{t:"没有匹配项",s:"试试更短的关键词",i:"cmd"}},
+    transfer:{a:{t:"暂无传输记录",s:"上传 / 下载完成后在这里留存",b:"打开传输面板",i:"inbox"},b:{t:"暂无传输记录",s:"传输完成后出现在这里",i:"inbox"},c:{t:"暂无传输记录",s:"$ transfers --this-host"},d:{t:"暂无传输记录",s:"传输完成后出现在这里",i:"inbox"}},
+    bookmark:{a:{t:"还没有书签",s:"双击日志行即可添加书签",b:"查看快捷键",i:"bkmk"},b:{t:"还没有书签",s:"双击日志行添加",i:"bkmk"},c:{t:"暂无书签",s:"$ bookmark add <line>"},d:{t:"还没有书签",s:"双击日志行添加",i:"bkmk"}},
+    spark:{a:{t:"采样积累中…",s:"连接后每 5s 采集一次",b:"查看说明",i:"activity"},b:{t:"采样积累中…",s:"样本 ≥ 2 后绘制曲线",i:"activity"},c:{t:"采样积累中…",s:"$ metrics --watch"},d:{t:"采样积累中…",s:"样本 ≥ 2 后绘制",i:"activity"}}
+  }[key][v];
+  if(v==="a")return `<div class="em-a"><span class="ic">${ic(map.i,13)}</span><b>${map.t}</b><span>${map.s}</span><button class="btn sm">${map.b}</button></div>`;
+  if(v==="b")return `<div class="em-b"><span class="ic">${ic(map.i,15)}</span><b>${map.t}</b><span>${map.s}</span></div>`;
+  if(v==="c")return `<div class="em-c"><span class="ln">${map.t}</span><span class="sub">${map.s}</span></div>`;
+  return `<div class="em-d"><i class="bar" style="width:64%"></i><i class="bar" style="width:42%"></i><i class="bar" style="width:56%"></i><div class="tx"><b>${map.t}</b><span>${map.s}</span></div></div>`;
+}
+function minisHtml(v){
+  return `<div class="minis">`+MINIS.map(m=>`
+    <div class="mini">
+      <div class="mini-h">${ic(m.icon,12)}${m.name}</div>
+      <div class="mini-b">${m.mock}${miniBody(v,m.key)}</div>
+      <div class="mini-cap">现状：「${m.copy}」</div>
+    </div>`).join("")+`</div>`;
+}
+
+/* ================= 场景总览页 ================= */
+const INV=[
+  ["01","主工作区","文件目录 · 未选服务器","连接服务正常但未点击任何服务器","等待选择服务器 / 先选择服务器，系统会自动连接并打开目录。","大屏","44px 图标绝对居中，四周留白 > 90%",1],
+  ["02","主工作区","文件目录 · 连接中","已选服务器，SSH 握手期间","正在连接 {name} / 等待系统自动建立 SSH 连接...","大屏","同上，且无进度语感",1],
+  ["03","主工作区","日志预览 · 检索空态","未检索且无结果标签页","还没有检索结果 / 输入关键字回车…","大屏","同上（本页截图同款）",1],
+  ["04","主工作区","文件目录 · 目录为空","进入空目录","目录为空 / 回到上一级，或切换其他服务器","中屏","居中小卡，留白偏大",0],
+  ["05","主工作区","文件目录 · 加载中","目录列表请求进行中","正在加载目录内容","中屏","仅 spinner + 两行字",0],
+  ["06","主工作区","启动 · 服务离线","本地连接服务未启动","正在等待内置连接服务启动 / 连接服务不可达","大屏","startup-card 居中，信息密但无结构",1],
+  ["07","主工作区","启动 · 无服务器","首次使用，零服务器","还没有服务器 / 导入 FinalShell 连接后…","大屏","同上",1],
+  ["08","终端工作区","终端 · 无会话","终端标签为空","未建立终端会话 / 连接当前服务器，或从左侧列表选择","大屏","居中三件套，留白大",1],
+  ["09","侧栏","服务器列表 · 离线 / 无服务器","服务离线或 0 台（两处组件复用）","正在等待内置连接服务启动 / 还没有服务器","小态","sidebar-empty-box，尚可",0],
+  ["10","侧栏","活动流 · 初始","应用刚启动","系统已启动，等待选择服务器与日志文件。","小态","纯文本行，可沿用",0],
+  ["11","设置中心","连接设置 · 未选详情","清单未选中服务器","选择左侧服务器查看连接详情","中屏","居中图标+两行字",0],
+  ["12","设置中心","连接清单 · 搜索无匹配","过滤词无命中","没有匹配的服务器","小态","单行文字",0],
+  ["13","设置中心","更新中心 · 未检查","尚未检查过更新","尚未检查；点击上方「检查更新」开始。","小态","单行文字",0],
+  ["14","设置中心","更新中心 · 无版本说明","当前版本无 release note","暂无版本说明","小态","单行文字",0],
+  ["15","浮层","命令面板 · 无匹配","检索词无命中","没有匹配项","小态","单行文字",0],
+  ["16","浮层","快捷键管理 · 无命令","全部删除后","暂无命令，点击下方「新增命令」添加","小态","单行文字",0],
+  ["17","浮层","SSH 隧道 · 无隧道","无活跃隧道","暂无活跃隧道","小态","单行文字",0],
+  ["18","浮层","传输历史 · 无记录 / 筛选无果","新服务器或过滤无命中","当前服务器暂无传输记录 / 没有符合当前筛选条件的记录","中屏","empty-box 变体，可用",0],
+  ["19","浮层","路径历史下拉 · 空","无浏览历史","暂无历史记录","小态","单行文字",0],
+  ["20","浮层","书签面板 · 空","未添加书签","双击日志行可添加书签","小态","单行文字，可沿用",0],
+  ["21","浮层","AI 终端面板 · 未配置","未配置 AI Key","请先点击右上⚙配置 AI","小态","单行文字",0],
+  ["22","文件预览","压缩包 · 无子文件夹","压缩包无目录层","无子文件夹","小态","单行文字",0],
+  ["23","文件预览","结构化预览 · 空 class/字段/方法","class 无内容或解析失败","当前 class 未声明字段/方法 · 未读取到 class 结构信息","中屏","单行文字 ×4 处",0],
+  ["24","文件预览","class 大纲 · 空","无大纲","无","小态","一个「无」字，过于简陋",0],
+  ["25","监控面板","趋势火花图 · 采样不足","样本 < 2","采样积累中…","小态","淡虚线+灰字，可用",0],
+  ["26","监控面板","监控大图 · 采样不足","样本 < 2","采样积累中…","中屏","同上，但高度大时偏空",0],
+  ["27","监控面板","进程 / 磁盘 / 网卡 · 空","数据未返回","未读取到进程排行 / 磁盘信息 / 网卡计数","小态","单行文字 ×3 处",0],
+  ["28","内联","批量命令 · 无输出","命令无 stdout/stderr","（无输出）","小态","单行文字，可沿用",0],
+  ["29","内联","检索状态条 · 无命中","检索执行完零命中","本次检索没有命中结果。","小态","状态条文本，非占位块",0]
+];
+function page0(){
+  let rows="";
+  for(const r of INV){
+    const lvl=r[7]===1?`<span class="hot">● 大屏痛点</span>`:r[6]==="中屏"?`<span class="mid">中屏</span>`:`<span class="sml">小态</span>`;
+    rows+=`<tr><td class="no">${r[0]}</td><td class="zone">${r[1]}</td><td class="sense"><b>${r[2]}</b><span>触发：${r[3]}</span></td><td class="copy">${r[4]}</td><td class="lvl">${lvl}</td><td>${r[5]}</td></tr>`;
+  }
+  return `
+  <div class="sec"><span class="no">00</span><b>场景总览：全系统共 29 处空占位</b><span>来源：apps/extension/src/ui 全量扫描（App.tsx + 40 余组件）</span></div>
+  <div class="diag">
+    <div class="dcard"><b><span class="no">诊断 1</span>布局策略单一，大屏留白失控</b><p>所有空态共用「图标 + 标题 + 一句话」绝对居中模板。主内容区约 1100×760 px 时，内容只占中心 ~160 px 高，四周留白超过 90%，视觉重心漂浮，这就是截图里的问题。</p></div>
+    <div class="dcard"><b><span class="no">诊断 2</span>大屏与小态不分档</b><p>1100px 的工作区空态和 240px 的下拉空态用同一套字号与图标规格：大屏显得空旷，小态反而合适。缺一档「大屏专用」的密度处理。</p></div>
+    <div class="dcard"><b><span class="no">诊断 3</span>动作无主次，缺少捷径</b><p>空态按钮全部是 ghost 平铺（如检索空态 3 个按钮无主次），没有键位提示、最近连接等「捷径」入口，用户下一步要自己找。</p></div>
+    <div class="dcard"><b><span class="no">诊断 4</span>留白不承载语境</b><p>产品是终端 / 日志工作台，但空屏就是纯白底，没有点阵、终端、幽灵行等语境暗示，与产品的「工程师工作台」气质脱节。</p></div>
+  </div>
+  <div class="sec"><span class="no">00.1</span><b>四个方案共同遵守的设计原则</b></div>
+  <div class="prin">
+    <div class="pcard"><div class="pn">原则 1 · 锚定</div><b>大屏不再绝对居中</b><p>要么锚定顶部展开结构（A），要么把留白变成画布 / 终端 / 幽灵内容（B/C/D），让空白「有意图」。</p></div>
+    <div class="pcard"><div class="pn">原则 2 · 三件套</div><b>诊断 + 主行动 + 捷径</b><p>每个空态必须回答：为什么是空的（一句诊断）、现在该做什么（唯一主按钮）、有没有更快的路（键位 / 最近记录）。</p></div>
+    <div class="pcard"><div class="pn">原则 3 · 分档</div><b>三档规格：大屏 / 面板 / 内联</b><p>图标 40px tile / 26px tile / 14px 裸图标；标题 13.5 / 12 / 11；提示 11.5 / 10.5 / 10。杜绝一套规格打天下。</p></div>
+    <div class="pcard"><div class="pn">原则 4 · Token</div><b>全 token 化，明暗通用</b><p>只用 ink / line / accent / shell 等既有 token，右上角可切换亮暗双态预览；等宽字只用于路径、键位、终端语境。</p></div>
+  </div>
+  <div class="sec"><span class="no">00.2</span><b>空占位场景总账（29 处 · 8 大区域）</b><span>● = 大屏痛点，本方案重点解决；其余用各方案的「面板 / 内联」档覆盖</span></div>
+  <table class="inv"><thead><tr><th>#</th><th>区域</th><th>场景 / 触发</th><th>现状文案（摘录）</th><th>量级</th><th>现状处理</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+/* ================= 方案页组装 ================= */
+function buildVersionPage(v,name,positioning,suitNote){
+  const C4={a:A,b:B,c:C,d:D}[v];
+  const heroNote={
+    a:`<b>要点：</b>内容锚定顶部而非绝对居中，用「3 步引导 + 最近连接 + 快捷键」三段结构把大屏撑满；首次用户照着走，老用户直接点按钮或键位。空态变成可执行的上手清单。`,
+    b:`<b>要点：</b>点阵画布 + 聚光渐晕让留白「有意图」，卡片收窄到 300px 并加最近连接一行（可直接点击）。适合日常高频空态：不教用户做事，只给唯一主按钮。`,
+    c:`<b>要点：</b>空区即终端——深色 shell 内嵌 mono 日志行（SYS/HNT/OUT 级别 + 闪烁光标），把「等待」演成产品自己的语言；底部悬浮胶囊给主行动。与日志视图的深色底一脉相承。`,
+    d:`<b>要点：</b>骨架行预示「这里将会出现什么」，空间被未来内容占住；中央悬浮胶囊给诊断 + 主行动。目录为空变体改用虚线拖放区，避免「假加载」误导。`
+  }[v];
+  const termNote={a:"终端空态同样锚定顶部；步骤里交代保活与 AI 配置。",b:"与文件目录同款画布徽章；meta 行提示多标签能力。",c:"终端拟态的主场：ssh 命令行 + 光标，等待感即品牌感。",d:"幽灵日志行 + 悬浮胶囊，暗示会话建立后的样子。"}[v];
+  const dirNote={a:"空目录给「常用位置」跳转 chips，比单纯返回上一级更快。",b:"meta 行直接给当前路径，方便确认是不是来错了地方。",c:"ls -la 的输出即空态：total 0，工程师一眼懂。",d:"空目录不用骨架（会误导成加载中），改用虚线拖放上传区。"}[v];
+  const nsNote={a:"首次配置场景信息量最大：三步走完即可开始使用。",b:"侧栏与主区同一语言，meta 行列出支持的导入来源。",c:"servers list → 0 found，用命令叙事讲清「为什么空」。",d:"侧栏与主区同时出骨架，整体是「即将有数据」的形状。"}[v];
+  return `
+  <div class="sec"><span class="no">${v.toUpperCase()}</span><b>方案 ${v.toUpperCase()} · ${name}</b><span>${positioning}</span></div>
+  <div class="note">${suitNote}<br/>${heroNote}</div>
+
+  <div class="sec"><span class="no">${v.toUpperCase()}.1</span><b>文件目录 · 等待选择服务器</b><span>场景 01（截图同款 · 大屏痛点）</span></div>
+  <div style="margin-top:12px">${frame(C4.wait(),{mode:"files"})}</div>
+  <div class="cap">同版式也覆盖 <b>场景 02 连接中</b>（标题换「正在连接 {name}」，步骤 1 变进度行）与 <b>场景 06 服务离线</b>（步骤换「检查服务 / 连接服务设置」）。</div>
+
+  <div class="sec"><span class="no">${v.toUpperCase()}.2</span><b>日志预览 · 还没有检索结果</b><span>场景 03（大屏痛点）</span></div>
+  <div style="margin-top:12px">${frame(C4.search(),{mode:"log"})}</div>
+
+  <div class="sec"><span class="no">${v.toUpperCase()}.3</span><b>终端 · 未建立会话</b><span>场景 08（大屏痛点）</span></div>
+  <div style="margin-top:12px">${frame(C4.term(),{mode:"files",status:"请先选择服务器"})}</div>
+  <div class="cap">${termNote}</div>
+
+  <div class="sec"><span class="no">${v.toUpperCase()}.4</span><b>文件目录 · 目录为空</b><span>场景 04 / 05（中屏）</span></div>
+  <div style="margin-top:12px">${frame(C4.dirempty(),{mode:"files",status:"/data/apps/logs"})}</div>
+  <div class="cap">${dirNote} 场景 05 加载中沿用本版式，内容区换 spinner。</div>
+
+  <div class="sec"><span class="no">${v.toUpperCase()}.5</span><b>启动 · 还没有服务器</b><span>场景 07（大屏痛点）· 侧栏同步空态（场景 09）</span></div>
+  <div style="margin-top:12px">${frame(C4.noservers(),{mode:"files",sbEmpty:v,status:"0 台服务器"})}</div>
+  <div class="cap">${nsNote}</div>
+
+  <div class="sec"><span class="no">${v.toUpperCase()}.6</span><b>小态适配</b><span>场景 12 / 15 / 18 / 20 / 25（下拉 · 抽屉 · 面板 · 图表）</span></div>
+  ${minisHtml(v)}
+  <div class="cap">小态规格：图标 26px tile（A）/ 裸 15px（B）/ mono 分隔线（C）/ 幽灵行 + 覆盖文字（D），均 <b>不再使用大屏三件套</b>。</div>`;
+}
+
+/* ================= 渲染 ================= */
+document.getElementById("p0").innerHTML=page0();
+document.getElementById("pa").innerHTML=buildVersionPage("a","引导式工作台","把空态变成可执行的上手清单 · 信息量最大","<b>适合：</b>首次启动、未选服务器、无服务器等「需要教用户下一步」的场景；对老用户则提供键位与最近连接捷径。");
+document.getElementById("pb").innerHTML=buildVersionPage("b","画布徽章","极简派 · 留白有意图，行动聚焦唯一主按钮","<b>适合：</b>日常高频空态（未选服务器 / 目录为空 / 无会话）；改动成本最低——保留现有居中心智，只加底纹、收窄卡片、补捷径。");
+document.getElementById("pc").innerHTML=buildVersionPage("c","终端拟态","品牌派 · 空区即终端，用产品自己的语言等待","<b>适合：</b>等待类场景（连接中 / 终端 / 检索跟随）；深色 shell 与日志视图同源，亮色主题下也成立（日志区本就是深底）。");
+document.getElementById("pd").innerHTML=buildVersionPage("d","形状幽灵","预告派 · 骨架占位，空间被「未来内容」填满","<b>适合：</b>加载 / 采样 / 列表空态；骨架行宽窄错落 + 缓速微光，暗示内容形状但不假装在加载（空目录用拖放区变体）。");
+
+/* 导航 */
+const DESC={
+  p0:["00","梳理全部空占位场景 → 问题诊断 → 共同设计原则"],
+  pa:["A 引导式工作台","锚定顶部 + 三步引导 + 最近连接 / 键位捷径 · 信息量最大"],
+  pb:["B 画布徽章","点阵画布 + 聚光渐晕 + 300px 紧凑卡 · 极简聚焦"],
+  pc:["C 终端拟态","深色 shell + mono 日志行 + 闪烁光标 · 品牌语境"],
+  pd:["D 形状幽灵","骨架行预示内容形状 + 中央悬浮胶囊 · 空间预告"]
+};
+document.querySelectorAll("#index button").forEach(b=>{
+  b.addEventListener("click",()=>{
+    document.querySelectorAll("#index button").forEach(x=>x.classList.remove("on"));
+    b.classList.add("on");
+    document.querySelectorAll(".page").forEach(p=>p.classList.remove("on"));
+    document.getElementById(b.dataset.page).classList.add("on");
+    const d=DESC[b.dataset.page];
+    document.getElementById("desc-n").textContent=d[0];
+    document.getElementById("desc-d").textContent=d[1];
+    document.getElementById("viewport").scrollTop=0;
+  });
+});
+document.querySelectorAll("#skin-toggle button").forEach(b=>{
+  b.addEventListener("click",()=>{
+    document.querySelectorAll("#skin-toggle button").forEach(x=>x.classList.remove("on"));
+    b.classList.add("on");
+    document.getElementById("viewport").classList.toggle("dark",b.dataset.skin==="dark");
+  });
+});
+/* URL hash 直达：#pa / #pb / #pc / #pd / #p0，可选暗色后缀 -dark（如 #pc-dark） */
+(function(){
+  const h=location.hash.replace("#","");
+  if(!h)return;
+  const [pg,skin]=h.split("-");
+  const nav=document.querySelector(`#index button[data-page="${pg}"]`);
+  if(nav)nav.click();
+  if(skin==="dark")document.querySelector('#skin-toggle button[data-skin="dark"]').click();
+})();
+</script>
+</body>
+</html>

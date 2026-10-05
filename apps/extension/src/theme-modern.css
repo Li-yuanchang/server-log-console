@@ -15,6 +15,12 @@
   --fs-lg: 16px;     /* 大：区块标题 */
   --fs-xl: 18px;     /* 特大：页面标题 */
   --fs-title: 15px;  /* 兼容旧引用 */
+  /* 圆角刻度：与字号 token 同理必须定义在 :root（经典主题共用基础样式文件，
+     若只在 .theme-modern 下定义，classic 取不到值会导致圆角声明整条失效）。
+     .theme-modern 内仍保留同名覆盖，便于主题定制。 */
+  --r-s: 6px;
+  --r-m: 8px;
+  --r-l: 10px;
 }
 
 /* ============================================================
@@ -2297,14 +2303,11 @@
   background: var(--panel);
 }
 
-/* --- 20a. 终端视图背景同源（2026-10-03 色差修复） ---
-   xterm 画布按字符网格渲染，四周/底部会露出容器底色；终端视图链路里
-   工作区面板/面板体等层的底色（半透明工作区层、soft 变体）与 xterm 主题
-   底色（--terminal-background）不同值时，形成「两条深浅不一的蓝灰」色差
-   （实测 102,128,163 vs 89,113,145）。终端视图链路统一钉
-   var(--terminal-background)，与 xtheme 渲染底色同源，缝隙不可见。 */
-/* 背景带 --shell 兜底：Geist 等部分主题预设未定义 --terminal-background，
-   无兜底时整条链路退化为透明，露出工作区背景层（色差依旧） */
+/* --- 20a. 终端视图链路：透明（2026-10-03 修订） ---
+   此前本块把整条链路涂成 --terminal-background——但 xterm 视口自带
+   「终端配色」的内联底色（随配色/主题实时刷新），链路涂黑后：
+   ① 视口下缘剩余区与链路层两套深浅打架；② 黑窗口圆角被同色链路吞掉。
+   改为链路全透明，黑 = xterm 视口内联底色，圆角可见。 */
 .theme-modern .workspace-panel.workspace-panel-terminal,
 .theme-modern .workspace-panel.workspace-panel-terminal .terminal-bottom-panel,
 .theme-modern .workspace-panel.workspace-panel-terminal .terminal-body-layout,
@@ -2320,7 +2323,16 @@
 .theme-modern .main-panel-with-terminal .terminal-tab-pane,
 .theme-modern .main-panel-with-terminal .terminal-panel-body,
 .theme-modern .main-panel-with-terminal .xterm-container {
-  background: var(--terminal-background, var(--shell));
+  background: transparent;
+}
+
+/* 黑窗口四角圆角（v3 反馈：面板圆角碰不到中部黑块，必须圆黑块本身）；
+   overflow:hidden 让 xterm 内容随圆角裁剪。分屏 pane 内的 xterm 容器同规则。 */
+.theme-modern .workspace-panel.workspace-panel-terminal .terminal-panel-body .xterm-container,
+.theme-modern .main-panel-with-terminal .terminal-panel-body .xterm-container {
+  border-radius: var(--r-m);
+  overflow: hidden;
+  background: transparent;
 }
 
 /* --- 20. 终端面板 --- */

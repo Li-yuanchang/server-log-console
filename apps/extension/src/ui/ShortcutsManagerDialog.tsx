@@ -398,7 +398,16 @@ export function ShortcutsManagerDialog({ open, cwd, onClose }: ShortcutsManagerD
             ),
           )}
           {commands.length === 0 && editingId !== EDIT_NEW ? (
-            <div className="shortcuts-dialog-empty">暂无命令，点击下方「新增命令」添加</div>
+            /* 小态 · 抽屉档（empty-states-a-v2 09 屏）：tile + 一句话 + 主行动 */
+            <div className="mini-empty">
+              <span className="mini-empty-ic" aria-hidden="true"><Plus size={13} strokeWidth={1.7} /></span>
+              <b>还没有自定义命令</b>
+              <span>内置预设已生效，新增后在此覆盖</span>
+              <button type="button" className="ghost-button" onClick={beginAdd}>
+                <Plus size={12} />
+                新增命令
+              </button>
+            </div>
           ) : null}
         </div>
         <div className="shortcuts-dialog-foot">

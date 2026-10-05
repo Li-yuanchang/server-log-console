@@ -85,7 +85,14 @@ export function CommandPalette(props: { open: boolean; onClose: () => void; comm
             />
           </div>
           <div className="palette-list">
-            {filtered.length === 0 ? <div className="palette-empty">没有匹配项</div> : null}
+            {filtered.length === 0 ? (
+              /* 小态 · 抽屉档（empty-states-a-v2 09 屏）：icon + 一句话 + 捷径提示 */
+              <div className="palette-empty mini-empty">
+                <span className="mini-empty-ic" aria-hidden="true"><CommandIcon size={13} strokeWidth={1.7} /></span>
+                <b>没有匹配项</b>
+                <span>试试更短的关键词，或换个说法</span>
+              </div>
+            ) : null}
             {filtered.map((command, i) => {
               const showGroup = command.group !== lastGroup;
               lastGroup = command.group;

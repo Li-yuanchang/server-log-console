@@ -31,6 +31,9 @@ export type SidebarPanelProps = {
   onCloseSettingsWorkspace: () => void;
   onActivityPanelResizeStart: (event: React.PointerEvent<HTMLDivElement>) => void;
   hasPendingUpdate?: boolean;
+  isBusy?: boolean;
+  onRetryConnect?: () => void;
+  onCheckService?: () => void;
 };
 
 export function SidebarPanel(props: SidebarPanelProps) {
@@ -61,7 +64,68 @@ export function SidebarPanel(props: SidebarPanelProps) {
     onOpenPalette,
     onActivityPanelResizeStart,
     hasPendingUpdate,
+    isBusy,
+    onRetryConnect,
+    onCheckService,
   } = props;
+
+  /* 底部状态条五态（原型 empty-states-a-v2 第 10 屏）：
+     warn 服务离线 > err 连接失败 > connecting 连接中 > ok 已连接 > idle 待命 */
+  const statusState: "idle" | "connecting" | "ok" | "err" | "warn" = showServiceOfflineState
+    ? "warn"
+    : selectedServer && connectionTestStatus && !connectionTestStatus.connected && !isBusy
+      ? "err"
+      : selectedServer && !connectionTestStatus?.connected
+        ? "connecting"
+        : selectedServer && connectionTestStatus?.connected
+          ? "ok"
+          : "idle";
+  const statusWord = { idle: "待命", connecting: "连接中", ok: "已连接", err: "连接失败", warn: "服务离线" }[statusState];
+  const statusObj = statusState === "ok" || statusState === "connecting" ? selectedServer?.name ?? "" : "";
+  const statusL2 =
+    statusState === "idle" ? (
+      "选择服务器后自动连接"
+    ) : statusState === "connecting" ? (
+      <>
+        <span className="st-mini-spin" aria-hidden="true" />
+        <span className="mono">{actionStatus || `SSH 握手中 · ${selectedServer?.name ?? ""}`}</span>
+      </>
+    ) : statusState === "ok" ? (
+      <span className="mono">{`${selectedServer?.username ?? ""}@${selectedServer?.host ?? ""}:${selectedServer?.port ?? ""} · ${directoryPath || "/"}`}</span>
+    ) : statusState === "err" ? (
+      <>
+        <span className="mono">{selectedServer ? `${selectedServer.host}:${selectedServer.port}` : ""}</span>
+        <span>{connectionTestStatus?.message || "连接失败"}</span>
+        {onRetryConnect ? (
+          <button
+            type="button"
+            className="st-inline-act"
+            onClick={(event) => {
+              event.stopPropagation();
+              onRetryConnect();
+            }}
+          >
+            重试
+          </button>
+        ) : null}
+      </>
+    ) : (
+      <>
+        <span>自动重试中</span>
+        {onCheckService ? (
+          <button
+            type="button"
+            className="st-inline-act"
+            onClick={(event) => {
+              event.stopPropagation();
+              onCheckService();
+            }}
+          >
+            检查
+          </button>
+        ) : null}
+      </>
+    );
 
   return (
     <aside className="sidebar-panel">
@@ -141,29 +205,94 @@ export function SidebarPanel(props: SidebarPanelProps) {
       </div>
 
       <div
-        className={`status-card status-grid pane-section compact-connection-card sidebar-status${statusExpanded ? " sidebar-status-open" : ""}`}
+        className={`status-card status-grid pane-section compact-connection-card sidebar-status st-${statusState}${statusExpanded ? " sidebar-status-open" : ""}`}
         onClick={() => setStatusExpanded((v) => !v)}
         title={statusExpanded ? "收起连接概览" : "展开连接概览"}
       >
+        <span className="st-progress" aria-hidden="true" />
         {statusExpanded ? (
-          <>
-            <div className="pane-title">
-              连接概览
-              <span className="sidebar-status-collapse">收起</span>
+          <div className="st-open">
+            <div className="st-open-hd">
+              <span>连接概览</span>
+              <span
+                className="st-collapse"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setStatusExpanded(false);
+                }}
+              >
+                收起
+              </span>
             </div>
-            <div className="status-row"><span>本地服务</span><strong>{localServiceStatusText}</strong></div>
-            <div className="status-row"><span>服务器</span><strong>{connectionStateText}</strong></div>
-            <div className="status-row"><span>主机</span><strong>{selectedServer ? `${selectedServer.username}@${selectedServer.host}` : "--"}</strong></div>
-            <div className="status-row status-row-path"><span>路径</span><strong>{directoryPath || "/"}</strong></div>
-          </>
-        ) : (
-          <div className="sidebar-status-summary">
-            <span className={`sidebar-status-dot${selectedServer ? " on" : ""}`} />
-            <span className="sidebar-status-sum">
-              {selectedServer ? `${selectedServer.name} · ${selectedServer.username} · ${directoryPath || "/"}` : connectionStateText || "未连接"}
-            </span>
-            <span className="sidebar-status-toggle">详情</span>
+            <div className="st-kv">
+              <span>本地服务</span>
+              <b className="sans">{localServiceStatusText}</b>
+              <span>服务器</span>
+              <b className="sans">{selectedServer ? `${selectedServer.name} · ${connectionStateText || "--"}` : "--"}</b>
+              <span>主机</span>
+              <b>{selectedServer ? `${selectedServer.username}@${selectedServer.host}:${selectedServer.port}` : "--"}</b>
+              <span>路径</span>
+              <b>{directoryPath || "/"}</b>
+            </div>
+            <div className="st-acts">
+              {statusState === "err" && onRetryConnect ? (
+                <button
+                  type="button"
+                  className="ghost-button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onRetryConnect();
+                  }}
+                >
+                  重试
+                </button>
+              ) : null}
+              {statusState === "ok" && onRetryConnect ? (
+                <button
+                  type="button"
+                  className="ghost-button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onRetryConnect();
+                  }}
+                >
+                  重新连接
+                </button>
+              ) : null}
+              {statusState === "warn" && onCheckService ? (
+                <button
+                  type="button"
+                  className="ghost-button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onCheckService();
+                  }}
+                >
+                  检查服务
+                </button>
+              ) : null}
+              <button
+                type="button"
+                className="ghost-button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onOpenSettingsWorkspace("connections");
+                }}
+              >
+                连接设置
+              </button>
+            </div>
           </div>
+        ) : (
+          <>
+            <div className="st-l1">
+              <span className="st-dot" aria-hidden="true" />
+              <span className="st-word">{statusWord}</span>
+              {statusObj ? <span className="st-obj">{statusObj}</span> : null}
+              <span className="st-chev" aria-hidden="true">▾</span>
+            </div>
+            <div className="st-l2">{statusL2}</div>
+          </>
         )}
       </div>
 

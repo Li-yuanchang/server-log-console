@@ -105,73 +105,118 @@ function buildJumpServerCwdMarker() {
  * 不向用户暴露内部标记（[slc]），也绝不让 cd 失败把终端留在半途。
  * 绝不使用 clear —— 真 clear 会连滚动缓冲一起清掉（\e[3J），把 SSH 登录横幅
  * （Last login … from …）也抹掉；用户需要看到上次访问时间/IP。
- * 命令末尾只在“本行”擦除回显（上移一行 + 清除到屏幕尾），不触及上方横幅。
  *
- * 注意：必须在登录横幅/首个提示符出现之后再注入本命令，否则回显会落在横幅
- * 之前，“上移一行擦除”就会擦掉横幅本身（见 primeTerminalCwd）。
+ * 历史（2026-10-04）：旧实现靠命令末尾 `printf '\033[1A\r\033[J'` 擦掉回显，
+ * 假设回显只占一行 —— 宽屏成立；窄屏（≤50 列）命令折行 3~4 行，只擦掉了
+ * 最后一行，前面几行 cd 语句直接可见（用户反馈"小屏幕多显示了一条 cd"）。
+ * 现改为 stty 两步注入：先 `stty -echo; printf '@'`（探针 '@' 出现 = 回显已关、
+ * 且 stty 已执行），再发不可见的擦除+cd+恢复回显载荷 —— 与终端宽度彻底解耦。
+ *
+ * 注意：必须在登录横幅/首个提示符出现之后再注入本命令（见 primeTerminalCwd）。
  */
-function buildTerminalCwdCommand(cwd: string) {
+function buildTerminalCwdPayload(cwd: string) {
+  const escapedCwd = escapeShellSingleQuotes(cwd);
+  return `cd -- '${escapedCwd}' 2>/dev/null || cd -- "$HOME" 2>/dev/null || cd / 2>/dev/null`;
+}
+
+/** 回显抑制两步式：第一步关回显并打探针；第二步载荷开头先擦掉第一步的回显残迹 */
+const STTY_ECHO_OFF = `stty -echo; printf '@'\r`;
+const CWD_ERASE_OUTPUT_PATTERN = /\x1b\[J/;
+
+/**
+ * 新开 shell 的初始目录注入（回显抑制版，宽度无关）：
+ * ① 等登录横幅 + 首个提示符（P1）；
+ * ② `stty -echo; printf '@'` —— '@' 到达即证明回显已关；
+ * ③ 载荷 `printf '\033[1A\r\033[J'`（擦掉 P1 行上的 stty 回显残迹）
+ *    + `stty echo`（恢复）+ cd —— 全程不可见；
+ * 横幅/回显/擦除的完整字节作为 initialBuffer 返回，交由调用方回放。
+ * 任一步超时：回退旧方案（回显可见的 cd + 单行擦除）并恢复回显，保证可用性。
+ */
+function injectTerminalCwd(
+  stream: ClientChannel,
+  cwd: string | undefined,
+  options: { waitForFirstPrompt: boolean; timeoutMs: number },
+  onSettled: (initialBuffer: string) => void
+): void {
+  const targetCwd = cwd?.trim();
+  if (!targetCwd) {
+    onSettled("");
+    return;
+  }
+  let buffer = "";
+  let phase: "prompt" | "hidden" | "payload" = options.waitForFirstPrompt ? "prompt" : "hidden";
+  let settled = false;
+  let settleTimer: ReturnType<typeof setTimeout> | undefined;
+  let hardTimer: ReturnType<typeof setTimeout>;
+
+  const finish = () => {
+    if (settled) return;
+    settled = true;
+    clearTimeout(hardTimer);
+    if (settleTimer) clearTimeout(settleTimer);
+    stream.off("data", onData);
+    onSettled(buffer);
+  };
+
+  /** 兜底：回退旧行为（回显可见的 cd + 单行擦除），并确保回显处于开启状态 */
+  const fallback = () => {
+    stream.write(`stty echo\r`);
+    stream.write(`${buildTerminalCwdPayload(targetCwd)}; printf '\\033[1A\\r\\033[J'\r`);
+    settleTimer = setTimeout(finish, 300);
+  };
+
+  const onData = (chunk: Buffer | string) => {
+    buffer += chunk.toString();
+    if (phase === "prompt") {
+      // P1：登录横幅已输出、首个提示符出现
+      if (SHELL_PROMPT_TAIL_PATTERN.test(buffer)) {
+        phase = "hidden";
+        stream.write(STTY_ECHO_OFF);
+      }
+      return;
+    }
+    if (phase === "hidden") {
+      // 探针 '@' 到达 = stty -echo 已执行、回显已关 → 载荷不可见
+      if (buffer.includes("@")) {
+        phase = "payload";
+        stream.write(`printf '\\033[1A\\r\\033[J'; stty echo; ${buildTerminalCwdPayload(targetCwd)}\r`);
+      }
+      return;
+    }
+    // 载荷的擦除输出到达后，稍等提示符重绘完成即收尾
+    if (CWD_ERASE_OUTPUT_PATTERN.test(buffer)) {
+      if (settleTimer) clearTimeout(settleTimer);
+      settleTimer = setTimeout(finish, 200);
+    }
+  };
+
+  hardTimer = setTimeout(fallback, options.timeoutMs);
+  stream.on("data", onData);
+}
+
+/** 旧版单行擦除命令：仅作 injectTerminalCwd 超时兜底 */
+function buildTerminalCwdLegacyCommand(cwd: string) {
   const escapedCwd = escapeShellSingleQuotes(cwd);
   return `cd -- '${escapedCwd}' 2>/dev/null || cd -- "$HOME" 2>/dev/null || cd / 2>/dev/null; printf '\\033[1A\\r\\033[J'`;
 }
 
 /** 提示符行尾（`root@x:~# ` / `$ `）：用于判断登录横幅已输出、可以注入命令 */
 const SHELL_PROMPT_TAIL_PATTERN = /[#$]\s*$/;
-/** 本命令擦除序列的“真”ESC 输出（回显里只是字面 \033 文本，不会误命中） */
-const CWD_ERASE_OUTPUT_PATTERN = /\x1b\[J/;
 
 /**
- * 新开 shell 的初始目录注入：先等到登录横幅 + 首个提示符出现，再写 cd 命令，
- * 这样回显落在横幅下方、擦除不会波及横幅；并把横幅/回显/擦除的完整字节
- * 作为 initialBuffer 返回，交由调用方回放，避免“注入后到 WS 附加监听”之间丢包。
+ * 新开 shell 的初始目录注入：等登录横幅 + 首个提示符出现后走回显抑制注入，
+ * 横幅/回显/擦除的完整字节作为 initialBuffer 返回，交由调用方回放。
  */
 function primeTerminalCwd(stream: ClientChannel, cwd: string | undefined, timeoutMs = 5000): Promise<string> {
-  const targetCwd = cwd?.trim();
-  if (!targetCwd) {
-    return Promise.resolve("");
-  }
   return new Promise((resolve) => {
-    let buffer = "";
-    let sent = false;
-    let settled = false;
-    let settleTimer: ReturnType<typeof setTimeout> | undefined;
-
-    const finish = () => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(hardTimer);
-      if (settleTimer) clearTimeout(settleTimer);
-      stream.off("data", onData);
-      resolve(buffer);
-    };
-
-    const onData = (chunk: Buffer | string) => {
-      buffer += chunk.toString();
-      if (!sent) {
-        if (SHELL_PROMPT_TAIL_PATTERN.test(buffer)) {
-          sent = true;
-          stream.write(`${buildTerminalCwdCommand(targetCwd)}\r`);
-        }
-        return;
-      }
-      // 命令擦除输出到达后，稍等提示符重绘完成即收尾
-      if (CWD_ERASE_OUTPUT_PATTERN.test(buffer)) {
-        if (settleTimer) clearTimeout(settleTimer);
-        settleTimer = setTimeout(finish, 200);
-      }
-    };
-
-    const hardTimer = setTimeout(finish, timeoutMs);
-    stream.on("data", onData);
+    injectTerminalCwd(stream, cwd, { waitForFirstPrompt: true, timeoutMs }, (initialBuffer) => resolve(initialBuffer));
   });
 }
 
 function applyTerminalCwd(stream: ClientChannel, cwd?: string) {
-  const targetCwd = cwd?.trim();
-  if (!targetCwd) {
-    return;
-  }
-  stream.write(`${buildTerminalCwdCommand(targetCwd)}\r`);
+  /* 池化复用的活会话（含 JumpServer 堡垒机 shell）：同样走回显抑制注入。
+     fire-and-forget；超时兜底会恢复回显并回退旧行为。 */
+  injectTerminalCwd(stream, cwd, { waitForFirstPrompt: false, timeoutMs: 3000 }, () => {});
 }
 
 export class SshExecutorService {

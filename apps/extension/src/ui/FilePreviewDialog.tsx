@@ -1028,7 +1028,7 @@ function ClassOutlineSection({
             </button>
           );
         }) : (
-          <div className="class-outline-empty">无</div>
+          <div className="class-outline-empty">未读取到 class 结构信息</div>
         )}
       </div>
     </div>
