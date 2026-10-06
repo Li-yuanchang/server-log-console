@@ -6,13 +6,13 @@
 - **`docs/版本修复归档-2026-04-14.md`** — 记录问题背景、根因、修改点、经验教训和防复发清单。
 - **维护约定** — 详细代码链、安装版资源命中、排查过程与复盘结论统一写入归档，不在 `CHANGELOG.md` 重复展开。
 
-## [0.3.266] — 2026-10-06
+## [0.3.267] — 2026-10-06
 
 侧栏状态卡居中修复与文案调整版本。
 
 ### 修复
 
-- **底部状态卡内容未垂直居中（三层叠加修复）** — ① styles-empty-workbench.css（加载晚于 theme-modern-v2.css，同特异性后赢）的折叠态规则 `height:auto; align-items:stretch` 压掉了 v2 的 30px 定高，卡片高度随内容、文字贴上沿 → 改为 `height:30px + align-items/justify-content:center`；② `.st-l1` 残留旧两行布局的单边顶部 padding（`7px 12px 0`），在居中单行卡里把文字压低 ≈3.5px → 归零（水平内边距由卡片 0 14px 提供）；③ CJK 字形在 Geist 行盒内的字体度量偏下 ≈2px → 折叠态 st-l1 `margin-bottom:4px` 微调回正。实测字形中心与卡片中心偏差 <1px。st-l2 详情行仍收进展开态。
+- **底部状态卡内容未垂直居中（三层叠加修复）** — ① styles-empty-workbench.css（加载晚于 theme-modern-v2.css，同特异性后赢）的折叠态规则 `height:auto; align-items:stretch` 压掉了 v2 的 30px 定高，卡片高度随内容、文字贴上沿 → 改为 `height:30px + align-items/justify-content:center`；② `.st-l1` 残留旧两行布局的单边顶部 padding（`7px 12px 0`），在居中单行卡里把文字压低 ≈3.5px → 归零（水平内边距由卡片 0 14px 提供）；③ 曾加 margin-bottom:4px 微调 CJK 字形度量偏差，实测整行偏上（用户反馈），已撤回——flex 几何居中即为最终态。实测字形中心与卡片中心偏差 ≤1px。st-l2 详情行仍收进展开态。
 - **状态词「待命」改为「未连接」** — idle 态（未选择服务器）原文案"待命"含义不清，改为"未连接"，与 连接中/已连接/连接失败 词族一致。
 
 ## [0.3.263] — 2026-10-06
