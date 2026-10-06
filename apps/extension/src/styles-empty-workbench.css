@@ -90,11 +90,8 @@
   line-height: 1.2;
   min-width: 0;
 }
-/* CJK 字形在 Geist 行盒内偏下 ≈2px（字体度量，flex 居中只作用于行盒），
-   折叠态微调回正（用户反馈 2026-10-06） */
-.theme-modern .sidebar-status:not(.sidebar-status-open) .st-l1 {
-  margin-bottom: 4px;
-}
+/* 注：曾加 margin-bottom:4px 微调字形度量偏差，实测整行偏上（用户反馈
+   2026-10-06），已撤回——flex 几何居中即为最终态 */
 .sidebar-status .st-dot {
   flex: none;
   width: 7px;
