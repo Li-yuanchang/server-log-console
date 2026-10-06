@@ -16,9 +16,11 @@ Thumbs.db
 .env
 .env.*
 
-# Windsurf
-.windsurf/*
-!.windsurf/workflows/
+# Windsurf（工作流提示词也不再入库）
+.windsurf/
+
+# 本地设计/过程文档（方案、原型、走查笔记等，不上传）
+docs/
 
 # Electron build
 .electron-build/
@@ -35,3 +37,9 @@ apps/electron/.update-config/
 
 # 在线更新发布产物（release:update 输出，上传 GitHub Release / 2.208 更新源用）
 release/
+
+# Update source config for dev machine (contains intranet address)
+apps/electron/update-config.local.json
+
+# Generated from CHANGELOG at packaging time
+apps/electron/release-notes.md
