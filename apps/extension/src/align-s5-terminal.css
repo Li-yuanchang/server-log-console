@@ -201,37 +201,45 @@
   background: var(--terminal-background, var(--shell));
 }
 .theme-modern .terminal-panel-bar {
+  padding: 4px 12px; /* 原 theme-modern.css 深色块存活声明，随块删除迁入此处 */
   background: var(--panel);
   border-bottom: 1px solid var(--line);
 }
 .theme-modern .terminal-panel-bar-info {
   color: var(--ink-muted);
+  font-size: var(--fs-xs); /* 同上：原深色块存活声明 */
 }
 .theme-modern .terminal-panel-bar-info strong {
   color: var(--ink);
 }
-/* 工具行按钮（2026-10-04 用户要求：去掉框）—— 覆盖旧原型 .btn.sm 带框白底规则：
-   背景透明、边框透明占位，hover = panel-muted + ink（与 v2 §终端工具钮一致）。
-   须显式复位 theme-modern.css 2214-2237 深色块的白 8% 填充与 shell-ink 字。 */
+/* 工具行按钮（2026-10-04 用户要求：去掉框）——浅色工具行的规格块。
+   原 theme-modern.css 深色残留块已删除，本块保留 hover 复位职责；
+   常规态颜色与全站图标按钮同档（--ink-soft，theme-modern-v2 §图标按钮），
+   hover 才加深到 --ink。 */
 .theme-modern .terminal-panel-bar-actions button,
 .theme-modern .terminal-panel-bar-actions .terminal-toolbar-button {
   background: transparent;
   border: 1px solid transparent;
-  color: var(--ink);
+  color: var(--ink-soft);
   font-size: var(--fs-2xs);
 }
 .theme-modern .terminal-panel-bar-actions button:hover:not(:disabled),
 .theme-modern .terminal-panel-bar-actions .terminal-toolbar-button:hover:not(:disabled) {
-  background: var(--panel-muted);
+  /* hover 底色与日志预览按钮统一（用户反馈 2026-10-06：终端按钮 hover 灰盒
+     改为预览按钮的 accent-soft 柔和着色底）；theme-modern-v2 §终端工具钮
+     的同名 hover 规则已同步修改，两处必须一致 */
+  background: var(--accent-soft);
   border-color: transparent;
   color: var(--ink);
 }
-/* 激活态（快捷命令面板 / AI 抽屉展开）：accent-soft 底 + accent 字（浅色版） */
+/* 激活态（快捷命令面板 / AI 抽屉展开）：accent-soft 底 + accent 字，无边框
+   （用户反馈 2026-10-06：选中态边框去掉，与日志预览开关按钮的选中样式统一，
+   见 align-selected.css 的 icon-toggle-active = border-color:transparent） */
 .theme-modern .terminal-panel-bar-actions .terminal-toolbar-button.terminal-shortcuts-toggle-active,
 .theme-modern .terminal-panel-bar-actions .terminal-toolbar-button.tai-toggle-active {
   color: var(--accent);
   background: var(--accent-soft);
-  border-color: color-mix(in srgb, var(--accent) 28%, transparent);
+  border-color: transparent;
 }
 /* 底部快捷命令行（原型 603-607：label mut + .fchip 胶囊 + 右侧提示） */
 .theme-modern .terminal-quick-bar {

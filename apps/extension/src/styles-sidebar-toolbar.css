@@ -87,8 +87,16 @@
   border-radius: 0;
 }
 
+/* mac 沉浸式：红绿灯保持系统默认（y=12，实测渲染圆心 ≈19.5）。按钮行 26px 高、
+   字形中心 = padding-top + 13 → padding-top 7 使 ⌘/设置与红绿灯垂直居中 */
 .electron-macos-immersive .sidebar-head {
-  padding-top: 5px;
+  padding-top: 7px;
+}
+
+/* 网页版页签条用 -6px 外边距贴边；沉浸式下 main-panel 无 padding，
+   负边距会把整条推出窗口顶被裁掉，必须归零 */
+.electron-macos-immersive .workspace-session-strip {
+  margin: 0;
 }
 
 .electron-macos-immersive .sidebar-head-row {

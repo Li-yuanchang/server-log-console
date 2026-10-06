@@ -6,6 +6,156 @@
 - **`docs/版本修复归档-2026-04-14.md`** — 记录问题背景、根因、修改点、经验教训和防复发清单。
 - **维护约定** — 详细代码链、安装版资源命中、排查过程与复盘结论统一写入归档，不在 `CHANGELOG.md` 重复展开。
 
+## [0.3.266] — 2026-10-06
+
+侧栏状态卡居中修复与文案调整版本。
+
+### 修复
+
+- **底部状态卡内容未垂直居中（三层叠加修复）** — ① styles-empty-workbench.css（加载晚于 theme-modern-v2.css，同特异性后赢）的折叠态规则 `height:auto; align-items:stretch` 压掉了 v2 的 30px 定高，卡片高度随内容、文字贴上沿 → 改为 `height:30px + align-items/justify-content:center`；② `.st-l1` 残留旧两行布局的单边顶部 padding（`7px 12px 0`），在居中单行卡里把文字压低 ≈3.5px → 归零（水平内边距由卡片 0 14px 提供）；③ CJK 字形在 Geist 行盒内的字体度量偏下 ≈2px → 折叠态 st-l1 `margin-bottom:4px` 微调回正。实测字形中心与卡片中心偏差 <1px。st-l2 详情行仍收进展开态。
+- **状态词「待命」改为「未连接」** — idle 态（未选择服务器）原文案"待命"含义不清，改为"未连接"，与 连接中/已连接/连接失败 词族一致。
+
+## [0.3.263] — 2026-10-06
+
+连接中空态 loading 去重 + 侧栏底部状态条裁切修复版本。
+
+### 修复
+
+- **连接中空态 loading 重复** — 「正在连接 xxx」空态同时渲染 live 实时状态行（"● 正在自动连接服务器…"）与步骤① 的 spinner，两个加载指示叠放。去掉独立 live 行，实时 actionStatus 并入步骤① 描述（spinner = 唯一加载指示，实时文案不丢）。
+- **侧栏底部状态条显示不全** — 折叠态被固定 30px（与终端状态栏同高对齐决策）+ overflow:hidden，但卡片内容天然两行（st-l1 状态 + st-l2 详情），第二行被裁一半悬在边缘。折叠态隐藏 st-l2（详情收进点击展开态），30px 对齐保留、不再出现裁切；连接中的实时文案已在主区步骤①中展示。
+
+## [0.3.262] — 2026-10-06
+
+文件目录三角号常显修复 + 服务器行操作重排版本。
+
+### 修复
+
+- **文件目录行中部的 `›` 三角常显、列错位** — 目录行尾的 `›`（v3 设计④：仅移动档显示）的"默认隐藏守卫"写在 `@container slc-sp (max-width:559.9px)` 块内——桌面 1280px 下容器查询不命中，守卫从未生效，裸 SVG 以默认 display 渲染常显，且作为多余 grid 子项把 大小/修改时间/类型 列挤错位。修复：守卫提升到顶层作用域（`.app-shell .f-go, body.extension-sidepanel .f-go { display:none }`，styles-sidepanel 加载最末、特异性压过 svg 全局规则）；窄档显示规则保留在容器查询内。实测桌面 18 个 `›` 全部 `display:none`，行/表头列对齐恢复。
+- **服务器行 hover/选中时名称与 IP 被挤成半截** — 快捷组此前被 v2 §15 改为流内元素（hover/选中时 `display:inline-flex` 顶掉端口），但三个按钮（连接/编辑/更多）合计 ≈100px，把 `.server-item` 挤到 68px，名称/IP 只剩 "2.2..."、"192..."。重排：hover/选中只保留一个「更多 ⋯」按钮，「编辑」收进 ⋯ 菜单（新增「编辑（设置中心）」项），「连接」移除（与点击行本身重复）；配合快捷组右距 12→4px、按钮 28→24px、行右内边距 12→8px。实测行宽 68→140px，最长 host（192.168.127.122，99px）完整显示。
+
+## [0.3.260] — 2026-10-06
+
+设置中心检查更新按钮 hover 可读性修复版本。
+
+### 修复
+
+- **「检查更新」按钮 hover 后文字不可见** — `.settings-exclusive button`（0,2,1）通配规则把设置区按钮统一为白底深字，压掉了 `settings-update-btn-primary`（0,1,0）的 accent 常态；但它的 `:hover` 规则（0,3,0）又能赢过通配，把背景翻成 `--accent-strong` 深蓝，文字仍是通配给的深色 `--ink` → 深底深字。hover 改为与设置区其它按钮一致的 `panel-muted` 浅底 + `--ink` 深字（常态外观不变）。
+
+## [0.3.259] — 2026-10-06
+
+终端按钮选中态去边框版本。
+
+### 修复
+
+- **终端按钮选中（激活）态仍带边框** — 快捷命令面板 / AI 抽屉展开按钮的激活态在 hover 统一后仍保留 accent 描边（`border-color: color-mix(accent 28%)`），与日志预览开关按钮的选中样式（无边框柔和底，见 align-selected.css `icon-toggle-active`）不一致。两处同名规则（align-s5-terminal.css、theme-modern-v2.css）的 `border-color` 统一改为 `transparent`：激活态 = accent-soft 底 + accent 字 + 无边框。
+
+## [0.3.258] — 2026-10-06
+
+终端按钮 hover 样式统一版本。
+
+### 修复
+
+- **终端工具钮 hover 灰盒 → 与日志预览按钮一致的柔和着色底** — 终端工具行按钮 hover 此前是中性灰盒（`--panel-muted`），日志预览按钮 hover 是 accent-soft 柔和着色底（无边框、圆角、图标加深）。将 `terminal-toolbar-button` 的 hover 底色统一为 `var(--accent-soft)`（与 `icon-button:hover` 同 token），涉及 align-s5-terminal.css 与 theme-modern-v2.css 两处同名规则（层级平级，必须同步改）。激活态（快捷命令/AI 抽屉）本就是 accent-soft，不变。
+
+## [0.3.257] — 2026-10-06
+
+预览按钮条满宽与终端黑窗呼吸间距版本。
+
+### 修复
+
+- **日志预览按钮条左右两端没到头 + 右侧按钮对齐** — `.viewer-shell` 的 `padding: 0 16px 8px` 把整个预览列（含「文件预览 · xxx」按钮条与「回到头部/切片」工具行）一起内缩 16px。改为 shell 左右内缩走 `--viewer-pad-x` 变量，两条工具条（`.viewer-toolbar-row`、`.log-view-bar`）负 margin 抵消让条背景满宽顶到工作区两缘；条内内容不沿用旧的内缩位置，而是对齐 12px 的 bar 列约定（初版补偿 28px 保留了旧的右缘位置 1252，与命令栏 ⌘K 的 1268 差 16px，用户指出后改为 12px）。实测：两条 bar 200→1280 满宽，条内按钮右缘 = ⌘K 右缘 = 暂停按钮右缘 = 1268 同一竖线，日志正文留白原样保留。仅 `.workspace-panel` 祖先作用域，PiP/独立小窗不受影响。
+- **终端黑窗左右贴边无呼吸** — 终端链路（workspace-panel-terminal → terminal-tab-panes → xterm-viewport 黑底）实测左右 padding 全 0，黑窗怼死两缘；页签条/快捷命令行自带 ≈14px 内容边距，视觉上只有黑块贴边。给 `.terminal-tab-panes > .terminal-tab-pane` 加左右 12px margin + `width:auto`：黑窗内缩透出工作区底色形成呼吸，自带圆角随之可见。两个坑（防复发）：① pane 是 `absolute + inset:0`，绝对定位的 containing block 是祖先 padding box（含 padding 区），父级加 padding 无效，必须用 pane 自身 margin；② pane 带有 `.terminal-panel-body` 的 `width:100%`，left+width+right 超约束时 right 被忽略 → 只缩左边、右边溢出 12px，必须同时 `width:auto`。实测黑窗 212→1268，左右呼吸各 12px 完全对称。
+
+## [0.3.253] — 2026-10-05
+
+文件列表竖向滚动条跨过表头修复版本。
+
+### 修复
+
+- **竖向滚动条从表头那一行就开始画** — 文件列表是 CSS Grid 手写假表格（`.file-table` / `.file-table-head` / `.file-row` 均为 `div`，非 `<table>`），且表头此前是滚动容器 `.file-table`（`overflow:auto`）的子元素、靠 `position:sticky` 吸顶——滚动条属于该容器，轨道高度覆盖整表（含表头），所以从表头顶部起画。改为：`.file-table` 变成不滚动的 flex 列容器，数据行（含空态/加载态）包进新的 `.file-table-body` 独立滚动容器，表头留在滚动容器外、去掉 sticky。表头与 body 各自 `scrollbar-gutter: stable` 同宽预留，保证滚动条出现/消失时列宽不跳、表头与数据列仍对齐。滚动条现在只从表头下沿开始。
+  - `FileBrowserTable.tsx`：`{head}{children}` → `{head}<div class="file-table-body">{children}</div>`
+  - `styles-file-reader.css`：`.file-table` 改 flex 列 + `overflow:hidden`；新增 `.file-table-body`（`overflow:auto` + `scrollbar-gutter:stable`）；`.file-table-head` 去掉 `position:sticky`、改 `flex:0 0 auto` + `overflow:hidden` + `scrollbar-gutter:stable`。
+
+## [0.3.252] — 2026-10-05
+
+文件列表右侧留白异常修复版本。
+
+### 修复
+
+- **文件列表右侧多出一条死空白（右 31px vs 左 16px 不对称）** — 「S6 滚动条常驻占位」把 `scrollbar-gutter: stable` 加在了 `.browser-file-column-body` 上，但该元素是 `overflow: hidden`、永不滚动；文件列表真正的滚动容器是内层 `.file-table`（`overflow: auto`，表头 sticky 挂在它上面）。这条 stable 纯凭空占 15px，并把表内滚动条向内推、右侧露出一条死空白。移除 body 上的该项（目录树 `.tree-list` 是真实滚动容器，保留 stable 正常防列宽跳变）。实测右边界由 31px 收敛到 16px，与左侧对称。
+
+## [0.3.251] — 2026-10-05
+
+mac 沉浸式标题栏呼吸间距修复版本。
+
+### 修复
+
+- **侧栏头部按钮与红绿灯垂直居中** — 红绿灯保持系统默认位置不动（`trafficLightPosition` y=12，实测渲染圆心 ≈19.5px），侧栏头部按钮行 `padding-top` 由 5px 提到 7px，⌘/设置按钮字形中心（20px）落到红绿灯视线上（此前按钮整体偏高约 1.5px）。
+- **工作区页签条贴顶裁切** — 页签条网页版用的 `margin: -6px` 出血在沉浸式下（main-panel 无 padding）会把整条推出窗口顶 6px 被裁掉，tab 文字距窗口顶仅约 7px、比红绿灯线高约 5px。mac 沉浸式下归零负边距，顶部留 3px、条高 37px，34px 页签中心（20px）与红绿灯同一条视线，下划线不再贴顶，整带保持紧凑。仅 `electron-macos-immersive` 作用域生效，网页/扩展侧栏布局不变。
+
+## [0.3.248] — 2026-10-05
+
+托盘图标二次重设计版本。
+
+### 变更
+
+- **状态栏图标改为日志流线条** — 实心方块方案偏重、与菜单栏其它线型图标不协调，改为无外框的两行递减日志条 + `❯` 提示符线型 glyph，与 Dock 图标"日志行 + 提示符"同构，深浅色菜单栏均清晰。
+- **加载界面 logo 核对** — 启动页（index.html `#app-loading`）、重启遮罩、`?splash` 设计预览均通过 `/icon.svg` 动态引用应用图标，0.3.247 的新 logo 已自动生效，无需逐屏替换。
+
+## [0.3.247] — 2026-10-05
+
+品牌形象与打包命名优化版本。
+
+### 变更
+
+- **应用图标重新设计** — 由"终端提示符"升级为"日志流"视觉：三行带级别圆点（绿/黄/红）的日志条 + 白色 `❯` 提示符与青色光标，底色渐变与光晕同步翻新。同步覆盖 macOS icns、Windows ico、Linux/托盘 PNG 与浏览器扩展图标全套尺寸。
+- **状态栏图标重新设计** — 托盘改为实心圆角方块 + 镂空提示符（macOS 模板图，深浅色菜单栏均清晰）。
+- **打包名缩短** — `ServerLogConsole` → `SLC`（Server Log Console 缩写）：产物为 `SLC.app`、`SLC-<ver>-arm64.dmg` 等，CFBundleName 同步为 `SLC`（菜单栏进程名），Finder 显示名仍为「日志控制台」，用户数据目录不受影响。
+
+## [0.3.246] — 2026-10-05
+
+重启安装可靠性修复版本。
+
+### 修复
+
+- **重启安装后进程不退出** — 点击「重启并安装」后窗口关闭但进程残留，Squirrel 换包工具等不到进程退出会无限挂起：升级看似无反应、旧遮罩不消失、手动重开的还是旧版本。现在退出安装后 800ms 温和退出、2.5s 强制退出兜底，换包立即完成并自动重启进入新版本。
+
+## [0.3.245] — 2026-10-05
+
+更新源可视化配置版本。
+
+### 新增
+
+- **更新源可编辑** — 「软件更新 → 更多信息」中的更新源支持直接修改并保存，立即热切换生效；地址保存在本机，清空并保存即恢复打包内置地址。下载进行中不允许切换。仅桌面版显示该设置，Web 与扩展端按各自机制更新。
+
+## [0.3.244] — 2026-10-05
+
+在线更新体验优化版本：版本说明随更新清单下发，更新面板对齐 VRC 更新中心的密度。
+
+### 修复
+
+- **版本说明为空** — 发布清单现在携带用户可读的版本说明（由 CHANGELOG 自动生成），检查更新即可看到本次更新内容；「已是最新」时也会展示当前版本的说明。
+- **更新面板收敛** — 自动检查开关上移到状态卡头部；发布渠道、各形态说明、检查记录、更新源与关于信息折叠进「更多信息」，默认收起。
+
+## [0.3.243] — 2026-10-05
+
+OTA 端到端验证版本。代码与 0.3.242 相同，仅升版用于验证 0.3.242 已装客户端的在线检测、差量下载与重启安装全链路。
+
+## [0.3.242] — 2026-10-05
+
+在线更新链路首个可用版本（更新组件随包分发 + 更新源配置内嵌 + 网关更新目录免鉴权）。
+
+### 修复
+
+- **更新组件进安装包** — `electron-updater` 从 devDependencies 移入 dependencies，electron-builder 自动打进 app.asar；此前打包后 `require("electron-updater")` 失败，设置中心显示「更新组件不可用」。
+- **更新源随包内嵌** — 打包前 `prepare-update-config.cjs` 读取 `update-config.local.json`（或 `SLC_UPDATE_URL`）写入 `resources/update-config/update-config.json`；此前包内 updateUrl 为空，更新源显示「--」。
+- **网关更新目录免鉴权** — 鉴权中间件放行 `/desktop-updates/` 前缀；electron-updater 检查更新不携带 Bearer token，经网关托管更新源时不再被 401 拦截。
+
+### 验证
+
+- **asar 抽查** — `app.asar` 内含 `node_modules/electron-updater`；`Contents/Resources/app-update.yml` 与 `update-config/update-config.json` 均指向 `http://192.168.2.208/desktop-updates`。
+- **更新源实测** — `http://192.168.2.208/desktop-updates/latest-mac.yml` 及 zip/dmg 匿名可访问。
+
 ## [0.3.241] — 2026-10-05
 
 SSH 执行器健壮性与终端 PiP 重排修复版本。

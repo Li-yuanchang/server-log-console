@@ -111,6 +111,9 @@ export function EmptyWorkbench(props: EmptyWorkbenchProps) {
               >
                 {step.state === "done" ? (
                   <span className="empty-wb-num is-done" aria-hidden="true">✓</span>
+                ) : step.state === "wait" ? (
+                  /* 进行中：只渲染 spinner（::before），数字若同格会掉到圈外（用户反馈 2026-10-05） */
+                  <span className="empty-wb-num is-wait" aria-hidden="true" />
                 ) : (
                   <span className="empty-wb-num" aria-hidden="true">{index + 1}</span>
                 )}

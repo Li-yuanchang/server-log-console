@@ -19,6 +19,8 @@ export type SlcDesktopUpdateState = {
   updateInfo: { version: string; releaseDate?: string; releaseNotes?: string } | null;
   progress: { percent: number; transferred: number; total: number; bytesPerSecond: number } | null;
   updateUrl: string | null;
+  /** 包内 release-notes.md（当前版本的说明，「已是最新」状态兜底展示） */
+  bundledReleaseNotes: string | null;
 };
 
 export interface SlcDesktopUpdateApi {
@@ -26,6 +28,8 @@ export interface SlcDesktopUpdateApi {
   check(): Promise<SlcDesktopUpdateState>;
   download(): Promise<SlcDesktopUpdateState>;
   install(): void;
+  /** 编辑更新源（立即热切换并持久化到本机；传空串恢复出厂内置地址） */
+  setSource(url: string): Promise<SlcDesktopUpdateState>;
   onUpdateState(cb: (s: SlcDesktopUpdateState) => void): () => void;
 }
 

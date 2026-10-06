@@ -616,11 +616,10 @@ const VirtualLogViewerImpl = forwardRef<VirtualLogViewerHandle, Props>(
       if (!lines.length) return;
       const lastIndex = lines.length - 1;
       virtuosoRef.current?.scrollToIndex({ index: lastIndex, align: "end", behavior: "auto" });
-      forceScrollToBottom();
+      // 仅在一帧后校正一次：立即叠加 scrollTop 直写会与 Virtuoso 的滚动补偿互相拉扯，造成抖动
       window.requestAnimationFrame(() => {
         virtuosoRef.current?.scrollToIndex({ index: lastIndex, align: "end", behavior: "auto" });
         forceScrollToBottom();
-        window.requestAnimationFrame(forceScrollToBottom);
       });
     }, [forceScrollToBottom, lines.length]);
 

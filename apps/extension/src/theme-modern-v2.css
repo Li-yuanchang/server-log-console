@@ -57,10 +57,14 @@
   background: color-mix(in srgb, var(--accent) 14%, transparent);
   border-color: color-mix(in srgb, var(--accent) 32%, transparent);
 }
+/* 图标按钮常规态 = --ink-soft（theme-modern.css .icon-button 规格值）。
+   必须在此显式声明：上面 .ghost-button 的 --ink 与本块同特异性且本块后加载，
+   不声明时图标按钮会跟随文字按钮全黑，"常规灰 / hover 加深"的两档体系失效。 */
 .theme-modern .ghost-button.icon-button {
   width: 28px;
   padding: 0;
   justify-content: center;
+  color: var(--ink-soft);
 }
 /* R3：危险态红字。theme-modern.css 的 `.danger-button`（0,2,0）与
    v2 的 `.ghost-button`（0,2,0）同特异性，但 v2 后加载 → 红字被压成 --ink。
@@ -212,7 +216,6 @@
 .theme-modern .sidebar-head-buttons .ghost-button {
   width: 26px;
   height: 26px;
-  color: var(--ink-soft);
 }
 
 /* “服务器 N 台”行 → 弱化为组级说明（原型无此行，收成细行） */
@@ -360,6 +363,13 @@
   border-bottom: 1px solid var(--line);
   background: var(--panel);
   min-height: 34px;
+}
+/* mac 沉浸式：红绿灯保持系统默认（y=12，实测圆心 ≈19.5）。归零负边距后顶部留 3px、
+   条高 37px，34px 页签（中心 20）落在红绿灯视线上，下划线不再贴顶，整带保持紧凑。
+   特异性 0,3,0 压过本文件上面的 0,2,0 通版规则。 */
+.theme-modern.electron-macos-immersive .workspace-session-strip {
+  padding: 3px 10px 0;
+  min-height: 37px;
 }
 .theme-modern .workspace-session-tabs-shell {
   display: flex;
@@ -1560,7 +1570,7 @@
   align-items: center;
   gap: 8px;
   font-size: var(--fs-xs);
-  color: var(--shell-mut);
+  color: var(--ink-muted); /* 工具条恒为浅色面板（align-s5），深色值 --shell-mut 已废弃 */
   white-space: nowrap;
   min-width: 0;
 }
@@ -1574,33 +1584,9 @@
   gap: 4px;
   margin-left: auto;
 }
-.theme-modern .terminal-toolbar-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 26px;
-  min-width: 26px;
-  padding: 0 6px;
-  border: 1px solid transparent;
-  border-radius: var(--v2-radius-s);
-  background: transparent;
-  color: var(--shell-mut);
-  cursor: pointer;
-  white-space: nowrap;
-}
-.theme-modern .terminal-toolbar-button:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--ink) 8%, transparent);
-  color: var(--shell-ink, var(--ink));
-}
-.theme-modern .terminal-toolbar-button:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-.theme-modern .terminal-shortcuts-toggle-active,
-.theme-modern .tai-toggle-active {
-  color: var(--shell-ink, var(--ink));
-  background: color-mix(in srgb, var(--ink) 12%, transparent);
-}
+/* 终端工具钮的深色时代规则（shell-mut / 白 8% 填充）已删除——
+   工具行现为浅色面板（align-s5 §浅色工具行），规格统一收口在本文 §「终端工具钮」
+   与 align-s5 §工具行按钮复位块，此处不再保留旧底稿。 */
 /* 终端主体：撑满剩余高度 */
 .theme-modern .terminal-body-slot {
   flex: 1 1 0%;
@@ -1667,12 +1653,12 @@
   padding: 5px 14px;
   flex: none;
   border-top: 1px solid var(--line);
-  background: var(--terminal-background, var(--shell));
+  background: var(--panel); /* 快捷行恒为浅色面板（align-s5 同值），不再用深色 terminal-background */
   min-height: 34px;
 }
 .theme-modern .terminal-quick-bar-label {
   font-size: var(--fs-2xs);
-  color: var(--shell-mut);
+  color: var(--ink-muted); /* 深色值 --shell-mut 已废弃，与 align-s5 复位块同值 */
   white-space: nowrap;
 }
 .theme-modern .terminal-quick-chip {
@@ -1697,7 +1683,7 @@
 .theme-modern .terminal-quick-bar-spacer { flex: 1; }
 .theme-modern .terminal-quick-bar-hint {
   font-size: var(--fs-2xs);
-  color: var(--shell-mut);
+  color: var(--ink-muted); /* 深色值 --shell-mut 已废弃，与 align-s5 复位块同值 */
   white-space: nowrap;
 }
 /* 分屏工作区条按钮（深色终端上的 ghost） */
@@ -2171,8 +2157,11 @@
   margin: 0;
 }
 
-/* S6：文件列表滚动条常驻占位，避免勾选/传输态出现滚动条时列宽跳变 */
-.theme-modern .browser-file-column-body,
+/* S6：目录树滚动条常驻占位，避免勾选/传输态出现滚动条时列宽跳变。
+   文件列表的滚动容器是 .file-table-body（table 自身不滚动），其 gutter 定义在
+   styles-file-reader.css；表头 .file-table-head 同宽预留以保证列对齐。
+   ⚠️ 不要给 .browser-file-column-body 加此项：它是 overflow:hidden、永不滚动，
+   加了会凭空占 15px 并在右侧露出死空白。tree-list 是真实滚动容器，保留 stable。 */
 .theme-modern .browser-tree-column .tree-list {
   scrollbar-gutter: stable;
 }
@@ -2572,13 +2561,19 @@ body:has(.theme-modern) button:disabled {
   white-space: nowrap;
 }
 .theme-modern .terminal-toolbar-button:hover:not(:disabled) {
-  background: var(--panel-muted);
+  /* hover 底色与日志预览按钮统一（用户反馈 2026-10-06）：
+     原灰盒 --panel-muted → accent-soft 柔和着色底；align-s5-terminal 的同名
+     hover 规则已同步修改，两处必须一致 */
+  background: var(--accent-soft);
   color: var(--ink);
 }
+.theme-modern .terminal-toolbar-button.terminal-shortcuts-toggle-active,
 .theme-modern .terminal-toolbar-button.tai-toggle-active {
   background: var(--accent-soft);
   color: var(--accent);
-  border-color: color-mix(in srgb, var(--accent) 28%, transparent);
+  /* 选中态无边框（用户反馈 2026-10-06，与日志预览开关按钮统一）；
+     align-s5-terminal 的同名规则已同步修改，两处必须一致 */
+  border-color: transparent;
 }
 
 /* ============================================================
@@ -2649,7 +2644,9 @@ body:has(.theme-modern) button:disabled {
   padding: 12px 14px 4px !important;
 }
 .theme-modern .server-item-quick-actions {
-  padding: 0 12px 0 0 !important;
+  /* 单「⋯」按钮重排（用户反馈 2026-10-06）：右距收窄为 4px，
+     让名称/host 在 200px 侧栏里尽量完整可读 */
+  padding: 0 4px 0 0 !important;
 }
 /* 3) 选中样式：仅 accent-soft 底；去掉左侧蓝色指示条（用户要求） */
 .theme-modern .server-item-wrap-active,
@@ -2696,8 +2693,8 @@ body:has(.theme-modern) button:disabled {
 }
 .theme-modern .server-item-quick-actions .server-item-mini-action,
 .theme-modern .server-item-mini-action {
-  width: 28px !important;
-  min-width: 28px !important;
+  width: 24px !important;
+  min-width: 24px !important;
   height: 24px !important;
   min-height: 24px !important;
   border-radius: var(--r-s) !important;
@@ -2720,11 +2717,19 @@ body:has(.theme-modern) button:disabled {
   background: var(--panel) !important;
   color: var(--ink) !important;
 }
+/* 行右内边距 12→8（用户反馈 2026-10-06）：配合单「⋯」按钮（24px + 4px 右距），
+   15 字符 host（192.168.127.122 ≈ 99px @fs-2xs mono）可完整显示不被截 */
+.theme-modern .server-list .server-item-wrap .server-item {
+  padding-right: 8px !important;
+}
 
 /* ---------- 侧栏底部摘要行 × 终端状态栏 同高对齐（用户反馈：左右底栏落差） ----------
    终端状态栏（align-s5-terminal.css §9）为 30px + 1px 上边框；摘要行折叠态此前
    padding 7px 14px + 默认行高，实测与状态栏差数像素，底部出现台阶。
-   此处折叠态固定 30px、内容垂直居中、line-height:1；展开态（.sidebar-status-open）不受影响。 */
+   此处折叠态固定 30px、内容垂直居中、line-height:1；展开态（.sidebar-status-open）不受影响。
+   折叠态只显示 st-l1（用户反馈 2026-10-06：st-l2 详情行被 30px 定高裁一半）：
+   st-l2（连接中文案/root@host 等）收进展开态查看；连接中的实时文案已并入
+   主区连接中空态的步骤①描述（App.tsx EmptyWorkbench）。 */
 .theme-modern .sidebar-status {
   padding: 0 14px;
   line-height: 1;
@@ -2734,6 +2739,9 @@ body:has(.theme-modern) button:disabled {
   flex-direction: row;
   align-items: center;
   overflow: hidden;
+}
+.theme-modern .sidebar-status:not(.sidebar-status-open) .st-l2 {
+  display: none;
 }
 
 /* ============================================================

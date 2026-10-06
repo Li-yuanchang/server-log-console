@@ -1481,15 +1481,6 @@ export function App() {
   }, [sliceData]);
 
   useEffect(() => {
-    if (!liveFollowEnabled || liveFollowPaused || activeViewerTabId !== "file") return;
-    requestAnimationFrame(() => {
-      virtualViewerRef.current?.scrollToBottom();
-      window.setTimeout(() => virtualViewerRef.current?.scrollToBottom(), 80);
-      window.setTimeout(() => virtualViewerRef.current?.scrollToBottom(), 180);
-    });
-  }, [activeViewerTabId, liveFollowContent, liveFollowEnabled, liveFollowPaused]);
-
-  useEffect(() => {
     setActiveHighlightIndex(0);
     setViewerLineCopyRange(null);
   }, [activeViewerTabId, resultTabs, sliceData?.content, results?.rawOutput, keywordInput, useRegex]);
@@ -4382,9 +4373,11 @@ export function App() {
                       eyebrow="文件目录 · 连接中"
                       title={`正在连接 ${selectedServer.name}`}
                       sub="正在建立 SSH 连接，通常 2 秒内完成；成功后会自动打开目录并记住位置。"
-                      live={isBusy ? (actionStatus || "SSH 握手中") : "等待系统自动建立 SSH 连接"}
+                      /* loading 单一化（用户反馈 2026-10-06：live 行与步骤① spinner 重复）：
+                         不再渲染独立 live 行，实时 actionStatus 并入步骤①描述，
+                         步骤① spinner = 唯一加载指示 */
                       steps={[
-                        { title: "建立连接", desc: "SSH 握手与凭证校验", state: "wait" },
+                        { title: "建立连接", desc: isBusy ? (actionStatus || "SSH 握手中") : "等待系统自动建立 SSH 连接", state: "wait" },
                         { title: "读取根目录", desc: "连接成功后自动挂载目录树" },
                         { title: "记住位置", desc: "下次启动直达最近目录" },
                       ]}

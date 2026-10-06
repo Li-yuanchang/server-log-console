@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { ReactNode } from "react";
 import type { ServerSummary, ServerConnectionTestResponse } from "@server-log-console/shared";
 import type { SettingsWorkspaceView } from "./ConnectionSettingsWorkspace.js";
-import { Command as CommandIcon, Copy, Ellipsis, Pencil, Play, Trash2, ChevronDown, X, FileText, FolderOpen, TerminalSquare } from "lucide-react";
+import { Command as CommandIcon, Copy, Ellipsis, Pencil, Trash2, ChevronDown, X, FileText, FolderOpen, TerminalSquare } from "lucide-react";
 import { ToolIcon } from "./ToolIcon.js";
 
 /* 侧栏（Chrome side panel）移动档共享组件。
@@ -63,29 +63,10 @@ export function ServerGroupsList(props: ServerGroupsListProps) {
                     <span className="server-item-meta">{server.port}</span>
                   </button>
                   <div className="server-item-quick-actions" aria-label={`${server.name} 管理操作`}>
-                    {/* 原型 srow() 悬浮组 = 三个按钮：连接 ▶ / 编辑 ✏️ / 更多 ⋯
-                        （prototype.html 第 350-352 行）。图标 12px、描边 1.6（原型 ic 默认 sw=1.6）。 */}
-                    <button
-                      type="button"
-                      className="server-item-mini-action"
-                      title="连接"
-                      aria-label={`连接 ${server.name}`}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        onSelectServer(server.id);
-                      }}
-                    >
-                      <Play size={12} strokeWidth={1.6} />
-                    </button>
-                    <button
-                      type="button"
-                      className="server-item-mini-action"
-                      title="编辑（设置中心）"
-                      aria-label={`编辑 ${server.name}`}
-                      onClick={() => onOpenSettingsWorkspace("connections")}
-                    >
-                      <Pencil size={12} strokeWidth={1.6} />
-                    </button>
+                    {/* 重排（用户反馈 2026-10-06：hover/选中时三按钮 ≈100px 把名称/IP 挤成
+                        "2.2..."/"192..." 半截信息）：只保留一个「更多 ⋯」按钮（≈28px），
+                        名称与 host 基本完整可读。连接 = 点击行本身（原 ▶ 与行点击重复）；
+                        编辑移入 ⋯ 菜单。 */}
                     <button
                       type="button"
                       className={`server-item-mini-action${serverMenuId === server.id ? " is-open" : ""}`}
@@ -109,6 +90,16 @@ export function ServerGroupsList(props: ServerGroupsListProps) {
                           }}
                         >
                           <Copy size={12} strokeWidth={1.8} /> 复制连接信息
+                        </button>
+                        <button
+                          type="button"
+                          className="server-item-menu-item"
+                          onClick={() => {
+                            setServerMenuId("");
+                            onOpenSettingsWorkspace("connections");
+                          }}
+                        >
+                          <Pencil size={12} strokeWidth={1.8} /> 编辑（设置中心）
                         </button>
                         {server.source ? (
                           <button

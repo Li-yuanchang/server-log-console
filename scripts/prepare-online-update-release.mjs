@@ -219,7 +219,7 @@ async function main() {
   const electronPackage = await readJson(path.join(ELECTRON_DIR, "package.json"));
   const version = String(electronPackage.version ?? "").trim();
   if (!version) die("无法读取权威版本：apps/electron/package.json 缺少 version 字段");
-  const productName = String(electronPackage.build?.productName ?? "ServerLogConsole");
+  const productName = String(electronPackage.build?.productName ?? "SLC");
   const outputDir = path.join(ROOT_DIR, "release", `online-update-${version}`);
   const desktopUpdatesDir = path.join(outputDir, "desktop-updates");
   log(`权威版本: ${version}（apps/electron/package.json，productName=${productName}）`);

@@ -257,25 +257,36 @@ try {
   probe(`electron-updater load failed ${error && error.stack ? error.stack : String(error)}`);
 }
 
-const DESKTOP_UPDATE_URL = resolveDesktopUpdateUrl();
+// 更新源可变：包内配置为出厂默认，用户可在设置中心编辑（userData/update-source.json 覆盖）
+let desktopUpdateUrl = resolveDesktopUpdateUrl();
+// 包内版本说明（release-notes.md 随 asar 分发，prepare-release-notes.cjs 从 CHANGELOG 生成）
+const BUNDLED_RELEASE_NOTES = readBundledReleaseNotes();
 let desktopUpdateState = buildInitialDesktopUpdateState();
 let desktopUpdaterConfigured = false;
 
 configureDesktopUpdater();
 registerDesktopUpdateIpc();
 
+function readBundledReleaseNotes() {
+  try {
+    return fs.readFileSync(path.join(__dirname, "release-notes.md"), "utf8").trim();
+  } catch {
+    return "";
+  }
+}
+
 function buildInitialDesktopUpdateState() {
   if (!app.isPackaged) {
     return { status: "unavailable", error: "开发模式不支持自动更新", updateInfo: null, progress: null };
   }
-  if (!DESKTOP_UPDATE_URL || !autoUpdater) {
+  if (!desktopUpdateUrl || !autoUpdater) {
     return { status: "unavailable", error: autoUpdater ? "未配置更新源" : "更新组件不可用", updateInfo: null, progress: null };
   }
   return { status: "idle", error: null, updateInfo: null, progress: null };
 }
 
 function isDesktopUpdateSupported() {
-  return Boolean(app.isPackaged && DESKTOP_UPDATE_URL && autoUpdater);
+  return Boolean(app.isPackaged && desktopUpdateUrl && autoUpdater);
 }
 
 function buildDesktopUpdateSnapshot() {
@@ -290,7 +301,8 @@ function buildDesktopUpdateSnapshot() {
     },
     updateInfo: desktopUpdateState.updateInfo,
     progress: desktopUpdateState.progress,
-    updateUrl: DESKTOP_UPDATE_URL || null,
+    updateUrl: desktopUpdateUrl || null,
+    bundledReleaseNotes: BUNDLED_RELEASE_NOTES || null,
   };
 }
 
@@ -311,9 +323,9 @@ function configureDesktopUpdater() {
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = true;
   autoUpdater.allowPrerelease = false;
-  if (DESKTOP_UPDATE_URL) {
+  if (desktopUpdateUrl) {
     ensureDesktopUpdaterConfig();
-    autoUpdater.setFeedURL({ provider: "generic", url: DESKTOP_UPDATE_URL, channel: "latest" });
+    autoUpdater.setFeedURL({ provider: "generic", url: desktopUpdateUrl, channel: "latest" });
   }
 
   autoUpdater.on("checking-for-update", () => {
@@ -396,13 +408,67 @@ function registerDesktopUpdateIpc() {
     // 先回包再退出安装，避免渲染层 invoke 悬空
     setTimeout(() => {
       try {
+        // Squirrel 原生安装路径不触发 before-quit：若不先置位，主窗口 close 拦截会把退出
+        // 吞成托盘隐藏，ShipIt 等不到进程退出会无限挂起
+        isQuitting = true;
         autoUpdater.quitAndInstall(false, true);
       } catch (error) {
         probe(`quitAndInstall failed ${error && error.stack ? error.stack : String(error)}`);
       }
+      // darwin 上原生路径只关窗口不退进程（window-all-closed 对 darwin 无操作）：
+      // ShipIt 会等进程退出才换包，等不到就永久挂起（曾实测挂 3 小时）。
+      // 800ms 温和 quit（清理 gateway 子进程），2.5s 硬 exit 兜底——不可被任何事件拦截。
+      setTimeout(() => {
+        try { app.quit(); } catch (error) { probe(`install quit failed ${error}`); }
+      }, 800);
+      setTimeout(() => {
+        probe("install hard exit (app.exit)");
+        try { app.exit(0); } catch (error) { probe(`install exit failed ${error}`); }
+      }, 2500);
     }, 0);
     return buildDesktopUpdateSnapshot();
   });
+  // 设置中心编辑更新源：立即热切换 feed 并持久化到 userData；清空 = 恢复出厂内置链路
+  ipcMain.handle("slc:update:set-source", (_event, rawUrl) => {
+    const url = typeof rawUrl === "string" ? rawUrl.trim() : "";
+    if (url && !/^https?:\/\//i.test(url)) return buildDesktopUpdateSnapshot();
+    if (desktopUpdateState.status === "downloading" || desktopUpdateState.status === "ready") {
+      return buildDesktopUpdateSnapshot();
+    }
+    desktopUpdateUrl = url;
+    persistUpdateSourceOverride(url);
+    if (url && autoUpdater) {
+      ensureDesktopUpdaterConfig();
+      autoUpdater.setFeedURL({ provider: "generic", url, channel: "latest" });
+    }
+    desktopUpdateState = buildInitialDesktopUpdateState();
+    updateDesktopUpdateState({});
+    return buildDesktopUpdateSnapshot();
+  });
+}
+
+function readUpdateSourceOverride() {
+  try {
+    const file = path.join(app.getPath("userData"), "update-source.json");
+    if (!fs.existsSync(file)) return "";
+    const parsed = JSON.parse(fs.readFileSync(file, "utf8"));
+    return typeof parsed?.updateUrl === "string" ? parsed.updateUrl.trim() : "";
+  } catch {
+    return "";
+  }
+}
+
+function persistUpdateSourceOverride(url) {
+  try {
+    const file = path.join(app.getPath("userData"), "update-source.json");
+    if (url) {
+      fs.writeFileSync(file, `${JSON.stringify({ updateUrl: url }, null, 2)}\n`, "utf8");
+    } else {
+      fs.rmSync(file, { force: true });
+    }
+  } catch (error) {
+    probe(`persist update-source failed ${error && error.stack ? error.stack : String(error)}`);
+  }
 }
 
 function settleDesktopUpdateFailure(error, operation) {
@@ -427,7 +493,7 @@ function ensureDesktopUpdaterConfig() {
   const fallbackConfigPath = path.join(app.getPath("userData"), "app-update.yml");
   const fallbackConfig = [
     "provider: generic",
-    `url: ${JSON.stringify(DESKTOP_UPDATE_URL)}`,
+    `url: ${JSON.stringify(desktopUpdateUrl)}`,
     "updaterCacheDirName: slc-updater",
     "",
   ].join("\n");
@@ -439,6 +505,10 @@ function ensureDesktopUpdaterConfig() {
 }
 
 function resolveDesktopUpdateUrl() {
+  // 设置中心保存的自定义更新源优先（userData/update-source.json），清空该文件即恢复出厂链路
+  const overrideUrl = readUpdateSourceOverride();
+  if (overrideUrl) return overrideUrl;
+
   const envUrl = process.env.SLC_UPDATE_URL?.trim();
   if (envUrl) return envUrl;
 
@@ -986,6 +1056,8 @@ function createWindow() {
     show: false,
     backgroundColor: "#fafafa",
     titleBarStyle: "hiddenInset",
+    // 红绿灯位置保持不动（实测渲染圆心 = y+7.5 ≈ 19.5px），mac 沉浸式的侧栏按钮行
+    // 与工作区页签条在 CSS 里对齐这条中线（见 styles-sidebar-toolbar.css）
     trafficLightPosition: { x: 12, y: 12 },
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),

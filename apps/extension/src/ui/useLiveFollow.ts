@@ -3,6 +3,9 @@ import { getGatewayToken, localServiceBase } from "./api.js";
 import { trimLiveContent } from "./utils.js";
 import type { VirtualLogViewerHandle } from "./VirtualLogViewer.js";
 
+/** 实时内容刷新的最小间隔（ms）：攒批上限节奏，约 10 帧/秒 */
+const LIVE_FLUSH_INTERVAL = 100;
+
 export interface UseLiveFollowOptions {
   serverId: string;
   sliceContent: string | undefined;
@@ -55,6 +58,30 @@ export function useLiveFollow(opts: UseLiveFollowOptions): UseLiveFollowReturn {
   const liveFollowExpectedCloseRef = useRef(false);
   const liveFollowRetryCountRef = useRef(0);
   const forceBottomUntilRef = useRef(0);
+  // 高吞吐日志下 gateway 每个 SSH data 事件推一条 WS 消息；先攒批再按固定节奏
+  // 刷进 state，把渲染频率从"每消息一次"压到 ~10 次/秒，避免全量重算打满主线程。
+  const pendingLiveChunkRef = useRef("");
+  const liveFlushTimerRef = useRef<number | null>(null);
+
+  function flushPendingLiveChunks() {
+    liveFlushTimerRef.current = null;
+    const pending = pendingLiveChunkRef.current;
+    if (!pending) return;
+    pendingLiveChunkRef.current = "";
+    setLiveFollowContent((current) => trimLiveContent(`${current || sliceContentRef.current || ""}${pending}`));
+  }
+
+  function scheduleLiveFlush() {
+    if (liveFlushTimerRef.current !== null) return;
+    liveFlushTimerRef.current = window.setTimeout(flushPendingLiveChunks, LIVE_FLUSH_INTERVAL);
+  }
+
+  function clearLiveFlushTimer() {
+    if (liveFlushTimerRef.current !== null) {
+      window.clearTimeout(liveFlushTimerRef.current);
+      liveFlushTimerRef.current = null;
+    }
+  }
 
   function clearLiveFollowReconnectTimer() {
     if (liveFollowReconnectTimerRef.current !== null) {
@@ -99,7 +126,13 @@ export function useLiveFollow(opts: UseLiveFollowOptions): UseLiveFollowReturn {
       liveFollowRetryCountRef.current = 0;
     }
     if (!options?.keepContent) {
+      clearLiveFlushTimer();
+      pendingLiveChunkRef.current = "";
       setLiveFollowContent("");
+    } else {
+      // 保留内容时把已接收未刷入的尾巴落进 state，避免丢最后一段
+      clearLiveFlushTimer();
+      flushPendingLiveChunks();
     }
   }
 
@@ -115,6 +148,9 @@ export function useLiveFollow(opts: UseLiveFollowOptions): UseLiveFollowReturn {
     liveSocketRef.current?.close();
     liveSocketRef.current = null;
     clearLiveFollowReconnectTimer();
+    // 新会话从头基于切片内容累积，丢弃上一会话残留的未刷入数据
+    clearLiveFlushTimer();
+    pendingLiveChunkRef.current = "";
     setLiveFollowConnected(false);
     setLiveFollowEnabled(true);
     setLiveFollowContent((current) => trimLiveContent(current || sliceContentRef.current || ""));
@@ -162,7 +198,8 @@ export function useLiveFollow(opts: UseLiveFollowOptions): UseLiveFollowReturn {
         }
 
         if (payload.chunk) {
-          setLiveFollowContent((current) => trimLiveContent(`${current || sliceContentRef.current || ""}${payload.chunk}`));
+          pendingLiveChunkRef.current += payload.chunk;
+          scheduleLiveFlush();
         }
       } catch (error) {
         onStatus(`实时跟随解析失败：${error instanceof Error ? error.message : "未知错误"}`);
@@ -206,11 +243,11 @@ export function useLiveFollow(opts: UseLiveFollowOptions): UseLiveFollowReturn {
     if (liveFollowEnabled) {
       setLiveFollowPaused(false);
     }
+    // 两次兜底足够：立即 + 一帧后（等 Virtuoso 完成本轮测量），
+    // 更多频次的强制滚动会和 followOutput 互相打架造成抖动
     window.requestAnimationFrame(() => {
       viewerRef.current?.scrollToBottom();
-      window.setTimeout(() => viewerRef.current?.scrollToBottom(), 80);
-      window.setTimeout(() => viewerRef.current?.scrollToBottom(), 180);
-      window.setTimeout(() => viewerRef.current?.scrollToBottom(), 320);
+      window.setTimeout(() => viewerRef.current?.scrollToBottom(), 150);
     });
   }
 
@@ -220,6 +257,7 @@ export function useLiveFollow(opts: UseLiveFollowOptions): UseLiveFollowReturn {
 
   useEffect(() => () => {
     clearLiveFollowReconnectTimer();
+    clearLiveFlushTimer();
     liveFollowExpectedCloseRef.current = true;
     liveSocketRef.current?.close();
     liveSocketRef.current = null;

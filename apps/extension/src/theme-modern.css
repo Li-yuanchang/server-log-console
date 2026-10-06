@@ -448,8 +448,9 @@
   border-bottom: 1px solid var(--sidebar-line);
 }
 
+/* mac 沉浸式：按钮行与红绿灯（系统默认位置，实测圆心 ≈19.5）垂直居中，见 styles-sidebar-toolbar.css */
 .theme-modern.electron-macos-immersive .sidebar-head {
-  padding-top: 5px;
+  padding-top: 7px;
 }
 
 .theme-modern .sidebar-head-row { gap: 8px; }
@@ -2335,6 +2336,20 @@
   background: transparent;
 }
 
+/* 终端黑窗左右呼吸（用户反馈 2026-10-05）：黑窗此前左右贴死工作区边缘，
+   而页签条/快捷命令行自带内容内边距，视觉上只有黑块怼边。
+   ⚠️ 用 pane 的 margin 而非 .terminal-tab-panes 的 padding：pane 是
+   absolute + inset:0，绝对定位的 containing block 是祖先的 padding box
+   （含 padding 区），父级 padding 对它无效；inset:0 + 双侧 margin 才会收缩盒子。
+   ⚠️ 必须同时 width:auto：pane 带有 .terminal-panel-body 的 width:100%，
+   left+width+right 超约束时 right 被忽略 → 只缩左边、右边溢出 12px。
+   黑窗自带圆角随呼吸露出。 */
+.theme-modern .terminal-tab-panes > .terminal-tab-pane {
+  width: auto;
+  margin-left: 12px;
+  margin-right: 12px;
+}
+
 /* --- 20. 终端面板 --- */
 .theme-modern .terminal-bottom-panel {
   border: 1px solid var(--line);
@@ -2345,46 +2360,12 @@
   overflow: hidden;
 }
 
-.theme-modern .terminal-panel-bar {
-  padding: 4px 12px;
-  min-height: 32px;
-  background: var(--terminal-background, var(--shell));
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-.theme-modern .terminal-panel-bar-info { font-size: var(--fs-xs); }
-
-.theme-modern .terminal-panel-bar-info strong { color: #e2e8f0; }
-
-.theme-modern .terminal-panel-bar-actions button {
-  font-size: var(--fs-xs);
-  padding: 3px 8px;
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.08);
-  border: none;
-  color: var(--shell-ink);
-}
-
-.theme-modern .terminal-panel-bar-actions button:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.14);
-}
-
-.theme-modern .terminal-toolbar-button {
-  font-size: var(--fs-xs);
-  padding: 3px 8px;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.08);
-  border: none;
-  color: var(--shell-ink);
-}
-
-.theme-modern .terminal-toolbar-button:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.14);
-}
-
-.theme-modern .terminal-toolbar-button:disabled {
-  opacity: 0.42;
-}
+/* 终端工具行（.terminal-panel-bar / -info / -actions / .terminal-toolbar-button）
+   的现代主题规格收口在两处，此处不再保留深色时代底稿（白 8% 填充 + shell-ink 字，
+   浅色工具行下全为死规则，且与 align-s5 复位块形成跨文件层叠地雷）：
+   · 工具条/信息文字/按钮复位 → align-s5-terminal.css §浅色工具行
+     （padding 4px 12px、info font-size fs-xs 等存活声明已迁入对应块）
+   · .terminal-toolbar-button 基础规格与激活态 → theme-modern-v2.css §终端工具钮 */
 
 .theme-modern .selection-copy-menu,
 .theme-modern .terminal-sel-menu {
@@ -3176,7 +3157,23 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  padding: 0 16px 8px;
+  /* 预览列左右内缩统一走变量：日志正文仍吃这套 padding（用户要求 2026-10-05：
+     正文留白保留），按钮条用下面两条规则负 margin 抵消以满宽到边 */
+  --viewer-pad-x: 16px;
+  padding: 0 var(--viewer-pad-x) 8px;
+}
+
+/* 文件预览按钮条满宽（用户反馈 2026-10-05：bar 左右两端没到头）：
+   负 margin 抵消 shell 的左右 padding 让条背景满宽；条内内容不沿用旧的内缩位置，
+   而是对齐 12px 的 bar 列约定——与上方命令栏（⌘K）、文件列表头部（「N 项」）
+   同一条竖线（用户反馈 2026-10-06：右侧按钮要对齐）。
+   仅限主窗内嵌视图（.workspace-panel 祖先）；PiP/独立小窗无此结构，不受影响。 */
+.theme-modern .workspace-panel .viewer-shell > .viewer-toolbar-row,
+.theme-modern .workspace-panel .viewer-shell > .log-view-bar {
+  margin-left: calc(-1 * var(--viewer-pad-x));
+  margin-right: calc(-1 * var(--viewer-pad-x));
+  padding-left: 12px;
+  padding-right: 12px;
 }
 
 .theme-modern .viewer-workbench {
@@ -5756,7 +5753,14 @@ body.is-electron .settings-exclusive-head input {
   border: 1px solid var(--accent);
   font-weight: 550;
 }
-.settings-update-btn-primary:hover:not(:disabled) { background: var(--accent-strong); }
+.settings-update-btn-primary:hover:not(:disabled) {
+  /* ⚠️ 上方 .settings-exclusive button (0,2,1) 会压掉本按钮 (0,1,0) 的 accent 常态，
+     实际渲染 = 白底深字（用户所见）；若 hover 走 --accent-strong（深蓝）会变成
+     深底深字、文字不可读（用户反馈 2026-10-06）。hover 与设置区其它按钮
+     （.settings-exclusive .ghost-button:hover）一致用 panel-muted 浅底 + --ink 深字。 */
+  background: var(--panel-muted);
+  color: var(--ink);
+}
 
 .settings-update-btn-ghost {
   background: var(--panel);
@@ -5886,63 +5890,16 @@ body.is-electron .settings-exclusive-head input {
 .settings-update-note-group-feat li::before { background: var(--accent); }
 .settings-update-note-group-fix li::before { background: var(--green-dot); }
 
-/* 更新设置行（原型 .pref-row / .seg / .switch / .src-url） */
-.settings-update-pref-row {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 11px 0;
-}
-.settings-update-pref-row + .settings-update-pref-row {
-  border-top: 1px solid var(--line);
-}
-
-.settings-update-pref-label {
-  flex: 1;
-  min-width: 0;
-}
-.settings-update-pref-label strong {
-  display: block;
-  font-size: var(--fs-xs);
-  font-weight: 550;
-  color: var(--ink);
-}
-.settings-update-pref-label span {
-  font-size: var(--fs-2xs);
-  color: var(--ink-muted);
-}
-
-.settings-update-pref-ctl {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.settings-update-seg {
+/* 状态卡头部的自动检查开关（对齐 VRC：开关常驻卡片头部，不占独立设置行） */
+.settings-update-head-switch {
+  margin-left: auto;
   display: inline-flex;
-  border: 1px solid var(--line);
-  border-radius: var(--r-s);
-  overflow: hidden;
+  align-items: center;
+  gap: 7px;
 }
-.settings-update-seg button {
-  font: inherit;
+.settings-update-head-switch-label {
   font-size: var(--fs-2xs);
-  padding: 4px 12px;
-  border: none;
-  background: var(--panel);
   color: var(--ink-soft);
-  cursor: pointer;
-}
-.settings-update-seg button + button { border-left: 1px solid var(--line); }
-.settings-update-seg button.on {
-  background: var(--ink);
-  color: var(--on-ink);
-  font-weight: 550;
-}
-.settings-update-seg button:disabled {
-  cursor: default;
-  opacity: 0.55;
 }
 
 .settings-update-switch {
@@ -5983,70 +5940,79 @@ body.is-electron .settings-exclusive-head input {
   max-width: 420px;
 }
 
-.settings-update-src-url {
+.settings-update-src-input {
   flex: 1;
+  min-width: 0;
+  font: inherit;
   font-family: var(--mono-font-family);
   font-size: var(--fs-2xs);
-  color: var(--ink-soft);
+  color: var(--ink);
   border: 1px solid var(--line);
   border-radius: var(--r-s);
   padding: 6px 10px;
-  background: var(--panel-muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  background: var(--panel);
+  outline: none;
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+.settings-update-src-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+.settings-update-src-input-invalid,
+.settings-update-src-input-invalid:focus {
+  border-color: var(--red);
+  box-shadow: 0 0 0 2px var(--red-soft);
 }
 
-/* 各形态如何更新（原型 .host-row） */
-.settings-update-host-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 11px 0;
-}
-.settings-update-host-row + .settings-update-host-row { border-top: 1px solid var(--line); }
-.settings-update-host-row.settings-update-host-dim { opacity: 0.62; }
-
-.settings-update-host-ico {
-  flex: 0 0 28px;
-  width: 28px;
-  height: 28px;
-  border-radius: 7px;
+/* 低频信息折叠（检查记录 / 更新源 / 关于）：默认收起，对齐 VRC 更新中心密度 */
+.settings-update-more {
   border: 1px solid var(--line);
-  background: var(--panel-muted);
+  border-radius: var(--r-l);
+  background: var(--panel);
+  margin-bottom: 14px;
+}
+
+.settings-update-more > summary {
   display: flex;
   align-items: center;
-  justify-content: center;
-  color: var(--ink-soft);
-}
-.settings-update-host-ico svg { display: block; }
-
-.settings-update-host-row.settings-update-host-cur .settings-update-host-ico {
-  border-color: color-mix(in srgb, var(--accent) 30%, transparent);
-  background: var(--accent-soft);
-  color: var(--accent);
-}
-
-.settings-update-host-main {
-  flex: 1;
-  min-width: 0;
-}
-
-.settings-update-host-name {
-  display: flex;
-  align-items: center;
-  gap: 7px;
+  gap: 8px;
+  padding: 10px 16px;
   font-size: var(--fs-xs);
-  font-weight: 600;
-  color: var(--ink);
+  font-weight: 550;
+  color: var(--ink-soft);
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+.settings-update-more > summary::-webkit-details-marker { display: none; }
+.settings-update-more > summary::after {
+  content: "";
+  margin-left: auto;
+  width: 7px;
+  height: 7px;
+  border-right: 1.5px solid var(--ink-muted);
+  border-bottom: 1.5px solid var(--ink-muted);
+  transform: rotate(45deg);
+  transition: transform 0.15s;
+}
+.settings-update-more[open] > summary::after { transform: rotate(225deg); }
+
+.settings-update-more-hint {
+  font-size: var(--fs-2xs);
+  font-weight: 400;
+  color: var(--ink-muted);
 }
 
-.settings-update-host-desc {
-  font-size: var(--fs-2xs);
-  color: var(--ink-muted);
-  margin-top: 2px;
-  line-height: 1.55;
+.settings-update-more-body {
+  padding: 0 16px 16px;
+  border-top: 1px solid var(--line);
 }
+.settings-update-more-body .settings-update-card {
+  margin-top: 12px;
+  margin-bottom: 0;
+}
+
+.settings-update-card-last { margin-bottom: 0; }
 
 /* 检查记录（原型 .log-row） */
 .settings-update-log-row {
@@ -6157,39 +6123,130 @@ body.is-electron .settings-exclusive-head input {
   box-shadow: 0 0 0 2px var(--panel, #fff);
 }
 
-/* 重启遮罩（原型 .restart-overlay）：全屏毛玻璃 + spinner */
+/* 重启遮罩（2026-10-05 重设计，原型 restart-preview.html 方案 A）：品牌实底，
+   不再透出背后内容（旧版 bg 92% 透明 + blur(4px) 被用户否决）。
+   与启动页（index.html #app-loading）同一套品牌语言：logo + 词标 + 版本徽标
+   + spinner + 流光条 + 恢复承诺。token 全跟随主题，暗色自动适配。 */
 .settings-update-restart-overlay {
   position: fixed;
   inset: 0;
   z-index: 90;
-  background: color-mix(in srgb, var(--bg) 92%, transparent);
-  backdrop-filter: blur(4px);
+  background: var(--bg);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 14px;
+  font-family: var(--app-font-family, var(--font, -apple-system, "PingFang SC", sans-serif));
 }
 
-.settings-update-restart-spinner {
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  border: 2.5px solid var(--line);
+.restart-splash {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  animation: settings-update-rise 0.4s cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+@keyframes settings-update-rise {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .restart-splash { animation: none; }
+}
+
+.restart-splash-logo {
+  width: 56px;
+  height: 56px;
+  margin-bottom: 14px;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08), 0 8px 24px rgba(15, 32, 51, 0.14);
+}
+.restart-splash-logo img {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.restart-splash-word {
+  font-size: 14.5px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+.restart-splash-ver {
+  margin-top: 3px;
+  font-size: var(--fs-xs);
+  font-family: var(--mono-font-family, var(--mono, monospace));
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.restart-splash-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.restart-splash-spin {
+  width: 13px;
+  height: 13px;
+  border: 2px solid var(--line);
   border-top-color: var(--accent);
-  animation: settings-update-spin 0.9s linear infinite;
+  border-radius: 50%;
+  animation: settings-update-spin 0.8s linear infinite;
 }
 @keyframes settings-update-spin {
   to { transform: rotate(360deg); }
 }
-
-.settings-update-restart-title {
-  font-size: var(--fs-base);
-  font-weight: 650;
-  color: var(--ink);
+@media (prefers-reduced-motion: reduce) {
+  .restart-splash-spin { animation: none; border-top-color: var(--ink-muted); }
 }
 
-.settings-update-restart-sub {
+.restart-splash-status {
   font-size: var(--fs-xs);
   color: var(--ink-muted);
+}
+
+.restart-splash-flowbar {
+  position: relative;
+  width: 200px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--line);
+  margin-top: 16px;
+  overflow: hidden;
+}
+.restart-splash-flowbar::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 40%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  animation: settings-update-flow 1.2s ease-in-out infinite;
+}
+@keyframes settings-update-flow {
+  0% { transform: translateX(-110%); }
+  100% { transform: translateX(360%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .restart-splash-flowbar::after {
+    animation: none;
+    left: 0;
+    right: 0;
+    width: 100%;
+    background: color-mix(in srgb, var(--accent) 40%, transparent);
+  }
+}
+
+.restart-splash-restore {
+  font-size: var(--fs-2xs);
+  color: var(--ink-muted);
+  margin-top: 14px;
+  max-width: 260px;
+  line-height: 1.6;
 }
