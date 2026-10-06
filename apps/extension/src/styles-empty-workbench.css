@@ -34,9 +34,14 @@
   background: var(--panel-muted);
 }
 .theme-modern .sidebar-status:not(.sidebar-status-open) {
-  height: auto;
+  /* 折叠态 30px 定高 + 内容水平/垂直居中（用户反馈 2026-10-06：待命贴上沿不居中）。
+     本文件加载晚于 theme-modern-v2.css，同特异性下此块才是实际生效规则；
+     此前 height:auto/stretch → 卡高随内容、文字贴上沿。
+     st-l2 详情行已由 v2 折叠隐藏（单行卡），展开态不受影响。 */
+  height: 30px;
   flex-direction: column;
-  align-items: stretch;
+  align-items: center;
+  justify-content: center;
   overflow: hidden;
 }
 
@@ -77,10 +82,18 @@
   display: flex;
   align-items: center;
   gap: 7px;
-  padding: 7px 12px 0;
+  /* padding 7px 12px 0 → 0（用户反馈 2026-10-06：待命/未连接不居中）：
+     旧两行布局的单边顶部 padding 在 30px 居中单行卡里把文字压低 ≈3.5px；
+     水平内边距由 .theme-modern .sidebar-status 的 0 14px 提供 */
+  padding: 0;
   font-size: var(--fs-xs);
   line-height: 1.2;
   min-width: 0;
+}
+/* CJK 字形在 Geist 行盒内偏下 ≈2px（字体度量，flex 居中只作用于行盒），
+   折叠态微调回正（用户反馈 2026-10-06） */
+.theme-modern .sidebar-status:not(.sidebar-status-open) .st-l1 {
+  margin-bottom: 4px;
 }
 .sidebar-status .st-dot {
   flex: none;

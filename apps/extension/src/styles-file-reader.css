@@ -408,14 +408,24 @@
 }
 
 .file-table {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 0;
   flex: 1 1 auto;
   min-height: 0;
   width: 100%;
   height: 100%;
+  overflow: hidden;
+}
+
+/* 数据行滚动容器：表头为 .file-table 直接子级（在滚动容器【外】），竖向滚动条
+   只从表头下沿开始，不再跨过表头那一行。scrollbar-gutter: stable 与表头
+   (.file-table-head) 同宽预留，滚动条出现/消失时列宽不跳、表头与行保持对齐。 */
+.file-table-body {
+  flex: 1 1 auto;
+  min-height: 0;
   overflow: auto;
-  align-content: start;
+  scrollbar-gutter: stable;
 }
 
 .tree-list,
@@ -486,12 +496,16 @@
 }
 
 .file-table-head {
+  flex: 0 0 auto;
   padding: 6px 8px;
   color: #5f6b7a;
   font-size: var(--fs-2xs);
   border-bottom: 1px solid #d9e0e8;
-  position: sticky;
-  top: -2px;
+  /* 表头已移出滚动容器（见 .file-table / .file-table-body）：不再需要 sticky。
+     overflow: hidden + scrollbar-gutter: stable 让表头预留与 body 同宽的滚动条槽位，
+     滚动的 body 出现/消失滚动条时列宽不跳、表头与数据列保持对齐。 */
+  overflow: hidden;
+  scrollbar-gutter: stable;
   background: linear-gradient(180deg, #fafbfc, #f0f3f7);
   z-index: 1;
 }

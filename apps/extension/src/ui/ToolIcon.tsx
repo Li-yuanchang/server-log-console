@@ -244,7 +244,10 @@ function ClassicIcon({ kind }: { kind: IconKind }) {
   }
 }
 
-const LUCIDE_PROPS = { size: 16, strokeWidth: 1.45, "aria-hidden": true } as const;
+// 图标钮内 svg 会被 .icon-button svg 强制收进 14px 盒（24 网格），线宽按 14/24 折算：
+// 1.8 → 观感 ≈1.05px，与各组件直引 lucide 的 14/1.8、终端工具行 13/2.0 同档。
+// 旧值 1.45 折算后仅 ≈0.85px，视觉上比邻近图标细一截（用户反馈"不精细"的主因之一）。
+const LUCIDE_PROPS = { size: 16, strokeWidth: 1.8, "aria-hidden": true } as const;
 
 function ModernIcon({ kind }: { kind: IconKind }) {
   switch (kind) {

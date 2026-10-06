@@ -5,7 +5,7 @@ const { execFileSync } = require("child_process");
 const launchEnv = { ...process.env };
 delete launchEnv.ELECTRON_RUN_AS_NODE;
 
-const appName = "ServerLogConsole.app";
+const appName = "SLC.app";
 const appCandidates = [
   path.join(__dirname, "dist", "mac-arm64", appName),
   path.join(__dirname, "dist", "mac", appName),
@@ -19,7 +19,7 @@ if (!sourceApp) {
 const destinationApp = path.join("/Applications", appName);
 
 try {
-  execFileSync("osascript", ["-e", 'tell application "ServerLogConsole" to quit'], { stdio: "ignore" });
+  execFileSync("osascript", ["-e", 'tell application "SLC" to quit'], { stdio: "ignore" });
 } catch {}
 
 if (fs.existsSync(destinationApp)) {

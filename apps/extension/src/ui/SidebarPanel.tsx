@@ -70,7 +70,8 @@ export function SidebarPanel(props: SidebarPanelProps) {
   } = props;
 
   /* 底部状态条五态（原型 empty-states-a-v2 第 10 屏）：
-     warn 服务离线 > err 连接失败 > connecting 连接中 > ok 已连接 > idle 待命 */
+     warn 服务离线 > err 连接失败 > connecting 连接中 > ok 已连接 > idle 未连接
+     （idle 文案 2026-10-06 用户确认：待命含义不清 → 未连接，并入「连接」词族） */
   const statusState: "idle" | "connecting" | "ok" | "err" | "warn" = showServiceOfflineState
     ? "warn"
     : selectedServer && connectionTestStatus && !connectionTestStatus.connected && !isBusy
@@ -80,7 +81,7 @@ export function SidebarPanel(props: SidebarPanelProps) {
         : selectedServer && connectionTestStatus?.connected
           ? "ok"
           : "idle";
-  const statusWord = { idle: "待命", connecting: "连接中", ok: "已连接", err: "连接失败", warn: "服务离线" }[statusState];
+  const statusWord = { idle: "未连接", connecting: "连接中", ok: "已连接", err: "连接失败", warn: "服务离线" }[statusState];
   const statusObj = statusState === "ok" || statusState === "connecting" ? selectedServer?.name ?? "" : "";
   const statusL2 =
     statusState === "idle" ? (

@@ -1,10 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 22 22">
-  <defs>
-    <mask id="cutout" maskUnits="userSpaceOnUse">
-      <rect width="22" height="22" fill="#fff"/>
-      <path d="M6.55 6.85 C7.75 7.75 8.9 8.9 10.15 10.45 C8.9 11.8 7.75 13.05 6.55 14" fill="none" stroke="#000" stroke-width="2.15" stroke-linecap="round" stroke-linejoin="round"/>
-      <path d="M11.95 14.15 H15.9" fill="none" stroke="#000" stroke-width="1.95" stroke-linecap="round"/>
-    </mask>
-  </defs>
-  <rect x="2.65" y="3.55" width="16.7" height="14.9" rx="3.25" fill="#000" mask="url(#cutout)"/>
+  <!-- 日志流线条：两行递减日志条 + 提示符行，与 Dock 图标同构 -->
+  <rect x="4.4" y="4.6" width="13.2" height="2.3" rx="1.15" fill="#000"/>
+  <rect x="4.4" y="8.8" width="8.6" height="2.3" rx="1.15" fill="#000"/>
+  <path d="M4.9 13 L7.5 15.3 L4.9 17.6" fill="none" stroke="#000" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M10 17.6 H14.6" fill="none" stroke="#000" stroke-width="2.1" stroke-linecap="round"/>
 </svg>

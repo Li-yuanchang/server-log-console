@@ -522,6 +522,18 @@ body.extension-sidepanel .toolbar-panel {
    12. 移动档 @container slc-sp (max-width: 559.9px)
    几何/密度参照原型 400px 态（docs/prototypes/sidepanel-responsive.html）
    ============================================================ */
+
+/* --- 12l-b-guard. 目录行尾 ›（v3 设计④）：默认全局隐藏，仅移动档显示 ---
+   ⚠️ 本守卫必须在顶层作用域（2026-10-06 修复）：曾误写进下方 @container 块，
+   桌面宽档容器查询不命中 → 守卫不生效 → `›` 以裸 SVG 常显并挤错表格列。
+   加载顺序最末 + 特异性 (0,2,0) ≥ svg 全局规则，可稳定隐藏。 */
+.app-shell .f-go,
+body.extension-sidepanel .f-go {
+  display: none;
+  width: 12px;
+  height: 12px;
+}
+
 @container slc-sp (max-width: 559.9px) {
   /* --- 12a. 侧栏退位 → 单列 --- */
   :is(body.extension-sidepanel, .app-shell) .shell-layout {
@@ -1039,15 +1051,10 @@ body.extension-sidepanel .toolbar-panel {
   :is(body.extension-sidepanel, .app-shell) .settings-update-src-url {
     flex: 1 1 100%;
     word-break: break-all;
-  /* --- 12l-b. 目录行尾 ›（v3 设计④）：仅移动档显示 ---
-     守卫必须 ≥ .app-shell svg / .theme-modern svg 类全局规则（0,2,0+），
-     否则 SVG 失去尺寸约束渲染成黑三角并挤掉文件名（教训同 :where button 高度） */
-  .app-shell .f-go {
-    display: none;
-    width: 12px;
-    height: 12px;
   }
 
+  /* 窄档（≤559.9 容器）重新显示：仅扩展侧栏 / 窄窗移动档
+     （守卫在 12l-b-guard，顶层作用域） */
   :is(body.extension-sidepanel, .app-shell) .file-table .file-row .f-go {
     display: inline-flex;
     flex: none;

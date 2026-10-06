@@ -129,9 +129,10 @@ logPhase("Import strategies & middleware", t);
 app.use(cors());
 
 /* Bearer Token 鉴权：/health 保持开放（离线状态展示依赖它）；未配置令牌时完全放行（本地模式）。
+   /desktop-updates 保持匿名可读（electron-updater 检查更新不带令牌）。
    浏览器 WebSocket 无法携带请求头，upgrade 阶段用 ?token= 校验，这里同样接受该参数。 */
 app.use((req, res, next) => {
-  if (!authService.isEnabled() || req.path === "/health") {
+  if (!authService.isEnabled() || req.path === "/health" || req.path.startsWith("/desktop-updates/")) {
     next();
     return;
   }

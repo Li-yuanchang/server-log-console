@@ -37,6 +37,7 @@ contextBridge.exposeInMainWorld("slcDesktopUpdate", {
   check: () => ipcRenderer.invoke("slc:update:check"),
   download: () => ipcRenderer.invoke("slc:update:download"),
   install: () => ipcRenderer.invoke("slc:update:install"),
+  setSource: (url) => ipcRenderer.invoke("slc:update:set-source", url),
   onUpdateState: (callback) => {
     const handler = (_event, state) => callback(state);
     ipcRenderer.on("slc:update:state", handler);

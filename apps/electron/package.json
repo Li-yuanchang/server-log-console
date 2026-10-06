@@ -1,20 +1,24 @@
 {
   "name": "@server-log-console/electron",
-  "version": "0.3.241",
+  "version": "0.3.266",
   "description": "Server Log Console desktop app",
   "author": "lyc",
   "private": true,
   "main": "main.cjs",
+  "dependencies": {
+    "electron-updater": "^6.6.2"
+  },
   "scripts": {
     "start": "node run-clean-electron-env.cjs electron .",
     "bump-version": "node bump-version.cjs",
     "prepare-gateway": "node prepare-gateway.cjs",
     "prepare-update-config": "node prepare-update-config.cjs",
+    "prepare-release-notes": "node prepare-release-notes.cjs",
     "install:mac-app": "node install-mac-app.cjs",
-    "predist": "node bump-version.cjs && node prepare-gateway.cjs && node prepare-update-config.cjs",
-    "predist:mac": "node bump-version.cjs && node prepare-gateway.cjs && node prepare-update-config.cjs",
-    "predist:win": "node bump-version.cjs && node prepare-gateway.cjs && node prepare-update-config.cjs",
-    "predist:linux": "node bump-version.cjs && node prepare-gateway.cjs && node prepare-update-config.cjs",
+    "predist": "node bump-version.cjs && node prepare-gateway.cjs && node prepare-update-config.cjs && node prepare-release-notes.cjs",
+    "predist:mac": "node bump-version.cjs && node prepare-gateway.cjs && node prepare-update-config.cjs && node prepare-release-notes.cjs",
+    "predist:win": "node bump-version.cjs && node prepare-gateway.cjs && node prepare-update-config.cjs && node prepare-release-notes.cjs",
+    "predist:linux": "node bump-version.cjs && node prepare-gateway.cjs && node prepare-update-config.cjs && node prepare-release-notes.cjs",
     "dist": "node run-clean-electron-env.cjs electron-builder",
     "dist:mac": "node run-clean-electron-env.cjs electron-builder --mac",
     "dist:win": "node run-clean-electron-env.cjs electron-builder --win",
@@ -23,11 +27,15 @@
   },
   "build": {
     "appId": "com.slc.desktop",
-    "productName": "ServerLogConsole",
+    "productName": "SLC",
     "files": [
       "main.cjs",
-      "preload.cjs"
+      "preload.cjs",
+      "release-notes.md"
     ],
+    "releaseInfo": {
+      "releaseNotesFile": "release-notes.md"
+    },
     "extraResources": [
       {
         "from": ".electron-build/gateway",
@@ -67,7 +75,7 @@
         "zip"
       ],
       "extendInfo": {
-        "CFBundleName": "ServerLogConsole",
+        "CFBundleName": "SLC",
         "CFBundleDisplayName": "日志控制台"
       }
     },
@@ -93,7 +101,6 @@
   "devDependencies": {
     "app-builder-bin": "^4.0.0",
     "electron": "32.2.7",
-    "electron-builder": "^25.1.8",
-    "electron-updater": "^6.6.2"
+    "electron-builder": "^25.1.8"
   }
 }

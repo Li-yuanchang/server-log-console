@@ -13,6 +13,7 @@ const AUTO_CHECK_SESSION_KEY = "slc.update.auto-checked-this-session";
 const CHECK_LOG_KEY = "slc.update.check-log";
 const CHECK_LOG_LIMIT = 5;
 const RESTART_OVERLAY_DELAY_MS = 800;
+const RESTART_STALL_HINT_MS = 30000;
 const PROGRESS_THROTTLE_MS = 200;
 
 const IDLE_UPDATE_STATE: SlcDesktopUpdateState = {
@@ -22,6 +23,7 @@ const IDLE_UPDATE_STATE: SlcDesktopUpdateState = {
   updateInfo: null,
   progress: null,
   updateUrl: null,
+  bundledReleaseNotes: null,
 };
 
 export type DesktopUpdateHostKind = "desktop" | "extension" | "web";
@@ -248,7 +250,7 @@ interface NoteGroup {
   items: string[];
 }
 
-/** releaseNotes 简单分组：以「新增/修复」开头的行作为小标题，其余为列表项 */
+/** releaseNotes 简单分组：独立的「新增:/修复:」行作为小标题，其余为列表项（要求带冒号，避免误吞以"新增/修复"开头的条目） */
 function parseReleaseNotes(notes: string): NoteGroup[] {
   const groups: NoteGroup[] = [];
   let current: NoteGroup | null = null;
@@ -262,7 +264,7 @@ function parseReleaseNotes(notes: string): NoteGroup[] {
   for (const rawLine of notes.split(/\r?\n/)) {
     const line = rawLine.trim().replace(/^[-*]\s*/, "");
     if (!line) continue;
-    const heading = line.match(/^(新增|修复)\s*[:：]?\s*(.*)$/);
+    const heading = line.match(/^(新增|修复)[:：]\s*(.*)$/);
     if (heading) {
       current = { label: heading[1], kind: heading[1] === "新增" ? "feat" : "fix", items: [] };
       groups.push(current);
@@ -290,7 +292,19 @@ export function UpdateCenterPanel(props: UpdateCenterPanelProps) {
 
   const [autoCheckEnabled, setAutoCheckEnabled] = useState(() => localStorage.getItem(AUTO_CHECK_KEY) !== "false");
   const [sourceTesting, setSourceTesting] = useState(false);
+  const [sourceDraft, setSourceDraft] = useState<string | null>(null);
   const [restartPending, setRestartPending] = useState(false);
+  const [restartStalled, setRestartStalled] = useState(false);
+
+  // 兜底提示：遮罩超过阈值仍未重启，说明客户端退出被阻塞，引导用户手动退出完成安装
+  useEffect(() => {
+    if (!restartPending) {
+      setRestartStalled(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setRestartStalled(true), RESTART_STALL_HINT_MS);
+    return () => window.clearTimeout(timer);
+  }, [restartPending]);
 
   const status: SlcDesktopUpdateStatus = state.status;
   const nextVersion = state.updateInfo?.version ?? "";
@@ -356,8 +370,30 @@ export function UpdateCenterPanel(props: UpdateCenterPanelProps) {
     });
   };
 
+  // 更新源编辑缓冲：null = 未改动，跟随生效值；测试/保存针对草稿值
+  const effectiveSource = state.updateUrl ?? "";
+  const sourceValue = sourceDraft ?? effectiveSource;
+  const sourceDirty = sourceDraft !== null && sourceDraft.trim() !== effectiveSource;
+  const sourceValid = /^https?:\/\//i.test(sourceValue.trim());
+  const sourceSaveDisabled = !sourceDirty || !sourceValid || status === "downloading" || status === "ready";
+
+  const handleSaveSource = async () => {
+    const url = sourceValue.trim();
+    if (!/^https?:\/\//i.test(url)) {
+      showToast("error", "更新源需以 http:// 或 https:// 开头");
+      return;
+    }
+    try {
+      await window.slcDesktopUpdate?.setSource(url);
+      setSourceDraft(null);
+      showToast("success", url ? `更新源已保存：${url}` : "已恢复内置更新源");
+    } catch {
+      showToast("error", "更新源保存失败");
+    }
+  };
+
   const handleTestSource = async () => {
-    const baseUrl = state.updateUrl;
+    const baseUrl = sourceValue.trim();
     if (!baseUrl) {
       showToast("error", "未配置更新源，无法测试");
       return;
@@ -392,9 +428,16 @@ export function UpdateCenterPanel(props: UpdateCenterPanelProps) {
     return `${formatMb(progress.transferred)} MB / ${formatMb(progress.total)} MB · ${formatMb(progress.bytesPerSecond)} MB/s`;
   })();
 
-  const notesVisible = Boolean(state.updateInfo) && showNextVersion;
-  const noteGroups = notesVisible && state.updateInfo?.releaseNotes ? parseReleaseNotes(state.updateInfo.releaseNotes) : [];
-  const releaseDateLabel = notesVisible ? formatReleaseDate(state.updateInfo?.releaseDate) : "";
+  // 版本说明双来源：发现新版本时展示新版本说明（随更新清单下发），否则展示包内当前版本说明
+  const showNewNotes = showNextVersion && Boolean(state.updateInfo?.releaseNotes);
+  const showCurrentNotes = !showNextVersion && Boolean(state.bundledReleaseNotes);
+  const notesVisible = showNewNotes || showCurrentNotes;
+  const notesVersion = showNewNotes ? (state.updateInfo?.version ?? "") : currentVersion;
+  const noteGroups = notesVisible
+    ? parseReleaseNotes(showNewNotes ? (state.updateInfo?.releaseNotes ?? "") : (state.bundledReleaseNotes ?? ""))
+    : [];
+  const releaseDateLabel = showNewNotes ? formatReleaseDate(state.updateInfo?.releaseDate) : "";
+  const notesHint = showNewNotes ? (releaseDateLabel ? `发布于 ${releaseDateLabel}` : "新版本") : "当前版本";
 
   const statusReason = (() => {
     if (status === "unavailable") return state.error || UNAVAILABLE_FALLBACK;
@@ -435,11 +478,23 @@ export function UpdateCenterPanel(props: UpdateCenterPanelProps) {
       <div className="settings-update-scroll">
         <div className="settings-update-inner">
 
-          {/* 1. 状态主卡 */}
+          {/* 1. 状态主卡（自动检查开关对齐 VRC 放在卡片头部） */}
           <section className="settings-update-card">
             <div className="settings-update-card-head">
               <span className="settings-update-kicker">版本状态</span>
-              <span className="settings-update-hint">正式版渠道</span>
+              {isDesktop ? (
+                <span className="settings-update-head-switch">
+                  <span className="settings-update-head-switch-label">自动检查</span>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={autoCheckEnabled}
+                    aria-label="启动时自动检查"
+                    className={autoCheckEnabled ? "settings-update-switch on" : "settings-update-switch"}
+                    onClick={toggleAutoCheck}
+                  />
+                </span>
+              ) : null}
             </div>
             <div className="settings-update-card-body">
               <div className="settings-update-hero">
@@ -459,7 +514,6 @@ export function UpdateCenterPanel(props: UpdateCenterPanelProps) {
                       <span className="settings-update-badge-dot" aria-hidden="true" />
                       {hostBadgeLabel(hostKind, state)}
                     </span>
-                    <span className="settings-update-badge">正式版</span>
                   </div>
                 </div>
                 <div className="settings-update-hero-side">
@@ -505,16 +559,16 @@ export function UpdateCenterPanel(props: UpdateCenterPanelProps) {
             </div>
           </section>
 
-          {/* 2. 版本说明卡 */}
-          {notesVisible && state.updateInfo ? (
+          {/* 2. 版本说明卡（新版本说明 / 当前版本说明） */}
+          {notesVisible ? (
             <section className="settings-update-card">
               <div className="settings-update-card-head">
                 <span className="settings-update-kicker">版本说明</span>
-                {releaseDateLabel ? <span className="settings-update-hint">发布于 {releaseDateLabel}</span> : null}
+                <span className="settings-update-hint">{notesHint}</span>
               </div>
               <div className="settings-update-card-body">
                 <div className="settings-update-notes-ver">
-                  <span className="settings-update-notes-v">{state.updateInfo.version}</span>
+                  <span className="settings-update-notes-v">{notesVersion}</span>
                   {releaseDateLabel ? <span className="settings-update-notes-d">{releaseDateLabel}</span> : null}
                 </div>
                 {noteGroups.length ? (
@@ -538,157 +592,116 @@ export function UpdateCenterPanel(props: UpdateCenterPanelProps) {
             </section>
           ) : null}
 
-          {/* 3. 更新设置卡 */}
-          <section className="settings-update-card">
-            <div className="settings-update-card-head">
-              <span className="settings-update-kicker">更新设置</span>
-            </div>
-            <div className="settings-update-card-body">
-              <div className="settings-update-pref-row">
-                <div className="settings-update-pref-label">
-                  <strong>启动时自动检查</strong>
-                  <span>仅在桌面版生效；发现新版本时在导航与设置入口显示红点提醒，不自动下载。</span>
-                </div>
-                <div className="settings-update-pref-ctl">
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={autoCheckEnabled}
-                    aria-label="启动时自动检查"
-                    className={autoCheckEnabled ? "settings-update-switch on" : "settings-update-switch"}
-                    onClick={toggleAutoCheck}
-                  />
-                </div>
-              </div>
-              <div className="settings-update-pref-row">
-                <div className="settings-update-pref-label">
-                  <strong>发布渠道</strong>
-                  <span>内测渠道可更早收到版本，稳定性低于正式版。</span>
-                </div>
-                <div className="settings-update-pref-ctl">
-                  <span className="settings-update-seg">
-                    <button type="button" className="on">正式版</button>
-                    <button type="button" disabled title="内测渠道暂未开放（P1）">内测</button>
-                  </span>
-                </div>
-              </div>
-              <div className="settings-update-pref-row">
-                <div className="settings-update-pref-label">
-                  <strong>更新源</strong>
-                  <span>由发布脚本上传；清单与安装包同目录托管。</span>
-                </div>
-                <div className="settings-update-src-line">
-                  <span className="settings-update-src-url">{state.updateUrl ?? "--"}</span>
-                  <button
-                    type="button"
-                    className="settings-update-btn settings-update-btn-ghost"
-                    onClick={() => { void handleTestSource(); }}
-                    disabled={sourceTesting || !state.updateUrl}
-                    title={state.updateUrl ? `测试 ${state.updateUrl}/manifest.json 可达性` : "未配置更新源"}
-                  >
-                    {sourceTesting ? "测试中…" : "测试"}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          {/* 4. 各形态如何更新卡 */}
-          <section className="settings-update-card">
-            <div className="settings-update-card-head">
-              <span className="settings-update-kicker">各形态如何更新</span>
-              <span className="settings-update-hint">当前形态高亮</span>
-            </div>
-            <div className="settings-update-card-body">
-              <div className={hostKind === "desktop" ? "settings-update-host-row settings-update-host-cur" : "settings-update-host-row settings-update-host-dim"}>
-                <div className="settings-update-host-ico" aria-hidden="true">
-                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"><rect x="2" y="3" width="12" height="8" rx="1.4" /><path d="M6 13.5h4M8 11v2.5" /></svg>
-                </div>
-                <div className="settings-update-host-main">
-                  <span className="settings-update-host-name">
-                    桌面版（Electron）
-                    {hostKind === "desktop" ? <span className="settings-update-badge settings-update-badge-ok"><span className="settings-update-badge-dot" aria-hidden="true" />当前</span> : null}
-                  </span>
-                  <div className="settings-update-host-desc">electron-updater 走 generic 更新源；检查 → 下载 → 重启安装，应用退出时兜底安装。macOS 支持 blockmap 差量下载。</div>
-                </div>
-              </div>
-              <div className={hostKind === "extension" ? "settings-update-host-row settings-update-host-cur" : "settings-update-host-row settings-update-host-dim"}>
-                <div className="settings-update-host-ico" aria-hidden="true">
-                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"><circle cx="8" cy="8" r="6" /><path d="M2.3 8h11.4M8 2.2c1.8 1.7 2.8 3.7 2.8 5.8S9.8 12.1 8 13.8C6.2 12.1 5.2 10.1 5.2 8S6.2 3.9 8 2.2z" /></svg>
-                </div>
-                <div className="settings-update-host-main">
-                  <span className="settings-update-host-name">
-                    Chrome 扩展（MV3）
-                    {hostKind === "extension" ? <span className="settings-update-badge settings-update-badge-ok"><span className="settings-update-badge-dot" aria-hidden="true" />当前</span> : null}
-                  </span>
-                  <div className="settings-update-host-desc">网关自托管 update.xml + crx，由浏览器扩展更新机制拉取；页面提供「检查扩展更新」入口与版本号展示。</div>
-                </div>
-              </div>
-              <div className={hostKind === "web" ? "settings-update-host-row settings-update-host-cur" : "settings-update-host-row settings-update-host-dim"}>
-                <div className="settings-update-host-ico" aria-hidden="true">
-                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"><circle cx="8" cy="8" r="2" /><path d="M8 2.3v1.4M8 12.3v1.4M13.7 8h-1.4M3.7 8H2.3" /></svg>
-                </div>
-                <div className="settings-update-host-main">
-                  <span className="settings-update-host-name">
-                    Web 版（网关托管）
-                    {hostKind === "web" ? <span className="settings-update-badge settings-update-badge-ok"><span className="settings-update-badge-dot" aria-hidden="true" />当前</span> : null}
-                  </span>
-                  <div className="settings-update-host-desc">UI 静态资源随网关更新；此处仅展示服务端版本与「刷新生效」提示，不执行下载。</div>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          {/* 5. 检查记录卡 */}
-          <section className="settings-update-card">
-            <div className="settings-update-card-head">
-              <span className="settings-update-kicker">检查记录</span>
-              <span className="settings-update-hint">仅保留最近 5 条</span>
-            </div>
-            <div className="settings-update-card-body">
-              {checkLog.length ? (
-                checkLog.map((entry, index) => (
-                  <div key={`${entry.time}-${index}`} className="settings-update-log-row">
-                    <span className="settings-update-log-time">{entry.time}</span>
-                    <span className={entry.ok ? "settings-update-badge settings-update-badge-ok" : "settings-update-badge settings-update-badge-err"}>
-                      <span className="settings-update-badge-dot" aria-hidden="true" />
-                      {entry.ok ? "成功" : "失败"}
-                    </span>
-                    <span className="settings-update-log-msg">{entry.message}</span>
+          {/* 3. 低频信息折叠：更新源（仅桌面版可编辑）/ 检查记录 / 关于 */}
+          <details className="settings-update-more">
+            <summary>
+              更多信息
+              <span className="settings-update-more-hint">{isDesktop ? "检查记录 · 更新源 · 关于" : "检查记录 · 关于"}</span>
+            </summary>
+            <div className="settings-update-more-body">
+              {isDesktop ? (
+                <section className="settings-update-card">
+                  <div className="settings-update-card-head">
+                    <span className="settings-update-kicker">更新源</span>
+                    <span className="settings-update-hint">保存后立即生效；清空并保存可恢复内置地址</span>
                   </div>
-                ))
-              ) : (
-                <div className="settings-update-log-empty">尚未检查更新 — 点击页头「检查更新」开始，记录保留最近 5 条。</div>
-              )}
-            </div>
-          </section>
-
-          {/* 6. 关于本软件卡 */}
-          <section className="settings-update-card">
-            <div className="settings-update-card-head">
-              <span className="settings-update-kicker">关于本软件</span>
-            </div>
-            <div className="settings-update-card-body">
-              <div className="settings-update-about-grid">
-                {aboutItems.map(([key, value]) => (
-                  <div key={key} className="settings-update-about-item">
-                    <span className="settings-update-about-key">{key}</span>
-                    <span className="settings-update-about-value">{value}</span>
+                  <div className="settings-update-card-body">
+                    <div className="settings-update-src-line">
+                      <input
+                        type="text"
+                        className={sourceDirty && !sourceValid ? "settings-update-src-input settings-update-src-input-invalid" : "settings-update-src-input"}
+                        value={sourceValue}
+                        placeholder="http://192.168.2.208/desktop-updates"
+                        spellCheck={false}
+                        onChange={(event) => setSourceDraft(event.target.value)}
+                      />
+                      <button
+                        type="button"
+                        className="settings-update-btn settings-update-btn-primary"
+                        onClick={() => { void handleSaveSource(); }}
+                        disabled={sourceSaveDisabled}
+                        title={sourceSaveDisabled ? (sourceDirty && !sourceValid ? "需以 http:// 或 https:// 开头" : "尚未修改") : `保存 ${sourceValue.trim()}`}
+                      >
+                        保存
+                      </button>
+                      <button
+                        type="button"
+                        className="settings-update-btn settings-update-btn-ghost"
+                        onClick={() => { void handleTestSource(); }}
+                        disabled={sourceTesting || !sourceValid}
+                        title={`测试 ${sourceValue.trim() || "更新源"}/manifest.json 可达性`}
+                      >
+                        {sourceTesting ? "测试中…" : "测试"}
+                      </button>
+                    </div>
                   </div>
-                ))}
-              </div>
+                </section>
+              ) : null}
+
+              <section className="settings-update-card">
+                <div className="settings-update-card-head">
+                  <span className="settings-update-kicker">检查记录</span>
+                  <span className="settings-update-hint">仅保留最近 5 条</span>
+                </div>
+                <div className="settings-update-card-body">
+                  {checkLog.length ? (
+                    checkLog.map((entry, index) => (
+                      <div key={`${entry.time}-${index}`} className="settings-update-log-row">
+                        <span className="settings-update-log-time">{entry.time}</span>
+                        <span className={entry.ok ? "settings-update-badge settings-update-badge-ok" : "settings-update-badge settings-update-badge-err"}>
+                          <span className="settings-update-badge-dot" aria-hidden="true" />
+                          {entry.ok ? "成功" : "失败"}
+                        </span>
+                        <span className="settings-update-log-msg">{entry.message}</span>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="settings-update-log-empty">尚未检查更新 — 点击「检查更新」开始，记录保留最近 5 条。</div>
+                  )}
+                </div>
+              </section>
+
+              <section className="settings-update-card settings-update-card-last">
+                <div className="settings-update-card-head">
+                  <span className="settings-update-kicker">关于本软件</span>
+                </div>
+                <div className="settings-update-card-body">
+                  <div className="settings-update-about-grid">
+                    {aboutItems.map(([key, value]) => (
+                      <div key={key} className="settings-update-about-item">
+                        <span className="settings-update-about-key">{key}</span>
+                        <span className="settings-update-about-value">{value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </section>
             </div>
-          </section>
+          </details>
 
         </div>
       </div>
 
-      {/* 重启遮罩：点击「重启并安装」后先展示，稍候触发 install() */}
+      {/* 重启遮罩：点击「重启并安装」后先展示，稍候触发 install()。
+          2026-10-05 重设计（原型 restart-preview.html 方案 A）：品牌实底，
+          不再透出背后内容，与启动页（index.html #app-loading）同一套品牌语言。 */}
       {restartPending ? (
         <div className="settings-update-restart-overlay" role="alertdialog" aria-label="正在应用更新">
-          <span className="settings-update-restart-spinner" aria-hidden="true" />
-          <div className="settings-update-restart-title">正在应用更新 {nextVersion || ""}</div>
-          <div className="settings-update-restart-sub">客户端即将重启，未保存的搜索条件与布局会自动恢复</div>
+          <div className="restart-splash">
+            <div className="restart-splash-logo"><img src="/icon.svg" alt="" /></div>
+            <div className="restart-splash-word">日志控制台</div>
+            <div className="restart-splash-ver">正在应用更新 {nextVersion || ""}</div>
+            <div className="restart-splash-row">
+              <span className="restart-splash-spin" aria-hidden="true" />
+              <span className="restart-splash-status">{restartStalled ? "重启被阻塞，可手动完成" : "即将自动重启"}</span>
+            </div>
+            <div className="restart-splash-flowbar" aria-hidden="true" />
+            <div className="restart-splash-restore">
+              {restartStalled
+                ? "请从托盘菜单退出客户端，重新打开即可完成安装"
+                : "未保存的搜索条件与布局会自动恢复"}
+            </div>
+          </div>
         </div>
       ) : null}
     </div>
