@@ -413,32 +413,19 @@ function registerDesktopUpdateIpc() {
   });
   ipcMain.handle("slc:update:install", async () => {
     if (desktopUpdateState.status !== "ready") return buildDesktopUpdateSnapshot();
-    // 先回包再退出安装，避免渲染层 invoke 悬空
-    setTimeout(() => {
-      // Squirrel 原生安装路径不触发 before-quit：先置位让主窗口 close 拦截放行
-      isQuitting = true;
+    // 与 vrc 完全一致：置位让主窗口 close 拦截放行，然后交给 quitAndInstall 自行完成
+    // 「武装 Squirrel/ShipIt + 退出进程」。**绝不额外 app.quit()/app.exit() 强杀** ——
+    // 进程必须在 quitAndInstall 把更新交给系统安装器期间保持存活，过早强杀会掐断交接，
+    // 表现为包已下载校验但 ShipIt 从未被唤起、版本不生效。
+    isQuitting = true;
+    setImmediate(() => {
+      probe("install quitAndInstall called");
       try {
-        // 走 Squirrel.Mac 原生安装路径。关键：**绝不能立即强杀进程** ——
-        // quitAndInstall 需要保持进程存活，把更新经本地代理交给 Squirrel 并武装 ShipIt；
-        // 过早退出（曾用 800ms quit + 2.5s exit）会掐断该交接，导致更新包已下载校验、
-        // ShipIt 却从未被唤起、版本不生效。quitAndInstall 自身会退出进程，下面仅保留
-        // 长延时兜底，防它在异常情况下不退出，绝不抢在它前面。
-        probe("install quitAndInstall called");
         autoUpdater.quitAndInstall(false, true);
       } catch (error) {
         probe(`quitAndInstall failed ${error && error.stack ? error.stack : String(error)}`);
       }
-      // 兜底 1：10s 仍未退出 → 重新 app.quit()
-      setTimeout(() => {
-        probe("install fallback app.quit");
-        try { app.quit(); } catch (error) { probe(`install quit failed ${error}`); }
-      }, 10000);
-      // 兜底 2：20s 仍未退出 → 强制 exit，避免永久挂起
-      setTimeout(() => {
-        probe("install fallback app.exit");
-        try { app.exit(0); } catch (error) { probe(`install exit failed ${error}`); }
-      }, 20000);
-    }, 0);
+    });
     return buildDesktopUpdateSnapshot();
   });
   // 设置中心编辑更新源：立即热切换 feed 并持久化到 userData；清空 = 恢复出厂内置链路
