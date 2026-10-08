@@ -5651,19 +5651,19 @@ body.is-electron .settings-exclusive-head input {
   gap: 16px;
 }
 
+/* 应用图标（与加载页 / icon.svg 同源）；旧版为硬编码「SL」文字徽标，现换真图标 */
 .settings-update-app-icon {
   flex: 0 0 52px;
   width: 52px;
   height: 52px;
   border-radius: 12px;
-  background: linear-gradient(145deg, var(--ink), var(--shell));
-  color: var(--on-ink);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 700;
-  font-size: var(--fs-md);
-  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--on-ink) 14%, transparent), var(--shadow-sm);
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08), 0 8px 24px rgba(15, 32, 51, 0.14);
+}
+.settings-update-app-icon img {
+  width: 100%;
+  height: 100%;
+  display: block;
 }
 
 .settings-update-hero-main {
@@ -5818,19 +5818,20 @@ body.is-electron .settings-exclusive-head input {
   height: 100%;
   border-radius: 999px;
   background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 72%, var(--on-accent)));
-  transition: width 0.18s linear;
+  /* 宽度由 rAF 指数缓动逐帧写入（见 SmoothProgressFill），此处不做 CSS 补间 */
+  will-change: width;
 }
 
-.settings-update-sha-line {
-  display: flex;
+/* 校验通过徽标：并入进度条顶行（不再单独占一行，避免下载完成时卡片增高抖动） */
+.settings-update-sha-chip {
+  margin-left: auto;
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
-  margin-top: 9px;
-  font-family: var(--mono-font-family);
+  gap: 5px;
   font-size: var(--fs-2xs);
   color: var(--green);
 }
-.settings-update-sha-line svg { flex: 0 0 auto; }
+.settings-update-sha-chip svg { flex: 0 0 auto; }
 
 /* 版本说明（原型 .notes-ver / .note-group） */
 .settings-update-notes-ver {
