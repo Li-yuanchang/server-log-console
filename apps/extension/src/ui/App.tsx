@@ -3715,13 +3715,20 @@ export function App() {
                 onChangeTabs={(next) => {
                   setTerminalTabs(next.terminalTabs);
                   setActiveTerminalTabId(next.activeTerminalTabId);
+                  /* 关闭最后一个标签 = 关闭终端视图，回到内容区（日志预览/文件目录）。
+                     否则标签清空后只剩空态工作台停留在终端视图里，用户点「终端」按钮
+                     才切回内容视图，表现为「点了却打开日志预览」的错乱。 */
+                  if (next.terminalTabs.length === 0) {
+                    setTerminalPanelOpen(false);
+                    setActiveTerminalTabId("");
+                  }
                 }}
                 onStatus={setActionStatus}
                 onActivity={pushActivity}
                 terminalFontSize={terminalFontSize}
                 terminalFontFamily={monoFontFamilyValue(terminalFontFamily)}
                 terminalBackgroundColor={terminalScheme.theme.background}
-            terminalScheme={uiTerminalScheme}
+                terminalScheme={uiTerminalScheme}
                 terminalOverlay={terminalOverlay}
                 onToggleTerminalOverlay={toggleTerminalOverlay}
                 onTogglePopup={toggleTerminalPopup}
