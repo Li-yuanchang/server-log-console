@@ -1,6 +1,6 @@
 {
   "name": "@server-log-console/electron",
-  "version": "0.3.269",
+  "version": "0.3.270",
   "description": "Server Log Console desktop app",
   "author": "lyc",
   "private": true,

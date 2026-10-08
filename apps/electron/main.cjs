@@ -328,6 +328,14 @@ function configureDesktopUpdater() {
     autoUpdater.setFeedURL({ provider: "generic", url: desktopUpdateUrl, channel: "latest" });
   }
 
+  // 更新器日志落到 /tmp/slc-main-probe.txt，排查下载/安装交接问题（此前 ShipIt 未被唤起时无任何线索）
+  autoUpdater.logger = {
+    info: (m) => probe(`updater info ${formatUpdaterLog(m)}`),
+    warn: (m) => probe(`updater warn ${formatUpdaterLog(m)}`),
+    error: (m) => probe(`updater error ${formatUpdaterLog(m)}`),
+    debug: (m) => probe(`updater debug ${formatUpdaterLog(m)}`),
+  };
+
   autoUpdater.on("checking-for-update", () => {
     updateDesktopUpdateState({ status: "checking", error: null });
   });
@@ -407,24 +415,29 @@ function registerDesktopUpdateIpc() {
     if (desktopUpdateState.status !== "ready") return buildDesktopUpdateSnapshot();
     // 先回包再退出安装，避免渲染层 invoke 悬空
     setTimeout(() => {
+      // Squirrel 原生安装路径不触发 before-quit：先置位让主窗口 close 拦截放行
+      isQuitting = true;
       try {
-        // Squirrel 原生安装路径不触发 before-quit：若不先置位，主窗口 close 拦截会把退出
-        // 吞成托盘隐藏，ShipIt 等不到进程退出会无限挂起
-        isQuitting = true;
+        // 走 Squirrel.Mac 原生安装路径。关键：**绝不能立即强杀进程** ——
+        // quitAndInstall 需要保持进程存活，把更新经本地代理交给 Squirrel 并武装 ShipIt；
+        // 过早退出（曾用 800ms quit + 2.5s exit）会掐断该交接，导致更新包已下载校验、
+        // ShipIt 却从未被唤起、版本不生效。quitAndInstall 自身会退出进程，下面仅保留
+        // 长延时兜底，防它在异常情况下不退出，绝不抢在它前面。
+        probe("install quitAndInstall called");
         autoUpdater.quitAndInstall(false, true);
       } catch (error) {
         probe(`quitAndInstall failed ${error && error.stack ? error.stack : String(error)}`);
       }
-      // darwin 上原生路径只关窗口不退进程（window-all-closed 对 darwin 无操作）：
-      // ShipIt 会等进程退出才换包，等不到就永久挂起（曾实测挂 3 小时）。
-      // 800ms 温和 quit（清理 gateway 子进程），2.5s 硬 exit 兜底——不可被任何事件拦截。
+      // 兜底 1：10s 仍未退出 → 重新 app.quit()
       setTimeout(() => {
+        probe("install fallback app.quit");
         try { app.quit(); } catch (error) { probe(`install quit failed ${error}`); }
-      }, 800);
+      }, 10000);
+      // 兜底 2：20s 仍未退出 → 强制 exit，避免永久挂起
       setTimeout(() => {
-        probe("install hard exit (app.exit)");
+        probe("install fallback app.exit");
         try { app.exit(0); } catch (error) { probe(`install exit failed ${error}`); }
-      }, 2500);
+      }, 20000);
     }, 0);
     return buildDesktopUpdateSnapshot();
   });
@@ -559,6 +572,18 @@ function normalizeUpdatePercent(value) {
   const percent = Number(value);
   if (!Number.isFinite(percent)) return 0;
   return Math.max(0, Math.min(100, Math.round(percent * 10) / 10));
+}
+
+/** electron-updater 的 logger 接收 string 或任意对象，统一成单行字符串后写入 probe 日志 */
+function formatUpdaterLog(value) {
+  if (value == null) return "";
+  if (typeof value === "string") return value;
+  if (value instanceof Error) return value.stack || value.message;
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
 }
 
 function readableDesktopUpdateError(error) {
