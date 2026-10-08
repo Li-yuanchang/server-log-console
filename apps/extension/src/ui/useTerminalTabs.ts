@@ -75,11 +75,22 @@ export function useTerminalTabs(params: UseTerminalTabsParams): UseTerminalTabsR
 
   /* 迁移：tabs 为空且旧 terminalSessionId 非空 → 用它构造单标签。
      无依赖数组：每次渲染后廉价检查一次；同一 serverId+legacyKey 只迁移一次（ref 护栏），
-     避免父级忽略 onChange 时造成死循环。 */
+     避免父级忽略 onChange 时造成死循环。
+
+     ⚠️ 关键护栏（修「关闭最后一个标签要点两次」）：某工作区一旦出现过标签（进入多标签
+     模型），就永久记入 multiTabModelRef，此后即使标签被清空也不再用旧 terminalSessionId
+     迁移重建。否则关闭最后一个标签 → tabs 变空 → 本 effect 立刻用旧 id 复活一个新标签，
+     表现就是「点 × 一次关不掉、务必点第二次」，且第二次才真正清空。 */
   const migratedKeyRef = useRef("");
+  const multiTabModelRef = useRef<Set<string>>(new Set());
   useEffect(() => {
+    if (tabs.length > 0) {
+      // 已进入多标签模型：记录，之后清空不再迁移
+      multiTabModelRef.current.add(serverId);
+      return;
+    }
     const legacy = legacySessionId.trim();
-    if (tabs.length > 0 || !legacy) {
+    if (!legacy || multiTabModelRef.current.has(serverId)) {
       return;
     }
     const key = `${serverId}|${legacy}`;

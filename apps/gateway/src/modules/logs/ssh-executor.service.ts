@@ -119,14 +119,26 @@ function buildTerminalCwdPayload(cwd: string) {
   return `cd -- '${escapedCwd}' 2>/dev/null || cd -- "$HOME" 2>/dev/null || cd / 2>/dev/null`;
 }
 
-/** 回显抑制两步式：第一步关回显并打探针；第二步载荷开头先擦掉第一步的回显残迹 */
-const STTY_ECHO_OFF = `stty -echo; printf '@'\r`;
+/**
+ * 回显抑制两步式：第一步关回显并打探针；第二步载荷开头先擦掉第一步的回显残迹。
+ *
+ * 探针标记 `@@SLC@@`（CWD_PROBE_MARKER）——两个坑都要绕开：
+ *  ① 源码/命令回显里不能出现这个标记：命令用八进制转义写
+ *     `printf '\100\100SLC\100\100'`，命令文本本身不含 '@'。历史上写的是字面
+ *     `printf '@'`，回显里就带 '@'，探针"命中自己的回显"，在 stty -echo 尚未生效时
+ *     就误判命中 → 载荷被回显 → 内部命令泄漏到屏幕。
+ *  ② 不能拿历史 buffer 判命中：登录提示符 `[root@localhost …]#` 本身就含 '@'，
+ *     全量扫描会在发命令前就命中。故探针只扫"发出关回显命令之后到达的新数据"
+ *     （见 injectTerminalCwd 的 probeWindow）。
+ */
+const CWD_PROBE_MARKER = "@@SLC@@";
+const STTY_ECHO_OFF = `stty -echo; printf '\\100\\100SLC\\100\\100'\r`;
 const CWD_ERASE_OUTPUT_PATTERN = /\x1b\[J/;
 
 /**
  * 新开 shell 的初始目录注入（回显抑制版，宽度无关）：
  * ① 等登录横幅 + 首个提示符（P1）；
- * ② `stty -echo; printf '@'` —— '@' 到达即证明回显已关；
+ * ② `stty -echo; printf '\100\100SLC\100\100'` —— 探针标记到达即证明回显已关；
  * ③ 载荷 `printf '\033[1A\r\033[J'`（擦掉 P1 行上的 stty 回显残迹）
  *    + `stty echo`（恢复）+ cd —— 全程不可见；
  * 横幅/回显/擦除的完整字节作为 initialBuffer 返回，交由调用方回放。
@@ -145,6 +157,9 @@ function injectTerminalCwd(
   }
   let buffer = "";
   let phase: "prompt" | "hidden" | "payload" = options.waitForFirstPrompt ? "prompt" : "hidden";
+  // 探针窗口：只累积"发出关回显命令之后"到达的数据。绝不能扫全量 buffer ——
+  // 登录提示符 `[root@localhost …]#` 自身就含 '@'，全量扫描会在命令生效前误判命中。
+  let probeWindow = "";
   let settled = false;
   let settleTimer: ReturnType<typeof setTimeout> | undefined;
   let hardTimer: ReturnType<typeof setTimeout>;
@@ -165,19 +180,28 @@ function injectTerminalCwd(
     settleTimer = setTimeout(finish, 300);
   };
 
+  /** 进入隐藏阶段：清空探针窗口、关回显并打探针（探针只在窗口内判命中） */
+  const beginHidden = () => {
+    phase = "hidden";
+    probeWindow = "";
+    stream.write(STTY_ECHO_OFF);
+  };
+
   const onData = (chunk: Buffer | string) => {
-    buffer += chunk.toString();
+    const text = chunk.toString();
+    buffer += text;
+    probeWindow += text;
     if (phase === "prompt") {
       // P1：登录横幅已输出、首个提示符出现
       if (SHELL_PROMPT_TAIL_PATTERN.test(buffer)) {
-        phase = "hidden";
-        stream.write(STTY_ECHO_OFF);
+        beginHidden();
       }
       return;
     }
     if (phase === "hidden") {
-      // 探针 '@' 到达 = stty -echo 已执行、回显已关 → 载荷不可见
-      if (buffer.includes("@")) {
+      // 探针标记到达 = stty -echo 已执行、回显已关 → 载荷不可见。
+      // 只认"关回显命令发出后新到达"的数据，避免命中提示符里的 '@' 或命令回显。
+      if (probeWindow.includes(CWD_PROBE_MARKER)) {
         phase = "payload";
         stream.write(`printf '\\033[1A\\r\\033[J'; stty echo; ${buildTerminalCwdPayload(targetCwd)}\r`);
       }
@@ -189,6 +213,12 @@ function injectTerminalCwd(
       settleTimer = setTimeout(finish, 200);
     }
   };
+
+  // 复用会话（池化连接 / JumpServer shell）：已处于提示符，无需等待首提示符，
+  // 立即进入隐藏阶段。原实现该路径漏发 STTY_ECHO_OFF，只能等超时兜底。
+  if (!options.waitForFirstPrompt) {
+    beginHidden();
+  }
 
   hardTimer = setTimeout(fallback, options.timeoutMs);
   stream.on("data", onData);
