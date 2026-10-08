@@ -285,6 +285,42 @@ export interface UpdateCenterPanelProps {
   showToast: (type: ToastState["type"], message: string) => void;
 }
 
+/**
+ * 平滑进度条填充：主进程的 download-progress 是离散事件（且被 200ms 节流），
+ * 直接按跳变值渲染 + 短 CSS transition 会「一截一动」。这里用 rAF 指数缓动让宽度
+ * 连续逼近目标值，并直接写 DOM（绕开 React 重渲染，60fps 且零额外渲染开销）。
+ * React 侧只传一个恒定 style，避免重渲染把 rAF 写入的宽度覆盖回去。
+ */
+function SmoothProgressFill({ target }: { target: number }) {
+  const fillRef = useRef<HTMLDivElement>(null);
+  // 初始值对齐挂载时的进度：中途重新挂载也从当前值接着走，而不是从 0 重爬
+  const initialRef = useRef(Math.max(0, Math.min(100, target)));
+  const currentRef = useRef(initialRef.current);
+  const targetRef = useRef(target);
+  targetRef.current = Math.max(0, Math.min(100, target));
+
+  useEffect(() => {
+    let raf = 0;
+    let last = performance.now();
+    const tick = (now: number) => {
+      const dt = Math.min(0.1, (now - last) / 1000);
+      last = now;
+      const goal = targetRef.current;
+      let cur = currentRef.current;
+      // 帧率无关的指数缓动：每秒收敛 ~92%，起步轻快、接近目标时自然减速
+      cur += (goal - cur) * (1 - Math.exp(-dt / 0.4));
+      if (Math.abs(goal - cur) < 0.05) cur = goal;
+      currentRef.current = cur;
+      if (fillRef.current) fillRef.current.style.width = `${cur}%`;
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
+  return <div ref={fillRef} className="settings-update-progress-fill" style={{ width: `${initialRef.current}%` }} />;
+}
+
 export function UpdateCenterPanel(props: UpdateCenterPanelProps) {
   const { state, checkLog, onCheck, onDownload, onInstall, showToast } = props;
   const hostKind = useMemo(resolveUpdateHostKind, []);
@@ -498,7 +534,9 @@ export function UpdateCenterPanel(props: UpdateCenterPanelProps) {
             </div>
             <div className="settings-update-card-body">
               <div className="settings-update-hero">
-                <div className="settings-update-app-icon" aria-hidden="true">SL</div>
+                <div className="settings-update-app-icon" aria-hidden="true">
+                  <img src="./icon.svg" alt="" />
+                </div>
                 <div className="settings-update-hero-main">
                   <div className="settings-update-hero-ver">
                     <span className="settings-update-ver-cur">{currentVersion}</span>
@@ -543,17 +581,19 @@ export function UpdateCenterPanel(props: UpdateCenterPanelProps) {
                 <div className="settings-update-progress-wrap">
                   <div className="settings-update-progress-top">
                     <span className="settings-update-progress-title">{progressTitle}</span>
-                    <span className="settings-update-progress-bytes">{progressBytes}</span>
+                    {status === "ready" ? (
+                      /* 校验通过并入顶行（原为进度条下方独立一行，完成时凭空增高导致页面抖动） */
+                      <span className="settings-update-sha-chip">
+                        <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><path d="M3 8.5l3.2 3.2L13 5" /></svg>
+                        SHA-256 校验通过
+                      </span>
+                    ) : (
+                      <span className="settings-update-progress-bytes">{progressBytes}</span>
+                    )}
                   </div>
                   <div className="settings-update-progress-track">
-                    <div className="settings-update-progress-fill" style={{ width: `${progressPercent}%` }} />
+                    <SmoothProgressFill target={progressPercent} />
                   </div>
-                  {status === "ready" ? (
-                    <div className="settings-update-sha-line">
-                      <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><path d="M3 8.5l3.2 3.2L13 5" /></svg>
-                      SHA-256 校验通过 · SHA256SUMS
-                    </div>
-                  ) : null}
                 </div>
               ) : null}
             </div>
@@ -688,7 +728,7 @@ export function UpdateCenterPanel(props: UpdateCenterPanelProps) {
       {restartPending ? (
         <div className="settings-update-restart-overlay" role="alertdialog" aria-label="正在应用更新">
           <div className="restart-splash">
-            <div className="restart-splash-logo"><img src="/icon.svg" alt="" /></div>
+            <div className="restart-splash-logo"><img src="./icon.svg" alt="" /></div>
             <div className="restart-splash-word">日志控制台</div>
             <div className="restart-splash-ver">正在应用更新 {nextVersion || ""}</div>
             <div className="restart-splash-row">
