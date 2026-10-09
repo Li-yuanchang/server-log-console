@@ -4215,7 +4215,6 @@ export function App() {
                         focusLineIndex={lineContextState && activeViewerTabId === "file" ? lineContextState.lineNumber - lineContextState.startLine : undefined}
                         selectedLineRange={activeViewerTabId === "file" ? viewerLineCopyRange : null}
                         onLineClick={viewerLineClickEnabled ? handleViewerLineClick : (activeViewerTabId === "file" ? handleViewerFileLineClick : undefined)}
-                        lineActionTitle={viewerLineClickEnabled ? "按住 Ctrl 或 Cmd 点击可跳转到原日志" : "Cmd/Ctrl 点击复制日志块，Shift 点击选择范围"}
                         onSelectedLineRangeChange={activeViewerTabId === "file" ? handleViewerLineRangeChange : undefined}
                         onCopyLineRange={activeViewerTabId === "file" ? handleCopyViewerLineRange : undefined}
                         bookmarks={activeResultTab ? (activeResultTab.bookmarks || {}) : undefined}
