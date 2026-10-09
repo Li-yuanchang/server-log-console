@@ -714,10 +714,19 @@ const VirtualLogViewerImpl = forwardRef<VirtualLogViewerHandle, Props>(
           }}
           components={{ Scroller: VirtuosoScroller }}
           itemContent={renderLine}
-          defaultItemHeight={17}
+          computeItemKey={(index) => index}
+          /* 滚动白屏修复（2026-10-08）：日志行 white-space:pre-wrap + word-break:break-word
+             会折行 → 行高不固定（单行 18px，长堆栈可折成上百 px）。旧配置
+             defaultItemHeight=17（< 真实 18px）+ 仅 overscan=300（按像素算约 16 行）+ 无
+             increaseViewportBy，导致快速滚动时按 17px 估算出的偏移与真实布局错位，
+             视口落进"已估算但未渲染"的区域 → 露出查看器浅色底（白屏），随后行被测量
+             才"啪"地出现。修法：默认行高对齐真实值 18px（12px × line-height 1.5），
+             并用 increaseViewportBy 在视口上下各预渲染一段，滚动时新区域已就绪。 */
+          defaultItemHeight={18}
           followOutput={followOutput ? "auto" : false}
           atBottomThreshold={200}
           atBottomStateChange={(atBottom) => onNearBottomChange?.(atBottom)}
+          increaseViewportBy={{ top: 600, bottom: 900 }}
           overscan={300}
           style={{ height: "100%", width: "100%" }}
         />
