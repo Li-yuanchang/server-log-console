@@ -216,7 +216,6 @@ interface Props {
   selectedLineRange?: { start: number; end: number } | null;
   bookmarks?: Record<number, string>;
   onLineClick?: (lineIndex: number, event: React.MouseEvent<HTMLDivElement>) => void;
-  lineActionTitle?: string;
   onBookmarkToggle?: (lineIndex: number) => void;
   onHighlightCountChange?: (count: number) => void;
   onFocusLineHighlightIndex?: (index: number) => void;
@@ -248,7 +247,6 @@ const VirtualLogViewerImpl = forwardRef<VirtualLogViewerHandle, Props>(
       selectedLineRange,
       bookmarks,
       onLineClick,
-      lineActionTitle,
       onBookmarkToggle,
       onHighlightCountChange,
       onFocusLineHighlightIndex,
@@ -469,7 +467,6 @@ const VirtualLogViewerImpl = forwardRef<VirtualLogViewerHandle, Props>(
           onLineClick!(index, event);
         } : undefined;
         const handleDoubleClick = showBookmarkControls ? () => onBookmarkToggle!(index) : undefined;
-        const title = clickable ? (lineActionTitle || "按住 Ctrl 或 Cmd 点击执行行操作") : undefined;
 
         const bookmarkIcon = showBookmarkControls
           ? (isBookmarked
@@ -479,12 +476,13 @@ const VirtualLogViewerImpl = forwardRef<VirtualLogViewerHandle, Props>(
         const focusBadge = isFocused
           ? `<span class="log-focus-badge" title="当前跳转定位">定位</span>`
           : "";
+        /* 不再给每一行都挂原生 title（由 ImmediateTooltip 即时渲染成气泡）——
+           日志行密且长，鼠标划过任意一行都弹「Cmd/Ctrl 点击复制…」，频率过高、遮挡内容。 */
         const lineProps = {
           className: baseClass,
           "data-line-index": index,
           onClick: handleClick,
           onDoubleClick: handleDoubleClick,
-          title,
         };
 
         const renderNumColumn = (numHtml: string, bodyHtml: string) => (
@@ -549,7 +547,7 @@ const VirtualLogViewerImpl = forwardRef<VirtualLogViewerHandle, Props>(
           </div>
         );
       },
-      [variant, displayHighlightRegex, cumulativeOffsets, activeHighlightIndex, focusLineIndex, selectedLineRange, bookmarks, onLineClick, lineActionTitle, onBookmarkToggle, lineMatchCounts],
+      [variant, displayHighlightRegex, cumulativeOffsets, activeHighlightIndex, focusLineIndex, selectedLineRange, bookmarks, onLineClick, onBookmarkToggle, lineMatchCounts],
     );
 
     const handleMouseDown = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
