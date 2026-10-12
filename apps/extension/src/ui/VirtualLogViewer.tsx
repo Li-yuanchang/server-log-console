@@ -189,6 +189,8 @@ function getLogBlockRange(lines: string[], lineIndex: number) {
 export interface VirtualLogViewerHandle {
   scrollToTop(): void;
   scrollToBottom(): void;
+  /** 翻页落点专用：收敛式重钉到顶/底（等测量稳定），与 LIVE 的轻量到底区分开 */
+  settleScrollTo(where: "top" | "bottom"): void;
   scrollToLine(index: number, behavior?: "auto" | "smooth"): void;
   scrollToHighlight(index: number): void;
   getLineRangeText(startLine: number, endLine: number): string;
@@ -214,6 +216,9 @@ interface Props {
   activeHighlightIndex: number;
   focusLineIndex?: number;
   selectedLineRange?: { start: number; end: number } | null;
+  /** 选区建立时的文本快照。提供后，仅当当前内容在 [start,end] 处仍与快照一致才画高亮，
+      避免翻页 / 实时追加 / 头部裁剪让高亮「漂」到别的行（2026-10-12）。 */
+  selectedLineText?: string;
   bookmarks?: Record<number, string>;
   onLineClick?: (lineIndex: number, event: React.MouseEvent<HTMLDivElement>) => void;
   onBookmarkToggle?: (lineIndex: number) => void;
@@ -245,6 +250,7 @@ const VirtualLogViewerImpl = forwardRef<VirtualLogViewerHandle, Props>(
       activeHighlightIndex,
       focusLineIndex,
       selectedLineRange,
+      selectedLineText,
       bookmarks,
       onLineClick,
       onBookmarkToggle,
@@ -284,6 +290,24 @@ const VirtualLogViewerImpl = forwardRef<VirtualLogViewerHandle, Props>(
       })),
       [errorLineKinds, lines],
     );
+
+    /* 选区新鲜度（2026-10-12）：行下标 + 文本快照。仅当当前内容在 [start,end] 处
+       仍与快照逐字一致，才认为选区「有效」并画高亮。翻页 / LIVE 追加 / 头部裁剪
+       改变了内容却对不上快照时，高亮隐藏（复制仍可用快照取原文），
+       避免高亮「漂」到别的行误导用户。 */
+    const selectionFresh = useMemo(() => {
+      if (!selectedLineRange || selectedLineText == null) {
+        return true; // 未提供快照：保持旧行为（仍按下标画）
+      }
+      const start = Math.max(0, Math.min(selectedLineRange.start, selectedLineRange.end));
+      const end = Math.min(lines.length - 1, Math.max(selectedLineRange.start, selectedLineRange.end));
+      if (end < start) {
+        return false;
+      }
+      return lines.slice(start, end + 1).join("\n") === selectedLineText;
+    }, [lines, selectedLineRange, selectedLineText]);
+
+    const effectiveLineRange = selectionFresh ? selectedLineRange : null;
 
     // 时间戳内联模式（2026-10-04）：时间列固定宽已废弃（theme-modern-v2 §日志行时间戳），
     // 时间戳就地渲染、堆栈续行顶格 —— 不再按视口测宽注入 --log-time-ch。
@@ -434,8 +458,8 @@ const VirtualLogViewerImpl = forwardRef<VirtualLogViewerHandle, Props>(
         const resultBodyText = resultNumMatch ? item.text.slice(resultNumMatch[0].length) : item.text;
 
         const isFocused = index === focusLineIndex;
-        const rangeStart = selectedLineRange ? Math.min(selectedLineRange.start, selectedLineRange.end) : -1;
-        const rangeEnd = selectedLineRange ? Math.max(selectedLineRange.start, selectedLineRange.end) : -1;
+        const rangeStart = effectiveLineRange ? Math.min(effectiveLineRange.start, effectiveLineRange.end) : -1;
+        const rangeEnd = effectiveLineRange ? Math.max(effectiveLineRange.start, effectiveLineRange.end) : -1;
         const isRangeSelected = rangeStart >= 0 && index >= rangeStart && index <= rangeEnd;
         const showBookmarkControls = Boolean(bookmarks && onBookmarkToggle);
         const isBookmarked = showBookmarkControls ? index in bookmarks! : false;
@@ -547,7 +571,7 @@ const VirtualLogViewerImpl = forwardRef<VirtualLogViewerHandle, Props>(
           </div>
         );
       },
-      [variant, displayHighlightRegex, cumulativeOffsets, activeHighlightIndex, focusLineIndex, selectedLineRange, bookmarks, onLineClick, onBookmarkToggle, lineMatchCounts],
+      [variant, displayHighlightRegex, cumulativeOffsets, activeHighlightIndex, focusLineIndex, effectiveLineRange, bookmarks, onLineClick, onBookmarkToggle, lineMatchCounts],
     );
 
     const handleMouseDown = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
@@ -583,6 +607,12 @@ const VirtualLogViewerImpl = forwardRef<VirtualLogViewerHandle, Props>(
         return;
       }
 
+      /* 选区已过期（内容变化、行号失去指向）时不延长 —— 否则会在错误的行上扩展范围。
+         此时由 App 侧引导用户重新 Shift 点击建立新选区。 */
+      if (!selectionFresh) {
+        return;
+      }
+
       const currentStart = Math.max(0, Math.min(selectedLineRange.start, selectedLineRange.end));
       const currentEnd = Math.min(lines.length - 1, Math.max(selectedLineRange.start, selectedLineRange.end));
       let nextRange: { start: number; end: number } | null = null;
@@ -602,7 +632,7 @@ const VirtualLogViewerImpl = forwardRef<VirtualLogViewerHandle, Props>(
       }
       event.preventDefault();
       onSelectedLineRangeChange(nextRange);
-    }, [lines.length, onCopyLineRange, onSelectedLineRangeChange, selectedLineRange]);
+    }, [lines.length, onCopyLineRange, onSelectedLineRangeChange, selectedLineRange, selectionFresh]);
 
     const forceScrollToBottom = useCallback(() => {
       const el = scrollerRef.current;
@@ -610,25 +640,102 @@ const VirtualLogViewerImpl = forwardRef<VirtualLogViewerHandle, Props>(
       el.scrollTop = el.scrollHeight;
     }, []);
 
-    const scrollToBottomStable = useCallback(() => {
+    /* LIVE 跟随用的轻量到底：不能高频强制滚动 —— 实时追加时滚动高度持续变化，
+       与 followOutput 互相拉扯会造成抖动（既有约定，勿改）。 */
+    const scrollToBottomLive = useCallback(() => {
       if (!lines.length) return;
       const lastIndex = lines.length - 1;
       virtuosoRef.current?.scrollToIndex({ index: lastIndex, align: "end", behavior: "auto" });
-      // 仅在一帧后校正一次：立即叠加 scrollTop 直写会与 Virtuoso 的滚动补偿互相拉扯，造成抖动
       window.requestAnimationFrame(() => {
         virtuosoRef.current?.scrollToIndex({ index: lastIndex, align: "end", behavior: "auto" });
         forceScrollToBottom();
       });
     }, [forceScrollToBottom, lines.length]);
 
+    /* 翻页落点专用：收敛式重钉（2026-10-12）。
+       往下翻锚在 index 0（偏移恒为 0，精确）；往上翻锚在「最后一行」，其位置取决于列表
+       总高 —— 新切片整段未测量时 Virtuoso 先按估算高度落位，随后逐行测量使上方内容变高，
+       把视口推离目标（表现为「上翻页没落到该到的地方」）。旧实现只在 0/80/180ms 钉三次，
+       测量未收敛就停手。现逐帧重钉，直到 scrollHeight 连续 3 帧不变（测量稳定）或达 30 帧上限。
+       仅用于翻页锚点（内容已换、处于静止），不用于 LIVE 跟随。
+
+       让位于用户输入：起始 150ms 宽限（容忍触发翻页那次滚动的惯性尾巴），此后用户
+       滚动/触摸/按键即终止重钉，把位置交还用户（否则强推会盖掉用户滚动）。
+       新一次 settleScroll 会取代上一次（由 settleRunRef 持有 cancel）。 */
+    const settleRunRef = useRef<(() => void) | null>(null);
+    const settleScroll = useCallback((where: "top" | "bottom") => {
+      if (!lines.length) return;
+      // 取代上一次：避免两次翻页的重钉循环同帧互推
+      settleRunRef.current?.();
+      const target = where === "bottom" ? lines.length - 1 : 0;
+      const align = where === "bottom" ? "end" : "start";
+      const scroller = scrollerRef.current;
+      const startedAt = performance.now();
+      let cancelled = false;
+      const onUserInput = () => {
+        // 宽限期内忽略（多为触发翻页那次滚动的惯性尾巴）
+        if (performance.now() - startedAt < 150) {
+          return;
+        }
+        cancelled = true;
+      };
+      const cleanupInput = () => {
+        window.removeEventListener("wheel", onUserInput, true);
+        window.removeEventListener("touchstart", onUserInput, true);
+        window.removeEventListener("keydown", onUserInput, true);
+        settleRunRef.current = null;
+      };
+      window.addEventListener("wheel", onUserInput, { passive: true, capture: true });
+      window.addEventListener("touchstart", onUserInput, { passive: true, capture: true });
+      window.addEventListener("keydown", onUserInput, true);
+      settleRunRef.current = () => {
+        cancelled = true;
+        cleanupInput();
+      };
+
+      let lastHeight = -1;
+      let stableFrames = 0;
+      let frames = 0;
+      const pin = () => {
+        if (cancelled) {
+          cleanupInput();
+          return;
+        }
+        virtuosoRef.current?.scrollToIndex({ index: target, align, behavior: "auto" });
+        if (where === "bottom" && scroller) {
+          scroller.scrollTop = scroller.scrollHeight;
+        }
+        const node = scrollerRef.current;
+        const height = node ? node.scrollHeight : -1;
+        stableFrames = height > 0 && height === lastHeight ? stableFrames + 1 : 0;
+        lastHeight = height;
+        frames += 1;
+        if (stableFrames < 3 && frames < 30) {
+          window.requestAnimationFrame(pin);
+        } else {
+          cleanupInput();
+        }
+      };
+      window.requestAnimationFrame(pin);
+    }, [lines.length]);
+
+    /* 卸载时终止可能仍在跑的重钉，避免帧回调在卸载后访问已失效 DOM */
+    useEffect(() => () => {
+      settleRunRef.current?.();
+      settleRunRef.current = null;
+    }, []);
+
     useImperativeHandle(
       ref,
       () => ({
         scrollToTop() {
-          virtuosoRef.current?.scrollToIndex({ index: 0, behavior: "auto" });
+          settleScroll("top");
         },
         scrollToBottom() {
-          scrollToBottomStable();
+          scrollToBottomLive();
+        },
+        settleScrollTo(where: "top" | "bottom") {
+          settleScroll(where);
         },
         scrollToLine(index: number, behavior: "auto" | "smooth" = "smooth") {
           if (!lines.length) return;
@@ -672,8 +779,8 @@ const VirtualLogViewerImpl = forwardRef<VirtualLogViewerHandle, Props>(
           if (startLine === endLine) {
             return domText;
           }
-          const selectedLineText = lines.slice(startLine, endLine + 1).join("\n");
-          return selectedLineText || domText;
+          const domLineText = lines.slice(startLine, endLine + 1).join("\n");
+          return domLineText || domText;
         },
         getScrollState() {
           const el = scrollerRef.current;
@@ -688,7 +795,7 @@ const VirtualLogViewerImpl = forwardRef<VirtualLogViewerHandle, Props>(
           return scrollerRef.current;
         },
       }),
-      [lines, scrollToBottomStable, totalMatches, findLineForMatch],
+      [lines, scrollToBottomLive, settleScroll, totalMatches, findLineForMatch],
     );
 
     if (!content) {

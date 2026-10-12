@@ -690,17 +690,27 @@ export function useLogViewer(params: LogViewerParams): LogViewerAPI {
   async function navigateSlice(direction: "prev" | "next", source: "button" | "wheel" | "keyboard" = "button") {
     if (!state.filePath.trim() || state.isBusy) return;
     if (state.liveFollowEnabled && !state.liveFollowPaused) { setters.setLiveFollowPaused(true); callbacks.pushActivity(`翻页浏览中，实时跟随已暂停。滚到底部可恢复。`); }
-    if (direction === "prev") {
-      if (state.sliceOffset <= 0 || state.sliceData?.isStart) return;
-      refs.sliceScrollAnchorRef.current = "bottom";
-      if (source === "wheel") refs.wheelSliceLockRef.current = true;
-      await loadSlice(Math.max(0, state.sliceOffset - state.sliceLength), state.sliceLength);
-      return;
+    /* 滚轮翻页锁在 await 后必释放（2026-10-12）：锁本意在切片加载期间抑制后续滚轮，
+       但若请求被更新的请求接管（requestId 变化）或失败，sliceData 不变 → 依赖 sliceData
+       的 effect 不触发 → 锁永久卡死、滚轮翻页彻底失效。故在 finally 里无条件释放。 */
+    const isWheel = source === "wheel";
+    try {
+      if (direction === "prev") {
+        if (state.sliceOffset <= 0 || state.sliceData?.isStart) return;
+        refs.sliceScrollAnchorRef.current = "bottom";
+        if (isWheel) refs.wheelSliceLockRef.current = true;
+        await loadSlice(Math.max(0, state.sliceOffset - state.sliceLength), state.sliceLength);
+        return;
+      }
+      if (state.sliceData?.isEnd) return;
+      refs.sliceScrollAnchorRef.current = "top";
+      if (isWheel) refs.wheelSliceLockRef.current = true;
+      await loadSlice(state.sliceData?.nextOffset ?? state.sliceOffset + state.sliceLength, state.sliceLength);
+    } finally {
+      if (isWheel) {
+        refs.wheelSliceLockRef.current = false;
+      }
     }
-    if (state.sliceData?.isEnd) return;
-    refs.sliceScrollAnchorRef.current = "top";
-    if (source === "wheel") refs.wheelSliceLockRef.current = true;
-    await loadSlice(state.sliceData?.nextOffset ?? state.sliceOffset + state.sliceLength, state.sliceLength);
   }
 
   function handleViewerWheel(event: any) {
