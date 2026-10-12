@@ -1480,10 +1480,23 @@ export function App() {
     });
   }, [sliceData]);
 
+  /* 命中高亮索引复位：检索条件 / 内容变化时归零（与行选区无关） */
   useEffect(() => {
     setActiveHighlightIndex(0);
-    setViewerLineCopyRange(null);
   }, [activeViewerTabId, resultTabs, sliceData?.content, results?.rawOutput, keywordInput, useRegex]);
+
+  /* 行范围选区（Shift 点击「按行复制」）清除时机（用户反馈 2026-10-08：
+     「翻页滚动选中就会消失」）。原实现把 setViewerLineCopyRange(null) 和上面的
+     高亮复位塞在同一个 effect，依赖里含 sliceData?.content —— 翻页加载新切片、
+     滚轮触底换页都会改动 content，于是选区被顺手清空。
+     现改为只在「查看目标」真正变化时清除：切换视图页签（含切到结果页）或换文件。
+     翻页、滚动都不再清空选区。依赖只保留这两个 —— 行选区本就仅在文件视图存在
+     （selectedLineRange 只对 activeViewerTabId === "file" 传入），resultTabs 的
+     增删会连带改 activeViewerTabId（切到新结果页），已由 activeViewerTabId 覆盖；
+     若把 resultTabs 也列入，实时检索期间的结果数组替换会误清刚建的选区。 */
+  useEffect(() => {
+    setViewerLineCopyRange(null);
+  }, [activeViewerTabId, filePath]);
 
   useEffect(() => {
     lastSearchResultsRef.current = null;
