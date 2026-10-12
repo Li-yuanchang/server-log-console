@@ -102,12 +102,18 @@
   box-shadow: none !important;
 }
 
-/* ---------- 6. 工作区会话页签（.wtab 形态：下划线 + 文字，无底） ---------- */
+/* ---------- 6. 工作区会话页签（文字式，无底、无下划线） ----------
+   2026-10-08：去掉激活页签底部的 2px 下划线（用户反馈「底边线太长、违和」）。
+   该页签含 13px 内边距 + 「测试」chip + 关闭按钮，下划线比文字宽出一截，
+   又紧贴 strip 的通栏 1px 分隔线，形成双层线。去掉后激活态改由
+   「文字转 ink/accent 色 + 字重 600」区分（与本文件「无实底」决策一致）。
+   仅隐身 border-bottom 的颜色、保留其宽度，故 34px 盒高不变。
+   hover 反馈保留给「未激活」页签，见 theme-modern-v2.css。 */
 .theme-modern .workspace-session-tab-active,
 .theme-modern .workspace-session-tab-active:hover:not(:disabled) {
   background: transparent !important;
   border-color: transparent !important;
-  border-bottom-color: var(--accent) !important;
+  border-bottom-color: transparent !important;
   box-shadow: none !important;
 }
 .theme-modern .workspace-session-tab-active .workspace-session-tab-trigger,

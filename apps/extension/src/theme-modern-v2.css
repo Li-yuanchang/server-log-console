@@ -399,11 +399,18 @@
   background: transparent !important;
   box-shadow: none !important;
 }
-.theme-modern .workspace-session-tab:hover {
-  border-bottom-color: var(--line-strong) !important;
+/* 2026-10-08：工作区页签去掉全部下划线（用户反馈底边线过长违和）。
+   原 hover = border-bottom-color: var(--line-strong)、active = var(--ink)。
+   两者已全部置透（本规则 + align-selected.css），否则会出现「悬停有线、
+   点中反而没线」的倒挂（:hover 特异性 (0,3,0) 高于 active 的 (0,2,0)）。
+   悬停反馈改由低调背景承担；激活态由文字色 + 字重区分。
+   保留 border-bottom 宽度（仅颜色透明），34px 盒高不变。 */
+.theme-modern .workspace-session-tab:not(.workspace-session-tab-active):hover {
+  border-bottom-color: transparent !important;
+  background: var(--panel-muted) !important;
 }
 .theme-modern .workspace-session-tab-active {
-  border-bottom-color: var(--ink) !important;
+  border-bottom-color: transparent !important;
 }
 .theme-modern .workspace-session-tab-trigger,
 .theme-modern .workspace-session-tab-active .workspace-session-tab-trigger {

@@ -389,18 +389,23 @@
   color: #f8fafc;
 }
 
+/* 选中文字配色（用户反馈 2026-10-08：选中后"颜色灰白"看不清）：
+   这里原写死 color:#f8fbff（近白），是日志区还是深色底时定的值；align-log-light.css
+   随后把内嵌日志区改成浅色底，却没同步改选中文字色 → 近白字配浅蓝底 = 灰白。
+   改为 color:inherit：选中态沿用该行自身文字色（普通行 = --ink-soft 深灰、
+   异常行 = 对应级别色），深浅主题下都保持可读。背景色维持原值不变。 */
 .viewer-console-markup ::selection,
 .viewer-console-markup .log-highlight::selection,
 .viewer-console-markup .log-highlight-active::selection {
   background: rgba(96, 165, 250, 0.42);
-  color: #f8fbff;
+  color: inherit;
 }
 
 .viewer-console-markup ::-moz-selection,
 .viewer-console-markup .log-highlight::-moz-selection,
 .viewer-console-markup .log-highlight-active::-moz-selection {
   background: rgba(96, 165, 250, 0.42);
-  color: #f8fbff;
+  color: inherit;
 }
 
 /* --- Local File Panel --- */
