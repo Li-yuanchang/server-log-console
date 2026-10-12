@@ -156,6 +156,22 @@ const JUMP_STATUS_REMOTE_ROOTS = new Set([
 
 type ServerStatusContextSource = "directory" | "file" | "saved" | "none";
 
+/**
+ * 行范围选区（Shift 点击「按行复制」）。
+ *
+ * 关键设计（2026-10-12 用户反馈「选中后日志自己滚动刷新，会不会一直往下复制」）：
+ * 同时保存**行下标**与**选中时刻的文本快照**。
+ *  - `text` 是复制时的唯一依据 —— 内容随后被翻页/实时追加/头部裁剪改变，复制仍取当初选中的原文。
+ *  - `start`/`end` 仅用于渲染高亮；内容变了就与快照对不上，此时隐藏高亮（见 selectionFresh），
+ *    避免高亮「往下漂」指向别的行误导用户。
+ */
+interface ViewerLineSelection {
+  start: number;
+  end: number;
+  /** 建立选区时从完整行数据取的文本快照；复制只认它 */
+  text: string;
+}
+
 function isJumpServerStatusContextCandidate(value: string): boolean {
   const parts = value.split("/").filter(Boolean);
   return parts.some((part, index) => index > 0 && JUMP_STATUS_REMOTE_ROOTS.has(part.toLowerCase()))
@@ -508,7 +524,7 @@ export function App() {
   const [lineContextState, setLineContextState] = useState<LineContextState | null>(null);
   const [highlightCount, setHighlightCount] = useState(0);
   const [viewerSelMenu, setViewerSelMenu] = useState<{ x: number; y: number; text: string } | null>(null);
-  const [viewerLineCopyRange, setViewerLineCopyRange] = useState<{ start: number; end: number } | null>(null);
+  const [viewerLineCopyRange, setViewerLineCopyRange] = useState<ViewerLineSelection | null>(null);
   const [showBookmarkPanel, setShowBookmarkPanel] = useState(false);
   const [showUtilityWorkspace, setShowUtilityWorkspace] = useState(false);
   const [activeUtilityPanel, setActiveUtilityPanel] = useState<UtilityPanelType>("compare");
@@ -568,6 +584,8 @@ export function App() {
   const autoConnectServerRef = useRef("");
   const sliceScrollAnchorRef = useRef<"top" | "bottom" | null>(null);
   const wheelSliceLockRef = useRef(false);
+  /* 行选区是否已过期（内容变化后快照对不上）：供 Shift 点击回调即时读取 */
+  const viewerLineSelectionStaleRef = useRef(false);
   const wheelSliceIntentRef = useRef<{ direction: "prev" | "next"; count: number; at: number } | null>(null);
   const lastResultTabIdRef = useRef("");
   const { treeResizeRef, activityPanelResizeRef } = usePanelResize(setBrowserTreeWidth, setActivityPanelHeight);
@@ -1465,18 +1483,13 @@ export function App() {
     const anchor = sliceScrollAnchorRef.current;
     sliceScrollAnchorRef.current = null;
     if (!anchor) {
-      wheelSliceLockRef.current = false;
       return;
     }
+    /* 翻页落点走 settleScrollTo（收敛式重钉，等测量稳定）：上翻钉最后一行、下翻钉首行。
+       不能走 scrollToBottom（那是 LIVE 跟随的轻量实现，会与 followOutput 打架）。
+       滚轮锁由 navigateSlice 的 finally 释放，这里不再代管。 */
     requestAnimationFrame(() => {
-      if (anchor === "top") {
-        virtualViewerRef.current?.scrollToTop();
-      } else if (anchor === "bottom") {
-        virtualViewerRef.current?.scrollToBottom();
-        window.setTimeout(() => virtualViewerRef.current?.scrollToBottom(), 80);
-        window.setTimeout(() => virtualViewerRef.current?.scrollToBottom(), 180);
-      }
-      wheelSliceLockRef.current = false;
+      virtualViewerRef.current?.settleScrollTo(anchor === "top" ? "top" : "bottom");
     });
   }, [sliceData]);
 
@@ -3005,20 +3018,34 @@ export function App() {
     }
     event.preventDefault();
     setViewerSelMenu(null);
+    /* 选区建立：每次都从「当前完整行数据」取文本快照，连同行下标一起存。
+       这样即便此后内容被翻页/实时追加/头部裁剪改变，复制仍取当初选中的原文。 */
+    const snapRange = (start: number, end: number) => {
+      const text = virtualViewerRef.current?.getLineRangeText(start, end) || "";
+      return { start, end, text };
+    };
     setViewerLineCopyRange((current) => {
       if (!current || current.start !== current.end) {
         setActionStatus(`已选择复制起点：第 ${formatNumber(lineIndex + 1)} 行。`);
-        return { start: lineIndex, end: lineIndex };
+        return snapRange(lineIndex, lineIndex);
+      }
+      /* 旧选区已过期（内容翻页/实时刷新后行号失去指向）：不在其上延长，
+         改为以本次点击为新起点重新开始，避免混合两段无关的日志。 */
+      if (viewerLineSelectionStaleRef.current) {
+        setActionStatus(`原选区内容已变化，已重新选择起点：第 ${formatNumber(lineIndex + 1)} 行。`);
+        return snapRange(lineIndex, lineIndex);
       }
       const next = { start: Math.min(current.start, lineIndex), end: Math.max(current.start, lineIndex) };
       setActionStatus(`已选择复制范围：第 ${formatNumber(next.start + 1)} - ${formatNumber(next.end + 1)} 行。`);
-      return next;
+      return snapRange(next.start, next.end);
     });
   }, [setActionStatus, showToast]);
 
   const handleCopyViewerLineRange = useCallback(async () => {
     if (!viewerLineCopyRange) return;
-    const text = virtualViewerRef.current?.getLineRangeText(viewerLineCopyRange.start, viewerLineCopyRange.end) || "";
+    /* 复制只认「建立选区时的文本快照」：不依赖当前内容，故翻页滚动 / LIVE 追加 / 头部裁剪
+       都不会让复制范围漂移或拷到别的行（用户反馈 2026-10-12）。 */
+    const text = viewerLineCopyRange.text;
     if (!text) return;
     try {
       await copyText(text);
@@ -3035,13 +3062,30 @@ export function App() {
 
   const handleViewerLineRangeChange = useCallback((range: { start: number; end: number }) => {
     setViewerSelMenu(null);
-    const normalized = {
-      start: Math.min(range.start, range.end),
-      end: Math.max(range.start, range.end),
-    };
-    setViewerLineCopyRange(normalized);
-    setActionStatus(`已选择复制范围：第 ${formatNumber(normalized.start + 1)} - ${formatNumber(normalized.end + 1)} 行。`);
+    const start = Math.min(range.start, range.end);
+    const end = Math.max(range.start, range.end);
+    /* 键盘 Shift+方向键调整范围：与 Shift 点击同源，重取当前完整行数据作为快照 */
+    const text = virtualViewerRef.current?.getLineRangeText(start, end) || "";
+    setViewerLineCopyRange({ start, end, text });
+    setActionStatus(`已选择复制范围：第 ${formatNumber(start + 1)} - ${formatNumber(end + 1)} 行。`);
   }, [setActionStatus]);
+
+  /* 选区「已过期」判定（2026-10-12）：内容翻页/LIVE 追加/头部裁剪后，快照与当前内容
+     对不上 → 行号已失去指向。此时提示条给出说明，高亮由 viewer 侧一并隐藏，
+     但复制仍取快照原文、不会拷错。 */
+  const viewerLineSelectionStale = useMemo(() => {
+    if (!viewerLineCopyRange || !viewerLineCopyRange.text) {
+      return false;
+    }
+    const lines = currentLogContent.split("\n");
+    const start = Math.max(0, Math.min(viewerLineCopyRange.start, viewerLineCopyRange.end));
+    const end = Math.min(lines.length - 1, Math.max(viewerLineCopyRange.start, viewerLineCopyRange.end));
+    if (end < start) {
+      return true;
+    }
+    return lines.slice(start, end + 1).join("\n") !== viewerLineCopyRange.text;
+  }, [currentLogContent, viewerLineCopyRange]);
+  viewerLineSelectionStaleRef.current = viewerLineSelectionStale;
 
   const returnToJumpSource = useCallback(() => {
     const source = lineContextState?.jumpSource;
@@ -4184,8 +4228,17 @@ export function App() {
                       <div className="viewer-line-copy-bar">
                         <div className="viewer-line-copy-main">
                           <span className="viewer-line-copy-kicker">按行复制</span>
-                          <strong>第 {formatNumber(viewerLineCopyRange.start + 1)} - {formatNumber(viewerLineCopyRange.end + 1)} 行</strong>
-                          <span>Shift 点击另一行可调整范围</span>
+                          <strong>
+                            第 {formatNumber(viewerLineCopyRange.start + 1)} - {formatNumber(viewerLineCopyRange.end + 1)} 行
+                            {" · "}
+                            {formatNumber(Math.abs(viewerLineCopyRange.end - viewerLineCopyRange.start) + 1)} 行
+                          </strong>
+                          {viewerLineSelectionStale ? (
+                            /* 内容已翻页 / 实时追加后快照对不上：高亮已隐藏，但复制仍取当初选中的原文 */
+                            <span>内容已变化，复制仍是所选原文</span>
+                          ) : (
+                            <span>Shift 点击另一行可调整范围</span>
+                          )}
                         </div>
                         <div className="viewer-line-copy-actions">
                           <button type="button" className="ghost-button slim-button" onClick={() => setViewerLineCopyRange(null)}>取消</button>
@@ -4227,6 +4280,7 @@ export function App() {
                         activeHighlightIndex={activeHighlightIndex}
                         focusLineIndex={lineContextState && activeViewerTabId === "file" ? lineContextState.lineNumber - lineContextState.startLine : undefined}
                         selectedLineRange={activeViewerTabId === "file" ? viewerLineCopyRange : null}
+                        selectedLineText={activeViewerTabId === "file" ? viewerLineCopyRange?.text : undefined}
                         onLineClick={viewerLineClickEnabled ? handleViewerLineClick : (activeViewerTabId === "file" ? handleViewerFileLineClick : undefined)}
                         onSelectedLineRangeChange={activeViewerTabId === "file" ? handleViewerLineRangeChange : undefined}
                         onCopyLineRange={activeViewerTabId === "file" ? handleCopyViewerLineRange : undefined}
