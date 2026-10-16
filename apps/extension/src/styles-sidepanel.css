@@ -216,7 +216,11 @@ body.extension-sidepanel .toolbar-panel {
   .theme-modern .browser-grid > .browser-tree-column {
     display: grid;
     grid-template-rows: auto minmax(0, 1fr);
-    flex: 0 0 132px;
+    /* 2026-10-12 修复「目录列拖不大」：此处原写死 flex: 0 0 132px，与
+       theme-modern.css 的 flex: 0 0 var(--browser-tree-width, 208px) 特异性相同
+       且本文件最后加载 → 变量被覆盖，窄档（侧栏 / ≤800 窗口）下拖拽完全失效。
+       改为读同一变量，132 仅作该档默认值；未拖拽过时即 132，拖拽后按变量取值。 */
+    flex: 0 0 var(--browser-tree-width, 132px);
     min-width: 0;
   }
 
