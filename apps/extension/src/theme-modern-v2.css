@@ -745,9 +745,16 @@
 .theme-modern .xrow:hover { background: color-mix(in srgb, var(--ink) 3.5%, transparent); }
 
 /* ---------- 9. 页签细节：关闭钮悬浮/＋/分组 chip ---------- */
-.theme-modern .workspace-session-tab .workspace-session-tab-close { opacity: 0; transition: opacity 0.12s; }
+/* 2026-10-16：× 对比增强（用户反馈「对比不明显」）。
+   原：opacity 0（仅 hover/active 显现）+ 颜色 color-mix(ink-soft 78% white)（偏淡）。
+   现：激活页签的 × 常显且用 ink-soft 实色、命中背景随激活底一起可辨；
+   未激活页签仍 hover 才显（避免常驻噪点）。 */
+.theme-modern .workspace-session-tab .workspace-session-tab-close { opacity: 0; transition: opacity 0.12s, background-color 0.12s, color 0.12s; }
 .theme-modern .workspace-session-tab:hover .workspace-session-tab-close,
 .theme-modern .workspace-session-tab-active .workspace-session-tab-close { opacity: 1; }
+.theme-modern .workspace-session-tab-close { color: var(--ink-soft); }
+.theme-modern .workspace-session-tab-close:hover { background: color-mix(in srgb, var(--ink) 10%, transparent); color: var(--ink); }
+.theme-modern .workspace-session-tab-active .workspace-session-tab-close:hover { background: color-mix(in srgb, var(--red) 14%, transparent); color: var(--red); }
 .theme-modern .workspace-session-tab-group {
   font-size: var(--fs-2xs);
   color: var(--ink-muted);

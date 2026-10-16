@@ -198,6 +198,9 @@
 .viewer-console-markup {
   white-space: pre-wrap;
   word-break: break-word;
+  /* 容器层一并禁掉文字原生拖拽（配合 .log-line）：否则从行间空隙起拖、
+     或拖动跨越行边界时，仍可能被浏览器接管为 HTML5 文本拖拽而丢失选区。 */
+  -webkit-user-drag: none;
 }
 
 .log-line {
@@ -208,6 +211,13 @@
   font-family: var(--log-font-family, "SFMono-Regular", "Consolas", "Liberation Mono", "Menlo", monospace);
   font-size: var(--log-font-size, 12px);
   line-height: 1.5;
+  /* 选区手感修复（2026-10-16 用户反馈「指针脱离软件区域选中就没了、手感稀烂」）：
+     日志文字默认可被浏览器当作原生拖拽对象 —— 按住并拖动会触发 HTML5「拖动选中文本」
+     而不是「延长选区」，于是看不到 ::selection 高亮、只剩 :hover 淡蓝；指针一离开窗口
+     :hover 消失 → 误以为「选中丢了」。禁掉文字原生拖拽后，拖动始终是延长选区，
+     松开即稳定保留（选区本就与指针位置无关）。 */
+  -webkit-user-drag: none;
+  user-select: text;
 }
 
 .log-line-clickable {
