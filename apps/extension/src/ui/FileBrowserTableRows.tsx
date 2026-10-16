@@ -69,14 +69,23 @@ export function FileBrowserTableRows(props: Props) {
     if (dropRowPath !== entry.path) setDropRowPath(entry.path);
   };
   const rowDragLeave = (event: ReactDragEvent<HTMLDivElement>, entry: LogFileEntry) => {
+    /* 仅接管应用内拖拽移动；外部文件放行，让列级 onDragLeave 正常复位上传遮罩 */
+    if (!event.dataTransfer.types.includes("application/x-slcc-move")) return;
     event.stopPropagation();
     setDropRowPath((current) => (current === entry.path ? null : current));
   };
   const rowDrop = (event: ReactDragEvent<HTMLDivElement>, entry: LogFileEntry) => {
+    /* ⚠️ 只在「应用内拖拽移动」时接管（2026-10-15 修复根因①）：
+       此前无条件 preventDefault + stopPropagation，会把「外部文件拖到文件夹行上传」
+       这一手势整个吞掉 —— 列级 handleFileDrop 收不到 drop，上传不触发、上传遮罩
+       （isDragOver）也永不复位，用户表现为「松手后遮罩常驻、切换目录都不行」。
+       外部文件拖拽（types 含 Files、不含 slcc-move）在此直接放行给列级处理。 */
+    if (!props.onDropMove || !event.dataTransfer.types.includes("application/x-slcc-move")) {
+      return;
+    }
     event.preventDefault();
     event.stopPropagation();
     setDropRowPath(null);
-    if (!props.onDropMove) return;
     const raw = event.dataTransfer.getData("application/x-slcc-move");
     if (!raw) return;
     try {

@@ -119,6 +119,29 @@ function getExtensionDistDir() {
     : path.join(__dirname, "..", "extension", "dist");
 }
 
+/**
+ * 允许的导航目标 = 应用自身入口（extension/dist 下的 file://）与 about:。
+ * 2026-10-15：此前 will-navigate 直接放行**所有** file:// —— 把外部文件拖到非落点
+ * 区域时，浏览器默认导航行为会让窗口跳到该文件的 file:// URL，整个 UI 被替换，
+ * 只能强杀重启（用户反馈「遮罩常驻、切换目录都不行、只能强杀」）。
+ * 收紧为「仅放行应用自己的入口」，其余一律拦截。
+ * 注意：资源（JS/CSS chunk）属子资源加载、不是导航，不受影响；应用也从未 loadURL。
+ */
+function isAppEntryUrl(url) {
+  if (url === "about:blank" || url.startsWith("about:")) {
+    return true;
+  }
+  try {
+    if (new URL(url).protocol !== "file:") {
+      return false;
+    }
+    const entryDir = pathToFileURL(path.join(getExtensionDistDir(), path.sep)).href;
+    return url.startsWith(entryDir);
+  } catch {
+    return false;
+  }
+}
+
 function getGatewayEntry() {
   return app.isPackaged
     ? path.join(process.resourcesPath, "gateway", "dist", "index.js")
@@ -841,9 +864,12 @@ ipcMain.handle("open-pip-window", (_event, config = {}) => {
     return { action: "deny" };
   });
   nextPipWindow.webContents.on("will-navigate", (event, url) => {
-    if (url.startsWith("file://") || url.startsWith("about:")) return;
+    if (isAppEntryUrl(url)) return;
     event.preventDefault();
-    shell.openExternal(url);
+    probe(`pip will-navigate blocked ${url}`);
+    if (!url.startsWith("file:")) {
+      shell.openExternal(url);
+    }
   });
   nextPipWindow.loadFile(indexFile, { query: Object.fromEntries(query.entries()) });
 
@@ -1132,9 +1158,12 @@ function createWindow() {
     return { action: "deny" };
   });
   mainWindow.webContents.on("will-navigate", (event, url) => {
-    if (url.startsWith("file://") || url.startsWith("about:")) return;
+    if (isAppEntryUrl(url)) return;
     event.preventDefault();
-    shell.openExternal(url);
+    probe(`main will-navigate blocked ${url}`);
+    if (!url.startsWith("file:")) {
+      shell.openExternal(url);
+    }
   });
 }
 

@@ -1,9 +1,13 @@
 import type { SearchSettingsState } from "./utils.js";
 
 const browserTreeWidthStorageKey = "server-log-console:browser-tree-width";
-const browserTreeWidthDefault = 208;
-const browserTreeWidthMin = 170;
-const browserTreeWidthMax = 380;
+/* 未自定义时不落默认值：由 CSS 按档位给默认宽（宽档 208 / 侧栏窄档 132）。
+   下限 140：贴近侧栏窄档默认树宽（132），拖到最窄时不会突然跳回更大值；
+   上限 560：深路径（如 127.121_差旅管理系统生产环境_公司）能拉到足够宽。
+   右侧文件列的可用宽度由 CSS 的 max-width 百分比再兜底，
+   见 theme-modern.css `.browser-grid > .browser-tree-column`（2026-10-12 用户反馈「拖不大」）。 */
+const browserTreeWidthMin = 140;
+const browserTreeWidthMax = 560;
 const activityPanelHeightStorageKey = "server-log-console:activity-panel-height";
 const activityPanelHeightDefault = 168;
 const activityPanelHeightMin = 108;
@@ -31,8 +35,12 @@ export interface TransferHistoryEntry {
   message?: string;
 }
 
-export function clampBrowserTreeWidth(width: number) {
-  return Math.max(browserTreeWidthMin, Math.min(browserTreeWidthMax, width));
+export function clampBrowserTreeWidth(width: number, maxWidth: number = browserTreeWidthMax) {
+  /* maxWidth 由拖拽处按「容器实测宽 − 文件列保底」动态算得后传入，用于窄宿主
+     （Chrome 侧栏 ~200px）下防止把树列拖到压没右侧文件列。硬上限（560）恒生效，
+     传入值只会在其之内收紧。 */
+  const effectiveMax = Math.max(browserTreeWidthMin, Math.min(browserTreeWidthMax, maxWidth));
+  return Math.max(browserTreeWidthMin, Math.min(effectiveMax, width));
 }
 
 export function clampActivityPanelHeight(height: number) {
@@ -40,12 +48,14 @@ export function clampActivityPanelHeight(height: number) {
 }
 
 export function readBrowserTreeWidth() {
+  /* 返回 null = 用户从未拖拽过：由 CSS 按档位给默认宽（宽档 208 / 侧栏窄档 132）。
+     一旦拖拽过就持久化具体像素值，各宿主共用。 */
   try {
     const raw = globalThis.localStorage?.getItem(browserTreeWidthStorageKey);
     const parsed = raw ? Number(raw) : NaN;
-    return Number.isFinite(parsed) ? clampBrowserTreeWidth(parsed) : browserTreeWidthDefault;
+    return Number.isFinite(parsed) ? clampBrowserTreeWidth(parsed) : null;
   } catch {
-    return browserTreeWidthDefault;
+    return null;
   }
 }
 

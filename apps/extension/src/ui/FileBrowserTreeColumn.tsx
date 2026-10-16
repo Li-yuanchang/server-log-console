@@ -180,10 +180,19 @@ export function FileBrowserTreeColumn(props: Props) {
             if (dropTargetPath !== path) setDropTargetPath(path);
           }}
           onDragLeave={(event) => {
+            /* 仅接管应用内拖拽移动；外部文件放行，不阻断列级/全局的遮罩复位 */
+            if (!event.dataTransfer.types.includes("application/x-slcc-move")) return;
             event.stopPropagation();
             if (dropTargetPath === path) setDropTargetPath(null);
           }}
           onDrop={(event) => {
+            /* ⚠️ 只在「应用内拖拽移动」时接管（2026-10-15 修复根因①，同 FileBrowserTableRows）：
+               此前无条件 preventDefault + stopPropagation，会把外部文件拖到树节点的 drop
+               整个吞掉 —— 上传不触发、上传遮罩不复位。外部文件在此直接放行，
+               由列级 handleFileDrop（若覆盖）或全局兜底处理。 */
+            if (!event.dataTransfer.types.includes("application/x-slcc-move")) {
+              return;
+            }
             event.preventDefault();
             event.stopPropagation();
             setDropTargetPath(null);

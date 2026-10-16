@@ -506,7 +506,9 @@ export function App() {
   const [directoryInput, setDirectoryInput] = useState("");
   const [pathbarMode, setPathbarMode] = useState<"browse" | "edit">("browse");
   const [selectedFilePaths, setSelectedFilePaths] = useState<string[]>([]);
-  const [browserTreeWidth, setBrowserTreeWidth] = useState(() => readBrowserTreeWidth());
+  /* 目录树宽：null = 用户从未拖拽 → 由 CSS 按档位给默认宽（宽档 208 / 侧栏窄档 132）。
+     一旦拖拽过就落成像素值，各宿主共用（沿用原持久化语义）。 */
+  const [browserTreeWidth, setBrowserTreeWidth] = useState<number | null>(() => readBrowserTreeWidth());
   const [activityPanelHeight, setActivityPanelHeight] = useState(() => readActivityPanelHeight());
   const [resultTabCounter, setResultTabCounter] = useState(1);
   const [activeHighlightIndex, setActiveHighlightIndex] = useState(0);
@@ -1227,12 +1229,59 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    writeBrowserTreeWidth(browserTreeWidth);
+    /* 仅在有自定义宽度时落盘（null = 未拖拽过，保留 CSS 档位默认宽） */
+    if (browserTreeWidth != null) {
+      writeBrowserTreeWidth(browserTreeWidth);
+    }
   }, [browserTreeWidth]);
 
   useEffect(() => {
     writeActivityPanelHeight(activityPanelHeight);
   }, [activityPanelHeight]);
+
+  /* 全局拖拽兜底（2026-10-15 用户反馈「上传松手后遮罩常驻、切换目录都不行、只能强杀」）。
+     两个职责：
+     ① 外部文件拖到「非落点区域」（侧栏/工具栏/空白）时，浏览器默认行为会让 Electron
+        导航到该 file:// 文件、整个 UI 被替换 → 只能强杀。这里 preventDefault 吞掉默认导航。
+     ② dragend / 离开窗口 时兜底清除上传遮罩，避免「松开后遮罩常驻、无法再拖」。
+     放在 window 冒泡阶段：应用自身列级 onDrop（handleFileDrop）先执行并 preventDefault，
+     故用 defaultPrevented 区分「已被上传落点处理」与「落在非落点区域」。 */
+  useEffect(() => {
+    const isExternalFileDrag = (event: DragEvent) => Boolean(event.dataTransfer?.types?.includes("Files"));
+    const onDragOver = (event: DragEvent) => {
+      /* 必须 preventDefault，否则 drop 不会被派发、且松手即触发导航 */
+      if (isExternalFileDrag(event)) {
+        event.preventDefault();
+      }
+    };
+    const onDrop = (event: DragEvent) => {
+      if (!isExternalFileDrag(event) || event.defaultPrevented) {
+        /* 非文件拖拽，或已被应用内的上传落点处理 */
+        return;
+      }
+      /* 落到非落点区域：吞掉默认行为（避免导航到 file://），并清除残留遮罩 */
+      event.preventDefault();
+      console.warn("[drag-guard] 文件落在非上传落点区域，已阻止默认导航并复位遮罩");
+      setIsDragOver(false);
+    };
+    const onDragEnd = () => setIsDragOver(false);
+    const onDragLeave = (event: DragEvent) => {
+      /* relatedTarget 为空 = 拖拽离开窗口：兜底清除遮罩 */
+      if (!event.relatedTarget) {
+        setIsDragOver(false);
+      }
+    };
+    window.addEventListener("dragover", onDragOver);
+    window.addEventListener("drop", onDrop);
+    window.addEventListener("dragend", onDragEnd);
+    window.addEventListener("dragleave", onDragLeave);
+    return () => {
+      window.removeEventListener("dragover", onDragOver);
+      window.removeEventListener("drop", onDrop);
+      window.removeEventListener("dragend", onDragEnd);
+      window.removeEventListener("dragleave", onDragLeave);
+    };
+  }, []);
 
   useEffect(() => {
     if (!contextMenu) {
@@ -2538,13 +2587,21 @@ export function App() {
   }
 
   function handleTreeResizeStart(event: ReactPointerEvent<HTMLDivElement>) {
-    if (!browserGridRef.current) {
+    const grid = browserGridRef.current;
+    if (!grid) {
       return;
     }
 
+    /* 起点宽度取实测值（未拖拽过时 browserTreeWidth 为 null，用实测列宽兜底） */
+    const measured = grid.querySelector(".browser-tree-column")?.getBoundingClientRect().width;
+    /* 拖拽上限：容器实测宽 − 拖拽手柄(6) − 右侧文件列保底 240。
+       窄宿主（Chrome 侧栏 ~200px）下该值会很小，clamp 后落到下限 140，
+       即「拖不动」但也不会压没文件列；宽宿主下可拉到硬上限 560。 */
+    const gridWidth = grid.getBoundingClientRect().width;
     treeResizeRef.current = {
       startX: event.clientX,
-      startWidth: browserGridRef.current.querySelector(".browser-tree-column")?.getBoundingClientRect().width || browserTreeWidth
+      startWidth: measured || browserTreeWidth || 208,
+      maxWidth: Math.max(140, Math.min(560, gridWidth - 6 - 240))
     };
     document.body.classList.add("is-resizing-tree");
     event.preventDefault();

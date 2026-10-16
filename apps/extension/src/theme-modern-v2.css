@@ -899,11 +899,17 @@
   overflow: auto;
   min-height: 0;
 }
+/* 长目录名可完整查看（2026-10-15 用户反馈「名称长显示不全」）：
+   行宽改内容驱动（max-content），用 min-width:100% 兜底 ——
+   内容比列窄时行铺满、计数徽标仍靠右（margin-left:auto 有剩余空间可分配）；
+   内容比列宽时行随内容展开、tree-list 出现横向滚动条，目录名不再被省略。
+   （配合 .tree-tn 的 flex:0 0 auto，彻底消除"名称被截断"。） */
 .theme-modern .tree-row {
   display: flex;
   align-items: center;
   gap: 5px;
-  width: 100%;
+  width: max-content;
+  min-width: 100%;
   height: 27px;
   padding-right: 8px;
   border: none;
@@ -957,9 +963,13 @@
   color: var(--accent);
 }
 .theme-modern .tree-tn {
+  /* 2026-10-15：目录名不再截断（用户反馈「名称长显示不全」）。
+     改为按内容定宽（flex: 0 0 auto）+ 不裁剪，配合 .tree-row 的 width:max-content
+     让长名称完整显示、由 tree-list 横向滚动承接；短名称时行仍铺满列宽（min-width:100%）。 */
+  flex: 0 0 auto;
+  max-width: none;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow: visible;
   white-space: nowrap;
   padding: 0;
   border: none;
@@ -1396,6 +1406,65 @@
   color: var(--ink);
   font-weight: 600;
   background: var(--panel-muted);
+}
+/* ============ 面包屑弹性折叠（2026-10-12） ============
+   用户设想：「重点显示当前目录以及前 3 级别目录；真显示不全时在前 3+N 自动省略」。
+   折叠逻辑在 FileBrowserPathbar（保留首段 +「…」+ 末 4 段，仍放不下则逐段减到 1）。
+   下面三条补齐视觉：
+   ① 末段允许收缩并省略号收尾（连「当前」都放不下时的最后兜底，绝不横向溢出）；
+   ②「…」按钮外观；
+   ③「…」弹层（portal 到 .app-shell，避开容器 overflow:hidden 的裁剪）。 */
+.theme-modern .pathbar-breadcrumbs > .pathbar-breadcrumb-node:last-child {
+  /* 覆盖同文件 1377 行的 flex: none：末段（当前目录）允许收缩 */
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.theme-modern .pathbar-breadcrumbs > .pathbar-breadcrumb-node:last-child .pathbar-breadcrumb-item {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.theme-modern .pathbar-breadcrumb-more {
+  color: var(--ink-muted);
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+.theme-modern .pathbar-breadcrumb-more:hover { color: var(--ink); }
+.theme-modern .pathbar-breadcrumb-more-menu {
+  z-index: 90;
+  display: flex;
+  flex-direction: column;
+  min-width: 160px;
+  max-width: 340px;
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-strong);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.16);
+}
+.theme-modern .pathbar-breadcrumb-more-item {
+  display: block;
+  width: 100%;
+  padding: 5px 8px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: var(--fs-xs);
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.theme-modern .pathbar-breadcrumb-more-item:hover {
+  background: var(--panel-muted);
+  color: var(--ink);
 }
 .theme-modern .directory-input {
   height: 30px;

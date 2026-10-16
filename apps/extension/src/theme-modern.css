@@ -1961,10 +1961,30 @@
 
 .theme-modern .browser-resizer {
   flex: 0 0 1px;
-  /* background: var(--line); —— 2026-10-03 用户要求去掉分隔线底色 */
+  /* background: var(--line); —— 2026-10-03 用户要求去掉分隔线底色。
+     2026-10-12：静止态仍无线（尊重该决策），但补 hover / 拖动态高亮抓手 ——
+     此前手柄是 6px 全透明、::before 又被关掉，用户根本看不出能拖。 */
   background: transparent;
+  position: relative;
 }
 .theme-modern .browser-resizer::before { display: none; }
+/* 悬停 / 拖动态：正中 1px accent 竖线（命中区仍 6px，见 .browser-grid > .browser-resizer） */
+.theme-modern .browser-resizer::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  transform: translateX(-50%);
+  background: transparent;
+  transition: background 0.12s ease;
+}
+.theme-modern .browser-resizer:hover::after,
+body.is-resizing-tree .theme-modern .browser-resizer::after {
+  background: var(--accent);
+  opacity: 0.55;
+}
 
 .theme-modern .browser-column {
   border: 1px solid var(--line);
@@ -3254,7 +3274,9 @@
   /* 树列宽度由 App 的拖拽状态驱动（FileBrowserGrid 写入 --browser-tree-width）。
      用 :has 前的类名而非 :first-child，避免勾选态插入批量条后选错元素造成横向抖动 */
   flex: 0 0 var(--browser-tree-width, 208px);
-  min-width: 160px;
+  /* min-width 对齐 JS 拖拽下限 140（storage.ts browserTreeWidthMin）：
+     原为 160，会把"拖到 140"顶回 160，表现为窄段拖不动。 */
+  min-width: 140px;
   overflow: auto;
 }
 
@@ -3870,7 +3892,15 @@
 
 @media (max-width: 1439.9px) {
   .theme-modern .sidebar-panel { flex: 0 0 200px; }
-  .theme-modern .browser-grid > .browser-column:first-child { flex: 0 0 180px; }
+  /* 2026-10-15 修复「目录树拖不动」（上一轮漏修的真凶）：此处原是写死
+     `flex: 0 0 180px`，特异性 (0,4,0) 高于树列变量规则
+     `.browser-grid > .browser-tree-column`（0,3,0）→ 窄档下拖拽设的
+     --browser-tree-width 被忽略，树列恒为 180px。Electron 默认窗口 1280px
+     ≤ 1439.9px，该档必然命中，故「一拖就没反应」。
+     改为读同一变量，180 仅作本档默认值。
+     顺带把选择器从 :first-child 换成 .browser-tree-column：勾选态会插入
+     .file-batch-span，:first-child 便指向批量条而非树列（与 base 规则同一坑）。 */
+  .theme-modern .browser-grid > .browser-tree-column { flex: 0 0 var(--browser-tree-width, 180px); }
 }
 
 /* 800 – 1024 桌面窄窗：原「56px 图标栏」档已删除——窄容器统一走

@@ -2,12 +2,12 @@ import { useEffect, useRef } from "react";
 import { clampBrowserTreeWidth, clampActivityPanelHeight } from "./storage.js";
 
 export type PanelResizeAPI = {
-  treeResizeRef: React.MutableRefObject<{ startX: number; startWidth: number } | null>;
+  treeResizeRef: React.MutableRefObject<{ startX: number; startWidth: number; maxWidth: number } | null>;
   activityPanelResizeRef: React.MutableRefObject<{ startY: number; startHeight: number } | null>;
 };
 
 export function usePanelResize(setBrowserTreeWidth: (v: number) => void, setActivityPanelHeight: (v: number) => void): PanelResizeAPI {
-  const treeResizeRef = useRef<{ startX: number; startWidth: number } | null>(null);
+  const treeResizeRef = useRef<{ startX: number; startWidth: number; maxWidth: number } | null>(null);
   const activityPanelResizeRef = useRef<{ startY: number; startHeight: number } | null>(null);
 
   useEffect(() => {
@@ -18,7 +18,9 @@ export function usePanelResize(setBrowserTreeWidth: (v: number) => void, setActi
       }
 
       const delta = event.clientX - resizeState.startX;
-      setBrowserTreeWidth(clampBrowserTreeWidth(resizeState.startWidth + delta));
+      /* maxWidth 在拖拽起点由 App 按容器实测宽算出（保证右侧文件列有保底宽度），
+         窄宿主（Chrome 侧栏 ~200px）下不会把树列拖到压没文件列。 */
+      setBrowserTreeWidth(clampBrowserTreeWidth(resizeState.startWidth + delta, resizeState.maxWidth));
     }
 
     function stopResize() {
