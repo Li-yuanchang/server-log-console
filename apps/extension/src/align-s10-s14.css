@@ -583,25 +583,22 @@
   font-weight: 550;
 }
 
-/* S14-2：图片背景遮罩亮度驱动——白纱强度绑定滑杆（App 写入 --custom-image-overlay-alpha 0..1）
-   S14-5：背景模糊绑定 --custom-image-blur */
-.theme-modern.ui-surface-custom.ui-custom-background-image {
-  --custom-shell-background:
-    linear-gradient(135deg, rgba(255, 255, 255, var(--custom-image-overlay-alpha, 0.3)), rgba(255, 255, 255, calc(var(--custom-image-overlay-alpha, 0.3) * 0.6))),
-    var(--custom-background-image),
-    linear-gradient(135deg, var(--custom-gradient-start), var(--custom-gradient-end));
-  --panel: rgba(255, 255, 255, calc(0.46 + var(--custom-image-overlay-alpha, 0.3) * 0.3));
-  --panel-strong: rgba(255, 255, 255, calc(0.62 + var(--custom-image-overlay-alpha, 0.3) * 0.25));
-  --panel-muted: rgba(255, 255, 255, calc(0.34 + var(--custom-image-overlay-alpha, 0.3) * 0.3));
-}
-.theme-modern.ui-surface-custom.ui-custom-background-image .shell-layout,
-.theme-modern.ui-surface-custom.ui-custom-background-image .main-panel {
+/* S14-2：图片背景遮罩亮度 → 已并入 theme-modern.css 的 .ui-bg-image
+   （由 --custom-image-overlay-alpha 0..1 驱动白/黑纱强度）。
+   S14-5：背景模糊绑定 --custom-image-blur（设置中心「背景模糊」滑杆）。
+   ⚠️ 旧选择器为 .ui-surface-custom.ui-custom-background-image —— 该体系已随
+   2026-10-02 主题重构退役（全仓库无人写入这两个类），滑杆因此长期不生效。
+   此处改挂现行背景层类 .ui-bg-image，恢复「背景模糊」实时生效。 */
+.theme-modern.ui-bg-image .shell-layout {
   backdrop-filter: blur(var(--custom-image-blur, 0px));
   -webkit-backdrop-filter: blur(var(--custom-image-blur, 0px));
 }
 
-/* S14-5：动态背景（Ken Burns，动效=减少时 class 不挂载） */
-.theme-modern.ui-bg-image.ui-dynamic-background .shell-layout {
+/* S14-5：动态背景（Ken Burns，动效=减少时 class 不挂载）。
+   ⚠️ 背景图挂在 .app-shell（= .theme-modern.ui-bg-image）上，而 .shell-layout
+   自身无任何背景图 → 原规则作用于它时 background-size/position 动画是空转。
+   改挂真正持有背景图的元素，恢复「动态背景」开关。 */
+.theme-modern.ui-bg-image.ui-dynamic-background {
   animation: slc-dyn-bg 26s ease-in-out infinite alternate;
 }
 @keyframes slc-dyn-bg {
@@ -609,6 +606,7 @@
   to { background-size: 116% auto; background-position: center 55%; }
 }
 @media (prefers-reduced-motion: reduce) {
+  .theme-modern.ui-bg-image,
   .theme-modern .shell-layout {
     animation: none !important;
   }

@@ -1037,7 +1037,7 @@
   background: var(--line);
 }
 
-/* 管理对话框：520px 居中，遮罩 rgba(23,23,23,.28) 点击关闭 */
+/* 管理对话框：520px 居中，遮罩走 --overlay token（回退值与原字面量同值），点击关闭 */
 .theme-modern .shortcuts-dialog-overlay {
   position: fixed;
   inset: 0;
@@ -1045,7 +1045,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(23, 23, 23, 0.28);
+  background: var(--overlay, rgba(23, 23, 23, 0.28));
 }
 .theme-modern .shortcuts-dialog {
   display: flex;

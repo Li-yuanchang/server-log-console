@@ -17,6 +17,8 @@ export type KeyboardShortcutsParams = {
   navigateSlice: (direction: "prev" | "next", source: "button" | "wheel" | "keyboard") => Promise<void>;
   focusHighlight: (direction: "prev" | "next") => void;
   normalizeSearchInput: (input: string) => string;
+  /** ⌘, / Ctrl+, 打开连接设置（2026-10-16：此前 UI 写着「⌘, 连接设置」但全仓无处理，是死提示） */
+  openConnectionSettings: () => void;
 };
 
 export function useKeyboardShortcuts(params: KeyboardShortcutsParams) {
@@ -37,6 +39,7 @@ export function useKeyboardShortcuts(params: KeyboardShortcutsParams) {
     navigateSlice,
     focusHighlight,
     normalizeSearchInput,
+    openConnectionSettings,
   } = params;
 
   useEffect(() => {
@@ -45,6 +48,14 @@ export function useKeyboardShortcuts(params: KeyboardShortcutsParams) {
       const target = event.target as HTMLElement | null;
       const isTypingTarget =
         target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target?.isContentEditable;
+
+      /* ⌘, / Ctrl+, 打开连接设置（2026-10-16 接线：UI 一直写着该提示但从未响应）。
+         macOS 上 `,` 的 event.key 为 ","，故直接比对；输入框内仍放行（与系统一致）。 */
+      if ((event.metaKey || event.ctrlKey) && !event.altKey && event.key === ",") {
+        event.preventDefault();
+        openConnectionSettings();
+        return;
+      }
 
       if ((event.metaKey || event.ctrlKey) && lowered === "f") {
         event.preventDefault();
@@ -128,5 +139,5 @@ export function useKeyboardShortcuts(params: KeyboardShortcutsParams) {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [activeLogView, activeViewerTabId, filePath, keywordInput, setShowKeywordBar, setShowQueryAdvanced, setKeywordInput, setActiveLogView, setActiveViewerTabId, enterPathbarEditMode, loadHeadSlice, loadTailSlice, navigateSlice, focusHighlight, normalizeSearchInput, keywordInputRef]);
+  }, [activeLogView, activeViewerTabId, filePath, keywordInput, setShowKeywordBar, setShowQueryAdvanced, setKeywordInput, setActiveLogView, setActiveViewerTabId, enterPathbarEditMode, loadHeadSlice, loadTailSlice, navigateSlice, focusHighlight, normalizeSearchInput, keywordInputRef, openConnectionSettings]);
 }

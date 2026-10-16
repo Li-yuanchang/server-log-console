@@ -1525,6 +1525,7 @@ export function App() {
     navigateSlice,
     focusHighlight,
     normalizeSearchInput,
+    openConnectionSettings: () => openSettingsWorkspace("connections"),
   });
 
   useEffect(() => {
@@ -3394,8 +3395,9 @@ export function App() {
     "--log-font-family": monoFontFamilyValue(logFontFamily),
     "--terminal-font-family": monoFontFamilyValue(terminalFontFamily),
     "--custom-background-image": toCssImageUrl(customBackgroundImage),
-    /* 背景层图片模式：遮罩亮度 / 模糊由设置滑杆驱动（原型 T1）。 */
-    "--custom-image-overlay": `${uiImgOverlay}%`,
+    /* 背景层图片模式：遮罩亮度 / 模糊由设置滑杆驱动（原型 T1）。
+       只注入 -alpha（0..1，供 CSS calc 使用）与 blur；旧的百分比版
+       --custom-image-overlay 已无任何消费方，删除以免留下假配置。 */
     "--custom-image-overlay-alpha": String(Math.max(0, Math.min(0.9, uiImgOverlay / 100))),
     "--custom-image-blur": `${uiImgBlur}px`,
     /* 强调色覆盖（高级节；null = 跟随主题）：contrast() 比较法派生 on-accent */

@@ -364,12 +364,14 @@
   background: var(--panel);
   min-height: 34px;
 }
-/* mac 沉浸式：红绿灯保持系统默认（y=12，实测圆心 ≈19.5）。归零负边距后顶部留 3px、
-   条高 37px，34px 页签（中心 20）落在红绿灯视线上，下划线不再贴顶，整带保持紧凑。
+/* mac 沉浸式：红绿灯保持系统默认（y=12，实测圆心 ≈19.5），34px 页签中心需落在 ≈20。
+   2026-10-16 修复「上有呼吸间距、下边没有」（用户反馈）：原 padding 为 `3px 10px 0`，
+   下内边距写死 0 → 页签上方留 3px、下方贴底，上下不对称、观感别扭。
+   改为上下对称各 3px；页签中心 = 3 + 34/2 = 20，红绿灯对齐不变（故条高 37 → 40）。
    特异性 0,3,0 压过本文件上面的 0,2,0 通版规则。 */
 .theme-modern.electron-macos-immersive .workspace-session-strip {
-  padding: 3px 10px 0;
-  min-height: 37px;
+  padding: 3px 10px;
+  min-height: 40px;
 }
 .theme-modern .workspace-session-tabs-shell {
   display: flex;
@@ -706,7 +708,7 @@
 
 /* ---------- 7. 命令面板（原型 .palette） ---------- */
 .theme-modern .palette-overlay {
-  background: rgba(23, 23, 23, 0.28);
+  background: var(--overlay, rgba(23, 23, 23, 0.28));
 }
 .theme-modern .palette-box {
   background: var(--panel);
@@ -929,9 +931,11 @@
 .theme-modern .tree-row:hover {
   background: color-mix(in srgb, var(--ink) 4%, transparent);
 }
+/* 当前目录行（2026-10-16 用户反馈「去掉左侧边框加粗」）：
+   原为 background: accent-soft + box-shadow: inset 2px 0 0 accent —— 左侧 2px 强调条
+   在圆角行上渲染成一条弧形粗边，视觉突兀。去掉左条，仅保留淡底区分当前目录。 */
 .theme-modern .tree-row-current {
   background: var(--accent-soft);
-  box-shadow: inset 2px 0 0 var(--accent);
 }
 /* 拖拽移动的落点高亮（批量条提示 ③）：悬停节点描边强调，
    可与当前目录态叠加（拖到当前目录合法：可拖入其他文件） */
@@ -2704,25 +2708,26 @@ body:has(.theme-modern) button:disabled {
     gap: 0 !important;
   }
 }
-/* 2) 行内字号：名 --fs-sm / 主机·端口·分组 --fs-2xs（走 token） */
+/* 2) 行内字号（对齐 VRC 服务器树 2026-10-16）：名 --fs-sm · 主机/端口/分组 --fs-xs。
+   原主机·端口·分组统一 --fs-2xs（11px）偏小、且与分组同档导致层级挤。 */
 .theme-modern .server-item .server-item-main strong,
 .theme-modern .server-item strong,
 .theme-modern .server-item .server-item-name {
   font-size: var(--fs-sm) !important;
-  font-weight: 550 !important;
+  font-weight: 500 !important;
   line-height: 1.35 !important;
 }
 .theme-modern .server-item .server-item-main span {
-  font-size: var(--fs-2xs) !important;
+  font-size: var(--fs-xs) !important;
   line-height: 1.4 !important;
 }
 .theme-modern .server-item > .server-item-meta {
-  font-size: var(--fs-2xs) !important;
+  font-size: var(--fs-xs) !important;
   padding: 0 !important;
 }
 .theme-modern .server-group-title,
 .theme-modern .server-list .server-group-title {
-  font-size: var(--fs-2xs) !important;
+  font-size: var(--fs-xs) !important;
   font-weight: 600 !important;
   padding: 12px 14px 4px !important;
 }
@@ -2743,24 +2748,30 @@ body:has(.theme-modern) button:disabled {
   border-left: none !important;
   background: transparent !important;
 }
-/* 4) 状态点效果：7px；在线绿 + 3px 光环；离线灰 + 3px 浅环（原型 .dot）
-   颜色走 token：在线 --green-dot；离线/待定由 --ink / --amber 派生。 */
+/* 4) 状态点：对齐 VRC 服务器树 —— 小、干净、无外圈（用户反馈 2026-10-16
+   「状态点太大太丑，尤其外圈；未选中灰色也显示光晕更难看」）。
+   旧规格：7px 实心 + box-shadow 0 0 0 3px 外环 → 视觉直径撑到 ~13px，且
+   离线行也挂一圈灰环，整列出现一排半透明「甜甜圈」，杂且脏。
+   新规格：6px；在线=绿实心点、离线=细描边空心圈（VRC 未连接态）、待连接=琥珀实心点。
+   三者一律无外扩光晕/光环。 */
 .theme-modern .server-status-dot,
 .theme-modern .server-item .server-status-dot {
-  width: 7px !important;
-  height: 7px !important;
+  width: 6px !important;
+  height: 6px !important;
+  box-sizing: border-box !important;
+  box-shadow: none !important;
 }
 .theme-modern .server-status-dot.dot-connected {
   background: var(--green-dot) !important;
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--green-dot) 15%, transparent) !important;
+  border: none !important;
 }
 .theme-modern .server-status-dot.dot-idle {
-  background: color-mix(in srgb, var(--ink-muted) 40%, var(--panel)) !important;
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ink) 5%, transparent) !important;
+  background: transparent !important;
+  border: 1.5px solid color-mix(in srgb, var(--ink-muted) 45%, transparent) !important;
 }
 .theme-modern .server-status-dot.dot-pending {
   background: var(--amber) !important;
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--amber) 18%, transparent) !important;
+  border: none !important;
 }
 /* 5) 悬浮快捷操作组（原型 .qa / .qa .btn，prototype.html 106–112）
    原型：.btn.icon.sm = 28×24 / 图标 12 / 组内 gap 2；
