@@ -185,7 +185,7 @@ body.extension-sidepanel .theme-modern .sidebar-panel .server-item {
   min-width: 0;
   padding-left: 14px !important;
   padding-right: 0 !important;
-  /* 10px：状态点带 3px 光环（box-shadow），8px 视觉上只剩 ~5px，点贴文字 */
+  /* 10px：状态点（2026-10-16 起改为 6px 无光环，对齐 VRC）与文字之间的呼吸间距 */
   gap: 10px !important;
 }
 

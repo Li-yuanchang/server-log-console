@@ -50,6 +50,7 @@
 :root:has(.theme-modern) {
   background: #fafafa;
 }
+:root:has(.ui-theme-geist) { background: #fafafa; }
 :root:has(.ui-theme-carbon) { background: #0a0a0a; }
 :root:has(.ui-theme-steel) { background: #f6f8fa; }
 :root:has(.ui-theme-slate) { background: #0b1220; }
@@ -104,15 +105,11 @@
   --dot-idle: #c8ccd2;
   --overlay: rgba(23, 23, 23, 0.28);
   --app-font-family: "Geist", "Inter", -apple-system, "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
-  --custom-background-color: #f7f9fc;
-  --custom-gradient-start: #eef5ff;
-  --custom-gradient-end: #fff7ed;
+  /* 图片背景层：仅保留仍在消费的地址变量（App 内联注入真实值，此处 none 兜底）。
+     已删除一批退役死 token（自定义纯色背景色 / 文字色 / 渐变起止色 / shell 背景 /
+     面板色调 / 日志背景色 / 终端背景色）：它们属于 2026-10-02 之前的自定义主题体系，
+     全仓库已无任何 var() 消费（经全量核对确认）。 */
   --custom-background-image: none;
-  --custom-text-color: #171717;
-  --custom-log-background-color: #0a0a0a;
-  --custom-terminal-background-color: #0a0a0a;
-  --custom-shell-background: var(--bg);
-  --custom-panel-tint: rgba(255, 255, 255, 0.78);
   --log-viewer-background: linear-gradient(180deg, var(--shell), var(--shell-soft));
   --terminal-background: var(--shell);
   --terminal-background-soft: var(--shell-soft);
@@ -295,8 +292,13 @@
 }
 
 .theme-modern.ui-bg-image {
+  /* 图片背景：白纱遮罩强度由设置中心「遮罩亮度」滑杆驱动
+     （App 写入 --custom-image-overlay-alpha，0..0.9，默认 0.3）。
+     系数 1.13 / 0.6 使默认 0.3 时与原固定值 0.34 / 0.2 视觉一致 → 接线不改变默认观感。 */
   background:
-    linear-gradient(135deg, rgba(248, 250, 252, 0.34), rgba(255, 255, 255, 0.2)),
+    linear-gradient(135deg,
+      rgba(248, 250, 252, calc(var(--custom-image-overlay-alpha, 0.3) * 1.13)),
+      rgba(255, 255, 255, calc(var(--custom-image-overlay-alpha, 0.3) * 0.6))),
     radial-gradient(circle at 18% 12%, rgba(255, 255, 255, 0.22), transparent 34%),
     radial-gradient(circle at 88% 10%, rgba(15, 23, 42, 0.1), transparent 30%),
     var(--custom-background-image, none),
@@ -309,8 +311,12 @@
 .theme-modern.ui-theme-slate.ui-bg-image,
 .theme-modern.ui-theme-espresso.ui-bg-image,
 .theme-modern.ui-theme-ink.ui-bg-image {
+  /* 深色主题：黑纱遮罩同样跟随「遮罩亮度」滑杆
+     （系数 1.73 / 1.0 使默认 0.3 时与原固定值 0.52 / 0.3 一致） */
   background:
-    linear-gradient(135deg, rgba(10, 10, 12, 0.52), rgba(10, 10, 12, 0.3)),
+    linear-gradient(135deg,
+      rgba(10, 10, 12, calc(var(--custom-image-overlay-alpha, 0.3) * 1.73)),
+      rgba(10, 10, 12, calc(var(--custom-image-overlay-alpha, 0.3) * 1.0))),
     radial-gradient(circle at 18% 12%, rgba(0, 0, 0, 0.3), transparent 34%),
     var(--custom-background-image, none),
     var(--bg);
@@ -328,7 +334,17 @@
   -webkit-backdrop-filter: blur(16px);
 }
 
-.theme-modern.ui-bg-fancy .sidebar-panel,
+/* 侧栏（服务器树）保持实底：参考 VRC 服务器树 —— 树区为平面实色、不透视背景层渐变。
+   用户反馈 2026-10-16：「渐变色看着太花了」——aurora 等背景层的蓝紫光晕透过半透明
+   侧栏（原 62% panel + 毛玻璃）形成一层彩色雾气，是「花」的主因。
+   仅侧栏退出半透明组；工具栏/工作区仍保留毛玻璃（内容区透背景属预期）。 */
+.theme-modern.ui-bg-fancy .sidebar-panel {
+  background: var(--panel);
+  border-color: var(--line);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
 .theme-modern.ui-bg-fancy .toolbar-panel,
 .theme-modern.ui-bg-fancy .workspace-panel,
 .theme-modern.ui-bg-fancy .advanced-panel {
@@ -5485,7 +5501,8 @@ body.is-electron .settings-exclusive-head input {
   position: fixed;
   inset: 0;
   z-index: 9500;
-  background: rgba(23, 23, 23, 0.28);
+  /* 遮罩走 --overlay token（经典主题未定义该 token → 回退到原同值字面量，观感不变） */
+  background: var(--overlay, rgba(23, 23, 23, 0.28));
   display: flex;
   justify-content: center;
   align-items: flex-start;

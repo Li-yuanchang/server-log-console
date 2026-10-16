@@ -574,6 +574,7 @@
 /* 键位行（触屏容器隐藏，见窄档规则） */
 .empty-wb-keys {
   display: flex;
+  align-items: center;
   gap: 14px;
   flex-wrap: wrap;
   margin-top: 16px;
@@ -582,6 +583,10 @@
   font-size: 11px;
   color: var(--ink-soft);
 }
+/* 每项内部：键帽与文字垂直居中对齐（2026-10-16 用户反馈「内容与 icon 未垂直居中」）。
+   原先 kbd 为 inline-block、与文字按基线对齐，加上 border-bottom-width:2px 的视觉厚度，
+   键帽相对文字整体上浮。改为行内 flex + align-items:center 后二者严格居中。 */
+.empty-wb-keys > span { display: inline-flex; align-items: center; }
 .empty-wb-keys kbd {
   font-family: var(--mono-font-family);
   font-size: 10px;
@@ -696,6 +701,10 @@
   background: var(--panel-muted);
   padding: 11px 12px;
   display: flex;
+  /* 图标与文字块垂直居中（2026-10-16 用户反馈「内容与 icon 未垂直居中」）。
+     原先缺该声明 → flex 默认 align-items:stretch，而图标有定高 24px，
+     stretch 对该项退化为 flex-start，图标贴顶、与多行文字中心错位。 */
+  align-items: center;
   gap: 9px;
   font-size: 10.5px;
   color: var(--ink-soft);
