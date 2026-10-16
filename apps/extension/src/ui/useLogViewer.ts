@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import type {
   LogFileEntry,
   LogFileMetaResponse,
@@ -409,22 +409,81 @@ export function useLogViewer(params: LogViewerParams): LogViewerAPI {
 
   function handleViewerSelectionMouseDown() { setters.setViewerSelMenu(null); }
 
+  /* 计算并弹出「复制」pill（2026-10-16 选区手感修复）。
+     clientX/clientY 为 null 时按「选区末行右端」兜底定位 —— 快速拖选时指针可能已移出
+     窗口，此时拿不到鼠标坐标，但选区仍在，仍应给出复制入口。 */
+  function refreshViewerSelectionMenu(clientX: number | null, clientY: number | null) {
+    const container = refs.viewerContentShellRef.current;
+    const selection = globalThis.getSelection?.();
+    const selectedText = selection ? refs.virtualViewerRef.current?.getSelectionText(selection) || selection.toString() : "";
+    const text = selectedText.trim();
+    if (!container || !selection || selection.isCollapsed || !text || !((selection.anchorNode && container.contains(selection.anchorNode)) || (selection.focusNode && container.contains(selection.focusNode)))) {
+      setters.setViewerSelMenu(null);
+      return;
+    }
+    const rect = container.getBoundingClientRect();
+    let baseX = clientX;
+    let baseY = clientY;
+    /* 指针已越出查看器（快速拖选拖到窗口外 / 拖到工具栏）：坐标贴边会误导位置，
+       改用「选区末行右端」兜底定位，pill 落在选区附近。 */
+    if (baseX != null && baseY != null && (baseX < rect.left || baseX > rect.right || baseY < rect.top || baseY > rect.bottom)) {
+      baseX = null;
+      baseY = null;
+    }
+    if (baseX == null || baseY == null) {
+      try {
+        const range = selection.getRangeAt(Math.max(0, selection.rangeCount - 1));
+        const rects = Array.from(range.getClientRects());
+        const last = rects[rects.length - 1] || range.getBoundingClientRect();
+        baseX = last.left + Math.min(28, Math.max(0, last.width));
+        baseY = last.bottom - 6;
+      } catch {
+        baseX = rect.left + 48;
+        baseY = rect.top + 48;
+      }
+    }
+    const nextX = Math.min(Math.max(8, (baseX as number) - rect.left), Math.max(8, rect.width - 72));
+    const nextY = Math.min(Math.max(8, (baseY as number) - rect.top), Math.max(8, rect.height - 44));
+    setters.setViewerSelMenu({ x: nextX, y: nextY, text });
+  }
+
   function handleViewerSelectionMouseUp(event: any) {
-    window.setTimeout(() => {
+    window.setTimeout(() => refreshViewerSelectionMenu(event?.clientX ?? null, event?.clientY ?? null), 10);
+  }
+
+  /* 窗口外松手补弹（2026-10-16 选区手感修复）：在查看器内按下并拖选后，若把指针拖到
+     窗口外/工具栏再松开，容器自身的 onMouseUp 收不到，复制 pill 就永远不弹 ——
+     用户表现为"拖快了就选不出复制"。这里在 window 捕获级补一次：仅当事件落在查看器外、
+     且查看器内确有选区时才补弹（容器内的松手仍由 onMouseUp 处理，不会重复）。 */
+  const refreshSelectionMenuRef = useRef(refreshViewerSelectionMenu);
+  refreshSelectionMenuRef.current = refreshViewerSelectionMenu;
+  useEffect(() => {
+    const onWindowMouseUp = (event: MouseEvent) => {
       const container = refs.viewerContentShellRef.current;
-      const selection = globalThis.getSelection?.();
-      const selectedText = selection ? refs.virtualViewerRef.current?.getSelectionText(selection) || selection.toString() : "";
-      const text = selectedText.trim();
-      if (!container || !selection || selection.isCollapsed || !text || !((selection.anchorNode && container.contains(selection.anchorNode)) || (selection.focusNode && container.contains(selection.focusNode)))) {
-        setters.setViewerSelMenu(null);
+      if (!container) {
         return;
       }
-      const rect = container.getBoundingClientRect();
-      const nextX = Math.min(Math.max(8, event.clientX - rect.left), Math.max(8, rect.width - 72));
-      const nextY = Math.min(Math.max(8, event.clientY - rect.top), Math.max(8, rect.height - 44));
-      setters.setViewerSelMenu({ x: nextX, y: nextY, text });
-    }, 10);
-  }
+      const target = event.target as Node | null;
+      if (target && container.contains(target)) {
+        return; // 容器内松手：已由 onMouseUp 处理
+      }
+      const selection = globalThis.getSelection?.();
+      if (!selection || selection.isCollapsed) {
+        return;
+      }
+      const anchorIn = Boolean(selection.anchorNode && container.contains(selection.anchorNode));
+      const focusIn = Boolean(selection.focusNode && container.contains(selection.focusNode));
+      if (!anchorIn || !focusIn) {
+        return;
+      }
+      const { clientX, clientY } = event;
+      window.setTimeout(() => refreshSelectionMenuRef.current(clientX, clientY), 10);
+    };
+    window.addEventListener("mouseup", onWindowMouseUp, true);
+    return () => window.removeEventListener("mouseup", onWindowMouseUp, true);
+    /* 依赖用 ref 对象本身（稳定），而非 App 每渲染新建的 refs 字面量对象 ——
+       否则 effect 每帧重订阅。逻辑体经 refreshSelectionMenuRef 取最新闭包。 */
+  }, [refs.viewerContentShellRef]);
 
   async function handleCopyViewerSelection() {
     const selection = globalThis.getSelection?.();
