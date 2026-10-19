@@ -427,6 +427,12 @@ export function App() {
     setLogFontSize,
     terminalFontSize,
     setTerminalFontSize,
+    terminalLineHeight,
+    setTerminalLineHeight,
+    terminalCursorStyle,
+    setTerminalCursorStyle,
+    terminalCursorBlink,
+    setTerminalCursorBlink,
     uiFontSize,
     setUiFontSize,
     logFontFamily,
@@ -3446,6 +3452,9 @@ export function App() {
             terminalFontFamily={monoFontFamilyValue(terminalFontFamily)}
             terminalBackgroundColor={terminalScheme.theme.background}
             terminalScheme={uiTerminalScheme}
+            terminalLineHeight={terminalLineHeight}
+            terminalCursorStyle={terminalCursorStyle}
+            terminalCursorBlink={terminalCursorBlink}
             terminalThemeKey={resolvedTheme.id}
             terminalOverlay={terminalOverlay}
             onToggleTerminalOverlay={toggleTerminalOverlay}
@@ -3845,6 +3854,10 @@ export function App() {
                 terminalFontFamily={monoFontFamilyValue(terminalFontFamily)}
                 terminalBackgroundColor={terminalScheme.theme.background}
                 terminalScheme={uiTerminalScheme}
+                terminalLineHeight={terminalLineHeight}
+                terminalCursorStyle={terminalCursorStyle}
+                terminalCursorBlink={terminalCursorBlink}
+                terminalThemeKey={resolvedTheme.id}
                 terminalOverlay={terminalOverlay}
                 onToggleTerminalOverlay={toggleTerminalOverlay}
                 onTogglePopup={toggleTerminalPopup}
@@ -4863,6 +4876,12 @@ export function App() {
                 uiFontSize,
                 logFontSize,
                 terminalFontSize,
+                terminalLineHeight,
+                onTerminalLineHeightChange: setTerminalLineHeight,
+                terminalCursorStyle,
+                onTerminalCursorStyleChange: setTerminalCursorStyle,
+                terminalCursorBlink,
+                onTerminalCursorBlinkChange: setTerminalCursorBlink,
                 logFontFamily,
                 onLogFontFamilyChange: setLogFontFamily,
                 terminalFontFamily,

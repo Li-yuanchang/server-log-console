@@ -40,6 +40,12 @@ interface UseTerminalSessionOptions {
   terminalBackgroundColor?: string;
   /** 终端配色（独立槽位）：映射 xterm ITheme（背景/前景/光标/选区 + ANSI 16 色） */
   terminalScheme?: TerminalColorSchemeId;
+  /** 终端行高倍率（xterm lineHeight，1.0~2.4）。参考 VRC「行高」步进器。 */
+  terminalLineHeight?: number;
+  /** 终端光标样式（xterm cursorStyle）：块 / 竖线 / 下划线。参考 VRC「光标样式」。 */
+  terminalCursorStyle?: "block" | "bar" | "underline";
+  /** 终端光标闪烁（xterm cursorBlink）。参考 VRC「光标闪烁」。 */
+  terminalCursorBlink?: boolean;
   /** 解析后的主题标识（v3 色差修复）：ui 主题/明暗变更时触发 xterm ITheme 刷新，
       否则画布/视口底色停留在创建时的旧值，与 CSS 链路（--terminal-background 实时值）色差 */
   themeKey?: string;
@@ -287,9 +293,10 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
     const { shellBg } = readTerminalTheme(containerRef.current, options.terminalBackgroundColor);
 
     const terminal = new Terminal({
-      cursorBlink: true,
-      /* 用户反馈：默认块状光标太粗 → 竖线光标（2px，闪烁保留） */
-      cursorStyle: "bar",
+      /* 光标：样式/闪烁改为可配置（默认仍 bar + 闪烁 = 原写死值，观感不变） */
+      cursorBlink: options.terminalCursorBlink ?? true,
+      /* 用户反馈：默认块状光标太粗 → 默认竖线光标（2px，闪烁保留） */
+      cursorStyle: options.terminalCursorStyle ?? "bar",
       cursorWidth: 2,
       /* 搜索高亮（addon-search decorations）与客户端着色（registerDecoration）依赖提案 API，
          未开启时 findNext 在高亮环节抛错（被 safeSearchCall 吞掉 → 恒 0/0）、着色静默失效。 */
@@ -297,7 +304,8 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
       /* 原型 .term（prototype.html 190 行）原为 11px，用户确认过小 → 默认 14
          （= useUiTheme DEFAULT_TERMINAL_FONT_SIZE，设置中心可调）；字体兜底栈 = --mono token。 */
       fontSize: options.terminalFontSize || 14,
-      lineHeight: 1.8,
+      /* 行高改为可配置（默认 1.8 = 原写死值） */
+      lineHeight: options.terminalLineHeight || 1.8,
       fontFamily: options.terminalFontFamily || "'Geist Mono', 'SFMono-Regular', 'Menlo', 'Consolas', monospace",
       theme: buildTerminalTheme(options.terminalScheme, shellBg, ""),
       scrollback: 20000,
@@ -332,8 +340,19 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
     }
     /* 终端配色：整套 ITheme 替换（ANSI 16 色随方案切换） */
     terminal.options.theme = buildTerminalTheme(options.terminalScheme, shellBg, shellInk);
+    /* 行高 / 光标：即时同步（设置中心改完立刻生效，无需重连会话）。
+       行高变化会改变每行像素高度 → 必须 scheduleFit 重排。 */
+    if (typeof options.terminalLineHeight === "number" && options.terminalLineHeight > 0) {
+      terminal.options.lineHeight = options.terminalLineHeight;
+    }
+    if (options.terminalCursorStyle) {
+      terminal.options.cursorStyle = options.terminalCursorStyle;
+    }
+    if (typeof options.terminalCursorBlink === "boolean") {
+      terminal.options.cursorBlink = options.terminalCursorBlink;
+    }
     scheduleFit([0, 24, 96]);
-  }, [options.terminalBackgroundColor, options.terminalFontSize, options.terminalFontFamily, options.terminalScheme, options.themeKey, scheduleFit]);
+  }, [options.terminalBackgroundColor, options.terminalFontSize, options.terminalFontFamily, options.terminalScheme, options.terminalLineHeight, options.terminalCursorStyle, options.terminalCursorBlink, options.themeKey, scheduleFit]);
 
   useEffect(() => {
     if (!options.active || !containerRef.current) {

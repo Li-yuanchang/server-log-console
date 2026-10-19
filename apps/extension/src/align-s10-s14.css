@@ -770,8 +770,15 @@
   color: var(--red, #c0392b);
 }
 
-/* 连接入口：直连时折叠为一行摘要（details/summary） */
-.theme-modern .settings-exclusive .conn-entry-card {
+/* 连接入口：折叠态（details/summary）卡片本身清零内边距 —— 内层 summary
+   自带 padding:12px 20px、note 自带 margin 0 20px，卡片再加一层会双倍呼吸。
+   ⚠️ 必须限定 :has(.conn-entry-details)（2026-10-17 修复）：
+   本规则权重 (0,3,0) 高于 .conn-detail-body .settings-card (0,2,0) 的
+   `padding: 12px 20px 14px`。原先无此限定 → 连「展开态」
+   （canConfigureRoute=true，直接渲染 settings-card-head / settings-field /
+   settings-note-box）的左右呼吸也被清零，导致整块内容紧贴面板边缘。
+   用户反馈：「堡垒机这个配置界面咋回事？左右呼吸间距呢？不遵守样式规范」。 */
+.theme-modern .settings-exclusive .conn-entry-card:has(.conn-entry-details) {
   padding: 0;
 }
 .theme-modern .settings-exclusive .conn-entry-details > summary {

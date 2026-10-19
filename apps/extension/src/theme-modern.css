@@ -4635,6 +4635,97 @@ body.is-electron .settings-exclusive-head input {
   gap: 10px;
 }
 
+/* ---------- 设置中心控件：步进器 / 开关（2026-10-19） ----------
+   参考 VRC 设置面板的交互形态，规格按 SLC 自身 token 重写（不引入 --vrc-*）：
+     .slc-stepper：−/值/＋ 三段，用于字号、行高这类「离散小范围数值」
+     .slc-switch ：34×20 滑动开关，用于布尔项（原 pill 文字按钮表意偏弱）
+   高度统一走 --ctl-h（28px），与全站按钮/输入框同刻度（THEME-SPEC §4.3）。 */
+.slc-stepper {
+  display: grid;
+  grid-template-columns: var(--ctl-h) 44px var(--ctl-h);
+  height: var(--ctl-h);
+  flex: none;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--ctl-radius, 6px);
+  background: var(--panel);
+}
+.slc-stepper button {
+  display: grid;
+  place-items: center;
+  border: none;
+  padding: 0;
+  color: var(--ink-soft);
+  background: var(--panel-muted);
+  font-size: var(--fs-sm);
+  line-height: 1;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+.slc-stepper button:hover:not(:disabled) {
+  color: var(--ink);
+  background: color-mix(in srgb, var(--accent) 10%, var(--panel-muted));
+}
+.slc-stepper button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.slc-stepper output {
+  display: grid;
+  place-items: center;
+  color: var(--ink);
+  background: var(--panel);
+  font-family: var(--mono-font-family);
+  font-size: var(--fs-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.slc-switch {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 34px;
+  width: 34px;
+  height: 20px;
+  cursor: pointer;
+}
+.slc-switch input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+.slc-switch span {
+  width: 100%;
+  border-radius: 999px;
+  background: var(--line-strong);
+  transition: background 160ms ease;
+}
+.slc-switch span::after {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--panel-strong);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+  content: "";
+  transition: transform 160ms ease;
+}
+.slc-switch input:checked + span {
+  background: var(--accent);
+}
+.slc-switch input:checked + span::after {
+  transform: translateX(14px);
+}
+.slc-switch input:focus-visible + span {
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+.slc-switch input:disabled + span {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 /* 清单分组标签与端口列（对齐主界面侧栏） */
 .conn-server-group-label {
   display: flex;

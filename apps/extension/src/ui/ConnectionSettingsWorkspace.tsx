@@ -75,6 +75,13 @@ interface Props {
     uiFontSize: number;
     logFontSize: number;
     terminalFontSize: number;
+    /* 终端外观（参考 VRC「控制台外观」）：行高 / 光标样式 / 光标闪烁 */
+    terminalLineHeight: number;
+    onTerminalLineHeightChange: (value: number) => void;
+    terminalCursorStyle: "block" | "bar" | "underline";
+    onTerminalCursorStyleChange: (style: "block" | "bar" | "underline") => void;
+    terminalCursorBlink: boolean;
+    onTerminalCursorBlinkChange: (value: boolean) => void;
     /* S14：日志 / 终端字体族独立配置 */
     logFontFamily: MonoFontFamily;
     onLogFontFamilyChange: (family: MonoFontFamily) => void;
@@ -1361,13 +1368,16 @@ export function ConnectionSettingsWorkspace(props: Props) {
                 <div className="settings-pref-row">
                   <span className="settings-pref-label"><strong>动态背景（图片缓慢缩放）</strong><span>动效=减少 时强制停用</span></span>
                   <span className="settings-pref-value">
-                    <button
-                      type="button"
-                      className={props.preferenceSection.dynamicBackground && props.preferenceSection.motionMode !== "reduced" ? "pill on" : "pill"}
-                      onClick={props.preferenceSection.onToggleDynamicBackground}
-                    >
-                      {props.preferenceSection.dynamicBackground ? "开启" : "关闭"}
-                    </button>
+                    <label className="slc-switch">
+                      <input
+                        type="checkbox"
+                        checked={props.preferenceSection.dynamicBackground}
+                        onChange={props.preferenceSection.onToggleDynamicBackground}
+                        disabled={props.preferenceSection.motionMode === "reduced"}
+                        aria-label="动态背景"
+                      />
+                      <span />
+                    </label>
                   </span>
                 </div>
                 {/* S14-3 必达：字体三处独立表（原型 1131-1142）——
@@ -1483,13 +1493,15 @@ export function ConnectionSettingsWorkspace(props: Props) {
                     <div className="watermark-main">
                       <div className="watermark-head">
                         <span className="watermark-title">水印<span className="chip">新增</span></span>
-                        <button
-                          type="button"
-                          className={props.preferenceSection.watermarkEnabled ? "pill on" : "pill"}
-                          onClick={props.preferenceSection.onToggleWatermark}
-                        >
-                          {props.preferenceSection.watermarkEnabled ? "开启" : "关闭"}
-                        </button>
+                        <label className="slc-switch">
+                          <input
+                            type="checkbox"
+                            checked={props.preferenceSection.watermarkEnabled}
+                            onChange={props.preferenceSection.onToggleWatermark}
+                            aria-label="安全水印"
+                          />
+                          <span />
+                        </label>
                       </div>
                       <label className="watermark-field">
                         <span>内容模板</span>
@@ -1610,6 +1622,70 @@ export function ConnectionSettingsWorkspace(props: Props) {
                 <div className="settings-pref-row">
                   <span className="settings-pref-label"><strong>终端选中复制</strong><span>选中即复制，右键粘贴</span></span>
                   <span className="settings-pref-value">默认开启</span>
+                </div>
+                {/* 终端外观（参考 VRC「控制台外观」）：行高 / 光标样式 / 光标闪烁。
+                    此前三项在 useTerminalSession 中写死（1.8 / bar / true），设置中心
+                    无入口；现改为可配，默认值与旧写死值一致，观感不变。 */}
+                <div className="settings-pref-row">
+                  <span className="settings-pref-label"><strong>行高</strong><span>影响每屏可见行数；改动后 xterm 自动重排</span></span>
+                  <span className="settings-pref-value">
+                    <span className="slc-stepper">
+                      <button
+                        type="button"
+                        aria-label="减小行高"
+                        disabled={props.preferenceSection.terminalLineHeight <= 1}
+                        onClick={() => props.preferenceSection.onTerminalLineHeightChange(
+                          Math.max(1, Math.round((props.preferenceSection.terminalLineHeight - 0.05) * 100) / 100)
+                        )}
+                      >−</button>
+                      <output>{props.preferenceSection.terminalLineHeight.toFixed(2)}</output>
+                      <button
+                        type="button"
+                        aria-label="增大行高"
+                        disabled={props.preferenceSection.terminalLineHeight >= 2.4}
+                        onClick={() => props.preferenceSection.onTerminalLineHeightChange(
+                          Math.min(2.4, Math.round((props.preferenceSection.terminalLineHeight + 0.05) * 100) / 100)
+                        )}
+                      >＋</button>
+                    </span>
+                  </span>
+                </div>
+                <div className="settings-pref-row">
+                  <span className="settings-pref-label"><strong>光标样式</strong><span>按终端使用习惯选择</span></span>
+                  <span className="settings-pref-value">
+                    <span className="seg lite" role="radiogroup" aria-label="终端光标样式">
+                      {([
+                        { id: "block", label: "块" },
+                        { id: "bar", label: "竖线" },
+                        { id: "underline", label: "下划线" }
+                      ] as const).map((option) => (
+                        <button
+                          key={option.id}
+                          type="button"
+                          role="radio"
+                          aria-checked={props.preferenceSection.terminalCursorStyle === option.id}
+                          className={props.preferenceSection.terminalCursorStyle === option.id ? "on" : ""}
+                          onClick={() => props.preferenceSection.onTerminalCursorStyleChange(option.id)}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </span>
+                  </span>
+                </div>
+                <div className="settings-pref-row">
+                  <span className="settings-pref-label"><strong>光标闪烁</strong><span>失去焦点后停止</span></span>
+                  <span className="settings-pref-value">
+                    <label className="slc-switch">
+                      <input
+                        type="checkbox"
+                        checked={props.preferenceSection.terminalCursorBlink}
+                        onChange={(event) => props.preferenceSection.onTerminalCursorBlinkChange(event.target.checked)}
+                        aria-label="终端光标闪烁"
+                      />
+                      <span />
+                    </label>
+                  </span>
                 </div>
                 {/* 终端配色（独立槽位，8 款）：渐变 swatch 条 = 底色→主色→成功→错误 */}
                 <div className="settings-pref-row settings-pref-row-wide">

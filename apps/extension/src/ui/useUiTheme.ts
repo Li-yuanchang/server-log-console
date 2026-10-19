@@ -24,6 +24,8 @@ export type UiBackgroundLayer =
   | "solid" | "aurora" | "linear" | "grid" | "dots" | "diag" | "noise" | "image";
 export type TerminalColorSchemeId =
   | "console" | "tokyo" | "mocha" | "dracula" | "nord" | "rose" | "solar" | "daylight";
+/** 终端光标样式：对齐 VRC「光标样式」三档（块 / 竖线 / 下划线） */
+export type TerminalCursorStyle = "block" | "bar" | "underline";
 
 export type ThemePresetFamily = "neutral" | "cool" | "warm" | "mono";
 
@@ -211,6 +213,15 @@ export type UiThemeAPI = {
   /** 终端配色（独立槽位） */
   uiTerminalScheme: TerminalColorSchemeId;
   setUiTerminalScheme: (scheme: TerminalColorSchemeId) => void;
+  /** 终端行高倍率（1.0~2.4，xterm lineHeight）。参考 VRC「行高」步进器。 */
+  terminalLineHeight: number;
+  setTerminalLineHeight: (value: number) => void;
+  /** 终端光标样式（xterm cursorStyle）。参考 VRC「光标样式」三档。 */
+  terminalCursorStyle: TerminalCursorStyle;
+  setTerminalCursorStyle: (style: TerminalCursorStyle) => void;
+  /** 终端光标闪烁（xterm cursorBlink）。参考 VRC「光标闪烁」开关。 */
+  terminalCursorBlink: boolean;
+  setTerminalCursorBlink: (value: boolean) => void;
   /** 强调色覆盖（null = 跟随主题；入口在高级节） */
   uiAccentOverride: string | null;
   setUiAccentOverride: (accent: string | null) => void;
@@ -257,6 +268,10 @@ const DEFAULT_UI_FONT_FAMILY: UiFontFamily = "geist";
 const DEFAULT_LOG_FONT_SIZE = 12;
 /* 终端默认字号：原型 .term 为 11px，用户确认过小 → 14px（可在设置中心调整） */
 const DEFAULT_TERMINAL_FONT_SIZE = 14;
+/* 终端行高 / 光标（参考 VRC「控制台外观」）：行高 1.8 为原实现写死值，改为可调后保持默认不变 */
+const DEFAULT_TERMINAL_LINE_HEIGHT = 1.8;
+const DEFAULT_TERMINAL_CURSOR_STYLE: TerminalCursorStyle = "bar";
+const DEFAULT_TERMINAL_CURSOR_BLINK = true;
 /* 界面字号（= --fs-base 梯度基准）：设置中心可调，联动全部 --fs-* token */
 const DEFAULT_UI_FONT_SIZE = 14;
 
@@ -401,6 +416,21 @@ export function useUiTheme(): UiThemeAPI {
   const [terminalFontSize, setTerminalFontSize] = useState(() => {
     return readStoredNumber("terminal-font-size", DEFAULT_TERMINAL_FONT_SIZE, 11, 18);
   });
+  /* 终端行高（1.0~2.4）：原 useTerminalSession 写死 1.8，此处改为可调，默认值不变 */
+  const [terminalLineHeight, setTerminalLineHeight] = useState(() => {
+    return readStoredNumber("terminal-line-height", DEFAULT_TERMINAL_LINE_HEIGHT * 100, 100, 240) / 100;
+  });
+  /* 终端光标样式 / 闪烁：原写死 bar + true，改为可调 */
+  const [terminalCursorStyle, setTerminalCursorStyle] = useState<TerminalCursorStyle>(() => {
+    const value = readLocalStorageValue("terminal-cursor-style");
+    return value === "block" || value === "underline" || value === "bar"
+      ? (value as TerminalCursorStyle)
+      : DEFAULT_TERMINAL_CURSOR_STYLE;
+  });
+  const [terminalCursorBlink, setTerminalCursorBlink] = useState(() => {
+    const value = readLocalStorageValue("terminal-cursor-blink");
+    return value === "" ? DEFAULT_TERMINAL_CURSOR_BLINK : value === "on";
+  });
   /* 界面字号：--fs-* 梯度基准（12~18），驱动全套界面字号 token */
   const [uiFontSize, setUiFontSize] = useState(() => {
     return readStoredNumber("ui-font-size", DEFAULT_UI_FONT_SIZE, 12, 18);
@@ -517,6 +547,18 @@ export function useUiTheme(): UiThemeAPI {
   }, [terminalFontSize]);
 
   useEffect(() => {
+    persistLocalStorageValue("terminal-line-height", String(Math.round(terminalLineHeight * 100)));
+  }, [terminalLineHeight]);
+
+  useEffect(() => {
+    persistLocalStorageValue("terminal-cursor-style", terminalCursorStyle);
+  }, [terminalCursorStyle]);
+
+  useEffect(() => {
+    persistLocalStorageValue("terminal-cursor-blink", terminalCursorBlink ? "on" : "off");
+  }, [terminalCursorBlink]);
+
+  useEffect(() => {
     persistLocalStorageValue("ui-font-size", String(uiFontSize));
   }, [uiFontSize]);
 
@@ -571,6 +613,9 @@ export function useUiTheme(): UiThemeAPI {
     setUiFontFamily(DEFAULT_UI_FONT_FAMILY);
     setLogFontSize(DEFAULT_LOG_FONT_SIZE);
     setTerminalFontSize(DEFAULT_TERMINAL_FONT_SIZE);
+    setTerminalLineHeight(DEFAULT_TERMINAL_LINE_HEIGHT);
+    setTerminalCursorStyle(DEFAULT_TERMINAL_CURSOR_STYLE);
+    setTerminalCursorBlink(DEFAULT_TERMINAL_CURSOR_BLINK);
     setUiFontSize(DEFAULT_UI_FONT_SIZE);
     setLogFontFamily(DEFAULT_MONO_FONT_FAMILY);
     setTerminalFontFamily(DEFAULT_MONO_FONT_FAMILY);
@@ -612,6 +657,12 @@ export function useUiTheme(): UiThemeAPI {
     setLogFontSize,
     terminalFontSize,
     setTerminalFontSize,
+    terminalLineHeight,
+    setTerminalLineHeight,
+    terminalCursorStyle,
+    setTerminalCursorStyle,
+    terminalCursorBlink,
+    setTerminalCursorBlink,
     uiFontSize,
     setUiFontSize,
     logFontFamily,
