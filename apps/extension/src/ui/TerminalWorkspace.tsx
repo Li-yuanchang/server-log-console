@@ -72,6 +72,10 @@ interface TerminalPanelProps {
   terminalFontFamily?: string;
   terminalBackgroundColor?: string;
   terminalScheme?: TerminalColorSchemeId;
+  /** 终端行高 / 光标样式 / 光标闪烁（参考 VRC「控制台外观」，设置中心可调） */
+  terminalLineHeight?: number;
+  terminalCursorStyle?: "block" | "bar" | "underline";
+  terminalCursorBlink?: boolean;
   /** 解析后的主题标识：变更时刷新 xterm ITheme（v3 色差修复，见 useTerminalSession.themeKey） */
   terminalThemeKey?: string;
   terminalOverlay: "none" | "shortcuts" | "ai";
@@ -110,6 +114,10 @@ interface TerminalTabPaneProps {
   terminalFontFamily?: string;
   terminalBackgroundColor?: string;
   terminalScheme?: TerminalColorSchemeId;
+  /** 终端行高 / 光标样式 / 光标闪烁（参考 VRC「控制台外观」） */
+  terminalLineHeight?: number;
+  terminalCursorStyle?: "block" | "bar" | "underline";
+  terminalCursorBlink?: boolean;
   /** 解析后的主题标识：变更时刷新 xterm ITheme（v3 色差修复） */
   terminalThemeKey?: string;
   onSessionIdChange: (tabId: string, sessionId: string) => void;
@@ -155,6 +163,9 @@ function TerminalTabPane(props: TerminalTabPaneProps) {
     terminalFontFamily: props.terminalFontFamily,
     terminalBackgroundColor: props.terminalBackgroundColor,
     terminalScheme: props.terminalScheme,
+    terminalLineHeight: props.terminalLineHeight,
+    terminalCursorStyle: props.terminalCursorStyle,
+    terminalCursorBlink: props.terminalCursorBlink,
     themeKey: props.terminalThemeKey,
   });
 
@@ -960,6 +971,10 @@ export function TerminalPanel(props: TerminalPanelProps) {
                         terminalFontSize={props.terminalFontSize}
                         terminalFontFamily={props.terminalFontFamily}
                         terminalBackgroundColor={props.terminalBackgroundColor}
+                        terminalScheme={props.terminalScheme}
+                        terminalLineHeight={props.terminalLineHeight}
+                        terminalCursorStyle={props.terminalCursorStyle}
+                        terminalCursorBlink={props.terminalCursorBlink}
                         terminalThemeKey={props.terminalThemeKey}
                         onSessionIdChange={handleSessionIdChange}
                         onTerminalInstance={handleTerminalInstance}
