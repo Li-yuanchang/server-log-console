@@ -304,8 +304,8 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
       /* 原型 .term（prototype.html 190 行）原为 11px，用户确认过小 → 默认 14
          （= useUiTheme DEFAULT_TERMINAL_FONT_SIZE，设置中心可调）；字体兜底栈 = --mono token。 */
       fontSize: options.terminalFontSize || 14,
-      /* 行高改为可配置（默认 1.8 = 原写死值） */
-      lineHeight: options.terminalLineHeight || 1.8,
+      /* 行高改为可配置（默认 1.2，与 useUiTheme DEFAULT_TERMINAL_LINE_HEIGHT 一致） */
+      lineHeight: options.terminalLineHeight || 1.2,
       fontFamily: options.terminalFontFamily || "'Geist Mono', 'SFMono-Regular', 'Menlo', 'Consolas', monospace",
       theme: buildTerminalTheme(options.terminalScheme, shellBg, ""),
       scrollback: 20000,

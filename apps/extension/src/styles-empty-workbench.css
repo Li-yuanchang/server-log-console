@@ -372,15 +372,9 @@
   justify-content: center;
   position: relative;
 }
-/* 顶部极淡聚光：给内容一个「锚」 */
-.empty-wb::before {
-  content: "";
-  position: absolute;
-  inset: 0 0 auto 0;
-  height: 190px;
-  pointer-events: none;
-  background: radial-gradient(58% 130% at 50% 0%, color-mix(in srgb, var(--accent) 5%, transparent), transparent 70%);
-}
+/* 2026-10-19 移除顶部径向聚光（.empty-wb::before 的 radial-gradient）：
+   用户多次反馈「渐变色看着太花了」「AI 公式化」。该光晕是「AI 味」的典型来源之一，
+   且与默认背景层同时存在时叠加成两层彩色雾气。空状态保持纯底色。 */
 .empty-wb-grid {
   position: relative;
   width: 800px;

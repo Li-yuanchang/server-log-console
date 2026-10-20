@@ -1,11 +1,14 @@
 {
   "name": "@server-log-console/electron",
-  "version": "0.3.238",
+  "version": "0.3.280",
   "description": "Server Log Console desktop app",
   "author": "lyc",
   "private": true,
   "main": "main.cjs",
-  "workspaces": ["apps/*", "packages/*"],
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
     "build:extension": "npm --prefix apps/extension run build",
     "release:update": "node scripts/prepare-online-update-release.mjs"
