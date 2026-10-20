@@ -3391,6 +3391,11 @@ export function App() {
   }, [selectedFilePaths.length, clearSelectedFiles, confirmDialog, renameDialog, moveDialog, batchMoveDialog, mkdirDialog, previewDialog, contextMenu, workspaceTabMenu, blankContextMenu, showViewerDebugPanel, paletteOpen, showConnectionSettings, setActionStatus]);
 
   const appShellClassName = `app-shell${uiTheme === "modern" ? " theme-modern" : ""} ui-density-${uiDensity} ui-theme-${resolvedTheme.id} ui-bg-${uiBackground}${uiBackground !== "solid" ? " ui-bg-fancy" : ""} ui-motion-${motionMode}${dynamicBackground && motionMode !== "reduced" ? " ui-dynamic-background" : ""}${isElectron ? " electron-immersive" : ""}${isElectron && isMacOS ? " electron-macos-immersive" : ""}`;
+
+  /* 终端配色（独立槽位）：背景与 ITheme 都来自所选方案。
+     定义位置必须早于 appShellStyle —— 后者要把配色注入 --terminal-background。 */
+  const terminalScheme = TERMINAL_SCHEMES.find((s) => s.id === uiTerminalScheme) ?? TERMINAL_SCHEMES[0];
+
   const appShellStyle = {
     /* 界面字号梯度：uiFontSize 驱动全套 --fs-* token（设置中心可调） */
     ...uiFontSizeVars(uiFontSize),
@@ -3400,6 +3405,13 @@ export function App() {
     /* S14：日志 / 终端字体族独立（原型：字体三处独立，日志字体族是原缺失能力） */
     "--log-font-family": monoFontFamilyValue(logFontFamily),
     "--terminal-font-family": monoFontFamilyValue(terminalFontFamily),
+    /* 终端配色方案 → CSS 层（2026-10-19 修复）：
+       「终端配色」此前只经 JS prop 传给 xterm 实例，CSS 层从未拿到值 —— 而全站
+       18 处 var(--terminal-background) 消费点（终端面板底、独立窗、PiP）都靠它。
+       不注入时永远回退到 --shell（深色），导致选浅色方案（如「日光」）后
+       终端外壳仍是黑的、与 xterm 画布撞色。此处同步注入，让外壳跟随方案。 */
+    "--terminal-background": terminalScheme.theme.background,
+    "--terminal-background-soft": terminalScheme.theme.background,
     "--custom-background-image": toCssImageUrl(customBackgroundImage),
     /* 背景层图片模式：遮罩亮度 / 模糊由设置滑杆驱动（原型 T1）。
        只注入 -alpha（0..1，供 CSS calc 使用）与 blur；旧的百分比版
@@ -3417,15 +3429,16 @@ export function App() {
       : {}),
   } as CSSProperties;
 
-  /* 终端配色（独立槽位）：背景与 ITheme 都来自所选方案 */
-  const terminalScheme = TERMINAL_SCHEMES.find((s) => s.id === uiTerminalScheme) ?? TERMINAL_SCHEMES[0];
-
   /* html 底色跟随主题：index.html 防闪烁脚本写入的是内联 style（优先级最高），
-     切主题时不会自动更新，这里同步，避免深色主题下窗口边缘露出浅色底。 */
+     切主题时不会自动更新，这里同步，避免深色主题下窗口边缘露出浅色底。
+     独立终端窗例外（2026-10-19）：其底色应跟随「终端配色方案」而非 UI 主题 ——
+     否则选浅色方案（日光 #fbfbfa）时，html/body 仍是 UI 底色，窗口边缘露一圈异色。 */
   useEffect(() => {
-    document.documentElement.style.background = resolvedTheme.v.bg;
+    document.documentElement.style.background = isStandaloneTerminalWindow
+      ? terminalScheme.theme.background
+      : resolvedTheme.v.bg;
     document.documentElement.dataset.skTheme = resolvedTheme.id;
-  }, [resolvedTheme]);
+  }, [resolvedTheme, terminalScheme]);
 
   if (isStandaloneTerminalWindow) {
     return (

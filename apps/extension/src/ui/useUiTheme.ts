@@ -259,7 +259,10 @@ const DEFAULT_UI_THEME = "modern" as const;
 const DEFAULT_UI_DENSITY: UiDensity = "compact";
 const DEFAULT_UI_THEME_PRESET: UiThemePreset = "geist";
 const DEFAULT_UI_TONE_MODE: UiToneMode = "system";
-const DEFAULT_UI_BACKGROUND: UiBackgroundLayer = "aurora";
+/* 默认背景层（2026-10-19 由 aurora → solid）：
+   aurora 是顶部蓝紫径向光晕，用户多次反馈「渐变色看着太花了」「AI 公式化」。
+   改为 solid（直接用主题自身底色，最干净），aurora 仍可在设置中心选用。 */
+const DEFAULT_UI_BACKGROUND: UiBackgroundLayer = "solid";
 const DEFAULT_UI_TERMINAL_SCHEME: TerminalColorSchemeId = "console";
 const DEFAULT_CUSTOM_BACKGROUND_IMAGE = "";
 const DEFAULT_UI_IMG_OVERLAY = 30;
@@ -268,8 +271,12 @@ const DEFAULT_UI_FONT_FAMILY: UiFontFamily = "geist";
 const DEFAULT_LOG_FONT_SIZE = 12;
 /* 终端默认字号：原型 .term 为 11px，用户确认过小 → 14px（可在设置中心调整） */
 const DEFAULT_TERMINAL_FONT_SIZE = 14;
-/* 终端行高 / 光标（参考 VRC「控制台外观」）：行高 1.8 为原实现写死值，改为可调后保持默认不变 */
-const DEFAULT_TERMINAL_LINE_HEIGHT = 1.8;
+/* 终端行高 / 光标（参考 VRC「控制台外观」）。
+   ⚠️ 行高默认值 2026-10-19 由 1.8 → 1.2，与 VRC 对齐（用户反馈「终端字体很小」）：
+   xterm 的 lineHeight 是「行高 = 字号 × 倍率」（默认 1.0）。旧值 1.8 让每行
+   高达字号的 1.8 倍，字只占行高 55%，视觉上又小又稀；1.2 让字占 83%，
+   同样 14px 字号看起来明显更饱满。字号本身未动（SLC 14px 已大于 VRC 13px）。 */
+const DEFAULT_TERMINAL_LINE_HEIGHT = 1.2;
 const DEFAULT_TERMINAL_CURSOR_STYLE: TerminalCursorStyle = "bar";
 const DEFAULT_TERMINAL_CURSOR_BLINK = true;
 /* 界面字号（= --fs-base 梯度基准）：设置中心可调，联动全部 --fs-* token */
@@ -384,7 +391,14 @@ export function useUiTheme(): UiThemeAPI {
   const [systemDark, setSystemDark] = useState(systemPrefersDark);
   const [uiBackground, setUiBackground] = useState<UiBackgroundLayer>(() => {
     const value = readLocalStorageValue("ui-bg-layer");
-    return BG_LAYERS.some((b) => b.id === value) ? (value as UiBackgroundLayer) : DEFAULT_UI_BACKGROUND;
+    if (!BG_LAYERS.some((b) => b.id === value)) return DEFAULT_UI_BACKGROUND;
+    /* 一次性迁移（2026-10-19）：默认层 aurora → solid。
+       旧默认值会在首次挂载时被写入 localStorage，因此「从未改过」与「主动选过
+       aurora」在存储上无法区分 —— 这里统一迁移一次；确实喜欢极光光晕的用户可在
+       设置中心重新选中（之后带 migrated 标记，不再被覆盖）。 */
+    const migrated = readLocalStorageValue("ui-bg-layer-migrated") === "1";
+    if (!migrated && value === "aurora") return DEFAULT_UI_BACKGROUND;
+    return value as UiBackgroundLayer;
   });
   const [uiImgOverlay, setUiImgOverlay] = useState(() => {
     return readStoredNumber("custom-image-overlay", DEFAULT_UI_IMG_OVERLAY, 0, 90);
@@ -416,9 +430,15 @@ export function useUiTheme(): UiThemeAPI {
   const [terminalFontSize, setTerminalFontSize] = useState(() => {
     return readStoredNumber("terminal-font-size", DEFAULT_TERMINAL_FONT_SIZE, 11, 18);
   });
-  /* 终端行高（1.0~2.4）：原 useTerminalSession 写死 1.8，此处改为可调，默认值不变 */
+  /* 终端行高（1.0~2.4）。2026-10-19：默认值 1.8 → 1.2（对齐 VRC，解决字显小）。
+     迁移：旧版（0.3.279）上线时会把当时的默认值 180 写进 localStorage，仅改默认值
+     对已运行过的用户无效。此处做一次性迁移：若存的是旧默认 180 且尚未迁移，则归位到
+     新默认。用户主动调过的其他值（如 140/160/200）一律保留不动。 */
   const [terminalLineHeight, setTerminalLineHeight] = useState(() => {
-    return readStoredNumber("terminal-line-height", DEFAULT_TERMINAL_LINE_HEIGHT * 100, 100, 240) / 100;
+    const stored = readStoredNumber("terminal-line-height", DEFAULT_TERMINAL_LINE_HEIGHT * 100, 100, 240);
+    const migrated = readLocalStorageValue("terminal-line-height-migrated") === "1";
+    if (!migrated && stored === 180) return DEFAULT_TERMINAL_LINE_HEIGHT;
+    return stored / 100;
   });
   /* 终端光标样式 / 闪烁：原写死 bar + true，改为可调 */
   const [terminalCursorStyle, setTerminalCursorStyle] = useState<TerminalCursorStyle>(() => {
@@ -512,6 +532,8 @@ export function useUiTheme(): UiThemeAPI {
 
   useEffect(() => {
     persistLocalStorageValue("ui-bg-layer", uiBackground);
+    /* 迁移标记：写过值即视为完成迁移，避免下次启动把用户主动选的 aurora 又改掉 */
+    persistLocalStorageValue("ui-bg-layer-migrated", "1");
   }, [uiBackground]);
 
   useEffect(() => {
@@ -548,6 +570,8 @@ export function useUiTheme(): UiThemeAPI {
 
   useEffect(() => {
     persistLocalStorageValue("terminal-line-height", String(Math.round(terminalLineHeight * 100)));
+    /* 迁移标记：一旦写过值即视为已完成迁移，避免下次启动把用户手调的值又改掉 */
+    persistLocalStorageValue("terminal-line-height-migrated", "1");
   }, [terminalLineHeight]);
 
   useEffect(() => {

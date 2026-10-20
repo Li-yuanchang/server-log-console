@@ -14,7 +14,16 @@ function getLanguageKey(fileName: string) {
 
 const languageExtensionCache = new Map<string, Promise<Extension>>();
 
-const editorHighlightStyle = HighlightStyle.define([
+/**
+ * 语法高亮按「编辑器外观」分两套 —— 2026-10-16 用户反馈
+ * 「文件编辑这些关键字咋是灰色的，根本看不清」。
+ *
+ * 根因：下面这套配色原本是给**深色底**选的（全是很亮的粉彩色：propertyName #dbeafe、
+ * keyword #7dd3fc、string #fbbf24…）。而预览弹窗早已统一为**浅色**（appearance 默认
+ * "light"，背景 var(--panel) 白）→ 亮蓝/亮黄画在白底上对比度极低，YAML 的键名
+ * （propertyName）几乎看不见。现按外观各用一套：深色沿用原值，浅色换成可读的深色系。
+ */
+const editorHighlightStyleDark = HighlightStyle.define([
   { tag: tags.keyword, color: "#7dd3fc", fontWeight: "650" },
   { tag: tags.propertyName, color: "#dbeafe" },
   { tag: tags.atom, color: "#c4b5fd" },
@@ -24,6 +33,20 @@ const editorHighlightStyle = HighlightStyle.define([
   { tag: tags.comment, color: "#64748b", fontStyle: "italic" },
   { tag: tags.brace, color: "#fb7185", fontWeight: "700" },
   { tag: tags.separator, color: "#94a3b8" }
+]);
+
+/* 浅色外观配色：白底上均取深色系（对比度约 4.5:1 以上），色相沿用深色版的分工，
+   让同一个文件在两种外观下"哪段是什么"的语义保持一致。 */
+const editorHighlightStyleLight = HighlightStyle.define([
+  { tag: tags.keyword, color: "#6d28d9", fontWeight: "650" },
+  { tag: tags.propertyName, color: "#1d4ed8" },
+  { tag: tags.atom, color: "#7c3aed" },
+  { tag: tags.variableName, color: "#15803d" },
+  { tag: tags.string, color: "#b45309" },
+  { tag: tags.number, color: "#be185d" },
+  { tag: tags.comment, color: "#6b7280", fontStyle: "italic" },
+  { tag: tags.brace, color: "#b91c1c", fontWeight: "700" },
+  { tag: tags.separator, color: "#64748b" }
 ]);
 
 type NginxParserState = {
@@ -384,7 +407,8 @@ export function CodeEditor({ value, fileName, documentKey, theme = "modern", app
       keymap.of([...closeBracketsKeymap, ...defaultKeymap, ...searchKeymap, ...historyKeymap, ...foldKeymap, indentWithTab]),
       languageExtension,
       isDark ? [oneDark, darkOverride] : [syntaxHighlighting(defaultHighlightStyle, { fallback: true }), lightTheme],
-      syntaxHighlighting(editorHighlightStyle),
+      /* 语法高亮按外观选色（2026-10-16）：浅色底必须用深色系，否则关键字/键名看不清 */
+      syntaxHighlighting(isDark ? editorHighlightStyleDark : editorHighlightStyleLight),
       ...(readOnly ? [EditorState.readOnly.of(true), EditorView.editable.of(false)] : [
         keymap.of([{ key: "Mod-s", run: () => { cbRef.current.onSave?.(); return true; } }]),
         EditorView.updateListener.of((u) => {

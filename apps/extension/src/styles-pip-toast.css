@@ -1071,7 +1071,11 @@
 
 .terminal-panel-bar-title strong {
   max-width: 100%;
-  color: rgba(255, 255, 255, 0.94);
+  /* 跟随 UI 主题主文字色（2026-10-19）：原写死 rgba(255,255,255,.94)。
+     独立窗 bar 背景 = --panel（浅色 chrome，与嵌入态一致），文字必须用同源
+     的深色 ink；此前写死白色 → 浅色主题/浅色方案下白底白字不可读。
+     回退值保留原白色系，深色主题观感不变。 */
+  color: var(--ink, rgba(255, 255, 255, 0.94));
   font-size: var(--fs-sm);
   white-space: nowrap;
   overflow: hidden;
@@ -1085,7 +1089,8 @@
 
 .terminal-panel-bar-title span {
   max-width: 100%;
-  color: rgba(184, 198, 215, 0.76);
+  /* 次级文字：UI 主题弱化色，与嵌入态 .terminal-panel-bar-info 同源 */
+  color: var(--ink-muted, rgba(184, 198, 215, 0.76));
   font-size: var(--fs-2xs);
   white-space: nowrap;
   overflow: hidden;
@@ -1106,7 +1111,10 @@
 }
 
 .terminal-panel-bar-status {
-  color: rgba(126, 200, 227, 0.9) !important;
+  /* 跟随 UI 主题（2026-10-19）：原写死青蓝 rgba(126,200,227,.9) 属「终端恒深色」
+     时代的配色。独立窗 bar 已是浅色 chrome（--panel），状态文字改用主题弱化色，
+     与嵌入态 .terminal-panel-bar-info 同源。 */
+  color: var(--ink-soft, rgba(126, 200, 227, 0.9)) !important;
 }
 
 .terminal-panel-bar-standalone .terminal-panel-bar-actions {

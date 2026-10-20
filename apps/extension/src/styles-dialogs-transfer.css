@@ -1597,6 +1597,12 @@ button.class-outline-row {
   cursor: pointer;
   min-width: 18px;
   padding: 0 3px;
+  /* 折叠箭头垂直居中（2026-10-16 用户反馈「小箭头没有垂直居中」）：
+     gutterElement 是块级、内部 marker 为 inline-grid → 默认按基线对齐（inline-grid 的
+     基线 = 下外边距边缘），箭头因此整体偏下。改为 flex 居中，与行高严格对齐。 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .code-editor-container .cm-foldGutter {
@@ -1604,24 +1610,25 @@ button.class-outline-row {
   background: #050607;
 }
 
+/* 折叠箭头：去掉底色与描边（2026-10-16 用户反馈「去掉外边框和背景色」），
+   只保留字形本身；悬停仅提亮颜色，不再出现方块。 */
 .code-editor-container .cm-fold-marker {
-  display: inline-grid;
-  place-items: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 15px;
   height: 15px;
   border-radius: 5px;
   color: #bfdbfe;
-  background: rgba(96, 165, 250, 0.1);
-  box-shadow: inset 0 0 0 1px rgba(147, 197, 253, 0.16);
+  background: transparent;
+  box-shadow: none;
   font-size: var(--fs-sm);
   line-height: 1;
-  transition: background-color 120ms ease, color 120ms ease;
+  transition: color 120ms ease;
 }
 
 .code-editor-container .cm-foldGutter .cm-gutterElement:hover .cm-fold-marker {
-  background: rgba(96, 165, 250, 0.28);
   color: #ffffff;
-  box-shadow: inset 0 0 0 1px rgba(147, 197, 253, 0.42);
 }
 
 .code-editor-container .cm-foldPlaceholder {

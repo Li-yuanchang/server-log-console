@@ -105,6 +105,11 @@
   --dot-idle: #c8ccd2;
   --overlay: rgba(23, 23, 23, 0.28);
   --app-font-family: "Geist", "Inter", -apple-system, "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  /* --font-ui：界面正文字体别名（2026-10-19 修复）。
+     本文件内 10 处 font-family: var(--font-ui) 引用它，但该 token 从未定义 ——
+     这些声明全部失效、静默回落到继承字体。定义为 --app-font-family 别名后，
+     既能继承设置中心的「界面字体」选择，也不改变既有默认观感。 */
+  --font-ui: var(--app-font-family);
   /* 图片背景层：仅保留仍在消费的地址变量（App 内联注入真实值，此处 none 兜底）。
      已删除一批退役死 token（自定义纯色背景色 / 文字色 / 渐变起止色 / shell 背景 /
      面板色调 / 日志背景色 / 终端背景色）：它们属于 2026-10-02 之前的自定义主题体系，
@@ -2733,7 +2738,9 @@ body.is-resizing-tree .theme-modern .browser-resizer::after {
 }
 
 .theme-modern .terminal-panel-bar-status {
-  color: #7ec8e3 !important;
+  /* 跟随 UI 主题（2026-10-19）：原写死 #7ec8e3 属「终端恒深色」时代配色；
+     终端 bar 现为浅色 chrome，状态文字改用主题弱化色。 */
+  color: var(--ink-soft, #7ec8e3) !important;
 }
 
 /* --- 21. 空状态 --- */

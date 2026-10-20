@@ -380,15 +380,24 @@
 .theme-modern .preview-dialog .code-editor-container .cm-gutterElement {
   color: inherit;
 }
+/* 折叠箭头：去掉底色与描边、并保证垂直居中（2026-10-16 用户反馈
+   「小箭头没有垂直居中」「去掉外边框和背景色，丑到没有朋友」）。
+   此前这里给了 accent-soft 底 + inset 描边，白底上是一枚"小方块"；
+   现只留字形，悬停仅换色。居中交由 gutterElement 的 flex 完成（见下方规则）。 */
+.theme-modern .preview-dialog .code-editor-container .cm-foldGutter .cm-gutterElement {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
 .theme-modern .preview-dialog .code-editor-container .cm-fold-marker {
-  color: var(--accent);
-  background: var(--accent-soft);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--ink-muted);
+  background: transparent;
+  box-shadow: none;
 }
 .theme-modern .preview-dialog .code-editor-container .cm-foldGutter .cm-gutterElement:hover .cm-fold-marker {
-  color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 20%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 42%, transparent);
+  color: var(--ink);
+  background: transparent;
+  box-shadow: none;
 }
 .theme-modern .preview-dialog .code-editor-container .cm-foldPlaceholder {
   border-color: var(--line-strong);
