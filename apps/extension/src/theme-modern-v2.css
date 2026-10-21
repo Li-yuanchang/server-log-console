@@ -211,6 +211,18 @@
   font-size: var(--fs-sm);
   font-weight: 700;
   letter-spacing: -0.01em;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+/* 标题右侧副标题（2026-10-21 学 VRC「16 个连接」）：服务器规模提到一级信息区 */
+.theme-modern .sidebar-head-count {
+  flex: none;
+  font-size: var(--fs-2xs);
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--ink-muted);
 }
 .theme-modern .sidebar-head-buttons { gap: 4px; }
 .theme-modern .sidebar-head-buttons .ghost-button {
@@ -236,11 +248,19 @@
 .theme-modern .sidebar-panel input[placeholder*="名称"] {
   height: 28px;
   font-size: var(--fs-xs);
-  border-radius: var(--v2-radius-s);
+  /* 2026-10-21 对齐 VRC：圆角 7px（原 --v2-radius-s=6px）。本规则后加载，
+     会覆盖 theme-modern.css 里 pane-section input 的 radius，故在此同步。 */
+  border-radius: 7px;
 }
 
-/* 服务器行（原型 .srow：40px，点+名+host+端口） */
-.theme-modern .server-groups { border-top: 1px solid var(--line); }
+/* 服务器行（原型 .srow：40px，点+名+host+端口）
+   ⚠️ 2026-10-20 修复「顶部线条加粗扎眼」的真正元凶：
+   本元素同时带 .pane-section（其 border-bottom:1px）与 .server-groups，而此处
+   又给了 border-top:1px —— 两元素在同一 y 坐标各画一条线，实测精确重合为 2px 粗线。
+   违反 THEME-SPEC「相邻面板禁止双边框叠放」。移除 border-top，由上一个
+   .pane-section 的 border-bottom 单独承担分隔（唯一使用点 SidebarPanel.tsx:176
+   前必定是搜索区 pane-section，分隔不会丢）。 */
+.theme-modern .server-groups { border-top: none; }
 .theme-modern .server-group-title,
 .theme-modern .server-list .server-group-title {
   font-size: var(--fs-2xs);
@@ -263,9 +283,12 @@
 .theme-modern .server-item-wrap:hover { background: transparent; }
 .theme-modern .server-item-wrap-active,
 .theme-modern .server-item-wrap-active:hover {
+  /* 2026-10-21 对齐 VRC「干净透亮」：去掉左侧 2px 硬竖条，改为
+     「淡色填充 + 圆角」的单层表达（VRC .connection-item.active 即此法）。
+     竖条在浅色面板上是一条突兀的深色直边，是侧栏显脏的主要来源。 */
   background: var(--accent-soft);
-  box-shadow: inset 2px 0 0 var(--accent);
-  border-radius: 0;
+  box-shadow: none;
+  border-radius: 7px;
 }
 .theme-modern .server-item-wrap-active .server-item { background: transparent; }
 .theme-modern .server-item .server-status-dot {
@@ -360,9 +383,18 @@
   display: flex;
   align-items: center;
   padding: 0 10px;
-  border-bottom: 1px solid var(--line);
+  /* 分隔线软化（2026-10-21）：与 toolbar-panel 同理，混入面板色降低对比 */
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, var(--panel));
   background: var(--panel);
   min-height: 34px;
+}
+/* 空态占位条（2026-10-21）：无会话时也保留同高的一条，承担窗口拖拽区。
+   与有 tab 时的高度/背景/下边框完全一致，避免布局跳动。 */
+.theme-modern .workspace-session-strip-empty {
+  min-height: 34px;
+}
+.theme-modern.electron-macos-immersive .workspace-session-strip-empty {
+  min-height: 40px;
 }
 /* mac 沉浸式：红绿灯保持系统默认（y=12，实测圆心 ≈19.5），34px 页签中心需落在 ≈20。
    2026-10-16 修复「上有呼吸间距、下边没有」（用户反馈）：原 padding 为 `3px 10px 0`，
@@ -388,18 +420,25 @@
   min-width: 0;
 }
 .theme-modern .workspace-session-tab {
-  /* recon S1-18：原型 .wtab = height 34px / padding 0 13px（prototype.html 第 92 行），
-     此前实测仅 29px / padding 6px 14px。 */
+  /* recon S1-18：原型 .wtab = height 34px / padding 0 13px（prototype.html 第 92 行）。
+     2026-10-21：右侧改为 24px —— X 已改为「绝对定位悬浮」不占布局，
+     必须为它预留覆盖区（4px right + 18px 宽 + 2px 间隙），否则文字会被压住
+     （实测原 7px 导致遮挡 7px）。视觉上 X 距右边缘仅 4px，
+     不再有「X 右侧一大段空白」的问题。 */
   height: 34px;
-  padding: 0 13px;
+  padding: 0 24px 0 13px;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   border: none !important;
   border-bottom: 2px solid transparent !important;
   border-radius: 0 !important;
   background: transparent !important;
   box-shadow: none !important;
+}
+/* 无关闭钮的 tab（理论上不存在，兜底）：右内边距还原，避免文字贴边 */
+.theme-modern .workspace-session-tab:not(:has(.workspace-session-tab-close)) {
+  padding-right: 13px;
 }
 /* 2026-10-08：工作区页签去掉全部下划线（用户反馈底边线过长违和）。
    原 hover = border-bottom-color: var(--line-strong)、active = var(--ink)。
@@ -439,7 +478,10 @@
 
 /* ---------- 4. 工具栏（原型 .tbar 一行流式） ---------- */
 .theme-modern .toolbar-panel {
-  border-bottom: 1px solid var(--line);
+  /* 工具栏与内容区之间不留线（2026-10-21 用户定稿：border-bottom: 0）。
+     此前 1px 软化线仍显重；工具栏与内容区同底色，靠留白分层即可，
+     与 VRC「卡片间不画贯穿硬边」的做法一致。 */
+  border-bottom: 0 solid color-mix(in srgb, var(--line) 60%, var(--panel));
   background: var(--panel);
   padding: 0;
 }
@@ -491,21 +533,45 @@
   white-space: nowrap;
   box-shadow: none !important;
 }
-.theme-modern .seg > button:last-child { border-right: none !important; }
-/* 主视图切换：相邻按钮间用左侧分隔线（容器内无 last-child 归零问题） */
-.theme-modern .toolbar-view-switch-btn { border-right: none !important; }
-.theme-modern .toolbar-view-switch-btn + .toolbar-view-switch-btn,
-.theme-modern .seg > button + button {
-  border-left: 1px solid var(--line) !important;
+/* 主视图切换（日志预览 / 文件目录 / 终端）：2026-10-21 改为 VRC 分段控件形态。
+   用户反馈「分割线还是加粗的」：SLC 原为「容器 1px 边框 + 每两格之间 1px 竖线」，
+   白底上形成田字格，轮廓极重；VRC 的分段控件**没有内部竖线**，靠
+   「gap + 选中项白底浮起 + 轻微投影」区分，边界只由容器一圈承担。
+   此规则只作用于 .toolbar-view-switch，不影响其它 .seg（工具抽屉等仍用原样式）。 */
+.theme-modern .toolbar-view-switch {
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  background: var(--panel-muted);
+}
+.theme-modern .toolbar-view-switch-btn,
+.theme-modern .toolbar-view-switch-btn + .toolbar-view-switch-btn {
+  border: none !important;
+  border-radius: 4px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.theme-modern .toolbar-view-switch-btn:hover:not(.is-active) {
+  background: color-mix(in srgb, var(--ink) 5%, transparent) !important;
+  color: var(--ink) !important;
+}
+/* 选中项：白底浮起 + 轻投影（VRC button.active 同款手法），不再用黑底反白 */
+.theme-modern .toolbar-view-switch-btn.is-active {
+  background: var(--panel) !important;
+  color: var(--ink) !important;
+  font-weight: 600;
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--ink) 12%, transparent) !important;
 }
 .theme-modern .seg > button:hover:not(.on):not(:disabled),
 .theme-modern .toolbar-view-switch-btn:hover:not(.is-active) {
   background: var(--panel-muted) !important;
   color: var(--ink) !important;
 }
-/* 主档选中态：黑底白字（原型 .seg>button.on） */
-.theme-modern .seg > button.on,
-.theme-modern .toolbar-view-switch-btn.is-active {
+/* 主档选中态：黑底白字（原型 .seg>button.on）
+   2026-10-21：移除 .toolbar-view-switch-btn.is-active —— 主视图切换已改为
+   VRC 分段控件形态（白底浮起 + 轻投影，见上方规则），若仍并入本组会因
+   同特异性+后加载把白底压回黑底。此处只管通用 .seg。 */
+.theme-modern .seg > button.on {
   background: var(--ink) !important;
   color: #ffffff !important;
   font-weight: 600;
@@ -754,9 +820,39 @@
 .theme-modern .workspace-session-tab .workspace-session-tab-close { opacity: 0; transition: opacity 0.12s, background-color 0.12s, color 0.12s; }
 .theme-modern .workspace-session-tab:hover .workspace-session-tab-close,
 .theme-modern .workspace-session-tab-active .workspace-session-tab-close { opacity: 1; }
-.theme-modern .workspace-session-tab-close { color: var(--ink-soft); }
-.theme-modern .workspace-session-tab-close:hover { background: color-mix(in srgb, var(--ink) 10%, transparent); color: var(--ink); }
-.theme-modern .workspace-session-tab-active .workspace-session-tab-close:hover { background: color-mix(in srgb, var(--red) 14%, transparent); color: var(--red); }
+/* X 关闭钮（2026-10-21）：用户反馈「X 右侧呼吸间距太大、字号偏大，最好上浮显示」。
+   根因：本钮同时带 .ghost-button.icon-button，被全局 28×28 规则撑大
+   （基类 20×20 被覆盖），且作为 flex 子项占位，把 tab 右侧撑出一大段空白。
+   改为「悬浮覆盖」：绝对定位到 tab 右端，不参与 flex 布局 —— 因此不再占空间、
+   不会挤压文字，也就没有那块右侧留白；只在 hover/激活时淡入（上浮观感）。 */
+.theme-modern .workspace-session-tab {
+  position: relative;
+}
+.theme-modern .workspace-session-tab .workspace-session-tab-close,
+.theme-modern .workspace-session-tab-close.ghost-button.icon-button {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 18px;
+  height: 18px;
+  min-width: 18px;
+  min-height: 18px;
+  margin: 0;
+  padding: 0;
+  border-radius: 4px;
+  color: var(--ink-soft);
+  background: transparent;
+  box-shadow: none;
+  z-index: 1;
+}
+/* 悬浮态需要实底，否则文字会透过按钮显示（覆盖式布局的必然代价） */
+.theme-modern .workspace-session-tab:hover .workspace-session-tab-close,
+.theme-modern .workspace-session-tab-active .workspace-session-tab-close {
+  background: var(--panel);
+}
+.theme-modern .workspace-session-tab-close:hover { background: color-mix(in srgb, var(--ink) 10%, transparent) !important; color: var(--ink); }
+.theme-modern .workspace-session-tab-active .workspace-session-tab-close:hover { background: color-mix(in srgb, var(--red) 14%, transparent) !important; color: var(--red); }
 .theme-modern .workspace-session-tab-group {
   font-size: var(--fs-2xs);
   color: var(--ink-muted);
@@ -1207,8 +1303,11 @@
 }
 .theme-modern .server-item-wrap-active,
 .theme-modern .server-list .server-item-wrap-active {
+  /* 2026-10-21 对齐 VRC：淡色填充 + 圆角，去掉左侧 2px 硬竖条（与上方同规则一致，
+     本处带 !important 用于压过旧的基础样式）。 */
   background: var(--accent-soft) !important;
-  box-shadow: inset 2px 0 0 var(--accent) !important;
+  box-shadow: none !important;
+  border-radius: 7px !important;
 }
 .theme-modern .server-item,
 .theme-modern .server-list button.server-item {
@@ -2708,27 +2807,30 @@ body:has(.theme-modern) button:disabled {
     gap: 0 !important;
   }
 }
-/* 2) 行内字号（对齐 VRC 服务器树 2026-10-16）：名 --fs-sm · 主机/端口/分组 --fs-xs。
-   原主机·端口·分组统一 --fs-2xs（11px）偏小、且与分组同档导致层级挤。 */
+/* 2) 行内字号/字重（2026-10-21 对齐 VRC 源码规格）：
+   VRC：名 12px/400 · IP·端口 11px · 分组 11px/400（group-title 无 font-weight）。
+   SLC 原：名 13px/500 · IP·端口·分组 12px · 分组 600 —— 字重与绝对尺寸都偏大，
+   且分组用了 600 加粗、颜色 --ink-muted 偏深。这里回归 VRC 的克制层级。 */
 .theme-modern .server-item .server-item-main strong,
 .theme-modern .server-item strong,
 .theme-modern .server-item .server-item-name {
-  font-size: var(--fs-sm) !important;
-  font-weight: 500 !important;
+  font-size: var(--fs-xs) !important;
+  font-weight: 400 !important;
   line-height: 1.35 !important;
 }
 .theme-modern .server-item .server-item-main span {
-  font-size: var(--fs-xs) !important;
+  font-size: var(--fs-2xs) !important;
   line-height: 1.4 !important;
 }
 .theme-modern .server-item > .server-item-meta {
-  font-size: var(--fs-xs) !important;
+  font-size: var(--fs-2xs) !important;
   padding: 0 !important;
 }
 .theme-modern .server-group-title,
 .theme-modern .server-list .server-group-title {
-  font-size: var(--fs-xs) !important;
-  font-weight: 600 !important;
+  font-size: var(--fs-2xs) !important;
+  font-weight: 400 !important;
+  color: var(--ink-soft) !important;
   padding: 12px 14px 4px !important;
 }
 .theme-modern .server-item-quick-actions {
@@ -2748,30 +2850,26 @@ body:has(.theme-modern) button:disabled {
   border-left: none !important;
   background: transparent !important;
 }
-/* 4) 状态点：对齐 VRC 服务器树 —— 小、干净、无外圈（用户反馈 2026-10-16
-   「状态点太大太丑，尤其外圈；未选中灰色也显示光晕更难看」）。
-   旧规格：7px 实心 + box-shadow 0 0 0 3px 外环 → 视觉直径撑到 ~13px，且
-   离线行也挂一圈灰环，整列出现一排半透明「甜甜圈」，杂且脏。
-   新规格：6px；在线=绿实心点、离线=细描边空心圈（VRC 未连接态）、待连接=琥珀实心点。
-   三者一律无外扩光晕/光环。 */
+/* 4) 状态点（2026-10-21 对齐 VRC 源码）：
+   VRC .status-dot：默认实心灰点 background: var(--vrc-border-strong)（#b8c2ae 灰绿），
+   .online 才变绿；**没有空心圈形态**。此前我把离线做成了 1.5px 空心圈，偏离了 VRC。
+   改为：在线=绿实心点、离线=灰绿实心点、待连接=琥珀实心点，三者均实心无外环。 */
 .theme-modern .server-status-dot,
 .theme-modern .server-item .server-status-dot {
   width: 6px !important;
   height: 6px !important;
   box-sizing: border-box !important;
+  border: none !important;
   box-shadow: none !important;
 }
 .theme-modern .server-status-dot.dot-connected {
   background: var(--green-dot) !important;
-  border: none !important;
 }
 .theme-modern .server-status-dot.dot-idle {
-  background: transparent !important;
-  border: 1.5px solid color-mix(in srgb, var(--ink-muted) 45%, transparent) !important;
+  background: var(--line-strong) !important;
 }
 .theme-modern .server-status-dot.dot-pending {
   background: var(--amber) !important;
-  border: none !important;
 }
 /* 5) 悬浮快捷操作组（原型 .qa / .qa .btn，prototype.html 106–112）
    原型：.btn.icon.sm = 28×24 / 图标 12 / 组内 gap 2；

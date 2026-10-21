@@ -399,16 +399,40 @@ export async function apiGetServerSystemProfile(serverId: string, timeoutMs = 30
   return readPayload<ServerSystemProfileResponse>(response, "读取服务器状态失败");
 }
 
+/**
+ * 测试服务器连接（2026-10-21 补超时）。
+ *
+ * 此前没有任何超时控制：网关侧若因「候选堡垒机串行重试 30s×N + direct 兜底」
+ * 而迟迟不返回，前端 `await` 会永久挂住 —— UI 停在「正在连接」，既无结果也无报错，
+ * 用户表现为「卡很久，关掉重开才好」。这里加超时后至少能收敛成一次明确失败，
+ * 让用户可以重试，而不是无限等待。
+ *
+ * 超时取 95s：网关最坏路径约为 30s(首选) + 30s(候选堡垒机) + 30s(direct 兜底)，
+ * 留 5s 余量，避免前端比网关更早放弃、把「慢成功」误报为失败。
+ */
 export async function apiTestConnection(
   serverId: string,
-  directoryPath: string
+  directoryPath: string,
+  timeoutMs = 95_000
 ): Promise<ServerConnectionTestResponse> {
-  const response = await gatewayFetch(`${localServiceBase}/api/servers/${encodeURIComponent(serverId)}/test-connection`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ directoryPath })
-  });
-  return readPayload<ServerConnectionTestResponse>(response, "连接测试失败");
+  const controller = new AbortController();
+  const timer = globalThis.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await gatewayFetch(`${localServiceBase}/api/servers/${encodeURIComponent(serverId)}/test-connection`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ directoryPath }),
+      signal: controller.signal
+    });
+    return await readPayload<ServerConnectionTestResponse>(response, "连接测试失败");
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new Error(`连接测试超时（${Math.round(timeoutMs / 1000)} 秒未返回）。可重试，或检查该服务器网络/堡垒机配置。`);
+    }
+    throw error;
+  } finally {
+    globalThis.clearTimeout(timer);
+  }
 }
 
 export async function apiImportFromTool(toolId: string): Promise<FinalShellImportResponse> {

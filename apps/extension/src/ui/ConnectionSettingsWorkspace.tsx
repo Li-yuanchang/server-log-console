@@ -82,6 +82,9 @@ interface Props {
     onTerminalCursorStyleChange: (style: "block" | "bar" | "underline") => void;
     terminalCursorBlink: boolean;
     onTerminalCursorBlinkChange: (value: boolean) => void;
+    /* 终端背景跟随 UI 主题（true=主题 --shell / false=配色方案自带底色） */
+    terminalBgFollowTheme: boolean;
+    onTerminalBgFollowThemeChange: (value: boolean) => void;
     /* S14：日志 / 终端字体族独立配置 */
     logFontFamily: MonoFontFamily;
     onLogFontFamilyChange: (family: MonoFontFamily) => void;
@@ -1416,7 +1419,14 @@ export function ConnectionSettingsWorkspace(props: Props) {
                               min={12}
                               max={18}
                               value={props.preferenceSection.uiFontSize}
-                              onChange={(event) => props.preferenceSection.onUiFontSizeChange(Number(event.target.value))}
+                              onChange={(event) => {
+                                /* 空值保护：清空时 Number("")=0 会被钳到最小值并持久化 */
+                                const raw = event.target.value;
+                                if (raw === "") return;
+                                const next = Number(raw);
+                                if (!Number.isFinite(next)) return;
+                                props.preferenceSection.onUiFontSizeChange(next);
+                              }}
                               aria-label="界面字号"
                             />
                           </td>
@@ -1443,7 +1453,14 @@ export function ConnectionSettingsWorkspace(props: Props) {
                               min={11}
                               max={16}
                               value={props.preferenceSection.logFontSize}
-                              onChange={(event) => props.preferenceSection.onLogFontSizeChange(Number(event.target.value))}
+                              onChange={(event) => {
+                                /* 空值保护：清空时 Number("")=0 会被钳到最小值并持久化 */
+                                const raw = event.target.value;
+                                if (raw === "") return;
+                                const next = Number(raw);
+                                if (!Number.isFinite(next)) return;
+                                props.preferenceSection.onLogFontSizeChange(next);
+                              }}
                               aria-label="日志预览字号"
                             />
                           </td>
@@ -1470,7 +1487,16 @@ export function ConnectionSettingsWorkspace(props: Props) {
                               min={11}
                               max={18}
                               value={props.preferenceSection.terminalFontSize}
-                              onChange={(event) => props.preferenceSection.onTerminalFontSizeChange(Number(event.target.value))}
+                              onChange={(event) => {
+                                /* 空值保护（2026-10-21）：清空输入框时 Number("")=0，
+                                   会被 setter 钳到最小值 11 并持久化 —— 用户反馈
+                                   「字号怎么是 11px、改不回来」正是此因。空串直接忽略。 */
+                                const raw = event.target.value;
+                                if (raw === "") return;
+                                const next = Number(raw);
+                                if (!Number.isFinite(next)) return;
+                                props.preferenceSection.onTerminalFontSizeChange(next);
+                              }}
                               aria-label="终端字号"
                             />
                           </td>
@@ -1615,9 +1641,51 @@ export function ConnectionSettingsWorkspace(props: Props) {
             <section id="pref-terminal" data-anchor className="settings-pref-section">
               <div className="settings-card-kicker">终端</div>
               <div className="settings-pref-card">
+                {/* 终端字体族 / 字号（2026-10-21 补齐）：此前这两项的**可编辑控件**
+                    只存在于「外观」分区的字体矩阵里，终端分区只有一行只读文字
+                    「Geist Mono · 11px」——用户反馈「字体字号也不能改」，正是因为
+                    在终端分区找不到入口。此处补上可编辑控件，与外观区共用同一
+                    setter（两处联动，改任一处都生效）。 */}
                 <div className="settings-pref-row">
-                  <span className="settings-pref-label"><strong>终端重排</strong><span>字体族 / 字号更新后 xterm 自动重排，避免列宽错位</span></span>
-                  <span className="settings-pref-value">{props.preferenceSection.terminalFontFamily === "geist-mono" ? "Geist Mono" : monoFontFamilyLabel(props.preferenceSection.terminalFontFamily)} · {props.preferenceSection.terminalFontSize}px</span>
+                  <span className="settings-pref-label"><strong>终端字体</strong><span>等宽字体族；改动后 xterm 自动重排</span></span>
+                  <span className="settings-pref-value">
+                    <ThemedSelect
+                      value={props.preferenceSection.terminalFontFamily}
+                      onChange={(value) => props.preferenceSection.onTerminalFontFamilyChange(value as MonoFontFamily)}
+                      ariaLabel="终端字体"
+                      options={[
+                        { value: "geist-mono", label: "Geist Mono" },
+                        { value: "sf-mono", label: "SF Mono" },
+                        { value: "menlo", label: "Menlo" },
+                        { value: "consolas", label: "Consolas" },
+                        { value: "system-mono", label: "系统等宽" }
+                      ]}
+                    />
+                  </span>
+                </div>
+                <div className="settings-pref-row">
+                  <span className="settings-pref-label"><strong>终端字号</strong><span>11–18px；改动后自动重排避免列宽错位</span></span>
+                  <span className="settings-pref-value">
+                    <span className="slc-stepper">
+                      <button
+                        type="button"
+                        aria-label="减小终端字号"
+                        disabled={props.preferenceSection.terminalFontSize <= 11}
+                        onClick={() => props.preferenceSection.onTerminalFontSizeChange(
+                          Math.max(11, props.preferenceSection.terminalFontSize - 1)
+                        )}
+                      >−</button>
+                      <output>{props.preferenceSection.terminalFontSize}px</output>
+                      <button
+                        type="button"
+                        aria-label="增大终端字号"
+                        disabled={props.preferenceSection.terminalFontSize >= 18}
+                        onClick={() => props.preferenceSection.onTerminalFontSizeChange(
+                          Math.min(18, props.preferenceSection.terminalFontSize + 1)
+                        )}
+                      >＋</button>
+                    </span>
+                  </span>
                 </div>
                 <div className="settings-pref-row">
                   <span className="settings-pref-label"><strong>终端选中复制</strong><span>选中即复制，右键粘贴</span></span>
@@ -1682,6 +1750,23 @@ export function ConnectionSettingsWorkspace(props: Props) {
                         checked={props.preferenceSection.terminalCursorBlink}
                         onChange={(event) => props.preferenceSection.onTerminalCursorBlinkChange(event.target.checked)}
                         aria-label="终端光标闪烁"
+                      />
+                      <span />
+                    </label>
+                  </span>
+                </div>
+                {/* 终端背景跟随主题（2026-10-21）：用户反馈「背景色也不跟随主题变化」。
+                    开启时终端底色取当前 UI 主题的 --shell，换主题即变；
+                    关闭时取所选「终端配色方案」自带底色（Tokyo Night 等原色）。 */}
+                <div className="settings-pref-row">
+                  <span className="settings-pref-label"><strong>背景跟随主题</strong><span>开启后终端底色随 UI 主题变化；关闭则用配色方案自带底色</span></span>
+                  <span className="settings-pref-value">
+                    <label className="slc-switch">
+                      <input
+                        type="checkbox"
+                        checked={props.preferenceSection.terminalBgFollowTheme}
+                        onChange={(event) => props.preferenceSection.onTerminalBgFollowThemeChange(event.target.checked)}
+                        aria-label="终端背景跟随主题"
                       />
                       <span />
                     </label>

@@ -18,9 +18,9 @@
          8 套主题的 bg 色表与 useUiTheme THEME_PRESETS 一致；toneMode=system 时
          读 prefers-color-scheme 在同族内取变体。 */
       try{
-        var __slcBg={'geist':'#fafafa','carbon':'#0a0a0a','steel':'#f6f8fa','slate':'#0b1220','sand':'#faf9f7','espresso':'#1c1917','cal':'#ffffff','ink':'#09090b'};
-        var __slcFam={geist:'neutral',carbon:'neutral',steel:'cool',slate:'cool',sand:'warm',espresso:'warm',cal:'mono',ink:'mono'};
-        var __slcPair={neutral:['geist','carbon'],cool:['steel','slate'],warm:['sand','espresso'],mono:['cal','ink']};
+        var __slcBg={'geist':'#fafafa','carbon':'#0a0a0a','steel':'#f6f8fa','slate':'#0b1220','sand':'#faf9f7','espresso':'#1c1917','cal':'#ffffff','ink':'#09090b','sage':'#f5f6f2','graphite':'#171a19'};
+        var __slcFam={geist:'neutral',carbon:'neutral',steel:'cool',slate:'cool',sand:'warm',espresso:'warm',cal:'mono',ink:'mono',sage:'sage',graphite:'sage'};
+        var __slcPair={neutral:['geist','carbon'],cool:['steel','slate'],warm:['sand','espresso'],mono:['cal','ink'],sage:['sage','graphite']};
         var __slcPreset=localStorage.getItem('ui-theme-preset')||'geist';
         if(!__slcBg[__slcPreset])__slcPreset='geist';
         var __slcTone=localStorage.getItem('ui-tone-mode')||'system';

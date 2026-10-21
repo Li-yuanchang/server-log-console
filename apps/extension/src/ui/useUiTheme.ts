@@ -18,7 +18,8 @@ export type UiWatermarkScope = "content" | "global";
    ============================================================ */
 
 export type UiThemePreset =
-  | "geist" | "carbon" | "steel" | "slate" | "sand" | "espresso" | "cal" | "ink";
+  | "geist" | "carbon" | "steel" | "slate" | "sand" | "espresso" | "cal" | "ink"
+  | "sage" | "graphite";
 export type UiToneMode = "system" | "light" | "dark";
 export type UiBackgroundLayer =
   | "solid" | "aurora" | "linear" | "grid" | "dots" | "diag" | "noise" | "image";
@@ -27,7 +28,7 @@ export type TerminalColorSchemeId =
 /** 终端光标样式：对齐 VRC「光标样式」三档（块 / 竖线 / 下划线） */
 export type TerminalCursorStyle = "block" | "bar" | "underline";
 
-export type ThemePresetFamily = "neutral" | "cool" | "warm" | "mono";
+export type ThemePresetFamily = "neutral" | "cool" | "warm" | "mono" | "sage";
 
 export type ThemePreset = {
   id: UiThemePreset;
@@ -73,14 +74,25 @@ export const THEME_PRESETS: ThemePreset[] = [
   { id: "ink", name: "墨", fam: "mono", tone: "dark", desc: "纯黑白 · 最高对比，零彩色",
     v: { bg: "#09090b", panel: "#18181b", muted: "#121214", ink: "#fafafa", soft: "#a1a1aa", mut: "#71717a", line: "#27272a", lineS: "#3f3f46", accent: "#fafafa", shell: "#050505", shellInk: "#d7dde5" },
     sem: { green: "#4ade80", red: "#f87171", amber: "#fbbf24" } },
+  /* ── 石墨青族（2026-10-20，取自 VRC 默认主题「石墨青」）──
+     用户反馈「顶部线条加粗扎眼、按 VRC 配色来」：实测 SLC 的线条本就是 1px，
+     扎眼的真正原因是 panel 用纯白 #ffffff 配中性灰线 #e7e7e7（白→灰硬过渡）；
+     VRC 用微暖白 #fbfbf7 配「暖灰绿」线 #d9ded0，线融入整体色调而不跳。
+     故这不是「把线改细」，而是整族色调换成低饱和灰绿。 */
+  { id: "sage", name: "石墨青", fam: "sage", tone: "light", desc: "VRC 默认 · 低饱和灰绿，长时间看资源不累眼",
+    v: { bg: "#f5f6f2", panel: "#fbfbf7", muted: "#eef1e8", ink: "#27302a", soft: "#747b70", mut: "#92988d", line: "#d9ded0", lineS: "#b8c2ae", accent: "#426b57", shell: "#0f1310", shellInk: "#d6ddd8" },
+    sem: { green: "#477a45", red: "#a5483d", amber: "#b77935" } },
+  { id: "graphite", name: "石墨夜", fam: "sage", tone: "dark", desc: "VRC 深色 · 石墨底 + 同族灰绿",
+    v: { bg: "#171a19", panel: "#202521", muted: "#29312b", ink: "#e7ebe6", soft: "#a7b0a8", mut: "#7f8981", line: "#39433b", lineS: "#59665c", accent: "#73b59a", shell: "#0d100e", shellInk: "#d6ddd8" },
+    sem: { green: "#7fcf91", red: "#d36c7b", amber: "#d49a51" } },
 ];
 
 const THEME_PRESET_IDS = THEME_PRESETS.map((t) => t.id);
 const FAMILY_LIGHT: Record<ThemePresetFamily, UiThemePreset> = {
-  neutral: "geist", cool: "steel", warm: "sand", mono: "cal",
+  neutral: "geist", cool: "steel", warm: "sand", mono: "cal", sage: "sage",
 };
 const FAMILY_DARK: Record<ThemePresetFamily, UiThemePreset> = {
-  neutral: "carbon", cool: "slate", warm: "espresso", mono: "ink",
+  neutral: "carbon", cool: "slate", warm: "espresso", mono: "ink", sage: "graphite",
 };
 
 /** 背景层（独立于主题的一层）。视觉实现全部在 theme-modern.css 的 .ui-bg-* 块。 */
@@ -222,6 +234,9 @@ export type UiThemeAPI = {
   /** 终端光标闪烁（xterm cursorBlink）。参考 VRC「光标闪烁」开关。 */
   terminalCursorBlink: boolean;
   setTerminalCursorBlink: (value: boolean) => void;
+  /** 终端背景跟随 UI 主题（true=主题 --shell / false=所选终端配色方案自带底色） */
+  terminalBgFollowTheme: boolean;
+  setTerminalBgFollowTheme: (value: boolean) => void;
   /** 强调色覆盖（null = 跟随主题；入口在高级节） */
   uiAccentOverride: string | null;
   setUiAccentOverride: (accent: string | null) => void;
@@ -257,7 +272,10 @@ export type UiThemeAPI = {
 
 const DEFAULT_UI_THEME = "modern" as const;
 const DEFAULT_UI_DENSITY: UiDensity = "compact";
-const DEFAULT_UI_THEME_PRESET: UiThemePreset = "geist";
+/* 默认主题（2026-10-20 由 geist → sage）：用户反馈「顶部线条加粗扎眼，按 VRC 配色来」。
+   SLC 线条实测本就是 1px，扎眼源于「纯白 panel + 中性灰线」的硬过渡；VRC 石墨青用
+   「微暖白 #fbfbf7 + 暖灰绿线 #d9ded0」，线融入整体色调。故默认换成石墨青。 */
+const DEFAULT_UI_THEME_PRESET: UiThemePreset = "sage";
 const DEFAULT_UI_TONE_MODE: UiToneMode = "system";
 /* 默认背景层（2026-10-19 由 aurora → solid）：
    aurora 是顶部蓝紫径向光晕，用户多次反馈「渐变色看着太花了」「AI 公式化」。
@@ -361,6 +379,14 @@ function persistLocalStorageValue(key: string, value: string) {
 /** 主题初始化：读新 key；没有则迁移旧 ui-surface（plain→晨白 / mist→钢青 / paper→暖砂 / custom→晨白）。 */
 function initialThemePreset(): UiThemePreset {
   const value = readLocalStorageValue("ui-theme-preset");
+  /* 一次性迁移（2026-10-20）：默认主题 geist → sage（VRC 石墨青）。
+     旧默认值会在首次挂载时写入 localStorage，无法区分「从未改过」与「主动选过
+     geist」。这里把 geist 统一迁到 sage；确实想留晨白的用户重新选一次即可
+     （迁移标记写入后不再覆盖）。其余主题（carbon/steel/…）一律尊重用户选择。 */
+  const migrated = readLocalStorageValue("ui-theme-preset-migrated") === "1";
+  if (!migrated && value === "geist" && DEFAULT_UI_THEME_PRESET !== "geist") {
+    return DEFAULT_UI_THEME_PRESET;
+  }
   if (THEME_PRESET_IDS.includes(value as UiThemePreset)) return value as UiThemePreset;
   const legacySurface = readLocalStorageValue("ui-surface");
   if (legacySurface === "mist") return "steel";
@@ -451,6 +477,13 @@ export function useUiTheme(): UiThemeAPI {
     const value = readLocalStorageValue("terminal-cursor-blink");
     return value === "" ? DEFAULT_TERMINAL_CURSOR_BLINK : value === "on";
   });
+  /* 终端背景是否跟随 UI 主题（2026-10-21）：用户反馈「背景色也不跟随主题变化」。
+     开启时终端底色取主题 --shell；关闭时取所选「终端配色方案」的背景
+     （Tokyo Night / Dracula 等自带底色）。默认开启以贴合主题观感。 */
+  const [terminalBgFollowTheme, setTerminalBgFollowTheme] = useState(() => {
+    const value = readLocalStorageValue("terminal-bg-follow-theme");
+    return value === "" ? true : value === "on";
+  });
   /* 界面字号：--fs-* 梯度基准（12~18），驱动全套界面字号 token */
   const [uiFontSize, setUiFontSize] = useState(() => {
     return readStoredNumber("ui-font-size", DEFAULT_UI_FONT_SIZE, 12, 18);
@@ -524,6 +557,8 @@ export function useUiTheme(): UiThemeAPI {
 
   useEffect(() => {
     persistLocalStorageValue("ui-theme-preset", uiThemePreset);
+    /* 迁移标记：写过值即视为完成迁移，避免下次启动把用户主动选回的 geist 又改掉 */
+    persistLocalStorageValue("ui-theme-preset-migrated", "1");
   }, [uiThemePreset]);
 
   useEffect(() => {
@@ -583,6 +618,10 @@ export function useUiTheme(): UiThemeAPI {
   }, [terminalCursorBlink]);
 
   useEffect(() => {
+    persistLocalStorageValue("terminal-bg-follow-theme", terminalBgFollowTheme ? "on" : "off");
+  }, [terminalBgFollowTheme]);
+
+  useEffect(() => {
     persistLocalStorageValue("ui-font-size", String(uiFontSize));
   }, [uiFontSize]);
 
@@ -640,6 +679,7 @@ export function useUiTheme(): UiThemeAPI {
     setTerminalLineHeight(DEFAULT_TERMINAL_LINE_HEIGHT);
     setTerminalCursorStyle(DEFAULT_TERMINAL_CURSOR_STYLE);
     setTerminalCursorBlink(DEFAULT_TERMINAL_CURSOR_BLINK);
+    setTerminalBgFollowTheme(true);
     setUiFontSize(DEFAULT_UI_FONT_SIZE);
     setLogFontFamily(DEFAULT_MONO_FONT_FAMILY);
     setTerminalFontFamily(DEFAULT_MONO_FONT_FAMILY);
@@ -687,6 +727,8 @@ export function useUiTheme(): UiThemeAPI {
     setTerminalCursorStyle,
     terminalCursorBlink,
     setTerminalCursorBlink,
+    terminalBgFollowTheme,
+    setTerminalBgFollowTheme,
     uiFontSize,
     setUiFontSize,
     logFontFamily,
