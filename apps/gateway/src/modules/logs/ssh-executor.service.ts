@@ -249,6 +249,23 @@ function applyTerminalCwd(stream: ClientChannel, cwd?: string) {
   injectTerminalCwd(stream, cwd, { waitForFirstPrompt: false, timeoutMs: 3000 }, () => {});
 }
 
+/**
+ * SSH 连接全链路打点（2026-10-21）。
+ *
+ * 背景：此前本文件几乎没有任何日志（全文仅 1 处 console.warn），
+ * 「打开服务器卡很久、关掉重开才好」这类问题在日志里完全查不到 ——
+ * 探针文件里只有 app activate / 窗口事件，没有任何连接尝试记录。
+ *
+ * 打点范围（只记关键节点，避免噪声）：
+ *   - 池命中 / 新建
+ *   - 每次尝试的目标与耗时（成功/失败都能算出 30s×N 的串行回退代价）
+ *   - 最终失败原因
+ * 经 main.cjs 的 console 桥接写入 /tmp/slc-main-probe.txt（前缀 gateway log）。
+ */
+function sshLog(message: string) {
+  console.log(`[ssh] ${message}`);
+}
+
 export class SshExecutorService {
   private static readonly IDLE_TTL = 120_000;
   private static readonly MAX_LIFETIME = 600_000;
@@ -350,6 +367,7 @@ export class SshExecutorService {
       clearTimeout(cached.idleTimer);
       cached.idleTimer = setTimeout(() => this.evictExec(serverId), SshExecutorService.IDLE_TTL);
       cached.busy++;
+      sshLog(`exec 池命中 server=${serverId} busy=${cached.busy}`);
       return cached.connection.client;
     }
 
@@ -362,12 +380,35 @@ export class SshExecutorService {
     const preferBastionFirst = server.connectionKind === "bastion-target" || (!server.connectionKind && Boolean(server.preferredBastionId));
     const hasBastionRoute = preferBastionFirst && Boolean(server.preferredBastionId) && bastions.length > 0;
 
+    /* 关键：记录「候选数量 + 每个候选的超时」——串行回退的总耗时 ≈ timeoutMs × 候选数，
+       这正是「卡很久」的量级来源，此前完全不可见。 */
+    const startedAt = Date.now();
+    sshLog(
+      `exec 新建连接 server=${serverId} host=${credentials.host}:${credentials.port} kind=${server.connectionKind || "direct"} `
+      + `候选堡垒机=${bastions.length} 单次超时=${timeoutMs}ms 首选=${hasBastionRoute ? "bastion" : "direct"}`
+    );
+
+    /** 包一层计时：记录每次尝试的目标 / 结果 / 耗时 */
+    const attempt = async <T>(label: string, run: () => Promise<T>): Promise<T> => {
+      const t0 = Date.now();
+      sshLog(`尝试 ${label} 开始`);
+      try {
+        const result = await run();
+        sshLog(`尝试 ${label} 成功 耗时=${Date.now() - t0}ms`);
+        return result;
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : String(error);
+        sshLog(`尝试 ${label} 失败 耗时=${Date.now() - t0}ms 原因=${detail}`);
+        throw error;
+      }
+    };
+
     if (hasBastionRoute) {
       let lastError: unknown;
       let found = false;
       for (const bastion of bastions) {
         try {
-          connection = await this.connectManagedViaBastion(serverId, bastion.id, timeoutMs);
+          connection = await attempt(`bastion:${bastion.name || bastion.id}`, () => this.connectManagedViaBastion(serverId, bastion.id, timeoutMs));
           found = true;
           break;
         } catch (bastionError) { lastError = bastionError; }
@@ -375,16 +416,18 @@ export class SshExecutorService {
       if (!found) {
         // Bastion failed — try direct as last resort
         try {
-          connection = await this.connectManaged(serverId, timeoutMs);
+          connection = await attempt("direct(兜底)", () => this.connectManaged(serverId, timeoutMs));
         } catch (directError) {
+          sshLog(`exec 连接彻底失败 server=${serverId} 总耗时=${Date.now() - startedAt}ms`);
           throw new Error(humanizeSshError(lastError ?? directError, credentials));
         }
       }
     } else {
       try {
-        connection = await this.connectManaged(serverId, timeoutMs);
+        connection = await attempt("direct", () => this.connectManaged(serverId, timeoutMs));
       } catch (error) {
         if (bastions.length === 0) {
+          sshLog(`exec 连接失败（无可用堡垒机）server=${serverId} 总耗时=${Date.now() - startedAt}ms`);
           throw new Error(humanizeSshError(error, credentials));
         }
 
@@ -392,14 +435,19 @@ export class SshExecutorService {
         let found = false;
         for (const bastion of bastions) {
           try {
-            connection = await this.connectManagedViaBastion(serverId, bastion.id, timeoutMs);
+            connection = await attempt(`bastion:${bastion.name || bastion.id}`, () => this.connectManagedViaBastion(serverId, bastion.id, timeoutMs));
             found = true;
             break;
           } catch (bastionError) { lastError = bastionError; }
         }
-        if (!found) throw new Error(humanizeSshError(lastError, credentials));
+        if (!found) {
+          sshLog(`exec 连接彻底失败 server=${serverId} 总耗时=${Date.now() - startedAt}ms`);
+          throw new Error(humanizeSshError(lastError, credentials));
+        }
       }
     }
+
+    sshLog(`exec 连接建立 server=${serverId} mode=${connection!.mode} 总耗时=${Date.now() - startedAt}ms`);
 
     // Auto-evict on disconnect / error
     connection!.client.on("close", () => this.evictExec(serverId));

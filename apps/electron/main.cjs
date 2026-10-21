@@ -187,12 +187,50 @@ async function waitForGatewayReady(maxAttempts = 20, delayMs = 500) {
   return false;
 }
 
+/**
+ * 网关日志桥接（2026-10-21）。
+ *
+ * 问题：startGateway() 优先走 importGatewayInProcess()，网关与本进程同体，
+ * 其 console.* 只写到 stdout —— 打包后的 app 里没有任何地方能看到。
+ * 只有 spawnGatewayProcess() 才会把子进程 stdout/stderr pipe 到 probe。
+ * 实测探针里 `gateway import start` 有 9 条、`gateway spawn start` 0 条，
+ * 即网关日志长期是黑洞，「连接卡住」这类问题因此完全无法定位。
+ *
+ * 方案：给 console 挂一层旁路，**仅**把网关（in-process）产生的日志追加进探针文件。
+ *  - probe() 用 fs.appendFileSync，不经过 console，故不会递归；
+ *  - 统一加 `gateway log` 前缀，便于 grep 区分主进程与网关；
+ *  - 幂等：重复调用只桥接一次（避免 startGateway 重入时套娃）。
+ */
+let gatewayConsoleBridged = false;
+function bridgeInProcessGatewayConsole() {
+  if (gatewayConsoleBridged) {
+    return;
+  }
+  gatewayConsoleBridged = true;
+  for (const level of ["log", "info", "warn", "error"]) {
+    const original = console[level].bind(console);
+    console[level] = (...args) => {
+      original(...args);
+      try {
+        const text = args
+          .map((value) => (value instanceof Error ? (value.stack || value.message) : typeof value === "string" ? value : JSON.stringify(value)))
+          .join(" ");
+        probe(`gateway log[${level}] ${text}`);
+      } catch {
+        /* 序列化失败不影响主流程 */
+      }
+    };
+  }
+}
+
 async function importGatewayInProcess(entry) {
   probe(`gateway import start ${entry}`);
   process.env.PORT = String(PORT);
   process.env.HOST = HOST;
   process.env.ELECTRON = "1";
   process.env.EXTENSION_DIST_DIR = getExtensionDistDir();
+  /* 加载前先挂桥：网关在 import 期间就会打印启动横幅与路由注册日志 */
+  bridgeInProcessGatewayConsole();
   await import(`${pathToFileURL(entry).href}?ts=${Date.now()}`);
   probe("gateway import resolved");
   return waitForGatewayReady();

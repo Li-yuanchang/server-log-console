@@ -134,7 +134,13 @@ export function SidebarPanel(props: SidebarPanelProps) {
         <div className="sidebar-head-row">
           <div className="sidebar-head-title">
             <p className="eyebrow">日志控制台</p>
-            <h1 className="topbar-title">日志控制台</h1>
+            <h1 className="topbar-title">
+              日志控制台
+              {/* 服务器统计移到标题右侧作副标题（2026-10-21，学 VRC「16 个连接」）：
+                  原先它挂在「服务器」小标题右侧，属于第二层级；移到主标题旁后
+                  一级信息区就能看到规模，列表区标题回归纯标签。 */}
+              {servers.length > 0 ? <span className="sidebar-head-count">{servers.length} 台</span> : null}
+            </h1>
           </div>
           <div className="sidebar-head-buttons">
             <button
@@ -165,7 +171,8 @@ export function SidebarPanel(props: SidebarPanelProps) {
       </div>
 
       <section className="pane-section">
-        <div className="pane-title-row"><strong className="pane-title">服务器</strong>{servers.length > 0 && <span>{servers.length} 台</span>}</div>
+        {/* 2026-10-21 用户要求：去掉搜索框上方的「服务器」标签行 ——
+            标题已在顶部「日志控制台」承担，此行使搜索框上方多出一段空白与层级噪音。 */}
         <input
           value={serverFilter}
           onChange={(event) => onServerFilterChange(event.target.value)}

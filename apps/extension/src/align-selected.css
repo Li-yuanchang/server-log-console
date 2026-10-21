@@ -12,9 +12,14 @@
    ============================================================ */
 
 /* ---------- 1. 分段控件 .seg 系列（视图切换 / 主档 / lite 档） ---------- */
+/* ⚠️ 2026-10-21 例外：.toolbar-view-switch-btn.is-active 已从本组移出。
+   用户要求「主视图切换按 VRC 分段控件来」（VRC: 无内部竖线、选中项白底浮起 +
+   轻投影、未选中透明）。若仍并入本组，其 transparent !important 会把
+   theme-modern-v2.css 的白底浮起压回透明，选中态就只剩变色、没有「格子」感。
+   该形态现由 theme-modern-v2.css「主视图切换」块定义。
+   其余分段控件（tool-drawer-seg / summary-seg / lite 档等）仍保持本文件
+   「无实底 + accent 文字」的既定决策，不受影响。 */
 .theme-modern .seg > button.on,
-.theme-modern .toolbar-view-switch-btn.is-active,
-.theme-modern .toolbar-view-switch-btn.is-active:hover:not(:disabled),
 .theme-modern .summary-seg button.on,
 .theme-modern .tool-drawer-seg button.on,
 .theme-modern .tool-drawer-seg > button.on,

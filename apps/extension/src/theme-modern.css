@@ -58,6 +58,8 @@
 :root:has(.ui-theme-espresso) { background: #1c1917; }
 :root:has(.ui-theme-cal) { background: #ffffff; }
 :root:has(.ui-theme-ink) { background: #09090b; }
+:root:has(.ui-theme-sage) { background: #f5f6f2; }
+:root:has(.ui-theme-graphite) { background: #171a19; }
 
 :root:has(.pip-standalone) {
   background: #0a0a0a;
@@ -239,6 +241,40 @@
   --sidebar-bg: #18181b; --sidebar-line: #27272a;
   --on-ink: #09090b; --dot-idle: #3f3f46;
   --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+/* ============================================================
+   石墨青族（2026-10-20，取自 VRC 默认主题）
+   用户反馈「顶部线条加粗扎眼，按 VRC 配色来」：SLC 线条实测本就是 1px，
+   扎眼源于「纯白 panel + 中性灰线」的硬过渡；VRC 用「微暖白 + 暖灰绿线」，
+   线融入整体色调。故整族改为低饱和灰绿，而非把线改细。
+   ============================================================ */
+.theme-modern.ui-theme-sage {
+  --bg: #f5f6f2; --panel: #fbfbf7; --panel-strong: #ffffff; --panel-muted: #eef1e8;
+  --ink: #27302a; --ink-soft: #747b70; --ink-muted: #92988d;
+  --line: #d9ded0; --line-strong: #b8c2ae;
+  --accent: #426b57; --accent-strong: #355744; --accent-soft: rgba(66, 107, 87, 0.1);
+  --on-accent: #ffffff;
+  --green: #477a45; --green-dot: #4f9d5d; --red: #a5483d; --red-soft: rgba(165, 72, 61, 0.08);
+  --amber: #b77935; --amber-soft: rgba(183, 121, 53, 0.1); --warning: #b77935;
+  --shell: #0f1310; --shell-soft: #171c18; --shell-ink: #d6ddd8; --shell-mut: #6d7a71;
+  --sidebar-bg: #fbfbf7; --sidebar-line: #d9ded0;
+  --on-ink: #ffffff; --dot-idle: #c2c9b8;
+  --shadow-sm: 0 2px 8px rgba(39, 48, 42, 0.06);
+}
+
+.theme-modern.ui-theme-graphite {
+  --bg: #171a19; --panel: #202521; --panel-strong: #252b27; --panel-muted: #29312b;
+  --ink: #e7ebe6; --ink-soft: #a7b0a8; --ink-muted: #7f8981;
+  --line: #39433b; --line-strong: #59665c;
+  --accent: #73b59a; --accent-strong: color-mix(in srgb, #73b59a 82%, #ffffff); --accent-soft: rgba(115, 181, 154, 0.16);
+  --on-accent: #141414;
+  --green: #7fcf91; --green-dot: #7fcf91; --red: #d36c7b; --red-soft: rgba(211, 108, 123, 0.16);
+  --amber: #d49a51; --amber-soft: rgba(212, 154, 81, 0.16); --warning: #d49a51;
+  --shell: #0d100e; --shell-soft: #141816; --shell-ink: #d6ddd8; --shell-mut: #6d7a71;
+  --sidebar-bg: #202521; --sidebar-line: #39433b;
+  --on-ink: #171a19; --dot-idle: #59665c;
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.45);
 }
 
 /* ============================================================
@@ -527,7 +563,8 @@
 .theme-modern .pane-section {
   padding: 10px 16px;
   gap: 8px;
-  border-bottom: 1px solid var(--sidebar-line);
+  /* 分隔线软化（2026-10-21）：混入侧栏面板色降低对比，与主区两条线一致 */
+  border-bottom: 1px solid color-mix(in srgb, var(--sidebar-line) 60%, var(--sidebar-bg));
   flex-shrink: 0;
 }
 
@@ -547,11 +584,13 @@
 
 .theme-modern .pane-section input {
   font-size: var(--fs-xs);
-  /* recon S1-8：原型 .input = 白底 + 1px 边框 + 圆角 6（prototype.html 第 57 / 364 行） */
-  background: var(--panel);
-  border: 1px solid var(--line);
+  /* 2026-10-21 对齐 VRC「干净透亮」：搜索框改为无边框 + 弱化底。
+     VRC 的 .sidebar-search 用 surface-muted 填充、0 边框、radius 7；
+     原先「白底 + 1px 描边」在浅色面板上形成一圈深色轮廓，是侧栏显脏的主因之一。 */
+  background: var(--panel-muted);
+  border: 0;
   color: var(--ink);
-  border-radius: 6px;
+  border-radius: 7px;
   padding: 0 10px;
   height: 28px;
 }
@@ -3188,6 +3227,10 @@ body.is-resizing-tree .theme-modern .browser-resizer::after {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  /* 定位上下文（2026-10-21）：终端区水印 .slc-watermark 是 absolute + inset:0，
+     需要一个 positioned 祖先才能正确铺满工作区。此前本元素无 position，
+     水印会挂到更外层（或视口），位置与裁切都不对。 */
+  position: relative;
 }
 
 .theme-modern .workspace-panel.workspace-panel-files {

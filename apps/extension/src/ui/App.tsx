@@ -433,6 +433,8 @@ export function App() {
     setTerminalCursorStyle,
     terminalCursorBlink,
     setTerminalCursorBlink,
+    terminalBgFollowTheme,
+    setTerminalBgFollowTheme,
     uiFontSize,
     setUiFontSize,
     logFontFamily,
@@ -3396,6 +3398,13 @@ export function App() {
      定义位置必须早于 appShellStyle —— 后者要把配色注入 --terminal-background。 */
   const terminalScheme = TERMINAL_SCHEMES.find((s) => s.id === uiTerminalScheme) ?? TERMINAL_SCHEMES[0];
 
+  /* 终端底色单一来源（2026-10-21）：CSS 层（--terminal-background）与 xterm 实例
+     （terminalBackgroundColor prop）必须取同一个值，否则外壳与画布撞色。
+     跟随主题时取 resolvedTheme.v.shell，换主题即变；否则取配色方案自带背景。 */
+  const terminalBackgroundColor = terminalBgFollowTheme
+    ? resolvedTheme.v.shell
+    : terminalScheme.theme.background;
+
   const appShellStyle = {
     /* 界面字号梯度：uiFontSize 驱动全套 --fs-* token（设置中心可调） */
     ...uiFontSizeVars(uiFontSize),
@@ -3405,13 +3414,13 @@ export function App() {
     /* S14：日志 / 终端字体族独立（原型：字体三处独立，日志字体族是原缺失能力） */
     "--log-font-family": monoFontFamilyValue(logFontFamily),
     "--terminal-font-family": monoFontFamilyValue(terminalFontFamily),
-    /* 终端配色方案 → CSS 层（2026-10-19 修复）：
-       「终端配色」此前只经 JS prop 传给 xterm 实例，CSS 层从未拿到值 —— 而全站
-       18 处 var(--terminal-background) 消费点（终端面板底、独立窗、PiP）都靠它。
-       不注入时永远回退到 --shell（深色），导致选浅色方案（如「日光」）后
-       终端外壳仍是黑的、与 xterm 画布撞色。此处同步注入，让外壳跟随方案。 */
-    "--terminal-background": terminalScheme.theme.background,
-    "--terminal-background-soft": terminalScheme.theme.background,
+    /* 终端背景（2026-10-21 增加「跟随主题」开关）：
+       - terminalBgFollowTheme=true（默认）→ 取当前 UI 主题的 --shell，
+         换主题时终端底色一起变（用户反馈「背景色也不跟随主题变化」）。
+       - false → 取所选「终端配色方案」自带背景（Tokyo Night / Dracula 等原色）。
+       CSS 层与 xterm 实例必须取同一个值，否则外壳与画布撞色。 */
+    "--terminal-background": terminalBgFollowTheme ? resolvedTheme.v.shell : terminalScheme.theme.background,
+    "--terminal-background-soft": terminalBgFollowTheme ? resolvedTheme.v.shell : terminalScheme.theme.background,
     "--custom-background-image": toCssImageUrl(customBackgroundImage),
     /* 背景层图片模式：遮罩亮度 / 模糊由设置滑杆驱动（原型 T1）。
        只注入 -alpha（0..1，供 CSS calc 使用）与 blur；旧的百分比版
@@ -3463,7 +3472,7 @@ export function App() {
             onActivity={pushActivity}
             terminalFontSize={terminalFontSize}
             terminalFontFamily={monoFontFamilyValue(terminalFontFamily)}
-            terminalBackgroundColor={terminalScheme.theme.background}
+            terminalBackgroundColor={terminalBackgroundColor}
             terminalScheme={uiTerminalScheme}
             terminalLineHeight={terminalLineHeight}
             terminalCursorStyle={terminalCursorStyle}
@@ -3611,7 +3620,16 @@ export function App() {
                 handleWorkspaceTabDragEnd,
               }}
             />
-          ) : null}
+          ) : (
+            /* 2026-10-21：无会话时保留一条同高的「空拖拽条」。
+               用户反馈「服务器 tab 所在区域不连接服务器无法拖动，只有打开服务器后
+               才可以拖动」—— 根因是此前该条件直接返回 null，整条 DOM 不存在，
+               而窗口拖拽区正是由 .workspace-session-strip 承担
+               （styles-sidebar-toolbar.css 的 -webkit-app-region: drag）。
+               补一条空条后，未连接状态下顶部同样是可拖拽区，且高度/背景与有
+               tab 时一致，不产生布局跳动。 */
+            <div className="workspace-session-strip workspace-session-strip-empty" aria-hidden="true" />
+          )}
           <section className="toolbar-panel">
             {/* 侧栏移动档顶栏（sp-appbar + 服务器 chip）：宽档由 CSS display:none 隐藏，DOM 常驻 */}
             <SidepanelMobileTop
@@ -3840,6 +3858,7 @@ export function App() {
             {!showServiceOfflineState && !showNoServerState && terminalPanelOpen && !terminalDetached ? (
               /* 终端工作台（五段式容器）：标签组 / 分屏 / 查找 / 菜单 / 状态栏均在容器内；
                  分屏双轨（terminal-workarea-split 顶条 + TerminalSplitView 直挂）已拆除 */
+              <>
               <TerminalPanel
                 popupMode="embedded"
                 server={selectedServer}
@@ -3865,7 +3884,7 @@ export function App() {
                 onActivity={pushActivity}
                 terminalFontSize={terminalFontSize}
                 terminalFontFamily={monoFontFamilyValue(terminalFontFamily)}
-                terminalBackgroundColor={terminalScheme.theme.background}
+                terminalBackgroundColor={terminalBackgroundColor}
                 terminalScheme={uiTerminalScheme}
                 terminalLineHeight={terminalLineHeight}
                 terminalCursorStyle={terminalCursorStyle}
@@ -3882,6 +3901,20 @@ export function App() {
                 onOpenSettings={() => openSettingsWorkspace("preferences")}
                 onUploadFiles={handleTerminalUploadFiles}
               />
+              {/* 终端区水印（2026-10-21 补齐）：此前 WatermarkOverlay 只挂在日志内容区
+                  与全局层，终端视图内完全没有水印 —— 用户反馈「水印有效吗」。
+                  作用范围=日志/预览区时同样覆盖终端，与日志区行为一致。
+                  终端外框为 .workspace-panel（position: relative），水印 absolute 可正确定位。 */}
+              <WatermarkOverlay
+                enabled={watermarkEnabled && watermarkScope === "content"}
+                template={watermarkTemplate}
+                opacity={watermarkOpacity}
+                scope="content"
+                user={credentialUsername || selectedServer?.username || "用户"}
+                host={selectedServer?.name || selectedServer?.host || "主机"}
+                time={watermarkTimeLabel}
+              />
+              </>
             ) : !showServiceOfflineState && !showNoServerState && (
               <>
                 {(!isFileMode || pip.isPip) ? (
@@ -4895,6 +4928,8 @@ export function App() {
                 onTerminalCursorStyleChange: setTerminalCursorStyle,
                 terminalCursorBlink,
                 onTerminalCursorBlinkChange: setTerminalCursorBlink,
+                terminalBgFollowTheme,
+                onTerminalBgFollowThemeChange: setTerminalBgFollowTheme,
                 logFontFamily,
                 onLogFontFamilyChange: setLogFontFamily,
                 terminalFontFamily,
