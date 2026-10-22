@@ -312,6 +312,12 @@ export interface ServerSystemProfileResponse {
   cpu: {
     cores: number;
     model: string;
+    /**
+     * 真实 CPU 使用率（0-100）。由网关在远端读 /proc/stat 两次采样差分得出
+     * （间隔 200ms），失败时为 undefined —— 此时前端回退到「负载/核数」口径并标注。
+     * 注意不要用 loadAverage/cores 冒充利用率：它可能远超 100%，且不是占用率。
+     */
+    usagePercent?: number;
   };
   memory: ServerSystemMetric;
   swap: ServerSystemMetric;

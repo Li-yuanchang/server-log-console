@@ -92,6 +92,33 @@ function parseNetwork(map: LineMap): ServerSystemNetworkInterface[] {
   })).filter((item) => item.name && item.name !== "lo");
 }
 
+/**
+ * 真实 CPU 利用率（0-100）。
+ * 主路径：/proc/stat 两次采样差分 —— usage = 1 - Δidle/Δtotal
+ *   （idle 只取 idle 列，不含 iowait，与 top 的 `id` 口径一致）
+ * 兜底：macOS/BSD 的 top CPU usage 行。
+ * 都拿不到时返回 undefined，由前端回退到「负载/核数」口径并显式标注，
+ * 绝不静默用 loadAverage/cores 冒充利用率。
+ */
+function parseCpuUsage(map: LineMap): number | undefined {
+  const pctRow = first(map, "CPU_USAGE_PCT");
+  if (pctRow.length) {
+    const pct = toNumber(pctRow[0], Number.NaN);
+    if (Number.isFinite(pct)) return Math.max(0, Math.min(100, Math.round(pct * 10) / 10));
+  }
+  const [total1, idle1, total2, idle2] = first(map, "CPU_USAGE");
+  const t1 = toNumber(total1);
+  const i1 = toNumber(idle1);
+  const t2 = toNumber(total2);
+  const i2 = toNumber(idle2);
+  const totalDelta = t2 - t1;
+  const idleDelta = i2 - i1;
+  // 两次采样必须单调递增且总增量足够，否则视为采样失败（避免除零/负数）
+  if (!(totalDelta > 0) || idleDelta < 0 || idleDelta > totalDelta) return undefined;
+  const usage = (1 - idleDelta / totalDelta) * 100;
+  return Math.max(0, Math.min(100, Math.round(usage * 10) / 10));
+}
+
 function buildProfileScript(): string {
   return String.raw`
 printf 'META\thostname\t%s\n' "$(hostname 2>/dev/null || printf '')"
@@ -125,6 +152,21 @@ if [ -r /proc/cpuinfo ]; then
   awk -F': ' '/model name|Hardware|Processor/ {print "CPU\tmodel\t"$2; exit}' /proc/cpuinfo
 elif command -v sysctl >/dev/null 2>&1; then
   printf 'CPU\tmodel\t%s\n' "$(sysctl -n machdep.cpu.brand_string 2>/dev/null || printf '')"
+fi
+# 真实 CPU 利用率：/proc/stat 两次差分（空闲时间占比取反）。
+# 字段序：cpu user nice system idle iowait irq softirq steal
+#   total = $2..$9（含 steal，steal 属于"非本机可用"，算作 busy 更贴近 top）
+#   idle  = $5（只取 idle，不含 iowait，与 top 的 id 列口径一致）
+# 不能用 loadAverage/核数 冒充——load 可远超核数，不是占用率；前端图表依赖这个真实值。
+if [ -r /proc/stat ]; then
+  read_cpu() { awk '/^cpu /{printf "%s\t%s", $2+$3+$4+$5+$6+$7+$8+$9, $5}' /proc/stat; }
+  cpu_s1=$(read_cpu)
+  sleep 0.25 2>/dev/null || sleep 1
+  cpu_s2=$(read_cpu)
+  printf 'CPU_USAGE\t%s\t%s\n' "$cpu_s1" "$cpu_s2"
+elif command -v top >/dev/null 2>&1; then
+  # macOS / BSD 兜底：top 第二帧的 CPU usage 行
+  top -l 2 -n 0 2>/dev/null | awk '/CPU usage/ {gsub(/%/,""); u=$3+0; s=$5+0; t=u+s; if (t>0) printf "CPU_USAGE_PCT\t%.1f\n", u/t*100}' | tail -n 1
 fi
 if command -v free >/dev/null 2>&1; then
   free -b | awk '/^Mem:/ {printf "MEM\t%s\t%s\t%s\t%.1f\n",$2,$3,$4,($2>0?$3/$2*100:0)} /^Swap:/ {printf "SWAP\t%s\t%s\t%s\t%.1f\n",$2,$3,$4,($2>0?$3/$2*100:0)}'
@@ -208,7 +250,8 @@ export class ServerSystemProfileService {
       loadAverage: [toNumber(loadFields[0]), toNumber(loadFields[1]), toNumber(loadFields[2])],
       cpu: {
         cores: cpuCores,
-        model: cpuModel
+        model: cpuModel,
+        usagePercent: parseCpuUsage(map)
       },
       memory: parseMemory(map),
       swap: parseSwap(map),
