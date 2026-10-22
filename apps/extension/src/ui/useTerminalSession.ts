@@ -30,7 +30,8 @@ interface UseTerminalSessionOptions {
   onSessionIdChange?: (sessionId: string) => void;
   preserveSessionOnInactive?: boolean;
   preserveSessionOnDispose?: boolean;
-  onSelectionMenu?: (menu: { x: number; y: number; text: string } | null) => void;
+  /** 选中文本变化（供 AI 面板等只读消费）。选中本身不再弹操作浮层。 */
+  onSelectionTextChange?: (text: string) => void;
   /** props 缺口（终端工作台重设计）：xterm 实例创建/销毁时上报，供容器把激活终端交给 useTerminalSearch 附着。
       只做实例上报，不触及 WS 协议逻辑。 */
   onTerminalInstanceChange?: (terminal: Terminal | null) => void;
@@ -153,22 +154,6 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
   const terminalReadyRef = useRef(false);
   const pendingInputTimerRef = useRef<number | null>(null);
   const pendingInputChunksRef = useRef<string[]>([]);
-
-  const clampSelectionMenuPosition = useCallback((x: number, y: number) => {
-    const container = containerRef.current;
-    if (!container) {
-      return { x, y };
-    }
-    const rect = container.getBoundingClientRect();
-    const horizontalPadding = 8;
-    const verticalPadding = 8;
-    const estimatedMenuWidth = 68;
-    const estimatedMenuHeight = 40;
-    return {
-      x: Math.max(horizontalPadding, Math.min(x, rect.width - estimatedMenuWidth - horizontalPadding)),
-      y: Math.max(estimatedMenuHeight + verticalPadding, Math.min(y, rect.height - verticalPadding)),
-    };
-  }, []);
 
   const canApplyTerminalFit = useCallback(() => {
     const container = containerRef.current;
@@ -370,40 +355,25 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
       scheduleFit();
     }
 
-    const onMouseUp = (e: MouseEvent) => {
-      setTimeout(() => {
-        const text = terminal.getSelection();
-        if (text && options.onSelectionMenu) {
-          const rect = container.getBoundingClientRect();
-          const relativeX = e.clientX - rect.left;
-          const relativeY = e.clientY - rect.top;
-          const nextPosition = clampSelectionMenuPosition(relativeX, relativeY);
-          options.onSelectionMenu({ x: nextPosition.x, y: nextPosition.y, text });
-        } else if (!text && options.onSelectionMenu) {
-          options.onSelectionMenu(null);
-        }
-      }, 10);
-    };
-
-    const onMouseDown = () => {
-      options.onSelectionMenu?.(null);
-    };
-
+    /* 选中操作浮层已移除（用户要求：选中不再弹层，只保留右键菜单触发）。
+       这里只保留滚动跟随状态刷新 + 选区文本上报（AI 面板消费）。 */
     const onViewportScroll = () => {
       updateFollowOutputState();
     };
 
-    container.addEventListener("mouseup", onMouseUp);
-    container.addEventListener("mousedown", onMouseDown);
+    const onSelectionChange = () => {
+      options.onSelectionTextChange?.(terminal.getSelection());
+    };
+
     container.addEventListener("scroll", onViewportScroll, true);
+    const selectionDisposable = terminal.onSelectionChange(onSelectionChange);
     updateFollowOutputState();
 
     return () => {
-      container.removeEventListener("mouseup", onMouseUp);
-      container.removeEventListener("mousedown", onMouseDown);
       container.removeEventListener("scroll", onViewportScroll, true);
+      selectionDisposable.dispose();
     };
-  }, [clampSelectionMenuPosition, options.active, ensureTerminal, options.onSelectionMenu, scheduleFit, updateFollowOutputState]);
+  }, [ensureTerminal, options.active, options.onSelectionTextChange, scheduleFit, updateFollowOutputState]);
 
   useEffect(() => {
     if (!options.active) {

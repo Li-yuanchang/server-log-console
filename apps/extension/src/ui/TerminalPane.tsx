@@ -1,11 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import type { MouseEvent as ReactMouseEvent } from "react";
-import { X, Copy, ClipboardPaste, RefreshCw, Plug } from "lucide-react";
+import { X, RefreshCw, Plug } from "lucide-react";
 import type { Terminal } from "@xterm/xterm";
 import type { ServerSummary } from "@server-log-console/shared";
 import { useTerminalSession } from "./useTerminalSession.js";
 import { localServiceBase } from "./api.js";
-import { copyText } from "./utils.js";
 import type { TerminalPaneApiSnapshot } from "./TerminalSplitView.js";
 
 export interface TerminalPaneConfig {
@@ -53,7 +52,6 @@ export function TerminalPane(props: Props) {
     onPaneContextMenu,
     onPaneFocus,
   } = props;
-  const [selMenu, setSelMenu] = useState<{ x: number; y: number; text: string } | null>(null);
 
   /* 回调经 ref 上报：hook 内的 useCallback 可能捕获旧 options，ref 转发保证永远调到最新 prop
      （模仿容器里 TerminalTabPane 的 callbacksRef 上报模式） */
@@ -74,7 +72,6 @@ export function TerminalPane(props: Props) {
     onSessionIdChange: (id) => onSessionIdChange(config.paneId, id),
     preserveSessionOnInactive: false,
     preserveSessionOnDispose: false,
-    onSelectionMenu: setSelMenu,
     onTerminalInstanceChange: (terminal) => propsRef.current.onTerminalInstanceChange?.(terminal),
   });
 
@@ -119,24 +116,6 @@ export function TerminalPane(props: Props) {
       propsRef.current.onSessionSnapshot?.(null);
     };
   }, []);
-
-  const handleCopy = useCallback(async () => {
-    if (!selMenu) return;
-    await copyText(session.getSelection() || selMenu.text);
-    session.clearSelection();
-    setSelMenu(null);
-    session.focusTerminalSoon();
-  }, [selMenu, session]);
-
-  const handleCopyAndPaste = useCallback(async () => {
-    if (!selMenu) return;
-    const text = session.getSelection() || selMenu.text;
-    await copyText(text);
-    session.pasteToTerminal(text);
-    session.clearSelection();
-    setSelMenu(null);
-    session.focusTerminalSoon();
-  }, [selMenu, session]);
 
   useEffect(() => {
     const timers = [0, 48, 160, 360, 720].map((delay) => window.setTimeout(() => {
@@ -184,16 +163,6 @@ export function TerminalPane(props: Props) {
         }}
       >
         <div ref={session.containerRef} className="xterm-container" />
-        {selMenu && (
-          <div className="terminal-sel-menu" style={{ left: selMenu.x, top: selMenu.y }}>
-            <button type="button" title="复制" onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }} onClick={() => void handleCopy()}>
-              <Copy size={14} />
-            </button>
-            <button type="button" title="复制并粘贴" onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }} onClick={() => void handleCopyAndPaste()}>
-              <ClipboardPaste size={14} />
-            </button>
-          </div>
-        )}
       </div>
     </div>
   );
