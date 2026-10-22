@@ -259,10 +259,9 @@ function motionModeLabel(value: UiMotionMode): string {
 
 const PREF_ANCHORS = [
   { id: "pref-appearance", label: "外观" },
-  { id: "pref-log", label: "日志预览" },
+  { id: "pref-log", label: "日志" },
   { id: "pref-terminal", label: "终端" },
-  { id: "pref-layout", label: "布局" },
-  { id: "pref-overlay", label: "浮层" },
+  { id: "pref-layout", label: "界面与浮层" },
   { id: "pref-advanced", label: "高级" },
 ];
 
@@ -1359,19 +1358,20 @@ export function ConnectionSettingsWorkspace(props: Props) {
                     </span>
                   </span>
                 </div>
+                {/* 2026-10-21 精简：原「动效」+「动态背景」两行合并为一行 ——
+                    动态背景本就是动效的子项（动效=减少时它被强制停用），
+                    拆两行让设置项显得零碎。 */}
                 <div className="settings-pref-row">
-                  <span className="settings-pref-label"><strong>动效</strong><span>低性能机器可选减少动效</span></span>
+                  <span className="settings-pref-label">
+                    <strong>动效</strong>
+                    <span>低性能机器可选减少；动态背景（图片缓慢缩放）在「减少」时自动停用</span>
+                  </span>
                   <span className="settings-pref-value">
-                    {/* S14-5：动效 = .seg.lite（原型 1170「标准/减少」） */}
-                    <span className="seg lite">                      <button type="button" className={props.preferenceSection.motionMode === "normal" ? "on" : ""} onClick={() => props.preferenceSection.onMotionModeChange("normal")}>标准</button>
+                    <span className="seg lite">
+                      <button type="button" className={props.preferenceSection.motionMode === "normal" ? "on" : ""} onClick={() => props.preferenceSection.onMotionModeChange("normal")}>标准</button>
                       <button type="button" className={props.preferenceSection.motionMode === "reduced" ? "on" : ""} onClick={() => props.preferenceSection.onMotionModeChange("reduced")}>减少</button>
                     </span>
-                  </span>
-                </div>
-                <div className="settings-pref-row">
-                  <span className="settings-pref-label"><strong>动态背景（图片缓慢缩放）</strong><span>动效=减少 时强制停用</span></span>
-                  <span className="settings-pref-value">
-                    <label className="slc-switch">
+                    <label className="slc-switch" title="动态背景：图片缓慢缩放">
                       <input
                         type="checkbox"
                         checked={props.preferenceSection.dynamicBackground}
@@ -1587,7 +1587,7 @@ export function ConnectionSettingsWorkspace(props: Props) {
             </section>
 
             <section id="pref-log" data-anchor className="settings-pref-section">
-              <div className="settings-card-kicker">日志预览</div>
+              <div className="settings-card-kicker">日志</div>
               <div className="settings-pref-card">
                 <button type="button" className="settings-pref-row settings-pref-row-click" onClick={props.preferenceSection.onToggleErrorHighlight}>
                   <span className="settings-pref-label"><strong>异常 / 告警高亮</strong><span>自动标记 ERROR、WARN 行</span></span>
@@ -1617,76 +1617,18 @@ export function ConnectionSettingsWorkspace(props: Props) {
                     />
                   </span>
                 </div>
-                <div className="settings-pref-row">
-                  <span className="settings-pref-label"><strong>日志字号</strong><span>立即生效</span></span>
-                  <span className="settings-pref-value">
-                    <ThemedSelect
-                      value={String(props.preferenceSection.logFontSize)}
-                      onChange={(value) => props.preferenceSection.onLogFontSizeChange(Number(value))}
-                      ariaLabel="日志字号"
-                      options={[
-                        { value: "11", label: "11px" },
-                        { value: "12", label: "12px" },
-                        { value: "13", label: "13px" },
-                        { value: "14", label: "14px" },
-                        { value: "16", label: "16px" }
-                      ]}
-                    />
-                  </span>
-                </div>
-                {/* S14-3：日志字号已并入「外观」的字体三处独立表 */}
+                {/* 2026-10-21 去重：原此处有「日志字号」下拉，与「外观 → 字体（三处独立）」
+                    表格中的日志预览字号重复。字体矩阵是三处字体的统一入口，此处删除，
+                    避免同一配置两处可改、用户分不清哪个生效。 */}
               </div>
             </section>
 
             <section id="pref-terminal" data-anchor className="settings-pref-section">
               <div className="settings-card-kicker">终端</div>
               <div className="settings-pref-card">
-                {/* 终端字体族 / 字号（2026-10-21 补齐）：此前这两项的**可编辑控件**
-                    只存在于「外观」分区的字体矩阵里，终端分区只有一行只读文字
-                    「Geist Mono · 11px」——用户反馈「字体字号也不能改」，正是因为
-                    在终端分区找不到入口。此处补上可编辑控件，与外观区共用同一
-                    setter（两处联动，改任一处都生效）。 */}
-                <div className="settings-pref-row">
-                  <span className="settings-pref-label"><strong>终端字体</strong><span>等宽字体族；改动后 xterm 自动重排</span></span>
-                  <span className="settings-pref-value">
-                    <ThemedSelect
-                      value={props.preferenceSection.terminalFontFamily}
-                      onChange={(value) => props.preferenceSection.onTerminalFontFamilyChange(value as MonoFontFamily)}
-                      ariaLabel="终端字体"
-                      options={[
-                        { value: "geist-mono", label: "Geist Mono" },
-                        { value: "sf-mono", label: "SF Mono" },
-                        { value: "menlo", label: "Menlo" },
-                        { value: "consolas", label: "Consolas" },
-                        { value: "system-mono", label: "系统等宽" }
-                      ]}
-                    />
-                  </span>
-                </div>
-                <div className="settings-pref-row">
-                  <span className="settings-pref-label"><strong>终端字号</strong><span>11–18px；改动后自动重排避免列宽错位</span></span>
-                  <span className="settings-pref-value">
-                    <span className="slc-stepper">
-                      <button
-                        type="button"
-                        aria-label="减小终端字号"
-                        disabled={props.preferenceSection.terminalFontSize <= 11}
-                        onClick={() => props.preferenceSection.onTerminalFontSizeChange(
-                          Math.max(11, props.preferenceSection.terminalFontSize - 1)
-                        )}
-                      >−</button>
-                      <output>{props.preferenceSection.terminalFontSize}px</output>
-                      <button
-                        type="button"
-                        aria-label="增大终端字号"
-                        disabled={props.preferenceSection.terminalFontSize >= 18}
-                        onClick={() => props.preferenceSection.onTerminalFontSizeChange(
-                          Math.min(18, props.preferenceSection.terminalFontSize + 1)
-                        )}
-                      >＋</button>
-                    </span>
-                  </span>
-                </div>
+                {/* 2026-10-21 去重：原此处有「终端字体」下拉 + 「终端字号」步进器，
+                    与「外观 → 字体（三处独立）」表格的终端行重复（同一 setter 两处入口）。
+                    三处字体统一由字体矩阵维护，本节只保留终端独有项（行高/光标/配色等）。 */}
                 <div className="settings-pref-row">
                   <span className="settings-pref-label"><strong>终端选中复制</strong><span>选中即复制，右键粘贴</span></span>
                   <span className="settings-pref-value">默认开启</span>
@@ -1799,7 +1741,7 @@ export function ConnectionSettingsWorkspace(props: Props) {
             </section>
 
             <section id="pref-layout" data-anchor className="settings-pref-section">
-              <div className="settings-card-kicker">布局</div>
+              <div className="settings-card-kicker">界面与浮层</div>
               <div className="settings-pref-card">
                 <button type="button" className="settings-pref-row settings-pref-row-click" onClick={props.preferenceSection.onToggleServerStatusAutoRefresh}>
                   <span className="settings-pref-label"><strong>服务器状态自动刷新</strong><span>状态面板定时采集</span></span>
@@ -1813,12 +1755,8 @@ export function ConnectionSettingsWorkspace(props: Props) {
                   <span className="settings-pref-label"><strong>操作记录高度</strong><span>显示时可拖拽调整</span></span>
                   <span className="settings-pref-value">{props.preferenceSection.activityPanelHeight}px</span>
                 </div>
-              </div>
-            </section>
-
-            <section id="pref-overlay" data-anchor className="settings-pref-section">
-              <div className="settings-card-kicker">浮层</div>
-              <div className="settings-pref-card">
+                {/* 2026-10-21 分区合并：原「浮层」独立分区只有 2 项，与「布局」同属
+                    「界面呈现」范畴，合并后导航由 6 项降到 5 项，减少视觉碎片。 */}
                 <button type="button" className="settings-pref-row settings-pref-row-click" onClick={props.preferenceSection.onTogglePathHistory}>
                   <span className="settings-pref-label"><strong>路径历史浮层</strong><span>文件浏览地址栏下拉</span></span>
                   <span className="settings-pref-value">{props.preferenceSection.showPathHistory ? "显示中" : "关闭"}</span>
