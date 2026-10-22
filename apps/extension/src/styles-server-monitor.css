@@ -1,0 +1,670 @@
+/* styles-server-monitor.css — 服务器性能监控面板（B 骨架 + A 磁盘块，2026-10 重设计）
+   隔离文件：只服务 ServerStatusPanel.tsx，类名统一 smp- 前缀，
+   与 align-s9-monitor.css 里的旧 server-status-* 规则完全解耦（旧规则自然失效，不做删除以免误伤）。
+   最后加载，故可安全覆盖 --pad-x / --gap 等同名局部变量。
+
+   设计要点（对应本次用户反馈）：
+   ① 贴边：卡片统一 14px 横内距 / 12px 纵内距，区块间距 10px
+   ② 折线图无波动：Y 轴按数据域自适应（不再死钉 0-100）+ 实际刻度 + 80% 阈值线
+   ③ 磁盘首屏可见：420 宽窄档压紧纵向节奏，磁盘卡留在首屏内
+   ④ 响应式：container query 三档（<360 / <560 / >=560 / >=720）
+*/
+
+/* ---------------- 0. 面板容器 ---------------- */
+.smp-panel {
+  /* 局部刻度：与原型一致，随容器（抽屉）宽度生效 */
+  --pad-x: 14px;
+  --pad-y: 12px;
+  --gap: 10px;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0%;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--panel);
+  color: var(--ink);
+  font-size: var(--fs-sm);
+  /* container query 的锚点：响应式按面板自身宽度而不是窗口宽度判断 */
+  container-type: inline-size;
+}
+
+/* ---------------- 1. 身份区（无边框，直接排在滚动区） ---------------- */
+.smp-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 2px 0 0;
+  min-width: 0;
+}
+.smp-avatar {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: var(--r-m);
+  background: var(--panel-muted);
+  color: var(--accent);
+}
+.smp-id { min-width: 0; flex: 1 1 auto; }
+.smp-id b {
+  display: block;
+  font-size: var(--fs-base);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.smp-id small {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--fs-2xs);
+  color: var(--ink-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---------------- 2. 通用小件 ---------------- */
+.smp-mono {
+  font-family: var(--mono-font-family);
+  font-variant-numeric: tabular-nums;
+}
+.smp-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 20px;
+  padding: 0 7px;
+  flex: none;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--panel-muted);
+  color: var(--ink-soft);
+  font-size: var(--fs-2xs);
+  white-space: nowrap;
+}
+.smp-chip-ok { background: color-mix(in srgb, var(--green) 9%, transparent); color: var(--green); border-color: transparent; }
+.smp-chip-warn { background: var(--amber-soft); color: var(--amber); border-color: transparent; }
+.smp-chip-crit { background: var(--red-soft); color: var(--red); border-color: transparent; }
+.smp-dot { width: 6px; height: 6px; flex: none; border-radius: 50%; background: var(--ink-muted); }
+.smp-dot-ok { background: var(--green); }
+.smp-dot-warn { background: var(--amber); }
+.smp-dot-crit { background: var(--red); }
+
+/* 滚动区 */
+.smp-scroll {
+  flex: 1 1 0%;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  padding: var(--pad-y) var(--pad-x) 16px;
+}
+
+/* 卡片 */
+.smp-card {
+  border: 1px solid var(--line);
+  border-radius: var(--r-m);
+  background: var(--panel);
+}
+.smp-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 9px var(--pad-x);
+  border-bottom: 1px solid var(--line);
+}
+.smp-card-ttl {
+  flex: none;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+}
+.smp-card-sp { flex: 1 1 auto; }
+.smp-card-body { padding: var(--pad-y) var(--pad-x); }
+
+/* 进度条 */
+.smp-bar {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--panel-muted);
+  overflow: hidden;
+}
+.smp-bar > i {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--accent);
+}
+.smp-bar-ok > i { background: var(--green); }
+.smp-bar-warn > i { background: var(--amber); }
+.smp-bar-crit > i { background: var(--red); }
+
+/* ---------------- 3. 指标 tile 网格（B 骨架） ---------------- */
+.smp-tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--gap);
+  /* 420 档：2×2 */
+}
+.smp-tile {
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-m);
+  background: var(--panel);
+}
+/* 风险前置：磁盘/内存接近阈值时整卡描边转色 */
+.smp-tile-warn { border-color: color-mix(in srgb, var(--amber) 34%, var(--line)); }
+.smp-tile-crit { border-color: color-mix(in srgb, var(--red) 34%, var(--line)); }
+.smp-tile-top {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--fs-2xs);
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+.smp-tile-sp { flex: 1 1 auto; }
+.smp-tile-win {
+  flex: none;
+  font-family: var(--mono-font-family);
+  font-size: 10px;
+  color: var(--ink-muted);
+}
+.smp-tile-v {
+  margin-top: 4px;
+  font-size: 19px;
+  font-weight: 650;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.smp-tile-v i {
+  margin-left: 1px;
+  font-size: var(--fs-2xs);
+  font-style: normal;
+  font-weight: 500;
+  color: var(--ink-muted);
+}
+.smp-tile-sub {
+  margin-top: 1px;
+  font-family: var(--mono-font-family);
+  font-size: 10px;
+  color: var(--ink-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* 副行第二段（磁盘容量）：与挂载点分行，避免 4 列 tile 变窄后整串被省略号吃掉 */
+.smp-tile-sub2 { margin-top: 0; }
+.smp-tile-spark { height: 22px; margin-top: 4px; }
+.smp-spark-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 22px;
+  font-size: var(--fs-2xs);
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+
+/* ---------------- 4. 趋势图 ---------------- */
+.smp-plot {
+  position: relative;
+  width: 100%;
+}
+.smp-plot svg { display: block; width: 100%; }
+.smp-plot-main { height: 118px; }
+
+/* SVG 取色统一走 class：CSS 变量在 SVG 属性上不解析，
+   而写死 hex 会让 10 套主题/深色模式全部错色。class → var() 则始终跟随主题。 */
+.smp-grid { stroke: var(--line); }
+.smp-grid-base { stroke: var(--line-strong); }
+.smp-axis-text {
+  fill: var(--ink-muted);
+  font-family: var(--mono-font-family);
+  font-size: 9.5px;
+}
+.smp-threshold { stroke: var(--red); opacity: 0.62; }
+.smp-threshold-text { fill: var(--red); opacity: 0.8; font-size: 9px; }
+.smp-series-cpu { stroke: var(--accent); }
+.smp-series-mem { stroke: var(--green); }
+.smp-series-disk { stroke: var(--amber); }
+.smp-series-load { stroke: var(--amber); stroke-dasharray: 4 3; opacity: 0.75; }
+.smp-area-cpu { fill: var(--accent); opacity: 0.16; }
+.smp-area-mem { fill: var(--green); opacity: 0.09; }
+.smp-area-disk { fill: var(--amber); opacity: 0.07; }
+.smp-crosshair { stroke: var(--line-strong); }
+.smp-crosshair-dot { stroke: var(--panel); stroke-width: 1.5; }
+.smp-crosshair-dot-cpu { fill: var(--accent); }
+.smp-crosshair-dot-mem { fill: var(--green); }
+.smp-tip {
+  position: absolute;
+  z-index: 5;
+  padding: 5px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--panel);
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.13);
+  color: var(--ink);
+  font-family: var(--mono-font-family);
+  font-size: 10.5px;
+  line-height: 1.5;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.smp-tip b { font-weight: 600; }
+.smp-tip-row { display: flex; align-items: center; gap: 5px; }
+.smp-tip-dot { width: 6px; height: 6px; flex: none; border-radius: 50%; }
+.smp-plot-empty {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 118px;
+  font-size: var(--fs-2xs);
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+.smp-plot-empty::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  top: 50%;
+  border-top: 1px dashed var(--line-strong);
+}
+.smp-plot-empty > span {
+  position: relative;
+  padding: 0 8px;
+  background: var(--panel);
+}
+
+/* 时间范围分段 */
+.smp-range {
+  display: inline-flex;
+  flex: none;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  overflow: hidden;
+}
+.smp-range button {
+  height: 20px;
+  padding: 0 7px;
+  border: none;
+  background: var(--panel);
+  color: var(--ink-soft);
+  font-size: var(--fs-2xs);
+  cursor: pointer;
+}
+.smp-range button + button { border-left: 1px solid var(--line); }
+.smp-range button:hover:not(.on) { background: var(--panel-muted); }
+.smp-range button.on {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* 图例（可点切换显隐） */
+.smp-legend {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 4px var(--pad-x) 9px;
+  font-size: var(--fs-2xs);
+  color: var(--ink-soft);
+}
+.smp-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 6px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: none;
+  color: inherit;
+  font-size: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.smp-legend-item.on {
+  border-color: var(--line);
+  background: var(--panel-muted);
+}
+.smp-legend-item.off {
+  opacity: 0.42;
+  text-decoration: line-through;
+}
+.smp-legend-sw {
+  width: 10px;
+  height: 2px;
+  flex: none;
+  border-radius: 1px;
+}
+.smp-legend-sw-dashed {
+  width: 10px;
+  height: 0;
+  flex: none;
+  border-top: 2px dashed var(--amber);
+}
+
+/* ---------------- 5. 风险预警行 ---------------- */
+.smp-warnrow {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 9px;
+  border-radius: var(--r-s);
+  background: var(--amber-soft);
+  color: var(--amber);
+  font-size: var(--fs-2xs);
+  line-height: 1.4;
+}
+
+/* ---------------- 6. 磁盘块（A 样式：挂载点 / 设备名 / 容量 分行） ---------------- */
+.smp-disks { display: flex; flex-direction: column; }
+.smp-disk {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 1px 10px;
+  padding: 9px 0;
+}
+.smp-disk + .smp-disk { border-top: 1px dashed var(--line); }
+.smp-disk-mount {
+  grid-column: 1;
+  grid-row: 1;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* 设备名独占整行：此前只占左列会被右侧容量挤压，/dev/mapper/centos-root 被省略号吃掉 */
+.smp-disk-fs {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  font-family: var(--mono-font-family);
+  font-size: 10px;
+  color: var(--ink-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.smp-disk-usage {
+  grid-column: 2;
+  grid-row: 1;
+  font-family: var(--mono-font-family);
+  font-size: var(--fs-2xs);
+  color: var(--ink-soft);
+  white-space: nowrap;
+  text-align: right;
+}
+.smp-disk-usage b {
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--ink);
+}
+.smp-disk .smp-bar {
+  grid-column: 1 / -1;
+  grid-row: 3;
+  margin-top: 4px;
+}
+
+/* ---------------- 7. 进程 / 网络 / 系统 ---------------- */
+.smp-proc { display: flex; flex-direction: column; }
+.smp-prow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 52px 62px;
+  gap: 8px;
+  align-items: center;
+  padding: 5px 0;
+  font-family: var(--mono-font-family);
+  font-size: var(--fs-2xs);
+}
+.smp-prow + .smp-prow { border-top: 1px solid var(--panel-muted); }
+.smp-prow-name {
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.smp-prow-args {
+  display: none;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  text-align: left;
+  color: var(--ink-muted);
+}
+.smp-prow-cpu { text-align: right; color: var(--ink-soft); }
+.smp-prow-cpu-hi { color: var(--red); font-weight: 600; }
+.smp-prow-cpu-md { color: var(--amber); font-weight: 600; }
+.smp-prow-rss { text-align: right; color: var(--ink-muted); }
+
+.smp-net {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: calc(var(--gap) + 4px);
+}
+.smp-net-item { min-width: 0; }
+.smp-net-name {
+  font-size: var(--fs-2xs);
+  color: var(--ink-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.smp-net-rt {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+  flex-wrap: wrap;
+  font-family: var(--mono-font-family);
+  font-size: var(--fs-xs);
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+.smp-net-rt b { font-weight: 600; color: var(--ink); }
+.smp-net-dn { color: var(--green); }
+.smp-net-up { color: var(--accent); }
+
+.smp-kv-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.smp-kv-cell {
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: var(--r-s);
+  background: var(--panel-muted);
+}
+.smp-kv-cell small {
+  display: block;
+  font-size: var(--fs-2xs);
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+.smp-kv-cell b {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* 长串单元格（内核 / CPU 型号）独占整行：两列放不下会被省略号吃掉 */
+.smp-kv-cell-wide { grid-column: 1 / -1; }
+.smp-load-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+.smp-load-cell {
+  padding: 8px 10px;
+  border-radius: var(--r-s);
+  background: var(--panel-muted);
+}
+.smp-load-cell b {
+  font-size: var(--fs-sm);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.smp-load-cell small {
+  display: block;
+  margin-top: 1px;
+  font-size: 10px;
+  color: var(--ink-muted);
+}
+
+/* ---------------- 8. 空态 / 错误 ---------------- */
+.smp-empty {
+  padding: 8px 10px;
+  border-radius: var(--r-s);
+  background: var(--panel-muted);
+  color: var(--ink-muted);
+  font-size: var(--fs-2xs);
+  text-align: center;
+}
+.smp-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0 var(--pad-x) 10px;
+  padding: 9px 10px;
+  border: 1px solid color-mix(in srgb, var(--amber) 30%, transparent);
+  border-radius: var(--r-m);
+  background: var(--amber-soft);
+  color: var(--amber);
+  font-size: var(--fs-xs);
+  line-height: 1.45;
+}
+.smp-warnings {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.smp-warnings span {
+  padding: 7px 9px;
+  border-radius: var(--r-s);
+  background: var(--amber-soft);
+  color: var(--amber);
+  font-size: var(--fs-2xs);
+  line-height: 1.4;
+}
+
+/* ---------------- 9. 底部 ---------------- */
+.smp-foot {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px var(--pad-x);
+  border-top: 1px solid var(--line);
+  background: var(--panel);
+}
+.smp-foot-note {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: var(--fs-2xs);
+  color: var(--ink-muted);
+}
+.smp-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+  height: 24px;
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--panel);
+  color: var(--ink-soft);
+  font-size: var(--fs-2xs);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.smp-btn:hover:not(:disabled) { background: var(--panel-muted); }
+.smp-btn.on {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--panel);
+}
+.smp-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+@keyframes smp-spin { to { transform: rotate(360deg); } }
+.smp-spin { animation: smp-spin 1s linear infinite; }
+
+/* ============================================================
+   10. 响应式（container query：按面板自身宽度，非窗口宽度）
+   ============================================================ */
+
+/* 极窄（<360：低分屏 / 终端分屏窗格）：tile 单列，避免数字挤爆 */
+@container (max-width: 359px) {
+  .smp-tiles { grid-template-columns: 1fr; }
+  .smp-kv-grid { grid-template-columns: 1fr; }
+}
+
+/* 窄档（<560，含默认 420 抽屉）：压紧纵向节奏，保证磁盘卡留在首屏 */
+@container (max-width: 559px) {
+  .smp-tile { padding: 8px 10px; }
+  .smp-tile-v { font-size: 17px; margin-top: 2px; }
+  .smp-tile-sub { font-size: 9.5px; }
+  .smp-tile-spark { height: 18px; }
+  .smp-tile-win { display: none; }
+  .smp-plot-main { height: 118px; }
+  .smp-card-head { padding-top: 6px; padding-bottom: 6px; }
+  .smp-legend { padding-top: 4px; padding-bottom: 6px; }
+  .smp-warnrow { padding: 5px 8px; font-size: 10px; }
+  .smp-scroll { gap: 8px; padding-top: 10px; }
+  /* 磁盘行压紧（每行含挂载点/设备名/进度条三行，比单行式更高） */
+  .smp-disk { padding: 4px 0; gap: 0 8px; }
+  .smp-disk-mount { font-size: var(--fs-2xs); }
+  .smp-disk-fs { font-size: 9.5px; line-height: 1.2; }
+  .smp-disk-usage { font-size: 10px; }
+  .smp-disk-usage b { font-size: var(--fs-2xs); }
+  .smp-disk .smp-bar { margin-top: 2px; height: 3px; }
+}
+
+/* 宽档（>=560）：tile 转 4 列，磁盘双列，进程显示参数 */
+@container (min-width: 560px) {
+  .smp-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .smp-disks {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0 18px;
+  }
+  .smp-disk:nth-child(2) { border-top: none; }
+  .smp-disk:nth-child(n + 3) { border-top: 1px dashed var(--line); }
+  .smp-prow { grid-template-columns: minmax(0, 1fr) 56px 68px minmax(0, 1.2fr); }
+  .smp-prow-args { display: block; }
+  .smp-kv-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .smp-plot-main { height: 132px; }
+}
+
+/* 更宽（>=720）：数字与留白放大 */
+@container (min-width: 720px) {
+  .smp-tile { padding: 12px 14px; }
+  .smp-tile-v { font-size: 22px; }
+  .smp-tile-spark { height: 30px; }
+  .smp-plot-main { height: 150px; }
+  .smp-tile-win { display: inline; }
+}
