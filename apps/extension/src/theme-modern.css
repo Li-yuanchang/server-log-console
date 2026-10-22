@@ -6315,7 +6315,8 @@ body.is-electron .settings-exclusive-head input {
 /* 重启遮罩（2026-10-05 重设计，原型 restart-preview.html 方案 A）：品牌实底，
    不再透出背后内容（旧版 bg 92% 透明 + blur(4px) 被用户否决）。
    与启动页（index.html #app-loading）同一套品牌语言：logo + 词标 + 版本徽标
-   + spinner + 流光条 + 恢复承诺。token 全跟随主题，暗色自动适配。 */
+   + spinner + 恢复承诺。token 全跟随主题，暗色自动适配。
+   注：横向流光条已移除（与转圈动画重复），只保留 spinner 一种加载指示。 */
 .settings-update-restart-overlay {
   position: fixed;
   inset: 0;
@@ -6397,39 +6398,6 @@ body.is-electron .settings-exclusive-head input {
 .restart-splash-status {
   font-size: var(--fs-xs);
   color: var(--ink-muted);
-}
-
-.restart-splash-flowbar {
-  position: relative;
-  width: 200px;
-  height: 2px;
-  border-radius: 2px;
-  background: var(--line);
-  margin-top: 16px;
-  overflow: hidden;
-}
-.restart-splash-flowbar::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 40%;
-  border-radius: 2px;
-  background: linear-gradient(90deg, transparent, var(--accent), transparent);
-  animation: settings-update-flow 1.2s ease-in-out infinite;
-}
-@keyframes settings-update-flow {
-  0% { transform: translateX(-110%); }
-  100% { transform: translateX(360%); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .restart-splash-flowbar::after {
-    animation: none;
-    left: 0;
-    right: 0;
-    width: 100%;
-    background: color-mix(in srgb, var(--accent) 40%, transparent);
-  }
 }
 
 .restart-splash-restore {
