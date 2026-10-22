@@ -7,7 +7,7 @@
  *  - 菜单内的点击 / 右键不冒泡（避免触发终端自身的选中清除等处理）
  *  - 点击菜单外（document mousedown）/ Esc 关闭（通过 props.onClose 回调）
  */
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { JSX } from "react";
 import {
   ClipboardCheck,
@@ -59,11 +59,71 @@ interface TerminalMenuShellProps {
 }
 
 /** 共用菜单壳：定位 + 分隔线 + 通用 item 布局 + 外点/Esc 关闭。
-    导出给终端工作台容器自组菜单（如工具行「分屏 ▾」下拉）。 */
+    导出给终端工作台容器自组菜单（如工具行「分屏 ▾」下拉）。
+    定位策略：先按鼠标坐标渲染一次，再用真实尺寸量测并与可视边界比对，
+    靠右/靠下放不下时自动翻转（右翻左、下翻上），最后做一次视口内收敛 —— 
+    保证菜单贴着窗口底部或右侧右键时也完整可见。 */
 export function TerminalMenuShell({ x, y, items, onClose }: TerminalMenuShellProps): JSX.Element {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
+  /* 首帧用原始坐标，量测后写入收敛坐标；null 表示尚未量测 */
+  const [position, setPosition] = useState<{ left: number; top: number } | null>(null);
+
+  useLayoutEffect(() => {
+    const anchor = rootRef.current;
+    const menu = anchor?.firstElementChild as HTMLElement | null;
+    if (!anchor || !menu) {
+      return;
+    }
+    /* 锚点以 absolute 坐标定位，其偏移父级即终端主壳 —— 用它当可视边界，
+       而不是 window：终端区可能只占窗口一部分，菜单不能跑到抽屉/侧栏下面。 */
+    const offsetParent = anchor.offsetParent as HTMLElement | null;
+    const parentRect = offsetParent?.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const boundLeft = parentRect?.left ?? 0;
+    const boundTop = parentRect?.top ?? 0;
+    const boundRight = parentRect ? parentRect.right : viewportWidth;
+    const boundBottom = parentRect ? parentRect.bottom : viewportHeight;
+    /* 再与视口取交集：终端壳可能比视口更宽/更高（溢出滚动），两者都要满足 */
+    const minLeft = Math.max(boundLeft, 0);
+    const minTop = Math.max(boundTop, 0);
+    const maxRight = Math.min(boundRight, viewportWidth);
+    const maxBottom = Math.min(boundBottom, viewportHeight);
+
+    const menuWidth = menu.offsetWidth;
+    const menuHeight = menu.offsetHeight;
+    const gap = 8;
+    /* anchor 的 (x, y) 是相对 offsetParent 的坐标：先换算到视口坐标再判断翻转 */
+    const viewportX = boundLeft + x;
+    const viewportY = boundTop + y;
+
+    /* 横向：默认右边展开；右侧放不下且左侧更宽裕时翻到鼠标左侧 */
+    const spaceRight = maxRight - viewportX;
+    const spaceLeft = viewportX - minLeft;
+    const flipLeft = menuWidth > spaceRight && spaceLeft > spaceRight;
+    /* 纵向：默认向下展开；下方放不下且上方更宽裕时翻到鼠标上方 */
+    const spaceDown = maxBottom - viewportY;
+    const spaceUp = viewportY - minTop;
+    const flipUp = menuHeight > spaceDown && spaceUp > spaceDown;
+
+    const targetViewportX = flipLeft ? viewportX - menuWidth : viewportX;
+    const targetViewportY = flipUp ? viewportY - menuHeight : viewportY;
+    /* 最终收敛：翻转后仍越界（极端窄/矮窗口）就贴边，并留 gap 呼吸间距 */
+    const clampedViewportX = Math.min(Math.max(targetViewportX, minLeft + gap), Math.max(minLeft + gap, maxRight - menuWidth - gap));
+    const clampedViewportY = Math.min(Math.max(targetViewportY, minTop + gap), Math.max(minTop + gap, maxBottom - menuHeight - gap));
+
+    setPosition({ left: clampedViewportX - boundLeft, top: clampedViewportY - boundTop });
+    /* items 每次渲染都是新数组，不能进依赖（会与 setPosition 形成无限循环）；
+       同一菜单实例的条目集合在打开期间不变，坐标变化时重新量测即可。 */
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [x, y]);
+
+  const anchorStyle = position
+    ? { left: position.left, top: position.top }
+    /* 量测前先离屏渲染，避免用户看到菜单从错误位置跳一下 */
+    : { left: x, top: y, visibility: "hidden" as const };
 
   useEffect(() => {
     // 点击菜单外关闭：目标不在壳内即关闭（菜单内部的 mousedown 已在锚点上 stopPropagation）
@@ -97,7 +157,7 @@ export function TerminalMenuShell({ x, y, items, onClose }: TerminalMenuShellPro
     <div
       ref={rootRef}
       className="terminal-menu-anchor"
-      style={{ left: x, top: y }}
+      style={anchorStyle}
       // 菜单内的指针事件一律不冒泡到终端容器
       onMouseDown={(event) => event.stopPropagation()}
       onClick={(event) => event.stopPropagation()}

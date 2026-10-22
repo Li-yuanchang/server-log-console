@@ -124,7 +124,8 @@ interface TerminalTabPaneProps {
   onTerminalInstance: (tabId: string, terminal: Terminal | null) => void;
   onSessionApi: (tabId: string, api: TerminalSessionApi | null) => void;
   onSessionState: (tabId: string, state: TerminalPaneSessionState | null) => void;
-  onSelectionMenu: (tabId: string, menu: { x: number; y: number; text: string } | null) => void;
+  /** 选区文本变化（只读上报，供 AI 面板引用）。选中本身不弹操作浮层。 */
+  onSelectionText: (tabId: string, text: string) => void;
 }
 
 function TerminalTabPane(props: TerminalTabPaneProps) {
@@ -139,8 +140,8 @@ function TerminalTabPane(props: TerminalTabPaneProps) {
   const handleSessionIdChange = useCallback((sessionId: string) => {
     callbacksRef.current.onSessionIdChange(tab.tabId, sessionId);
   }, [tab.tabId]);
-  const handleSelectionMenu = useCallback((menu: { x: number; y: number; text: string } | null) => {
-    callbacksRef.current.onSelectionMenu(tab.tabId, menu);
+  const handleSelectionText = useCallback((text: string) => {
+    callbacksRef.current.onSelectionText(tab.tabId, text);
   }, [tab.tabId]);
 
   const session = useTerminalSession({
@@ -157,7 +158,7 @@ function TerminalTabPane(props: TerminalTabPaneProps) {
     onSessionIdChange: handleSessionIdChange,
     preserveSessionOnInactive: true,
     preserveSessionOnDispose: true,
-    onSelectionMenu: handleSelectionMenu,
+    onSelectionTextChange: handleSelectionText,
     onTerminalInstanceChange: setTerminalInstance,
     terminalFontSize: props.terminalFontSize,
     terminalFontFamily: props.terminalFontFamily,
@@ -407,15 +408,13 @@ export function TerminalPanel(props: TerminalPanelProps) {
   const [selectionText, setSelectionText] = useState("");
   const [shortcutsDialogOpen, setShortcutsDialogOpen] = useState(false);
 
-  const handleSelectionMenu = useCallback((tabId: string, menu: { x: number; y: number; text: string } | null) => {
-    /* 只在选区出现时开菜单；null（终端内 mouseup 无选区 / mousedown）不用于关闭——
-       右键菜单自身的 document mousedown 外点关闭已覆盖，否则 macOS 右键的 mouseup
-       会在开菜单 10ms 后立刻把它关掉。 */
-    if (!menu) {
+  /* 选区文本只做上报（AI 面板引用命令行）；选中本身不再弹操作浮层，
+     右键菜单是唯一入口（右键时按当前选区取样）。 */
+  const handleSelectionText = useCallback((tabId: string, text: string) => {
+    if (tabId !== activeTabIdRef.current) {
       return;
     }
-    setSelectionText(menu.text);
-    setContextMenu({ x: menu.x, y: menu.y });
+    setSelectionText(text);
   }, []);
 
   /* 终端体右键：统一打开全量右键菜单（对应原型 T3/T10；用户反馈 Bug②：分屏时此前弹的是
@@ -980,7 +979,7 @@ export function TerminalPanel(props: TerminalPanelProps) {
                         onTerminalInstance={handleTerminalInstance}
                         onSessionApi={handleSessionApi}
                         onSessionState={handleSessionState}
-                        onSelectionMenu={handleSelectionMenu}
+                        onSelectionText={handleSelectionText}
                       />
                     ))}
                 </div>
