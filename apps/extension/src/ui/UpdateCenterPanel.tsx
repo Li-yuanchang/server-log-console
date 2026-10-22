@@ -735,7 +735,6 @@ export function UpdateCenterPanel(props: UpdateCenterPanelProps) {
               <span className="restart-splash-spin" aria-hidden="true" />
               <span className="restart-splash-status">{restartStalled ? "重启被阻塞，可手动完成" : "即将自动重启"}</span>
             </div>
-            <div className="restart-splash-flowbar" aria-hidden="true" />
             <div className="restart-splash-restore">
               {restartStalled
                 ? "请从托盘菜单退出客户端，重新打开即可完成安装"
