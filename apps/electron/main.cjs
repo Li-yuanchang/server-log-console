@@ -11,6 +11,15 @@ const PORT = 4040;
 const HOST = "127.0.0.1";
 const GATEWAY_URL = `http://${HOST}:${PORT}`;
 
+/* Windows 标题栏覆盖层高度（2026-10-23）。
+   Windows 用 titleBarStyle:"hidden" + titleBarOverlay 接管标题栏配色，
+   这里的高度决定系统窗口按钮（最小化/最大化/关闭）所在那条带子的高度。
+   取 36px：与侧栏标题行（10px 上下 padding + 约 16px 内容）及工作区页签条
+   （40px 含上下 3px 呼吸）接近，视觉上三者成为一条连续的顶带，不会出现
+   原生标题栏与页签条贴死、缺少呼吸间距的问题。
+   前端切主题时通过 slc:set-titlebar-overlay 更新 color/symbolColor。 */
+const TITLEBAR_OVERLAY_HEIGHT = 36;
+
 let mainWindow = null;
 let gatewayProcess = null;
 let tray = null;
@@ -722,6 +731,26 @@ ipcMain.handle("toggle-pin", () => {
 
 ipcMain.handle("get-pin", () => isAlwaysOnTop);
 
+/**
+ * Windows 标题栏配色跟随 UI 主题（2026-10-23）。
+ * 前端在主题/明暗变化时调用，把当前主题的 panel 底色与文字色同步给系统标题栏，
+ * 避免「顶部框架一条浅灰、下面 UI 是深色」的割裂。
+ * 仅 Windows 有效（macOS/Linux 无 titleBarOverlay）；异常一律吞掉，不影响业务。
+ */
+ipcMain.handle("slc:set-titlebar-overlay", (_event, payload = {}) => {
+  if (process.platform !== "win32" || !mainWindow || mainWindow.isDestroyed()) {
+    return false;
+  }
+  const color = typeof payload.color === "string" && payload.color.trim() ? payload.color.trim() : "#fafafa";
+  const symbolColor = typeof payload.symbolColor === "string" && payload.symbolColor.trim() ? payload.symbolColor.trim() : "#1f2a37";
+  try {
+    mainWindow.setTitleBarOverlay({ color, symbolColor, height: TITLEBAR_OVERLAY_HEIGHT });
+    return true;
+  } catch {
+    return false;
+  }
+});
+
 ipcMain.handle("save-file", async (_event, buffer, defaultName) => {
   const win = BrowserWindow.getFocusedWindow() || mainWindow;
   const { canceled, filePath } = await dialog.showSaveDialog(win, {
@@ -1131,7 +1160,18 @@ function createWindow() {
     title: "",
     show: false,
     backgroundColor: "#fafafa",
-    titleBarStyle: "hiddenInset",
+    /* 标题栏按平台走两套（2026-10-23）：
+       - macOS：hiddenInset + 红绿灯位置，图标按钮落在系统红绿灯视线上。
+       - Windows：hiddenInset 在 Windows 上不被支持 → 会退回**原生标题栏**，
+         于是窗口顶部多出一条与 UI 主题无关的浅灰条（用户反馈「顶部框架不能跟随
+         UI 主题背景色」「跟 tab 之间没呼吸间距」）。改用 titleBarStyle:"hidden"
+         + titleBarOverlay：系统窗口按钮仍在，但**标题栏底色/符号色由我们指定**，
+         并可在切主题时通过 slc:set-titlebar-overlay 实时更新。
+       - Linux：保持默认边框（titleBarOverlay 不支持）。 */
+    titleBarStyle: process.platform === "darwin" ? "hiddenInset" : process.platform === "win32" ? "hidden" : "default",
+    ...(process.platform === "win32"
+      ? { titleBarOverlay: { color: "#fafafa", symbolColor: "#1f2a37", height: TITLEBAR_OVERLAY_HEIGHT } }
+      : {}),
     /* Windows 隐藏系统菜单栏（2026-10-23 用户反馈「wind 版顶部工具条隐藏」）：
        Windows 下 BrowserWindow 默认会渲染「文件/编辑/视图/窗口」菜单栏，
        而 macOS 的菜单在系统顶栏、不在窗口内 —— 所以只有 Windows 会多出一条。
@@ -1139,7 +1179,7 @@ function createWindow() {
        系统菜单栏纯属多餘，故 Windows/Linux 上 autoHideMenuBar 隐藏（按 Alt 仍可唤出）。
        macOS 保持现状（菜单在系统顶栏，无影响）。 */
     autoHideMenuBar: process.platform !== "darwin",
-    trafficLightPosition: { x: 12, y: 12 },
+    ...(process.platform === "darwin" ? { trafficLightPosition: { x: 12, y: 12 } } : {}),
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,

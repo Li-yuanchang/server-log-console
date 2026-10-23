@@ -616,7 +616,12 @@
 
 /* --- 5. 服务器列表 --- */
 .theme-modern .server-groups {
-  padding: 8px 8px;
+  /* 水平内边距与搜索区 .pane-section（16px）对齐（2026-10-23 用户反馈
+     「输入框左右边距跟服务器选中的背景不一样宽、不整齐」）：
+     原为 8px，导致搜索框左缘比服务器行的选中底色再往内缩 8px，两级错位。
+     统一 16px 后，输入框、选中行底色、标题三者左/右缘完全对齐。
+     行的文字缩进由 .server-item 自身的水平 padding 承担，见 theme-modern-v2.css。 */
+  padding: 8px 16px;
   gap: 2px;
   flex: 1 1 0%;
   min-height: 0;
@@ -925,6 +930,39 @@
   border-color: var(--accent);
   box-shadow: 0 0 0 2px var(--accent-soft);
   outline: none;
+}
+
+/* 单行输入框 / 下拉：行高与控件高度对齐，让文字几何居中（2026-10-23 用户反馈
+   「input 等占位符内容不是垂直居中的」）。
+   根因不是盒模型没居中 —— 无需改 padding/height：line-height:normal 时行盒高度
+   由字体度量决定，中文字形上伸部比下伸部长，实测基线偏上：
+   框内 553..578 而墨迹 558..570，上留 5px / 下留 8px（-3px，肉眼即「贴顶」）。
+   把行高显式设为控件高度后实测 6px/7px，与英文输入表现一致（中英文差 2px → 0）。
+   ⚠️ 只作用于 input/select：textarea 是多行，行高必须由内容决定，
+      套用固定值会让换行间距变成 28px。 */
+.theme-modern input:where(:not([type="range"], [type="color"], [type="checkbox"], [type="radio"], [type="file"], [type="image"], [type="submit"], [type="button"], [type="reset"])),
+.theme-modern select {
+  line-height: var(--ctl-h);
+}
+
+/* 占位符统一走「次要文字」令牌（2026-10-23 用户反馈「颜色也不对吧，这么深色」）。
+   根因：全项目 15 条 ::placeholder 规则都是按具体组件零散写的（命令栏 / 实时过滤 /
+   预览搜索 / AI 输入等），设置中心与其它通用输入框一条都没覆盖，
+   于是落回浏览器 UA 默认色 #757575 —— 比 --ink-muted(#8f8f8f) 更深，
+   读起来像已填内容而不是「提示」。这里补一条全局兜底。
+
+   ⚠️ 特异性必须压到最低（0,0,1），否则会盖掉深色面上的浅色占位符：
+   本文件的加载顺序在 styles-tsc.css / align-s5-terminal.css 之后，
+   若写成 `.theme-modern input::placeholder`（0,1,1），就会与
+   `.tsc-textarea::placeholder`（0,1,1）打平并按「后写的赢」压掉它，
+   把终端 AI 输入框的淡蓝 #bfdbfe5c 变成灰色（实测踩到过）。
+   故整条选择器包进 :where() —— 内部一律不计特异性，只剩 ::placeholder 的 (0,0,1)，
+   任何组件级规则（≥ (0,1,1)）都能正常覆盖，UA 默认样式则仍被我方盖过。
+   opacity:1 同理 —— Firefox 默认给 ::placeholder 加 0.54 透明度，
+   不写这句会让令牌色在 Firefox 里再淡一层、与 Chrome 不一致。 */
+:where(.theme-modern) :where(input, textarea)::placeholder {
+  color: var(--ink-muted);
+  opacity: 1;
 }
 
 .theme-modern textarea {

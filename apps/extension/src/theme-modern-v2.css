@@ -119,8 +119,16 @@
   border-bottom-width: 2px;
   border-radius: 4px;
   padding: 0 4px;
-  line-height: 14px;
-  display: inline-block;
+  /* 键帽内文字垂直居中（2026-10-23 用户反馈「Ctrl 内容不垂直居中」）：
+     原为 inline-block + line-height:14px，而上/下边框不对称（1px / 2px），
+     文字盒重心被下边框顶偏 → 视觉上浮。改 inline-flex + center 后，
+     文字相对键帽盒严格居中，不再受边框厚度影响。 */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  min-height: 16px;
+  box-sizing: border-box;
 }
 
 /* ---------- 1b. 徽标类小控件（原型 .chip/.chip.grn/.chip.red/.chip.amb、.pill/.pill.on）
@@ -215,7 +223,11 @@
   font-weight: 700;
   letter-spacing: -0.01em;
   display: flex;
-  align-items: baseline;
+  /* 「服务器 + N 台」垂直居中（2026-10-23 用户反馈「1 台没垂直居中」）：
+     原为 align-items: baseline —— 两段字号不同（fs-sm vs fs-2xs），
+     基线对齐会让小字「1 台」整体上浮、落在主标题上半部，看起来像角标。
+     改为 center，两段按各自盒高居中，视觉重心对齐。 */
+  align-items: center;
   gap: 6px;
   min-width: 0;
 }
