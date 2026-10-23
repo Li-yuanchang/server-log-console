@@ -4,7 +4,7 @@ import { ChevronDown, ChevronLeft, Eye, EyeOff, MoreHorizontal, Terminal, Trash2
 import type { JumpServerAssetOption, LogProfile, ServerConnectionKind, ServerCredentialStatus, ServerSummary } from "@server-log-console/shared";
 import { looksLikeJumpServer } from "./terminal-utils.js";
 import { readDirectoryHistory } from "./storage.js";
-import { apiTestConnection, apiTestDraftConnection } from "./api.js";
+import { apiGetCredentialSecret, apiTestConnection, apiTestDraftConnection } from "./api.js";
 import { ThemedSelect } from "./ThemedSelect.js";
 import type { SlcDesktopUpdateState } from "../types/desktop-update.js";
 import { UpdateCenterPanel, type DesktopUpdateCheckLogEntry } from "./UpdateCenterPanel.js";
@@ -572,6 +572,45 @@ export function ConnectionSettingsWorkspace(props: Props) {
     setDraftTestState({ status: "idle", message: "" });
   }, [draftIdForTest]);
 
+  /* 编辑已保存连接时自动回填密码 / 私钥（2026-10-23 用户反馈
+     「既然服务器都存储密码了，为什么不自动填充密码，还要我手动改」）。
+     为什么可以回填：密码本来就存在本地 credentials.json，同一台机器读回来
+     不是新的信息暴露面；原表单「留空则不更新密码」是防误覆盖，不是安全策略，
+     但对「只改个备注/分组」的场景就成了纯负担。
+     实现要点：
+     - 仅 draft.id 指向已保存的手动连接时回填；新建（无 id）不动。
+     - prefilledDraftIdRef 记录已回填过的 id：用户手动清空密码后不会被再次写回；
+       取消/重开时清空记录，下次仍会重新读取。
+     - 读失败静默降级（例如网关设了 GATEWAY_HIDE_SECRETS=1 会 403），
+       不打断表单，用户仍可手填。 */
+  const prefilledDraftIdRef = useRef("");
+  const [draftSecretHint, setDraftSecretHint] = useState("");
+  useEffect(() => {
+    const targetId = props.connectionSection.draft.id;
+    setDraftSecretHint("");
+    if (detailPane !== "form" || !targetId) return;
+    if (prefilledDraftIdRef.current === targetId) return;
+    prefilledDraftIdRef.current = targetId;
+    void (async () => {
+      try {
+        const secret = await apiGetCredentialSecret(targetId);
+        const patch: Partial<ManualServerDraft> = {};
+        if (secret.password) patch.password = secret.password;
+        if (secret.privateKey) patch.privateKey = secret.privateKey;
+        if (!patch.password && !patch.privateKey) return;
+        props.connectionSection.onChangeDraft(patch);
+        setDraftSecretHint(
+          `已回填保存的${patch.password && patch.privateKey ? "密码与私钥" : patch.password ? "密码" : "私钥"}，可直接保存或修改`
+        );
+      } catch {
+        /* 无已存凭证 / 服务端禁用明文导出：保持空白，用户手填即可 */
+      }
+    })();
+    /* 只按「打开了哪台」触发；props.connectionSection 每次渲染都是新对象，
+       放进依赖会反复触发（配合 ref 守卫虽不会重复请求，但会误清提示）。 */
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detailPane, props.connectionSection.draft.id]);
+
   const selectedServer = props.currentServerSection.selectedServer;
   const credentialStatus = props.currentServerSection.credentialStatus;
   const hasCredentialDraft = Boolean(
@@ -1004,6 +1043,10 @@ export function ConnectionSettingsWorkspace(props: Props) {
                       <button className="ghost-button" type="button" onClick={() => {
                         props.connectionSection.onResetDraft();
                         setDraftTestState({ status: "idle", message: "" });
+                        /* 清掉「已回填」记录：下次重新打开同一台时要再读一次凭证
+                           （否则用户取消了、再点编辑，密码会是空的）。 */
+                        prefilledDraftIdRef.current = "";
+                        setDraftSecretHint("");
                         setDetailPane("detail");
                       }}>取消</button>
                       {/* 测试连接（2026-10-23 用户反馈）：放在「保存连接」前面，
@@ -1173,6 +1216,9 @@ export function ConnectionSettingsWorkspace(props: Props) {
                           {passwordVisible ? <EyeOff size={13} strokeWidth={1.8} /> : <Eye size={13} strokeWidth={1.8} />}
                         </button>
                       </div>
+                      {draftSecretHint ? (
+                        <span className="conn-group-hint">{draftSecretHint}</span>
+                      ) : null}
                     </div>
                     <div className="settings-field settings-field-span-2">
                       <span>私钥</span>

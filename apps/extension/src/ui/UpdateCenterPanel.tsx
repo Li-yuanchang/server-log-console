@@ -735,11 +735,10 @@ export function UpdateCenterPanel(props: UpdateCenterPanelProps) {
               <span className="restart-splash-spin" aria-hidden="true" />
               <span className="restart-splash-status">{restartStalled ? "重启被阻塞，可手动完成" : "即将自动重启"}</span>
             </div>
-            <div className="restart-splash-restore">
-              {restartStalled
-                ? "请从托盘菜单退出客户端，重新打开即可完成安装"
-                : "未保存的搜索条件与布局会自动恢复"}
-            </div>
+            {/* 正常重启时无需说明（状态行已表达）；仅在重启被阻塞时给出人工操作指引 */}
+            {restartStalled ? (
+              <div className="restart-splash-restore">请从托盘菜单退出客户端，重新打开即可完成安装</div>
+            ) : null}
           </div>
         </div>
       ) : null}

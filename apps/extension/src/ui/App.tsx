@@ -3450,6 +3450,23 @@ export function App() {
     document.documentElement.dataset.skTheme = resolvedTheme.id;
   }, [resolvedTheme, terminalScheme]);
 
+  /* Windows 原生标题栏跟随 UI 主题（2026-10-23）。
+     Windows 下窗口顶部那条带窗口按钮的标题栏由系统绘制，默认是浅灰，
+     与深色主题割裂（用户反馈「顶部框架不能跟随 UI 主题一个背景色」）。
+     主进程已改用 titleBarStyle:"hidden" + titleBarOverlay，这里把当前主题的
+     panel 底色与 ink 文字色同步过去，做到切主题即变。
+     其它平台（macOS 红绿灯 / Linux）主进程直接返回 false，无副作用。 */
+  useEffect(() => {
+    const api = (window as any).electronAPI;
+    if (!api?.setTitleBarOverlay || api.platform !== "win32") {
+      return;
+    }
+    void api.setTitleBarOverlay({
+      color: resolvedTheme.v.panel,
+      symbolColor: resolvedTheme.v.ink,
+    });
+  }, [resolvedTheme]);
+
   if (isStandaloneTerminalWindow) {
     return (
       <main className={`${appShellClassName} pip-standalone pip-terminal-standalone`} style={appShellStyle}>
