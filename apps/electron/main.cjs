@@ -1132,8 +1132,13 @@ function createWindow() {
     show: false,
     backgroundColor: "#fafafa",
     titleBarStyle: "hiddenInset",
-    // 红绿灯位置保持不动（实测渲染圆心 = y+7.5 ≈ 19.5px），mac 沉浸式的侧栏按钮行
-    // 与工作区页签条在 CSS 里对齐这条中线（见 styles-sidebar-toolbar.css）
+    /* Windows 隐藏系统菜单栏（2026-10-23 用户反馈「wind 版顶部工具条隐藏」）：
+       Windows 下 BrowserWindow 默认会渲染「文件/编辑/视图/窗口」菜单栏，
+       而 macOS 的菜单在系统顶栏、不在窗口内 —— 所以只有 Windows 会多出一条。
+       本应用所有操作都有界面内入口（设置中心 / 视图切换 / 托盘菜单），
+       系统菜单栏纯属多餘，故 Windows/Linux 上 autoHideMenuBar 隐藏（按 Alt 仍可唤出）。
+       macOS 保持现状（菜单在系统顶栏，无影响）。 */
+    autoHideMenuBar: process.platform !== "darwin",
     trafficLightPosition: { x: 12, y: 12 },
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),

@@ -74,22 +74,31 @@ html:has(.pip-terminal-standalone) #root {
   filter: drop-shadow(0 4px 14px rgba(15, 23, 42, 0.18));
 }
 
+/* 箭头定位（2026-10-23 修复「tooltip 箭头方向反了」）：
+   floating-ui 的 arrow 中间件对 top/bottom 定位**只返回 x**（对齐轴），
+   `middlewareData.arrow.y` 对这两种定位恒为 undefined —— 所以 JS 侧从未给箭头
+   设过 top。而 .instant-tooltip-arrow 只有 position:absolute、没有 top/bottom，
+   绝对定位在两个方向都缺省时会**回落到静态位置**（即文字之后的气泡底部）。
+   结果：气泡在图标下方时，箭头本该贴气泡上边缘，却画到了下边缘 → 看着方向反了。
+   修法：按气泡方向把箭头钉到正确的那条边。菱形（rotate 45°）一半嵌入气泡内、
+   与气泡同色融为一体，露出的一半就是朝外的三角，故旋转值不变。 */
 .instant-tooltip-arrow {
   position: absolute;
   width: 9px;
   height: 9px;
   background: inherit;
   pointer-events: none;
-}
-
-/* 顶部气泡：箭头在下方指向锚点 */
-.instant-tooltip:not(.instant-tooltip-below) .instant-tooltip-arrow {
-  transform: rotate(225deg);
-}
-
-/* 底部气泡：箭头在上方指向锚点 */
-.instant-tooltip-below .instant-tooltip-arrow {
   transform: rotate(45deg);
+}
+
+/* 顶部气泡（气泡在锚点上方）：箭头贴气泡**下**边缘，朝下指向锚点 */
+.instant-tooltip:not(.instant-tooltip-below) .instant-tooltip-arrow {
+  bottom: -4px;
+}
+
+/* 底部气泡（气泡在锚点下方）：箭头贴气泡**上**边缘，朝上指向锚点 */
+.instant-tooltip-below .instant-tooltip-arrow {
+  top: -4px;
 }
 
 button,

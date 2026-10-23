@@ -1,5 +1,6 @@
 import type { LogFileEntry } from "@server-log-console/shared";
 import type { RefObject } from "react";
+import { ContextMenuShell } from "./ContextMenuShell.js";
 
 export interface FileContextMenuState {
   x: number;
@@ -53,19 +54,15 @@ export function FileContextMenu(props: FileContextMenuProps) {
   }
 
   const isFile = menu.entry.kind === "file";
+  const isArchive = isArchiveFile(menu.entry);
+
+  /* 内容指纹：文件项 11 项 / 目录项 9 项 / 压缩包再多 2 项，高度各不相同。
+     不把条目差异纳入 key 的话，菜单会在同一坐标下沿用上一次的高度判断，
+     翻转位置就会错（这是「文件区贴底被遮盖」的另一半原因）。 */
+  const contentKey = `${menu.entry.path}|${menu.entry.kind}|${isArchive ? "zip" : "plain"}`;
 
   return (
-    <div className="context-menu-backdrop">
-      <div
-        ref={menuRef}
-        className="context-menu"
-        style={{ left: menu.x, top: menu.y }}
-        onClick={(event) => event.stopPropagation()}
-        onContextMenu={(event) => {
-          event.preventDefault();
-          event.stopPropagation();
-        }}
-      >
+    <ContextMenuShell x={menu.x} y={menu.y} menuRef={menuRef} contentKey={contentKey}>
         {/* 组①：打开 / 预览 · 下载 */}
         <div role="button" className="context-menu-item" onClick={() => { onClose(); onOpen(menu.entry); }}>
           {isFile ? "打开 / 预览" : "打开"}
@@ -120,7 +117,6 @@ export function FileContextMenu(props: FileContextMenuProps) {
           删除
           <span className="context-menu-key">⌫</span>
         </div>
-      </div>
-    </div>
+    </ContextMenuShell>
   );
 }
