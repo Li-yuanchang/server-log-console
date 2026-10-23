@@ -2811,7 +2811,14 @@ export function App() {
           diskPath: topDisk?.mount,
         });
       } catch {
-        /* 资源条获取失败静默：不打扰终端使用 */
+        /* 资源条获取失败：**不再静默清空**（2026-10-23 用户反馈「监控状态栏没了」）。
+           原实现 catch 里什么都不做，但由于成功时才会 setTerminalResources，
+           一旦某次请求失败（Windows 上较常见：超时/权限/上下文路径不符），
+           该状态就永远停留在 null —— 状态栏里 CPU/内存/磁盘 那一整块是
+           `resources ? ... : null` 条件渲染，于是整块消失，看起来像「状态栏丢了」。
+           这里保留上一次成功值（不清空），下一轮 10s 轮询会自动恢复；
+           首次即失败时由状态栏渲染「--」占位（见 TerminalStatusBar），
+           保证监控区位置始终存在、不塌陷。 */
       }
     };
     void fetchProfile();
@@ -3449,23 +3456,6 @@ export function App() {
       : resolvedTheme.v.bg;
     document.documentElement.dataset.skTheme = resolvedTheme.id;
   }, [resolvedTheme, terminalScheme]);
-
-  /* Windows 原生标题栏跟随 UI 主题（2026-10-23）。
-     Windows 下窗口顶部那条带窗口按钮的标题栏由系统绘制，默认是浅灰，
-     与深色主题割裂（用户反馈「顶部框架不能跟随 UI 主题一个背景色」）。
-     主进程已改用 titleBarStyle:"hidden" + titleBarOverlay，这里把当前主题的
-     panel 底色与 ink 文字色同步过去，做到切主题即变。
-     其它平台（macOS 红绿灯 / Linux）主进程直接返回 false，无副作用。 */
-  useEffect(() => {
-    const api = (window as any).electronAPI;
-    if (!api?.setTitleBarOverlay || api.platform !== "win32") {
-      return;
-    }
-    void api.setTitleBarOverlay({
-      color: resolvedTheme.v.panel,
-      symbolColor: resolvedTheme.v.ink,
-    });
-  }, [resolvedTheme]);
 
   if (isStandaloneTerminalWindow) {
     return (

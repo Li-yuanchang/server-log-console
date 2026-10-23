@@ -63,17 +63,23 @@ function ConnectedDuration({ connectedAt }: { connectedAt: number }) {
   return <span className="terminal-statusbar-duration">{formatConnectedDuration(now - connectedAt)}</span>;
 }
 
-/** 单条资源迷你条：标签 + 数值 + 42×4px 圆角槽（对应原型 .rbar） */
-function ResourceMeter({ label, value }: { label: string; value: number }) {
-  const level = resourceLevel(value);
-  const width = Math.max(0, Math.min(100, value));
+/** 单条资源迷你条：标签 + 数值 + 42×4px 圆角槽（对应原型 .rbar）。
+    value 为 null 时渲染「--」占位（2026-10-23）：监控是功能，取不到数据也不能整块消失。 */
+function ResourceMeter({ label, value }: { label: string; value: number | null }) {
+  const hasValue = value != null;
+  const level = hasValue ? resourceLevel(value) : "idle";
+  const width = hasValue ? Math.max(0, Math.min(100, value)) : 0;
   return (
     <span
       className={`terminal-statusbar-meter terminal-statusbar-meter-${level}`}
-      title={`${label} ${Math.round(value)}% · 来自网关每 10s 采集 · 点击打开监控`}
+      title={
+        hasValue
+          ? `${label} ${Math.round(value)}% · 来自网关每 10s 采集 · 点击打开监控`
+          : `${label} 暂无数据（网关未返回该指标，10s 后重试）· 点击打开监控`
+      }
     >
       <span className="terminal-statusbar-meter-label">{label}</span>
-      <span className="terminal-statusbar-meter-value">{Math.round(value)}%</span>
+      <span className="terminal-statusbar-meter-value">{hasValue ? `${Math.round(value)}%` : "--"}</span>
       <span className="terminal-statusbar-meter-track">
         <i
           className={`terminal-statusbar-meter-fill terminal-statusbar-meter-fill-${level}`}
@@ -175,20 +181,21 @@ export function TerminalStatusBar(props: TerminalStatusBarProps) {
         ) : null}
       </span>
 
-      {/* 中：网关资源迷你条（每 10s 采集，整组可点打开监控） */}
-      {resources ? (
-        <button
-          type="button"
-          className="terminal-statusbar-res"
-          onClick={onOpenMonitor}
-          title="来自网关每 10s 采集 · 点击打开监控"
-          aria-label="打开监控"
-        >
-          <ResourceMeter label="CPU" value={resources.cpu} />
-          <ResourceMeter label="内存" value={resources.mem} />
-          <ResourceMeter label={resources.diskPath || "磁盘"} value={resources.disk} />
-        </button>
-      ) : null}
+      {/* 中：网关资源迷你条（每 10s 采集，整组可点打开监控）。
+          2026-10-23：改为**始终渲染**。原为 `resources ? ... : null`，一旦某次
+          采集失败（Windows 上易超时）监控块就整块消失，用户以为「状态栏丢了」。
+          现监控是功能、位置常驻：无数据显示「--」，恢复数据后自动回填。 */}
+      <button
+        type="button"
+        className="terminal-statusbar-res"
+        onClick={onOpenMonitor}
+        title="来自网关每 10s 采集 · 点击打开监控"
+        aria-label="打开监控"
+      >
+        <ResourceMeter label="CPU" value={resources?.cpu ?? null} />
+        <ResourceMeter label="内存" value={resources?.mem ?? null} />
+        <ResourceMeter label={resources?.diskPath || "磁盘"} value={resources?.disk ?? null} />
+      </button>
 
       <span className="terminal-statusbar-grow" />
 

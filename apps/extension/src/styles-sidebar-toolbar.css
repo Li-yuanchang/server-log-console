@@ -3,22 +3,6 @@
   -webkit-app-region: no-drag;
 }
 
-/* Windows 标题栏覆盖层让位（2026-10-23）。
-   主进程改用 titleBarStyle:"hidden" + titleBarOverlay 后，网页内容会一直铺到
-   窗口最顶端，系统的最小化/最大化/关闭按钮**浮在内容之上**、压住右上角
-   （原先那里正是「Ctrl+1-9 切换会话」提示）。
-   这里在顶部让出与 overlay 等高的带子（高度与 main.cjs 的
-   TITLEBAR_OVERLAY_HEIGHT 保持一致 = 36px），效果是：
-     ① 系统窗口按钮独占最上一条，不再与页签条抢位置；
-     ② 该带子的底色 = .app-shell 的 var(--bg)，与前端同步过去的
-        titleBarOverlay.color 取值一致 → 窗口框架与 UI 同一背景色，不再割裂；
-     ③ 这条带子本身成为窗口与页签条之间的呼吸间距（用户反馈「没有呼吸间距」）。
-   仅 Windows 生效（body.is-win32 由 preload 注入），macOS/Linux 不受影响。 */
-body.is-win32 .app-shell.electron-immersive {
-  --titlebar-overlay-height: 36px;
-  padding-top: var(--titlebar-overlay-height) !important;
-}
-
 .electron-immersive .shell-layout {
   height: 100vh;
   gap: 0;

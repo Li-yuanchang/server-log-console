@@ -878,6 +878,15 @@
 .theme-modern .terminal-statusbar-meter-fill-bad {
   background: var(--red);
 }
+/* 占位档（2026-10-23）：网关未返回该指标时显示「--」，视觉上要弱化为中性灰，
+   避免和「真的 0%」混淆；填充条宽度为 0，自然不显示。 */
+.theme-modern .terminal-statusbar-meter-idle .terminal-statusbar-meter-value {
+  color: var(--ink-muted);
+  font-weight: 500;
+}
+.theme-modern .terminal-statusbar-meter-fill-idle {
+  background: transparent;
+}
 /* 弹性占位：把右侧提示推到行尾 */
 .theme-modern .terminal-statusbar-grow {
   flex: 1 1 0%;
@@ -922,6 +931,12 @@
   min-width: 0;
   background: var(--panel);
   border-top: 1px solid var(--line);
+  /* 文字垂直居中（2026-10-23 用户反馈「快捷命令没有垂直居中」）：
+     本行只设了 align-items:center，但子元素是普通 inline 文本，
+     会继承终端上下文的 line-height（.terminal-* 里有 1.7~1.8 的行高），
+     行盒比 33px 容器偏高、基线被推到偏下位置，视觉上文字下沉。
+     这里把行高收敛为 1，让 33px 盒内的文字按自身字高居中。 */
+  line-height: 1;
 }
 .theme-modern .terminal-qbar-label {
   flex: none;
