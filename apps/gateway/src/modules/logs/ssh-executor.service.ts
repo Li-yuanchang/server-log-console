@@ -1096,6 +1096,60 @@ export class SshExecutorService {
     }
   }
 
+  /** 草稿连接测试（2026-10-23）：用**请求里的**参数直连一次，不查注册表、不写配置。
+      供设置中心「新建/编辑连接」表单在保存前验证主机、端口、账号密码是否可用。
+      失败时统一过一遍 humanizeSshError，避免把 "All configured authentication methods failed"
+      这类英文原文直接甩给用户（与既有 probe / exec 的报错口径保持一致）。 */
+  async probeWithCredentials(
+    credentials: { host: string; port: number; username: string; password?: string; privateKey?: string },
+    command: string,
+    timeoutMs = 20000
+  ): Promise<string> {
+    const client = this.createSshClient(credentials.password);
+
+    const connection = await new Promise<Client>((resolve, reject) => {
+      let settled = false;
+      const timeout = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        client.end();
+        reject(new Error(`SSH connect timed out after ${timeoutMs}ms`));
+      }, timeoutMs);
+
+      client
+        .on("ready", () => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timeout);
+          resolve(client);
+        })
+        .on("error", (error) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timeout);
+          client.end();
+          reject(error);
+        })
+        .connect({
+          host: credentials.host,
+          port: credentials.port,
+          username: credentials.username,
+          password: credentials.password,
+          privateKey: credentials.privateKey,
+          readyTimeout: Math.min(timeoutMs, 20000),
+          tryKeyboard: true
+        });
+    }).catch((error: unknown) => {
+      throw new Error(humanizeSshError(error, credentials));
+    });
+
+    try {
+      return await this.execOnClient(connection, command, timeoutMs);
+    } finally {
+      try { connection.end(); } catch {}
+    }
+  }
+
   async connectJumpServerTerminal(serverId: string, bastionId: string | undefined, timeoutMs = 30000): Promise<ManagedSshConnection> {
     const currentServer = this.serverRegistry.getServer(serverId);
     if (this.isJumpServerBastion(currentServer)) {

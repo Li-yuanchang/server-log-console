@@ -593,6 +593,15 @@
   border-radius: 7px;
   padding: 0 10px;
   height: 28px;
+  /* 2026-10-23 修复「输入框太贴右侧、没有呼吸间距」：
+     .pane-section 是 display:grid，但 input 自身有 HTML 默认内在宽度
+     （size≈20ch ≈ 165px），窄侧栏（Windows 1280 窗口下侧栏仅 200px）里
+     它不会自动吃掉整行，右侧留白与左侧不对称、文字区贴到框右缘。
+     这里显式撑满可用宽度（减去 pane-section 的左右 16px 内边距），
+     左右呼吸由 pane-section padding 统一承担，两侧对称。 */
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .theme-modern .pane-section input::placeholder {

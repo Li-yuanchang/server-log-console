@@ -21,6 +21,7 @@ import { useBrowserTerminalPip } from "./useBrowserTerminalPip.js";
 import { TerminalAI } from "./TerminalAI.js";
 import { PipExpandIcon } from "./PipExpandIcon.js";
 import { EmptyWorkbench } from "./EmptyWorkbench.js";
+import { formatKeyHint } from "./key-hints.js";
 import type { TerminalTabState } from "./types.js";
 
 /**
@@ -798,7 +799,7 @@ export function TerminalPanel(props: TerminalPanelProps) {
             className="terminal-toolbar-button terminal-toolbar-button-icon"
             onClick={toggleFindBar}
             disabled={toolbarDisabled}
-            title="在终端中查找 ⌘F"
+            title={`在终端中查找 ${formatKeyHint("⌘F")}`}
           >
             <Search size={13} />
           </button>
@@ -809,7 +810,7 @@ export function TerminalPanel(props: TerminalPanelProps) {
               onClick={handleSplitButtonClick}
               /* 浏览器 PiP 打开中禁止进入分屏：主体已搬入 PiP 窗口，再叠加分屏布局会加剧 DOM 失配 */
               disabled={toolbarDisabled || (!isElectronRuntime && browserPip.isPip)}
-              title="分屏：左右 ⌘D / 上下 / 三分格 / 关闭当前窗格"
+              title={`分屏：左右 ${formatKeyHint("⌘D")} / 上下 / 三分格 / 关闭当前窗格`}
             >
               <Columns2 size={13} />
             </button>
@@ -837,7 +838,7 @@ export function TerminalPanel(props: TerminalPanelProps) {
             className={`terminal-toolbar-button terminal-toolbar-button-icon${showAI ? " tai-toggle-active" : ""}`}
             onClick={() => props.onToggleTerminalOverlay("ai")}
             disabled={toolbarDisabled}
-            title="AI 助手（引用选中内容）⌘J"
+            title={`AI 助手（引用选中内容）${formatKeyHint("⌘J")}`}
           >
             <Zap size={13} />
           </button>
@@ -908,7 +909,7 @@ export function TerminalPanel(props: TerminalPanelProps) {
           onCloseAll={closeAll}
         >
           {isElectronRuntime ? (
-            <span className="terminal-tabs-hint">⌘T 新建 · ⌘W 关闭标签</span>
+            <span className="terminal-tabs-hint">{formatKeyHint("⌘T 新建 · ⌘W 关闭标签")}</span>
           ) : null}
         </TerminalTabStrip>
       ) : null}

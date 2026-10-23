@@ -14,7 +14,9 @@ import type {
   ServerRouteConfig,
   ServerSystemProfileRequest,
   ServerConnectionTestRequest,
-  ServerConnectionTestResponse
+  ServerConnectionTestResponse,
+  ServerDraftConnectionTestRequest,
+  ServerDraftConnectionTestResponse
 } from "@server-log-console/shared";
 import { LogsService } from "./modules/logs/logs.service.js";
 import { LogSearchTaskService } from "./modules/logs/log-search-task.service.js";
@@ -299,6 +301,69 @@ app.post("/api/servers/manual", async (req, res) => {
     res.json({ server });
   } catch (error) {
     res.status(400).json({ message: error instanceof Error ? error.message : "Unknown error" });
+  }
+});
+
+/* 草稿连接测试（2026-10-23 用户反馈「新建界面保存链接前面少一个测试的按钮」）：
+   表单还没保存，没有 serverId，因此不能用 /api/servers/:serverId/test-connection。
+   这里直接用请求体里的主机/端口/账号/密码或私钥连一次，只做连通性与目录可读性检查，
+   不写任何配置文件、不注册服务器 —— 即「测了不满意可以直接不保存」。 */
+app.post("/api/servers/test-draft", async (req, res) => {
+  const body = (req.body || {}) as ServerDraftConnectionTestRequest;
+  const host = body.host?.trim() || "";
+  const port = Number(body.port || 22);
+  const username = body.username?.trim() || "root";
+  const directoryPath = body.directoryPath?.trim() || "/";
+
+  try {
+    if (!host) {
+      throw new Error("请先填写主机地址。");
+    }
+    if (!Number.isInteger(port) || port <= 0 || port > 65535) {
+      throw new Error("端口必须是 1-65535 之间的整数。");
+    }
+    if (!body.password && !body.privateKey) {
+      throw new Error("请先填写密码或私钥，否则无法测试登录。");
+    }
+
+    const script = [
+      `target=${shellEscape(directoryPath)}`,
+      'readable=0',
+      'if [ -d "$target" ] && [ -r "$target" ]; then readable=1; fi',
+      'printf "META\\t%s\\t%s\\n" "$target" "$readable"'
+    ].join("\n");
+
+    const output = await sshExecutorService.probeWithCredentials(
+      { host, port, username, password: body.password, privateKey: body.privateKey },
+      `bash -lc ${shellEscape(script)}`,
+      20000
+    );
+
+    const metaLine = output.split(/\r?\n/).find((line) => line.startsWith("META\t")) || "";
+    const [, remotePath = directoryPath, readableToken = "0"] = metaLine.split("\t");
+    const directoryReadable = readableToken === "1";
+
+    const payload: ServerDraftConnectionTestResponse = {
+      connected: true,
+      host,
+      username,
+      directoryPath: remotePath,
+      directoryReadable,
+      message: directoryReadable
+        ? `SSH 连通成功，目录可读：${remotePath}`
+        : `SSH 连通成功，但目录不可读或不存在：${remotePath}`
+    };
+    res.json(payload);
+  } catch (error) {
+    const payload: ServerDraftConnectionTestResponse = {
+      connected: false,
+      host,
+      username,
+      directoryPath,
+      directoryReadable: false,
+      message: error instanceof Error ? error.message : "连接测试失败"
+    };
+    res.status(400).json(payload);
   }
 });
 

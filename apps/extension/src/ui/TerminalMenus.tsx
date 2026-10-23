@@ -28,6 +28,7 @@ import {
   XSquare,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { formatKeyHint } from "./key-hints.js";
 
 /** 单个菜单项定义 */
 export interface MenuItemDef {
@@ -194,7 +195,7 @@ export function TerminalMenuShell({ x, y, items, onClose }: TerminalMenuShellPro
               <Icon className="terminal-menu-item-icon" size={13} strokeWidth={1.7} />
               <span className="terminal-menu-item-label">{def.label}</span>
               {def.kbd ? (
-                <span className="terminal-menu-item-kbd">{def.kbd}</span>
+                <span className="terminal-menu-item-kbd">{formatKeyHint(def.kbd)}</span>
               ) : def.hint ? (
                 <span className="terminal-menu-item-hint">{def.hint}</span>
               ) : null}

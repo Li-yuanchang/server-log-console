@@ -220,6 +220,26 @@ export interface ServerConnectionTestRequest {
   directoryPath?: string;
 }
 
+/** 草稿连接测试（2026-10-23）：表单尚未保存时，直接用填写的参数真连一次。
+    不查服务器注册表、不写任何配置，只做一次 SSH 探测 + 目录可读性检查。 */
+export interface ServerDraftConnectionTestRequest {
+  host: string;
+  port?: number;
+  username?: string;
+  password?: string;
+  privateKey?: string;
+  directoryPath?: string;
+}
+
+export interface ServerDraftConnectionTestResponse {
+  connected: boolean;
+  host: string;
+  username: string;
+  directoryPath: string;
+  directoryReadable: boolean;
+  message: string;
+}
+
 export interface ServerConnectionTestResponse {
   serverId: string;
   serverName: string;
@@ -337,6 +357,8 @@ export interface ManualServerUpsertRequest {
   profile?: LogProfile;
   connectionKind?: ServerConnectionKind;
   tags?: string[];
+  /** 手动连接的分组路径（如 ["生产","华东"]）；空数组或未传 = 未分组 */
+  groupPath?: string[];
   credential?: ServerCredentialInput;
 }
 

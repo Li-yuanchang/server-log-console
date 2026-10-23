@@ -1,5 +1,6 @@
 import { Command as CommandIcon, Ellipsis, Pin, PinOff } from "lucide-react";
 import { ToolIcon } from "./ToolIcon.js";
+import { formatKeyHint } from "./key-hints.js";
 
 type Props = {
   uiTheme: "classic" | "modern";
@@ -73,11 +74,11 @@ export function SearchToolbarActions(props: Props) {
         type="button"
         className="ghost-button toolbar-action-button toolbar-palette-button"
         onClick={props.onOpenPalette}
-        title="命令面板 (Cmd+K)"
+        title={`命令面板 (${formatKeyHint("⌘K")})`}
         aria-label="命令面板"
       >
         <CommandIcon size={14} strokeWidth={1.8} />
-        <span className="kbd">⌘K</span>
+        <span className="kbd">{formatKeyHint("⌘K")}</span>
       </button>
     </div>
   );

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Command as CommandIcon, FileText, Folder, Plug, Terminal, Zap } from "lucide-react";
+import { formatKeyHint } from "./key-hints.js";
 
 export type PaletteCommand = {
   id: string;
@@ -111,7 +112,7 @@ export function CommandPalette(props: { open: boolean; onClose: () => void; comm
                       {command.title}
                       {command.sub ? <span className="palette-item-sub"> {command.sub}</span> : null}
                     </span>
-                    {command.hint ? <span className="palette-item-hint">{command.hint}</span> : null}
+                    {command.hint ? <span className="palette-item-hint">{formatKeyHint(command.hint)}</span> : null}
                   </button>
                 </div>
               );

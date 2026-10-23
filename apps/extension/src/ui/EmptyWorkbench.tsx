@@ -1,5 +1,6 @@
 import React from "react";
 import { ChevronDown } from "lucide-react";
+import { formatKeyHint } from "./key-hints.js";
 
 /* ============================================================
    EmptyWorkbench — 大屏空态统一组件（方案 A「引导式工作台」定稿）
@@ -146,7 +147,9 @@ export function EmptyWorkbench(props: EmptyWorkbenchProps) {
             <div className="empty-wb-keys rv d5">
               {keys.map((key) => (
                 <span key={key.kbd}>
-                  <kbd>{key.kbd}</kbd>
+                  {/* 键位提示按平台转换（2026-10-23）：源码沿用 ⌘ 写法，渲染时在
+                      Windows/Linux 转成 Ctrl，避免出现根本不存在的 ⌘ 符号。 */}
+                  <kbd>{formatKeyHint(key.kbd)}</kbd>
                   {key.label}
                 </span>
               ))}

@@ -203,7 +203,10 @@
   border-right: 1px solid var(--line);
 }
 .theme-modern .sidebar-head {
-  padding: 10px 14px;
+  /* 水平内边距统一为 16px（2026-10-23）：原为 14px，而下方搜索区 .pane-section
+     是 16px（theme-modern.css），两者左缘不齐 → 标题、搜索框、服务器列表
+     形成三级错位，是「呼吸间距有问题」的主因。统一后侧栏内所有区块左缘对齐。 */
+  padding: 10px 16px;
   border-bottom: 1px solid var(--line);
 }
 .theme-modern .sidebar-head-row { align-items: center; }
@@ -382,16 +385,21 @@
 .theme-modern .workspace-session-strip {
   display: flex;
   align-items: center;
-  padding: 0 10px;
+  /* 上下留呼吸（2026-10-23 修复 Windows「tab icon 贴边」）：
+     原先 padding 上下为 0，而页签自身 height:34px → 页签撑满整条，
+     icon/文字直接顶到条的上边缘，观感极挤。mac 那条规则额外给了 3px 才正常，
+     Windows/Linux 走的是本基础规则、因此只有 Windows 出问题。
+     改为上下对称 3px（3 + 34 + 3 = 40px），与 mac 一致，跨平台统一。 */
+  padding: 3px 10px;
   /* 分隔线软化（2026-10-21）：与 toolbar-panel 同理，混入面板色降低对比 */
   border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, var(--panel));
   background: var(--panel);
-  min-height: 34px;
+  min-height: 40px;
 }
 /* 空态占位条（2026-10-21）：无会话时也保留同高的一条，承担窗口拖拽区。
    与有 tab 时的高度/背景/下边框完全一致，避免布局跳动。 */
 .theme-modern .workspace-session-strip-empty {
-  min-height: 34px;
+  min-height: 40px;
 }
 .theme-modern.electron-macos-immersive .workspace-session-strip-empty {
   min-height: 40px;

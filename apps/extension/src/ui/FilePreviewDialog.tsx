@@ -15,6 +15,7 @@ import { CodeEditor } from "./CodeEditor";
 import type { FilePreviewResponse } from "./api.js";
 import { useEscapeToClose } from "./useEscapeToClose.js";
 import { formatBytes } from "./utils.js";
+import { formatKeyHint } from "./key-hints.js";
 
 type ArchiveEntry = NonNullable<FilePreviewResponse["archiveEntries"]>[number];
 
@@ -331,7 +332,7 @@ export function FilePreviewDialog(props: FilePreviewDialogProps) {
                         onSave();
                       }}
                     >
-                      {dialog.saving ? "保存中…" : "保存 ⌘S"}
+                      {dialog.saving ? "保存中…" : `保存 ${formatKeyHint("⌘S")}`}
                     </button>
                   </div>
                 ) : null}
@@ -407,7 +408,7 @@ export function FilePreviewDialog(props: FilePreviewDialogProps) {
         {!dialog.loading && !isStructuredPreview ? (
           <div className="preview-footer">
             <span className="preview-footer-note">
-              {dialog.readOnly ? "只读 · 大文件仅加载最后 1MB" : "可编辑文件：⌘S 保存回写远程"}
+              {dialog.readOnly ? "只读 · 大文件仅加载最后 1MB" : `可编辑文件：${formatKeyHint("⌘S")} 保存回写远程`}
             </span>
             <span className="preview-footer-spacer" />
             <span className="preview-footer-meta">UTF-8 · {eol} · Geist Mono 12px</span>
@@ -877,7 +878,7 @@ function ClassPreview({ dialog, theme, compact = false }: { dialog: PreviewDialo
             <button
               type="button"
               className="class-ide-search-tab"
-              title="搜索源码（Ctrl/⌘F）"
+              title={`搜索源码（${formatKeyHint("⌘F")}）`}
               onClick={openSourceSearch}
             >
               搜索源码

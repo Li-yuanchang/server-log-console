@@ -16,6 +16,8 @@ import type {
   BatchCommandRequest,
   BatchCommandResponse,
   ServerConnectionTestResponse,
+  ServerDraftConnectionTestRequest,
+  ServerDraftConnectionTestResponse,
   ServerCredentialSecret,
   ServerCredentialStatus,
   ServerRouteConfig,
@@ -428,6 +430,35 @@ export async function apiTestConnection(
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") {
       throw new Error(`连接测试超时（${Math.round(timeoutMs / 1000)} 秒未返回）。可重试，或检查该服务器网络/堡垒机配置。`);
+    }
+    throw error;
+  } finally {
+    globalThis.clearTimeout(timer);
+  }
+}
+
+/**
+ * 草稿连接测试（2026-10-23）：把设置中心表单里**当前填的值**直接交给网关连一次，
+ * 不需要先保存。网关侧不落库、不注册服务器，纯一次 SSH 探测。
+ * 超时 30s：网关内部 SSH 连接预算 20s，留余量避免前端先放弃而误报超时。
+ */
+export async function apiTestDraftConnection(
+  payload: ServerDraftConnectionTestRequest,
+  timeoutMs = 30_000
+): Promise<ServerDraftConnectionTestResponse> {
+  const controller = new AbortController();
+  const timer = globalThis.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await gatewayFetch(`${localServiceBase}/api/servers/test-draft`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: controller.signal
+    });
+    return await readPayload<ServerDraftConnectionTestResponse>(response, "连接测试失败");
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new Error(`连接测试超时（${Math.round(timeoutMs / 1000)} 秒未返回）。可检查主机、端口或网络是否可达。`);
     }
     throw error;
   } finally {

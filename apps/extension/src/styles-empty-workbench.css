@@ -479,7 +479,9 @@
 .empty-wb-steps::before {
   content: "";
   position: absolute;
-  left: 27px;
+  /* 与节点圆心精确对齐：padding-left 16px + 节点 24px/2 = 28px，
+     减去线自身宽度的 0.5px → 1px 线的中心正好落在 28px（原 27px 偏 0.5px） */
+  left: 27.5px;
   top: 24px;
   bottom: 24px;
   width: 1px;
@@ -522,14 +524,20 @@
   color: var(--accent);
   border-color: color-mix(in srgb, var(--accent) 30%, transparent);
 }
+/* 进行中节点：底色不透明 → 遮住时间线导轨（旧版 transparent 让导轨从圈心穿出，
+   看起来像「圈里有条竖线、数字不居中」，用户反馈 2026-10-05）。边框隐藏，
+   只留 spinner 环本身的描边。 */
 .empty-wb-step.is-wait .empty-wb-num {
   border-color: transparent;
-  background: transparent;
+  background: var(--panel);
 }
+/* 进行中 spinner 外径必须与数字圈一致（24px）：box-sizing:border-box 把 2px 边框算进外径，
+   否则 14+2×2=18px 比选中/默认圈（24px）小一圈（用户反馈 2026-10-05）。 */
 .empty-wb-step.is-wait .empty-wb-num::before {
   content: "";
-  width: 14px;
-  height: 14px;
+  box-sizing: border-box;
+  width: 24px;
+  height: 24px;
   border: 2px solid var(--line);
   border-top-color: var(--accent);
   border-radius: 50%;
