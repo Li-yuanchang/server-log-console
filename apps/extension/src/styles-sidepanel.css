@@ -263,10 +263,16 @@ body.extension-sidepanel .toolbar-panel {
   }
 }
 
-/* ---------- 7. 设置中心 v2（容器 ≤1023.9 收缩档，去宿主前缀） ----------
-   rail 164px +（conn-list 268 / pref-anchor 116）在窄容器里详情列只剩负空间。
-   收缩档：导轨横排置顶、连接清单 132px、偏好锚点 92px。 */
-@container slc-sp (max-width: 1023.9px) {
+/* ---------- 7. 设置中心 v2（容器 ≤767.9 收缩档，去宿主前缀） ----------
+   2026-10-23 修复「窗口变小后设置中心导航漂到顶部，很丑」：
+   原阈值 1023.9px 定得**太早** —— 主窗口 minWidth=800，用户把窗口拉到 1000 左右
+   就触发了「竖排导轨 → 横排置顶」的整体换向，而那个宽度下空间其实完全够用：
+     容器 1024px → 详情列 592px；800px → 368px；720px → 288px
+   真正开始拥挤要到 560px 左右（详情列 128px）。
+   故阈值降到 767.9px（低于窗口最小宽 800）：桌面端无论怎么缩都保持左侧竖排导轨，
+   只有浏览器扩展侧栏等真窄宿主（<768）才切成横排。
+   横排时补 flex-wrap，避免 4 个导航项在 200px 侧栏里被挤出容器。 */
+@container slc-sp (max-width: 767.9px) {
   .settings-workspace-v2 {
     flex-direction: column;
   }
@@ -274,6 +280,7 @@ body.extension-sidepanel .toolbar-panel {
   .settings-rail {
     flex: none;
     flex-direction: row;
+    flex-wrap: wrap;
     align-items: center;
     gap: 6px;
     padding: 8px 10px;

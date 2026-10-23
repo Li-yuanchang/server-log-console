@@ -1,26 +1,13 @@
 const { contextBridge, ipcRenderer, webUtils } = require("electron");
 
-/* 平台类（2026-10-23）：
-   - is-electron：通用 Electron 条件样式（沉浸式标题栏 padding 等）
-   - is-win32 / is-macos：按平台区分。Windows 用 titleBarOverlay 接管标题栏后，
-     网页内容会延伸到标题栏下方、被系统窗口按钮覆盖，需要按平台给内容让位。 */
-const addPlatformClasses = () => {
-  const cls = document.body.classList;
-  cls.add("is-electron");
-  cls.add(process.platform === "win32" ? "is-win32" : process.platform === "darwin" ? "is-macos" : "is-linux");
-};
-if (document.body) addPlatformClasses();
-else document.addEventListener("DOMContentLoaded", addPlatformClasses);
+// Mark body with is-electron class for conditional CSS (e.g. immersive titlebar padding)
+const addElectronClass = () => document.body.classList.add("is-electron");
+if (document.body) addElectronClass();
+else document.addEventListener("DOMContentLoaded", addElectronClass);
 
 contextBridge.exposeInMainWorld("electronAPI", {
-  /* 平台标识（2026-10-23）：供前端判断是否需要同步 Windows 标题栏配色。
-     renderer 侧 navigator.platform 在 Electron 32 已弃用且不一定可靠，
-     直接由主进程给权威值。 */
-  platform: process.platform,
   togglePin: () => ipcRenderer.invoke("toggle-pin"),
   getPin: () => ipcRenderer.invoke("get-pin"),
-  /* Windows 标题栏配色跟随 UI 主题（2026-10-23）；其它平台主进程直接返回 false */
-  setTitleBarOverlay: (payload) => ipcRenderer.invoke("slc:set-titlebar-overlay", payload),
   onPinChanged: (callback) => {
     ipcRenderer.on("pin-changed", (_event, pinned) => callback(pinned));
   },
