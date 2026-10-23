@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { FeedbackOverlays, type DownloadProgressState, type UploadProgressState } from "./FeedbackOverlays.js";
 import { FileContextMenu, type FileContextMenuState } from "./FileContextMenu.js";
+import { ContextMenuShell } from "./ContextMenuShell.js";
 import { FileBrowserActions } from "./FileBrowserActions.js";
 import { FileBrowserContentColumn } from "./FileBrowserContentColumn.js";
 import { FileBrowserGrid } from "./FileBrowserGrid.js";
@@ -3319,9 +3320,9 @@ export function App() {
   const openBlankContextMenu = useCallback((event: ReactMouseEvent<HTMLElement>) => {
     event.preventDefault();
     event.stopPropagation();
-    const x = Math.max(4, Math.min(event.clientX, window.innerWidth - 210));
-    const y = Math.max(4, Math.min(event.clientY, window.innerHeight - 260));
-    setBlankContextMenu({ x, y });
+    /* 不做估算式预夹紧（原 window.innerWidth-210 / innerHeight-260 是硬编码猜测）：
+       菜单真实高度由 ContextMenuShell 量测后再翻转/收敛，贴底右键不再越界。 */
+    setBlankContextMenu({ x: event.clientX, y: event.clientY });
   }, []);
 
   useEffect(() => {
@@ -3855,7 +3856,17 @@ export function App() {
               onImportFinalShell={importFromFinalShell}
               onRefreshServers={fetchServers}
             />
-            {!showServiceOfflineState && !showNoServerState && terminalPanelOpen && !terminalDetached ? (
+            {/* 终端已弹出独立小窗：内容区整体让位给「收回」占位卡（2026-10-21 修复）。
+                此前该占位卡渲染在 </section> 之外，成了 .main-panel 的多余子项 ——
+                既不替换内容、也不参与 grid 行模板，导致「小窗模式下日志预览仍然显示」
+                （用户反馈）。现作为内容区的首个分支，与终端视图 / 日志视图互斥。 */}
+            {terminalDetached ? (
+              <div className="viewer-pip-placeholder">
+                <PipExpandIcon size={24} strokeWidth={1.5} />
+                <strong>终端已弹出到独立小窗</strong>
+                <button className="ghost-button" type="button" onClick={() => void restoreEmbeddedTerminalWindow()}>收回</button>
+              </div>
+            ) : !showServiceOfflineState && !showNoServerState && terminalPanelOpen ? (
               /* 终端工作台（五段式容器）：标签组 / 分屏 / 查找 / 菜单 / 状态栏均在容器内；
                  分屏双轨（terminal-workarea-split 顶条 + TerminalSplitView 直挂）已拆除 */
               <>
@@ -3915,7 +3926,7 @@ export function App() {
                 time={watermarkTimeLabel}
               />
               </>
-            ) : !showServiceOfflineState && !showNoServerState && (
+            ) : !showServiceOfflineState && !showNoServerState && !terminalDetached && (
               <>
                 {(!isFileMode || pip.isPip) ? (
                 <>
@@ -4851,14 +4862,6 @@ export function App() {
             )}
           </section>
 
-          {terminalDetached ? (
-            <div className="viewer-pip-placeholder">
-              <PipExpandIcon size={24} strokeWidth={1.5} />
-              <strong>终端已弹出到独立小窗</strong>
-              <button className="ghost-button" type="button" onClick={() => void restoreEmbeddedTerminalWindow()}>收回</button>
-            </div>
-          ) : null}
-
           {/* 侧栏移动档连接概览：原底部 sp-statusbar（400px 下过挤）已移除，
               概览并入顶部 srv-chip 选服层（ServerPickerOverlay.overview）——2026-10-04 */}
 
@@ -5108,14 +5111,12 @@ export function App() {
 
       {/* 空白处右键菜单：目录级操作（用户反馈 2026-09-30）。样式复用 .context-menu 体系 */}
       {blankContextMenu ? (
-        <div className="context-menu-backdrop">
-          <div
-            ref={blankContextMenuRef}
-            className="context-menu"
-            style={{ left: blankContextMenu.x, top: blankContextMenu.y }}
-            onClick={(event) => event.stopPropagation()}
-            onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); }}
-          >
+        <ContextMenuShell
+          x={blankContextMenu.x}
+          y={blankContextMenu.y}
+          menuRef={blankContextMenuRef}
+          contentKey="blank-dir-actions"
+        >
             <div
               role="button"
               className="context-menu-item"
@@ -5152,8 +5153,7 @@ export function App() {
             >
               上传目录
             </div>
-          </div>
-        </div>
+        </ContextMenuShell>
       ) : null}
 
       <WorkspaceTabContextMenu

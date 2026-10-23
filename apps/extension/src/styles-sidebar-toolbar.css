@@ -713,6 +713,12 @@ button:disabled {
 
 .sidebar-empty-box {
   align-content: start;
+  /* 图标水平居中（2026-10-23 用户反馈「未关联服务器的占位符 icon 没有水平居中」）：
+     .empty-box 是 display:grid，而 text-align:center 只对行内文字生效、对 grid 子项无效；
+     图标是定宽 44px 的 span，在网格里按 justify-self 默认值(stretch/start) 贴左，
+     于是「文字居中、图标偏左」。补 justify-items:center 让子项一并居中。 */
+  justify-items: center;
+  text-align: center;
   min-height: 84px;
 }
 

@@ -502,11 +502,12 @@ export function useLogViewer(params: LogViewerParams): LogViewerAPI {
   }
 
   function openContextMenu(entry: LogFileEntry, x: number, y: number) {
-    const menuWidth = 180;
-    const menuHeight = entry.kind === "file" ? 260 : 190;
-    const nextX = Math.min(Math.max(8, x), Math.max(8, window.innerWidth - menuWidth - 8));
-    const nextY = Math.min(Math.max(8, y), Math.max(8, window.innerHeight - menuHeight - 8));
-    callbacks.setContextMenu({ x: nextX, y: nextY, entry });
+    /* 定位交给 FileContextMenu 按真实尺寸量测后再翻转/收敛。
+       这里刻意不做「按估算高度预先 clamp」——文件菜单实际 11 项（真实高度约 340~400px），
+       而原估算 260/190 远小于真实值：先把 y 夹到一个「看似安全」的位置，组件内再量测时
+       基准已经被压变形，贴底右键仍旧越界（用户反馈的遮盖问题根因）。
+       保留原始鼠标坐标，尺寸相关判断只由一处负责。 */
+    callbacks.setContextMenu({ x, y, entry });
   }
 
   async function runSearch() {

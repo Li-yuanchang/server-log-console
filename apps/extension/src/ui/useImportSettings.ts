@@ -85,6 +85,22 @@ export function useImportSettings(deps: {
     const toolLabel = toolId === "finalshell" ? "FinalShell" : toolId === "xshell" ? "Xshell" : toolId;
     await withBusy(`正在导入 ${toolLabel} 连接...`, async () => {
       const payload = await apiImportFromTool(toolId);
+
+      /* 「找不到目录」或「目录存在但 0 条连接」都不算成功（2026-10-23 用户反馈
+         「没装 FinalShell 也提示导入成功」）。
+         注意必须 throw 而非 return：withBusy 的 successMessage 在任务**正常返回**时
+         会无条件弹「已导入 FinalShell 连接」——提前 return 仍会显示成功提示。
+         throw 让 withBusy 走 catch 分支，统一弹出错误 toast 并给出原因；
+         同时不写空列表，避免把用户已有服务器覆盖成空。 */
+      if (!payload.resolvedPath || payload.servers.length === 0) {
+        const detail = !payload.resolvedPath
+          ? `未找到 ${toolLabel} 配置目录。已检查：${payload.searchedPaths.join(" | ")}`
+          : `已找到配置目录 ${payload.resolvedPath}，但其中没有可导入的连接`;
+        setImportStatus(`未导入任何服务器：${detail}`);
+        setImportPath(detail);
+        throw new Error(`${detail}。可在设置中心指定配置目录，或手动新增连接。`);
+      }
+
       setServers(payload.servers);
       selectServerById(payload.servers[0]?.id ?? "");
       setFilePath("");

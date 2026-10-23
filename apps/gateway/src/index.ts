@@ -205,6 +205,16 @@ app.get("/api/import/finalshell", async (_req, res) => {
     const strategy = importResolver.resolve("finalshell");
     const preferredPath = localConfigService.getFinalShellConfiguredPath() || undefined;
     const result = await strategy.importServers(preferredPath);
+    /* 未找到配置目录时必须报错（2026-10-23 用户反馈「没装 FinalShell 也提示导入成功」）：
+       原实现无论是否找到都会落库 + markImported，于是 resolvedPath 为 null 时返回
+       200 + 空 servers —— 前端据此提示「导入成功」；更严重的是会把用户**已有**的
+       服务器列表覆盖成空数组。现在提前返回 404，既不落库也不伪装成功。 */
+    if (!result.resolvedPath) {
+      res.status(404).json({
+        message: `未找到 FinalShell 配置目录。已检查：${result.searchedPaths.join(" | ")}。若 FinalShell 装在自定义位置，请在设置中心填写配置目录后重试。`
+      });
+      return;
+    }
     await localConfigService.setImportedCredentials(result.credentials);
     await localConfigService.setImportedServers(result.servers);
     serverRegistryService.setImportedServers(result.servers);
@@ -260,6 +270,14 @@ app.get("/api/import/xshell", async (_req, res) => {
   try {
     const strategy = importResolver.resolve("xshell");
     const result = await strategy.importServers();
+    /* 与 finalshell 同规则（2026-10-23）：找不到配置目录时返回 404，
+       不再落库、不返回 200 空列表（否则前端会提示「导入成功」并清空已有列表）。 */
+    if (!result.resolvedPath) {
+      res.status(404).json({
+        message: `未找到 Xshell 配置目录。已检查：${result.searchedPaths.join(" | ")}。`
+      });
+      return;
+    }
     await localConfigService.setImportedCredentials(result.credentials);
     await localConfigService.setImportedServers(result.servers);
     serverRegistryService.setImportedServers(result.servers);

@@ -632,6 +632,19 @@
   height: var(--ctl-h);
   padding: 0 9px;
   font-size: 11px;
+  /* 2026-10-23 修复「＋ 新增」两个观感问题：
+     ① 字重：button 基类继承 500，但 .settings-primary-action 又抬到 550，
+        而这个按钮只是清单里的普通操作入口，不需要主按钮那种加粗 → 归一为 500。
+     ② 垂直居中：原先只给了 height + padding（0 9px），没有 display/align-items/line-height；
+        button 默认 inline-block，显式定高后文字按默认行高贴顶 → 视觉偏上。
+        改为 inline-flex + center，文字/全角＋号在 28px 盒内严格居中。
+     本规则特异性 (0,4,0)，高于 .settings-exclusive .ghost-button.settings-primary-action
+     的 (0,3,0)，可稳定覆盖，无需 !important。 */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  font-weight: 500;
 }
 
 /* 头部 ⋯ 菜单（原型头部省略号按钮） */
