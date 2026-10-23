@@ -129,11 +129,14 @@ function buildPlatformGroups(version, productName) {
       label: "Windows",
       manifest: "latest.yml",
       buildHint: "npm --prefix apps/electron run dist:win",
+      /* blockmap 标记为可选：nsis 配置 differentialPackage: false（与 vrc 一致）时
+         electron-builder 不产出 win 侧 blockmap，Windows 走全量更新，
+         因此缺失属预期，不该刷 WARN。 */
       patterns: [
         `*${version}*.exe`,
-        `*${version}*.exe.blockmap`,
+        { pattern: `*${version}*.exe.blockmap`, optional: true },
         `${productName}-${version}-win.zip`,
-        `${productName}-${version}-win.zip.blockmap`,
+        { pattern: `${productName}-${version}-win.zip.blockmap`, optional: true },
       ],
     },
     {
@@ -167,10 +170,14 @@ async function matchGroupFiles(group, distFiles) {
   const manifestHit = distFiles.find((name) => manifestRe.test(name));
   const matched = [];
   const missedPatterns = [];
-  for (const pattern of group.patterns) {
+  for (const entry of group.patterns) {
+    /* 模式可写成字符串，或 { pattern, optional } —— optional 的缺失不报 WARN
+       （如 nsis differentialPackage:false 时不产出的 win blockmap）。 */
+    const pattern = typeof entry === "string" ? entry : entry.pattern;
+    const optional = typeof entry === "string" ? false : Boolean(entry.optional);
     const re = globToRegExp(pattern);
     const hits = distFiles.filter((name) => re.test(name));
-    if (hits.length === 0) missedPatterns.push(pattern);
+    if (hits.length === 0 && !optional) missedPatterns.push(pattern);
     matched.push(...hits);
   }
   return { manifestHit, matched, missedPatterns };
