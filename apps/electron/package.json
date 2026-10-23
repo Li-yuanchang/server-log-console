@@ -14,14 +14,15 @@
     "prepare-gateway": "node prepare-gateway.cjs",
     "prepare-update-config": "node prepare-update-config.cjs",
     "prepare-release-notes": "node prepare-release-notes.cjs",
+    "clean-win-output": "node clean-win-output.cjs",
     "install:mac-app": "node install-mac-app.cjs",
     "predist": "node bump-version.cjs && node prepare-gateway.cjs && node prepare-update-config.cjs && node prepare-release-notes.cjs",
     "predist:mac": "node bump-version.cjs && node prepare-gateway.cjs && node prepare-update-config.cjs && node prepare-release-notes.cjs",
-    "predist:win": "node bump-version.cjs && node prepare-gateway.cjs && node prepare-update-config.cjs && node prepare-release-notes.cjs",
+    "predist:win": "node clean-win-output.cjs && node bump-version.cjs && node prepare-gateway.cjs && node prepare-update-config.cjs && node prepare-release-notes.cjs",
     "predist:linux": "node bump-version.cjs && node prepare-gateway.cjs && node prepare-update-config.cjs && node prepare-release-notes.cjs",
     "dist": "node run-clean-electron-env.cjs electron-builder",
     "dist:mac": "node run-clean-electron-env.cjs electron-builder --mac",
-    "dist:win": "node run-clean-electron-env.cjs electron-builder --win",
+    "dist:win": "node run-clean-electron-env.cjs electron-builder --win --x64",
     "dist:linux": "node run-clean-electron-env.cjs electron-builder --linux",
     "release:mac": "npm run dist:mac && npm run install:mac-app"
   },
@@ -82,9 +83,28 @@
     "win": {
       "icon": "resources/icon.ico",
       "target": [
-        "nsis",
-        "zip"
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64"
+          ]
+        }
       ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "differentialPackage": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "SLC"
     },
     "linux": {
       "icon": "resources/icons",
