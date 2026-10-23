@@ -4,7 +4,7 @@ import type { ManualServerDraft, SettingsWorkspaceView } from "./ConnectionSetti
 import type { WorkspaceSession, WorkspaceSessionState } from "./types.js";
 import type { ConfirmDialogState } from "./ModalDialogs.js";
 import { apiGetServers, apiDeleteServer, apiUpsertManualServer } from "./api.js";
-import { createManualServerDraft, parseManualServerTags, buildWorkspaceSession } from "./app-utils.js";
+import { createManualServerDraft, parseManualServerGroupPath, parseManualServerTags, buildWorkspaceSession } from "./app-utils.js";
 
 export type ServerManagementAPI = {
   fetchServers: () => Promise<ServerSummary[]>;
@@ -195,6 +195,7 @@ export function useServerManagement(deps: {
         profile: manualServerDraft.profile,
         connectionKind: manualServerDraft.connectionKind,
         tags: parseManualServerTags(manualServerDraft.tagsText),
+        groupPath: parseManualServerGroupPath(manualServerDraft.groupPathText),
         credential: manualServerDraft.password || manualServerDraft.privateKey
           ? {
               username: manualServerDraft.username.trim() || undefined,

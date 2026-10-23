@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { Plus } from "lucide-react";
+import { formatKeyHint } from "./key-hints.js";
 import {
   SHORTCUT_COMMANDS_STORAGE_KEY,
   deleteShortcutCommand,
@@ -151,7 +152,7 @@ export function TerminalQuickBar(props: TerminalQuickBarProps) {
           管理
         </button>
       </div>
-      <span className="terminal-qbar-hint">单击发送 · ⌘点仅填入 · 右键编辑</span>
+      <span className="terminal-qbar-hint">单击发送 · {formatKeyHint("⌘")}点仅填入 · 右键编辑</span>
       {menu && menuCommand ? (
         <div
           ref={menuRef}

@@ -194,6 +194,15 @@ export class LocalConfigService {
 
   async saveManualServer(request: ManualServerUpsertRequest): Promise<ServerSummary> {
     const connectionMeta = describeManualConnection(request.connectionKind);
+    /* 手动连接也支持分组（2026-10-23 用户反馈「连接里的分组咋设置的…不能自定义」）：
+       此前只有 FinalShell/Xshell 导入会带 groupPath，手动连接永远落在「未分组」。
+       归一化：段内若还含 "/" 也再拆一次 —— 前端用 " / " 把 groupPath 拼成展示文本，
+       若某一段自身带斜杠（如 "华东 / web"），回读时会被误解成多出一层。
+       空数组则视为未分组并省略该字段。 */
+    const groupPath = (request.groupPath || [])
+      .flatMap((segment) => segment.split(/[/\\]/))
+      .map((segment) => segment.trim())
+      .filter(Boolean);
     const server: PersistedServerRecord = {
       id: request.id || `manual:${Date.now()}`,
       name: request.name,
@@ -204,6 +213,7 @@ export class LocalConfigService {
       profile: request.profile || "custom",
       tags: request.tags?.length ? request.tags : ["manual"],
       source: "manual",
+      ...(groupPath.length ? { groupPath } : {}),
       connectionKind: connectionMeta.connectionKind,
       connectionHint: connectionMeta.connectionHint,
       cautionLabel: connectionMeta.cautionLabel

@@ -13,10 +13,20 @@ export function createManualServerDraft(server?: ServerSummary | null): ManualSe
     basePath: server?.basePath || "/var/log",
     profile: server?.profile || "custom",
     tagsText: server?.tags?.join(", ") || "",
+    groupPathText: server?.groupPath?.join(" / ") || "",
     connectionKind: server?.connectionKind === "bastion" || server?.connectionKind === "bastion-target" ? server.connectionKind : "direct",
     password: "",
     privateKey: ""
   };
+}
+
+/** 分组路径文本 → string[]：按 "/" 或 "\\" 分层，逐段去空白并丢弃空段。
+    "生产 / 华东 / " 与 "/生产/华东" 都会得到 ["生产","华东"]；空串得到 []（未分组）。 */
+export function parseManualServerGroupPath(groupPathText: string): string[] {
+  return groupPathText
+    .split(/[/\\]/)
+    .map((segment) => segment.trim())
+    .filter(Boolean);
 }
 
 export function parseManualServerTags(tagsText: string): string[] {

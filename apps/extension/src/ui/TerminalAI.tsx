@@ -10,6 +10,7 @@ import {
   assessCommand,
 } from "./ai-service.js";
 import type { AIConfig, AIMessage, ChatMessage } from "./ai-service.js";
+import { formatKeyHint } from "./key-hints.js";
 
 interface TerminalAIProps {
   serverId: string;
@@ -424,7 +425,7 @@ export function TerminalAI(props: TerminalAIProps) {
           {!configured && <span className="tai-badge-unconfigured">未配置</span>}
         </div>
         <div className="tai-header-actions">
-          <span className="chip tai-model-chip" title={`${config.model || "GLM-4"} · 快捷键 ⌘J`}>{modelChipLabel(config.model)}</span>
+          <span className="chip tai-model-chip" title={`${config.model || "GLM-4"} · 快捷键 ${formatKeyHint("⌘J")}`}>{modelChipLabel(config.model)}</span>
           <button
             type="button"
             className="tai-hdr-btn tai-hdr-btn-chat"

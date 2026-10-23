@@ -1,6 +1,7 @@
 import type { LogFileEntry } from "@server-log-console/shared";
 import type { RefObject } from "react";
 import { ContextMenuShell } from "./ContextMenuShell.js";
+import { formatKeyHint } from "./key-hints.js";
 
 export interface FileContextMenuState {
   x: number;
@@ -70,7 +71,7 @@ export function FileContextMenu(props: FileContextMenuProps) {
         {isFile ? (
           <div role="button" className="context-menu-item" onClick={() => { onClose(); onDownload(menu.entry.path); }}>
             下载
-            <span className="context-menu-key">⌘D</span>
+            <span className="context-menu-key">{formatKeyHint("⌘D")}</span>
           </div>
         ) : null}
         <div className="context-menu-separator" role="separator" />

@@ -2,6 +2,7 @@ import { X } from "lucide-react";
 import type { WorkspaceSession } from "./types.js";
 import type { WorkspaceTabDragState, WorkspaceTabDragAPI } from "./useWorkspaceTabDrag.js";
 import type { WorkspaceTabMenuState } from "./WorkspaceTabContextMenu.js";
+import { formatKeyHint } from "./key-hints.js";
 
 export type WorkspaceSessionTabsProps = {
   workspaceSessions: WorkspaceSession[];
@@ -96,13 +97,13 @@ export function WorkspaceSessionTabs(props: WorkspaceSessionTabsProps) {
         <button
           type="button"
           className="workspace-session-add"
-          title="打开服务器（⌘K）"
+          title={`打开服务器（${formatKeyHint("⌘K")}）`}
           aria-label="新建会话"
           onClick={onOpenPalette}
         >
           ＋
         </button>
-        <span className="workspace-session-hint"><span className="kbd">⌘1-9</span> 切换会话</span>
+        <span className="workspace-session-hint"><span className="kbd">{formatKeyHint("⌘1-9")}</span> 切换会话</span>
       </div>
     </div>
   );

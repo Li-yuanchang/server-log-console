@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { formatKeyHint } from "./key-hints.js";
 
 /* 终端底部状态栏（对应原型 T1 常规连接态 / T4 断线重连 / T8 未连接空态）。
    结构：左 = 状态点 + 连接文案 + 主机 + 时长（断线时：红点 + 原因 + 自动重试 n/N + 立即重连）；
@@ -195,7 +196,7 @@ export function TerminalStatusBar(props: TerminalStatusBarProps) {
       <span className="terminal-statusbar-right">
         <span className="terminal-statusbar-mono">UTF-8</span>
         <span className="terminal-statusbar-sep" />
-        <span className="terminal-statusbar-hint">⌘F 查找</span>
+        <span className="terminal-statusbar-hint">{formatKeyHint("⌘F")} 查找</span>
       </span>
     </div>
   );

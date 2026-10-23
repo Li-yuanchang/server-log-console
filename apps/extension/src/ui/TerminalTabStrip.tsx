@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { JSX, ReactNode } from "react";
 import { Plus, X } from "lucide-react";
+import { formatKeyHint } from "./key-hints.js";
 
 /**
  * 终端标签条（对应原型 T2 终端内多标签，含两层标签规则：标签组属于当前工作区）。
@@ -139,7 +140,7 @@ export function TerminalTabStrip({
           aria-label="新建终端"
           aria-disabled={!canNew}
           className={canNew ? "terminal-tabs-new" : "terminal-tabs-new terminal-tabs-new-disabled"}
-          title="新建终端 ⌘T"
+          title={`新建终端 ${formatKeyHint("⌘T")}`}
           onClick={() => {
             if (canNew) onNew();
           }}
@@ -164,7 +165,7 @@ export function TerminalTabStrip({
             onClick={() => runMenu(() => onClose(menu.tabId))}
           >
             关闭
-            <span className="terminal-tabs-menu-key">⌘W</span>
+            <span className="terminal-tabs-menu-key">{formatKeyHint("⌘W")}</span>
           </div>
           {onCloseOthers ? (
             <div

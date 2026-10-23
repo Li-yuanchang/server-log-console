@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
-import { ChevronLeft, MoreHorizontal, Terminal, Trash2 } from "lucide-react";
+import { createPortal } from "react-dom";
+import { ChevronDown, ChevronLeft, Eye, EyeOff, MoreHorizontal, Terminal, Trash2 } from "lucide-react";
 import type { JumpServerAssetOption, LogProfile, ServerConnectionKind, ServerCredentialStatus, ServerSummary } from "@server-log-console/shared";
 import { looksLikeJumpServer } from "./terminal-utils.js";
 import { readDirectoryHistory } from "./storage.js";
+import { apiTestConnection, apiTestDraftConnection } from "./api.js";
 import { ThemedSelect } from "./ThemedSelect.js";
 import type { SlcDesktopUpdateState } from "../types/desktop-update.js";
 import { UpdateCenterPanel, type DesktopUpdateCheckLogEntry } from "./UpdateCenterPanel.js";
@@ -32,6 +34,9 @@ export interface ManualServerDraft {
   basePath: string;
   profile: LogProfile;
   tagsText: string;
+  /** 分组路径文本（"生产 / 华东"）；空 = 未分组。手动连接原先没有分组字段，
+      所以手动新增的服务器永远落在「未分组」里（2026-10-23 用户反馈）。 */
+  groupPathText: string;
   connectionKind: ServerConnectionKind;
   password: string;
   privateKey: string;
@@ -494,8 +499,78 @@ export function ConnectionSettingsWorkspace(props: Props) {
      纯导航状态，非宽度分支——宽度判断只发生在 CSS 容器查询里。 */
   const [mobileShowDetail, setMobileShowDetail] = useState(false);
   const [currentAnchor, setCurrentAnchor] = useState(PREF_ANCHORS[0].id);
+  /* 密码 / 私钥「明文可见」开关（2026-10-23 用户需求：加可查看小眼睛）。
+     默认均为 false（掩码），仅用户主动点击才明文 —— 私钥原先直接明文可读，
+     现在默认掩码更安全；切换只在本地视图，不影响存盘内容。 */
+  const [passwordVisible, setPasswordVisible] = useState(false);
+  const [privateKeyVisible, setPrivateKeyVisible] = useState(false);
+  /* 分组输入的下拉开关 + 草稿测试连接状态（2026-10-23）。
+     分组用「可输入的下拉」：既能选已有分组（含导入的），也能直接敲新路径。
+     菜单走 portal + fixed（同 ThemedSelect）—— 表单容器 .conn-detail-body 有
+     overflow-y:auto，行内绝对定位的菜单会被滚动容器裁切。 */
+  const [groupMenuOpen, setGroupMenuOpen] = useState(false);
+  const [groupMenuCoords, setGroupMenuCoords] = useState<{ x: number; y: number; w: number } | null>(null);
+  const [draftTestState, setDraftTestState] = useState<{
+    status: "idle" | "testing" | "ok" | "fail";
+    message: string;
+  }>({ status: "idle", message: "" });
   const backgroundImageInputRef = useRef<HTMLInputElement | null>(null);
   const prefScrollRef = useRef<HTMLDivElement | null>(null);
+  const groupFieldRef = useRef<HTMLDivElement | null>(null);
+
+  /* 分组菜单锚点：按输入行真实位置定位，放不下时向上翻。 */
+  const updateGroupMenuCoords = () => {
+    const rect = groupFieldRef.current?.querySelector<HTMLElement>(".conn-group-input")?.getBoundingClientRect();
+    if (!rect) return;
+    const menuMaxHeight = 216;
+    const below = window.innerHeight - rect.bottom;
+    const flipUp = below < menuMaxHeight + 8 && rect.top > menuMaxHeight + 8;
+    setGroupMenuCoords({
+      x: rect.left,
+      y: flipUp ? rect.top - menuMaxHeight - 4 : rect.bottom + 4,
+      w: rect.width
+    });
+  };
+
+  const openGroupMenu = () => {
+    updateGroupMenuCoords();
+    setGroupMenuOpen(true);
+  };
+
+  /* 分组下拉的关闭：点外部 / Esc（与 ThemedSelect 行为一致）。
+     不用 input 的 onBlur —— 点候选项时 blur 会先触发，导致点不到选项。 */
+  useEffect(() => {
+    if (!groupMenuOpen) return;
+    const onPointerDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (groupFieldRef.current?.contains(target)) return;
+      if ((target as HTMLElement).closest?.(".conn-group-menu")) return;
+      setGroupMenuOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setGroupMenuOpen(false);
+    };
+    /* 滚动/改窗口尺寸时直接收起：portal 是 fixed，跟着滚动会脱离输入框。 */
+    const onScroll = () => setGroupMenuOpen(false);
+    const onResize = () => setGroupMenuOpen(false);
+    document.addEventListener("mousedown", onPointerDown, true);
+    document.addEventListener("keydown", onKeyDown);
+    window.addEventListener("scroll", onScroll, true);
+    window.addEventListener("resize", onResize);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown, true);
+      document.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("scroll", onScroll, true);
+      window.removeEventListener("resize", onResize);
+    };
+  }, [groupMenuOpen]);
+
+  /* 切换编辑对象（新增 ⇄ 编辑某台，或换另一台）时清掉上一次的测试结果，
+     避免把 A 的「测试通过」误读成 B 的结论。 */
+  const draftIdForTest = props.connectionSection.draft.id;
+  useEffect(() => {
+    setDraftTestState({ status: "idle", message: "" });
+  }, [draftIdForTest]);
 
   const selectedServer = props.currentServerSection.selectedServer;
   const credentialStatus = props.currentServerSection.credentialStatus;
@@ -542,8 +617,11 @@ export function ConnectionSettingsWorkspace(props: Props) {
   const normalizedFilter = listFilter.trim().toLowerCase();
   const listServers = props.connectionSection.managedServers.filter((server) => {
     if (!normalizedFilter) return true;
+    /* 分组名也参与检索（2026-10-23）：分组可自定义后，用户会想直接按组名筛机器。
+       与侧栏 useFileBrowserComputed 的 filteredGroupedServers 口径保持一致。 */
     return server.name.toLowerCase().includes(normalizedFilter)
       || `${server.username}@${server.host}`.toLowerCase().includes(normalizedFilter)
+      || (server.groupPath?.join(" / ") || "").toLowerCase().includes(normalizedFilter)
       || server.tags.some((tag) => tag.toLowerCase().includes(normalizedFilter));
   });
   const listGroups: Array<[string, ServerSummary[]]> = (() => {
@@ -560,6 +638,81 @@ export function ConnectionSettingsWorkspace(props: Props) {
     (server) => server.id === (pickedListId || selectedServer?.id || "")
   ) ?? null;
   const viewingCurrentServer = Boolean(activeListServer && selectedServer && activeListServer.id === selectedServer.id);
+
+  /* 分组候选（2026-10-23）：从现有服务器（含 FinalShell/Xshell 导入）里收集已用分组路径，
+     供表单「分组」下拉选择。导入分组就这样被复用，用户也能手打新路径自建分组。 */
+  const knownGroupOptions = (() => {
+    const names = new Set<string>();
+    for (const server of props.connectionSection.managedServers) {
+      const path = server.groupPath?.join(" / ").trim();
+      if (path) names.add(path);
+    }
+    return [...names].sort((a, b) => a.localeCompare(b, "zh-CN"));
+  })();
+  const draftGroupText = props.connectionSection.draft.groupPathText;
+  const filteredGroupOptions = knownGroupOptions.filter(
+    (name) => !draftGroupText.trim() || name.toLowerCase().includes(draftGroupText.trim().toLowerCase())
+  );
+  const draftGroupAlreadyKnown = knownGroupOptions.includes(draftGroupText.trim());
+
+  /* 草稿测试连接（2026-10-23 用户反馈「保存链接前面少一个测试的按钮」）：
+     默认用表单当前填的主机/端口/账号/密码或私钥真连一次，不需要先保存。
+     编辑已保存的手动连接时，若密码/私钥留空，才回落用「已存凭证」测——但仅当
+     主机/端口/用户名都没改：否则测的是旧地址，会给出误导性的「通过」。
+     只写本地状态，不改任何草案内容。 */
+  const handleTestDraft = async () => {
+    const { draft } = props.connectionSection;
+    const host = draft.host.trim();
+    if (!host) {
+      setDraftTestState({ status: "fail", message: "请先填写主机地址。" });
+      return;
+    }
+    const port = Number(draft.port.trim() || "22");
+    const username = draft.username.trim() || "root";
+    const hasSecretInput = Boolean(draft.password || draft.privateKey);
+
+    /* 编辑态：判断表单是否仍指向「已保存的那台」。改过地址就只能按新值测。 */
+    const savedServer = draft.id
+      ? props.connectionSection.managedServers.find((server) => server.id === draft.id) ?? null
+      : null;
+    const sameTarget = Boolean(
+      savedServer && savedServer.host === host && savedServer.port === port && savedServer.username === username
+    );
+
+    if (!hasSecretInput) {
+      if (!savedServer) {
+        setDraftTestState({ status: "fail", message: "请先填写密码或私钥再测试。" });
+        return;
+      }
+      if (!sameTarget) {
+        setDraftTestState({
+          status: "fail",
+          message: "主机、端口或用户名已改动，已保存的凭证不再适用，请填入密码或私钥后再测试。"
+        });
+        return;
+      }
+    }
+
+    setDraftTestState({ status: "testing", message: "正在连接…" });
+    try {
+      const result = hasSecretInput
+        ? await apiTestDraftConnection({
+            host,
+            port,
+            username,
+            password: draft.password || undefined,
+            privateKey: draft.privateKey || undefined,
+            directoryPath: draft.basePath.trim() || "/"
+          })
+        : await apiTestConnection(draft.id, draft.basePath.trim() || "/");
+      setDraftTestState({ status: "ok", message: result.message });
+    } catch (error) {
+      setDraftTestState({
+        status: "fail",
+        message: error instanceof Error ? error.message : "连接测试失败"
+      });
+    }
+  };
 
   /* S10：清单选中任何服务器都读取其凭证状态——凭证编辑不再要求先连接 */
   const activeListServerId = activeListServer?.id || "";
@@ -850,14 +1003,39 @@ export function ConnectionSettingsWorkspace(props: Props) {
                     <div className="settings-inline-actions">
                       <button className="ghost-button" type="button" onClick={() => {
                         props.connectionSection.onResetDraft();
+                        setDraftTestState({ status: "idle", message: "" });
                         setDetailPane("detail");
                       }}>取消</button>
+                      {/* 测试连接（2026-10-23 用户反馈）：放在「保存连接」前面，
+                          用表单当前值真连一次，不满意可以直接不保存。 */}
+                      <button
+                        className="ghost-button"
+                        type="button"
+                        onClick={() => { void handleTestDraft(); }}
+                        disabled={draftTestState.status === "testing" || props.isBusy || !props.connectionSection.draft.host.trim()}
+                        title="用当前填写的主机、端口、账号与密码/私钥立即测试一次，不需要先保存"
+                      >
+                        {draftTestState.status === "testing" ? "测试中…" : "测试连接"}
+                      </button>
                       <button className="ghost-button settings-primary-action" type="button" onClick={() => {
                         props.connectionSection.onSaveDraft();
                         setDetailPane("detail");
                       }} disabled={!props.connectionSection.canSaveDraft || props.isBusy}>保存连接</button>
                     </div>
                   </div>
+                  {draftTestState.status !== "idle" ? (
+                    <div
+                      className={`settings-draft-test settings-draft-test-${draftTestState.status}`}
+                      role={draftTestState.status === "fail" ? "alert" : "status"}
+                    >
+                      <strong>
+                        {draftTestState.status === "testing"
+                          ? "正在测试连接"
+                          : draftTestState.status === "ok" ? "连接测试通过" : "连接测试失败"}
+                      </strong>
+                      <span>{draftTestState.message}</span>
+                    </div>
+                  ) : null}
                   <div className="settings-form-grid settings-form-grid-two">
                     <label className="settings-field">
                       <span>名称</span>
@@ -903,14 +1081,123 @@ export function ConnectionSettingsWorkspace(props: Props) {
                       <span>标签</span>
                       <input value={props.connectionSection.draft.tagsText} onChange={(event) => props.connectionSection.onChangeDraft({ tagsText: event.target.value })} placeholder="prod, web, jump" />
                     </label>
-                    <label className="settings-field settings-field-span-2">
+                    {/* 分组（2026-10-23 用户反馈「分组咋设置的…咋不能自定义」）：
+                        可输入的下拉 —— 既能挑已有分组（导入的也在列表里），也能直接敲新路径。
+                        用 "/" 表示层级；留空即「未分组」。
+                        菜单用 portal 渲染到 body（同 ThemedSelect）：表单容器 .conn-detail-body
+                        是 overflow-y:auto，行内绝对定位会被裁切。 */}
+                    <div className="settings-field settings-field-span-2 conn-group-field" ref={groupFieldRef}>
+                      <span>分组</span>
+                      <div className="conn-group-input">
+                        <input
+                          value={props.connectionSection.draft.groupPathText}
+                          onChange={(event) => {
+                            props.connectionSection.onChangeDraft({ groupPathText: event.target.value });
+                            if (!groupMenuOpen) openGroupMenu();
+                          }}
+                          onFocus={() => { if (!groupMenuOpen) openGroupMenu(); }}
+                          placeholder="留空即未分组，用 / 分层：生产 / 华东"
+                          spellCheck={false}
+                        />
+                        <button
+                          type="button"
+                          className="settings-secret-toggle"
+                          onClick={() => (groupMenuOpen ? setGroupMenuOpen(false) : openGroupMenu())}
+                          title={groupMenuOpen ? "收起已有分组" : "选择已有分组"}
+                          aria-label={groupMenuOpen ? "收起已有分组" : "选择已有分组"}
+                          aria-expanded={groupMenuOpen}
+                        >
+                          <ChevronDown size={13} strokeWidth={1.8} />
+                        </button>
+                      </div>
+                      <span className="conn-group-hint">
+                        {!draftGroupText.trim()
+                          ? "留空 → 归入「未分组」"
+                          : draftGroupAlreadyKnown
+                            ? "复用已有分组"
+                            : `将新建分组「${draftGroupText.trim()}」`}
+                      </span>
+                      {groupMenuOpen && groupMenuCoords ? createPortal(
+                        <div className="conn-group-menu" role="listbox" style={{
+                          position: "fixed",
+                          left: `${groupMenuCoords.x}px`,
+                          top: `${groupMenuCoords.y}px`,
+                          width: `${groupMenuCoords.w}px`,
+                          zIndex: 9800
+                        }}>
+                          {filteredGroupOptions.length ? (
+                            filteredGroupOptions.map((name) => (
+                              <button
+                                key={name}
+                                type="button"
+                                role="option"
+                                aria-selected={draftGroupText.trim() === name}
+                                className={draftGroupText.trim() === name ? "conn-group-option conn-group-option-active" : "conn-group-option"}
+                                onClick={() => {
+                                  props.connectionSection.onChangeDraft({ groupPathText: name });
+                                  setGroupMenuOpen(false);
+                                }}
+                              >
+                                {name}
+                              </button>
+                            ))
+                          ) : (
+                            <span className="conn-group-empty">还没有已有分组，直接输入即可新建</span>
+                          )}
+                        </div>,
+                        document.body
+                      ) : null}
+                    </div>
+                    <div className="settings-field settings-field-span-2">
                       <span>密码</span>
-                      <input type="password" value={props.connectionSection.draft.password} onChange={(event) => props.connectionSection.onChangeDraft({ password: event.target.value })} placeholder="留空则不更新密码" />
-                    </label>
-                    <label className="settings-field settings-field-span-2">
+                      {/* 小眼睛（2026-10-23 用户需求）：默认掩码，点击切换明文。
+                          注意用 div 而非 label 包裹 —— label 会把内部按钮的点击
+                          转发给被标记控件（造成焦点跳动）。 */}
+                      <div className="settings-secret-field">
+                        <input
+                          type={passwordVisible ? "text" : "password"}
+                          value={props.connectionSection.draft.password}
+                          onChange={(event) => props.connectionSection.onChangeDraft({ password: event.target.value })}
+                          placeholder="留空则不更新密码"
+                          autoComplete="new-password"
+                          spellCheck={false}
+                        />
+                        <button
+                          type="button"
+                          className="settings-secret-toggle"
+                          onClick={() => setPasswordVisible((visible) => !visible)}
+                          title={passwordVisible ? "隐藏密码" : "显示密码"}
+                          aria-label={passwordVisible ? "隐藏密码" : "显示密码"}
+                          aria-pressed={passwordVisible}
+                        >
+                          {passwordVisible ? <EyeOff size={13} strokeWidth={1.8} /> : <Eye size={13} strokeWidth={1.8} />}
+                        </button>
+                      </div>
+                    </div>
+                    <div className="settings-field settings-field-span-2">
                       <span>私钥</span>
-                      <textarea value={props.connectionSection.draft.privateKey} onChange={(event) => props.connectionSection.onChangeDraft({ privateKey: event.target.value })} placeholder="可直接粘贴私钥内容" />
-                    </label>
+                      {/* 私钥原先直接明文可读；现默认掩码（类型切换由 CSS 的
+                          -webkit-text-security 实现 —— textarea 不支持 type=password），
+                          同样提供小眼睛切换。 */}
+                      <div className={`settings-secret-field settings-secret-field-textarea${privateKeyVisible ? " is-revealed" : ""}`}>
+                        <textarea
+                          value={props.connectionSection.draft.privateKey}
+                          onChange={(event) => props.connectionSection.onChangeDraft({ privateKey: event.target.value })}
+                          placeholder="可直接粘贴私钥内容"
+                          spellCheck={false}
+                        />
+                        <button
+                          type="button"
+                          className="settings-secret-toggle"
+                          onClick={() => setPrivateKeyVisible((visible) => !visible)}
+                          title={privateKeyVisible ? "隐藏私钥" : "显示私钥"}
+                          aria-label={privateKeyVisible ? "隐藏私钥" : "显示私钥"}
+                          aria-pressed={privateKeyVisible}
+                        >
+                          {privateKeyVisible ? <EyeOff size={13} strokeWidth={1.8} /> : <Eye size={13} strokeWidth={1.8} />}
+                        </button>
+                      </div>
+                    </div>
                   </div>
                   <div className="settings-note-box">
                     <strong>{connectionKindLabel(props.connectionSection.draft.connectionKind)}</strong>
@@ -943,6 +1230,7 @@ export function ConnectionSettingsWorkspace(props: Props) {
                           <span><span className="settings-info-key">用户名</span><span className="mono">{activeListServer.username}</span></span>
                           <span><span className="settings-info-key">类型</span><span>{connectionKindLabel(activeListServer.connectionKind)}</span></span>
                           <span><span className="settings-info-key">目录</span><span className="mono">{props.currentServerSection.connectionDirectory || "/"}</span></span>
+                          <span><span className="settings-info-key">分组</span><span>{activeListServer.groupPath?.join(" / ") || "未分组"}</span></span>
                           <span><span className="settings-info-key">来源</span><span>{sourceLabel(activeListServer.source)}</span></span>
                         </div>
                       </section>
@@ -1054,6 +1342,7 @@ export function ConnectionSettingsWorkspace(props: Props) {
                           <span>主机：{activeListServer.host}</span>
                           <span>端口：{activeListServer.port}</span>
                           <span>用户名：{activeListServer.username}</span>
+                          <span>分组：{activeListServer.groupPath?.join(" / ") || "未分组"}</span>
                           <span>日志目录：{activeListServer.basePath || "/"}</span>
                           <span>认证：{activeListServer.authType === "privateKey" ? "私钥" : activeListServer.authType === "password" ? "密码" : "未配置"}</span>
                           <span>说明：{activeListServer.connectionHint || "--"}</span>

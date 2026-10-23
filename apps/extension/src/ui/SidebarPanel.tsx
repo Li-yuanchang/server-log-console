@@ -135,10 +135,13 @@ export function SidebarPanel(props: SidebarPanelProps) {
           <div className="sidebar-head-title">
             <p className="eyebrow">日志控制台</p>
             <h1 className="topbar-title">
-              日志控制台
-              {/* 服务器统计移到标题右侧作副标题（2026-10-21，学 VRC「16 个连接」）：
-                  原先它挂在「服务器」小标题右侧，属于第二层级；移到主标题旁后
-                  一级信息区就能看到规模，列表区标题回归纯标签。 */}
+              {/* 标题文案按宿主区分（2026-10-23 用户反馈「Windows 标题栏已自带标题，
+                  内部还要保留吗」）：
+                  - Electron：窗口标题栏 / macOS 系统菜单栏 已经显示「日志控制台」，
+                    侧栏再写一遍是纯冗余、还白占一行高度 → 改为「服务器」，
+                    右侧原有的台数计数升为主体信息，既消除重复又有实际信息量。
+                  - 浏览器（扩展侧栏 / 普通标签页）：应用内标题是唯一身份标识，保留原名。 */}
+              {isElectron ? "服务器" : "日志控制台"}
               {servers.length > 0 ? <span className="sidebar-head-count">{servers.length} 台</span> : null}
             </h1>
           </div>
