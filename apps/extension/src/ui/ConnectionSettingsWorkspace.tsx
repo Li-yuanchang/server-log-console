@@ -10,6 +10,7 @@ import type { SlcDesktopUpdateState } from "../types/desktop-update.js";
 import { UpdateCenterPanel, type DesktopUpdateCheckLogEntry } from "./UpdateCenterPanel.js";
 import type { ToastState } from "./FeedbackOverlays.js";
 import type { MonoFontFamily, UiBackgroundLayer, UiDensity, UiFontFamily, UiMotionMode, UiThemePreset, UiToneMode, ThemePreset, TerminalColorScheme, TerminalColorSchemeId } from "./useUiTheme.js";
+import { monoFontFamilyValue } from "./useUiTheme.js";
 
 export type SettingsWorkspaceView = "connections" | "gateway" | "preferences" | "update";
 export type SettingsConnectionPane = "detail" | "form";
@@ -87,9 +88,8 @@ interface Props {
     onTerminalCursorStyleChange: (style: "block" | "bar" | "underline") => void;
     terminalCursorBlink: boolean;
     onTerminalCursorBlinkChange: (value: boolean) => void;
-    /* 终端背景跟随 UI 主题（true=主题 --shell / false=配色方案自带底色） */
-    terminalBgFollowTheme: boolean;
-    onTerminalBgFollowThemeChange: (value: boolean) => void;
+    /* 「跟随主题」卡预览色：主题 shell 底 / ink 文字 + 控制台方案 ANSI（App 按 resolvedTheme 计算） */
+    terminalFollowPreview: TerminalFollowPreviewColors;
     /* S14：日志 / 终端字体族独立配置 */
     logFontFamily: MonoFontFamily;
     onLogFontFamilyChange: (family: MonoFontFamily) => void;
@@ -424,6 +424,18 @@ function AppearanceLivePreview({ preset, bgLayer, imgOverlay, imgBlur, bgImage }
   );
 }
 
+/** 「跟随主题」卡的预览色：主题 shell 底 / ink 文字 + 控制台方案 ANSI（App 按 resolvedTheme 计算） */
+export interface TerminalFollowPreviewColors {
+  background: string;
+  foreground: string;
+  cursor: string;
+  green: string;
+  red: string;
+  yellow: string;
+  cyan: string;
+  brightBlack: string;
+}
+
 /** 终端配色真实预览：用 scheme.theme 上色的迷你终端（替代纯渐变条） */
 function TerminalPreview({ scheme }: { scheme: TerminalColorScheme }) {
   const t = scheme.theme;
@@ -446,6 +458,43 @@ function TerminalPreview({ scheme }: { scheme: TerminalColorScheme }) {
         <span style={{ color: t.green }}>root@127.38</span>&nbsp;<span className="cursor" style={{ background: t.cursor }} />
       </span>
     </span>
+  );
+}
+
+/** 终端实时预览面板：配色 / 字体 / 字号 / 行高 / 光标全部实时联动（对齐原型 .live-preview）。
+    非真实 xterm —— 只渲染当前设置的光学效果，够轻、无会话依赖。 */
+function TerminalLivePreview(props: {
+  theme: { background: string; foreground: string; cursor: string; green: string; red: string; yellow: string; cyan: string; brightBlack: string };
+  fontFamily: string;
+  fontSize: number;
+  lineHeight: number;
+  cursorStyle: "block" | "bar" | "underline";
+  cursorBlink: boolean;
+}) {
+  const { theme, fontFamily, fontSize, lineHeight, cursorStyle, cursorBlink } = props;
+  const cursorClass = ["lp-cursor", cursorStyle, cursorBlink ? "blink" : ""].filter(Boolean).join(" ");
+  return (
+    <div className="slc-term-live">
+      <div className="slc-term-live-bar">
+        <i /><i /><i />
+        <span className="slc-term-live-name">access.log — 日志控制台</span>
+        <span className="slc-term-live-tag"><i className="lv" />预览实时联动全部控件</span>
+      </div>
+      <div
+        className="slc-term-live-body"
+        style={{ background: theme.background, color: theme.foreground, fontFamily, fontSize, lineHeight }}
+      >
+        <span><span style={{ color: theme.brightBlack }}>Last login: Sat Oct 24 11:34:18 2026 from 192.168.19.14</span></span>
+        <span><span style={{ color: theme.green }}>root@127.38</span> systemctl status eos-server</span>
+        <span><span style={{ color: theme.green }}>● </span>eos-server.service <span style={{ color: theme.cyan }}>active (running)</span></span>
+        <span><span style={{ color: theme.red }}>09:02:11 ERROR</span> sync failed</span>
+        <span><span style={{ color: theme.yellow }}>09:02:16 WARN </span> mark #4821 FAILED</span>
+        <span>
+          <span style={{ color: theme.green }}>root@127.38</span> logs&nbsp;
+          <span className={cursorClass} style={{ background: theme.cursor }} />
+        </span>
+      </div>
+    </div>
   );
 }
 
@@ -1550,6 +1599,38 @@ export function ConnectionSettingsWorkspace(props: Props) {
                     </span>
                   </span>
                 </div>
+                <div className="settings-pref-row settings-pref-row-wide">
+                  <span className="settings-pref-label"><strong>强调色覆盖</strong><span>默认跟随主题；on-accent 黑白按对比度自动派生</span></span>
+                  <span className="slc-accent-row">
+                    <button
+                      type="button"
+                      className={props.preferenceSection.uiAccentOverride === null ? "csw csw-on" : "csw"}
+                      title="跟随主题"
+                      onClick={() => props.preferenceSection.onUiAccentOverrideChange(null)}
+                    >
+                      <i style={{ background: "color-mix(in srgb, var(--accent) 40%, transparent)" }} />
+                    </button>
+                    {ACCENT_OVERRIDES.map((accent) => (
+                      <button
+                        key={accent}
+                        type="button"
+                        className={props.preferenceSection.uiAccentOverride?.toLowerCase() === accent ? "csw csw-on" : "csw"}
+                        style={{ color: accent }}
+                        title={accent}
+                        onClick={() => props.preferenceSection.onUiAccentOverrideChange(accent)}
+                      >
+                        <i style={{ background: accent }} />
+                      </button>
+                    ))}
+                    <label className="settings-color-field slc-accent-custom">
+                      <input
+                        type="color"
+                        value={props.preferenceSection.uiAccentOverride ?? "#0070f3"}
+                        onChange={(event) => props.preferenceSection.onUiAccentOverrideChange(event.target.value)}
+                      />
+                    </label>
+                  </span>
+                </div>
                 <div className="slc-appearance-cols">
                 <div className="slc-appearance-main">
                 <div className="slc-theme-grid" role="radiogroup" aria-label="内置主题">
@@ -1718,22 +1799,14 @@ export function ConnectionSettingsWorkspace(props: Props) {
                     </label>
                   </span>
                 </div>
-                {/* S14-3 必达：字体三处独立表（原型 1131-1142）——
-                    表格 作用区/字体族/字号，三行 = 界面 / 日志预览 / 终端；下方虚线「实时预览」行。 */}
+                {/* 2026-10-24 重设计：原「三处独立」矩阵拆散 —— 界面留本区，日志移入「日志」，
+                    终端移入「终端」，每项设置与上下文同区（用户反馈跨分区维护体验割裂）。 */}
                 <div className="settings-pref-row settings-pref-row-wide">
-                  <span className="settings-pref-label"><strong>字体（三处独立）</strong><span>界面 / 日志预览 / 终端各自独立，日志字体族为新增能力</span></span>
+                  <span className="settings-pref-label"><strong>界面字体与字号</strong><span>日志 / 终端的字体字号在各自分区维护</span></span>
                   <div className="font-matrix">
                     <table className="font-matrix-table">
-                      <thead>
-                        <tr>
-                          <th>作用区</th>
-                          <th>字体族</th>
-                          <th>字号</th>
-                        </tr>
-                      </thead>
                       <tbody>
                         <tr>
-                          <td>界面</td>
                           <td>
                             <ThemedSelect
                               value={props.preferenceSection.uiFontFamily}
@@ -1766,84 +1839,8 @@ export function ConnectionSettingsWorkspace(props: Props) {
                             />
                           </td>
                         </tr>
-                        <tr>
-                          <td>日志预览</td>
-                          <td>
-                            <ThemedSelect
-                              value={props.preferenceSection.logFontFamily}
-                              onChange={(value) => props.preferenceSection.onLogFontFamilyChange(value as MonoFontFamily)}
-                              ariaLabel="日志预览字体"
-                              options={[
-                                { value: "geist-mono", label: "Geist Mono" },
-                                { value: "sf-mono", label: "SF Mono" },
-                                { value: "menlo", label: "Menlo" },
-                                { value: "consolas", label: "Consolas" },
-                                { value: "system-mono", label: "系统等宽" }
-                              ]}
-                            />
-                          </td>
-                          <td>
-                            <input
-                              type="number"
-                              min={11}
-                              max={16}
-                              value={props.preferenceSection.logFontSize}
-                              onChange={(event) => {
-                                /* 空值保护：清空时 Number("")=0 会被钳到最小值并持久化 */
-                                const raw = event.target.value;
-                                if (raw === "") return;
-                                const next = Number(raw);
-                                if (!Number.isFinite(next)) return;
-                                props.preferenceSection.onLogFontSizeChange(next);
-                              }}
-                              aria-label="日志预览字号"
-                            />
-                          </td>
-                        </tr>
-                        <tr>
-                          <td>终端</td>
-                          <td>
-                            <ThemedSelect
-                              value={props.preferenceSection.terminalFontFamily}
-                              onChange={(value) => props.preferenceSection.onTerminalFontFamilyChange(value as MonoFontFamily)}
-                              ariaLabel="终端字体"
-                              options={[
-                                { value: "geist-mono", label: "Geist Mono" },
-                                { value: "sf-mono", label: "SF Mono" },
-                                { value: "menlo", label: "Menlo" },
-                                { value: "consolas", label: "Consolas" },
-                                { value: "system-mono", label: "系统等宽" }
-                              ]}
-                            />
-                          </td>
-                          <td>
-                            <input
-                              type="number"
-                              min={11}
-                              max={18}
-                              value={props.preferenceSection.terminalFontSize}
-                              onChange={(event) => {
-                                /* 空值保护（2026-10-21）：清空输入框时 Number("")=0，
-                                   会被 setter 钳到最小值 11 并持久化 —— 用户反馈
-                                   「字号怎么是 11px、改不回来」正是此因。空串直接忽略。 */
-                                const raw = event.target.value;
-                                if (raw === "") return;
-                                const next = Number(raw);
-                                if (!Number.isFinite(next)) return;
-                                props.preferenceSection.onTerminalFontSizeChange(next);
-                              }}
-                              aria-label="终端字号"
-                            />
-                          </td>
-                        </tr>
                       </tbody>
                     </table>
-                    {/* 原型 1139-1141：虚线「实时预览」行 */}
-                    <div className="font-live-preview">
-                      实时预览 — 2026-09-29 09:02:11{" "}
-                      <span className="font-live-error">ERROR</span>{" "}
-                      c.e.task.SyncJob - sync failed: connection reset by peer
-                    </div>
                   </div>
                 </div>
                 {/* S14-4 必达：水印块（原型 1143-1168）——
@@ -1924,6 +1921,44 @@ export function ConnectionSettingsWorkspace(props: Props) {
             <section id="pref-log" data-anchor className="settings-pref-section">
               <div className="settings-card-kicker">日志</div>
               <div className="settings-pref-card">
+                {/* 2026-10-24 重设计：日志字体 / 字号从「外观 → 字体矩阵」移入本区（随上下文维护） */}
+                <div className="settings-pref-row">
+                  <span className="settings-pref-label"><strong>日志字体</strong><span>日志预览独立等宽字体</span></span>
+                  <span className="settings-pref-value">
+                    <ThemedSelect
+                      value={props.preferenceSection.logFontFamily}
+                      onChange={(value) => props.preferenceSection.onLogFontFamilyChange(value as MonoFontFamily)}
+                      ariaLabel="日志预览字体"
+                      options={[
+                        { value: "geist-mono", label: "Geist Mono" },
+                        { value: "sf-mono", label: "SF Mono" },
+                        { value: "menlo", label: "Menlo" },
+                        { value: "consolas", label: "Consolas" },
+                        { value: "system-mono", label: "系统等宽" }
+                      ]}
+                    />
+                  </span>
+                </div>
+                <div className="settings-pref-row">
+                  <span className="settings-pref-label"><strong>日志字号</strong><span>11–16px</span></span>
+                  <span className="settings-pref-value">
+                    <input
+                      type="number"
+                      min={11}
+                      max={16}
+                      value={props.preferenceSection.logFontSize}
+                      onChange={(event) => {
+                        /* 空值保护：清空时 Number("")=0 会被钳到最小值并持久化 */
+                        const raw = event.target.value;
+                        if (raw === "") return;
+                        const next = Number(raw);
+                        if (!Number.isFinite(next)) return;
+                        props.preferenceSection.onLogFontSizeChange(next);
+                      }}
+                      aria-label="日志预览字号"
+                    />
+                  </span>
+                </div>
                 <button type="button" className="settings-pref-row settings-pref-row-click" onClick={props.preferenceSection.onToggleErrorHighlight}>
                   <span className="settings-pref-label"><strong>异常 / 告警高亮</strong><span>自动标记 ERROR、WARN 行</span></span>
                   <span className="settings-pref-value">{props.preferenceSection.errorHighlightEnabled ? "开启" : "关闭"}</span>
@@ -1961,9 +1996,47 @@ export function ConnectionSettingsWorkspace(props: Props) {
             <section id="pref-terminal" data-anchor className="settings-pref-section">
               <div className="settings-card-kicker">终端</div>
               <div className="settings-pref-card">
-                {/* 2026-10-21 去重：原此处有「终端字体」下拉 + 「终端字号」步进器，
-                    与「外观 → 字体（三处独立）」表格的终端行重复（同一 setter 两处入口）。
-                    三处字体统一由字体矩阵维护，本节只保留终端独有项（行高/光标/配色等）。 */}
+                {/* 2026-10-24 重设计：终端设置全部归位本区 —— 字体 / 字号从「外观 → 字体矩阵」
+                    移入（与矩阵时代的去重决策相反：分散在各区更贴合上下文，原型已确认）。 */}
+                <div className="settings-pref-row">
+                  <span className="settings-pref-label"><strong>终端字体</strong><span>等宽字体族；改动后 xterm 自动重排</span></span>
+                  <span className="settings-pref-value">
+                    <ThemedSelect
+                      value={props.preferenceSection.terminalFontFamily}
+                      onChange={(value) => props.preferenceSection.onTerminalFontFamilyChange(value as MonoFontFamily)}
+                      ariaLabel="终端字体"
+                      options={[
+                        { value: "geist-mono", label: "Geist Mono" },
+                        { value: "sf-mono", label: "SF Mono" },
+                        { value: "menlo", label: "Menlo" },
+                        { value: "consolas", label: "Consolas" },
+                        { value: "system-mono", label: "系统等宽" }
+                      ]}
+                    />
+                  </span>
+                </div>
+                <div className="settings-pref-row">
+                  <span className="settings-pref-label"><strong>终端字号</strong><span>11–18px</span></span>
+                  <span className="settings-pref-value">
+                    <input
+                      type="number"
+                      min={11}
+                      max={18}
+                      value={props.preferenceSection.terminalFontSize}
+                      onChange={(event) => {
+                        /* 空值保护（2026-10-21）：清空输入框时 Number("")=0，
+                           会被 setter 钳到最小值 11 并持久化 —— 用户反馈
+                           「字号怎么是 11px、改不回来」正是此因。空串直接忽略。 */
+                        const raw = event.target.value;
+                        if (raw === "") return;
+                        const next = Number(raw);
+                        if (!Number.isFinite(next)) return;
+                        props.preferenceSection.onTerminalFontSizeChange(next);
+                      }}
+                      aria-label="终端字号"
+                    />
+                  </span>
+                </div>
                 <div className="settings-pref-row">
                   <span className="settings-pref-label"><strong>终端选中复制</strong><span>选中即复制，右键粘贴</span></span>
                   <span className="settings-pref-value">默认开启</span>
@@ -2032,45 +2105,76 @@ export function ConnectionSettingsWorkspace(props: Props) {
                     </label>
                   </span>
                 </div>
-                {/* 终端背景跟随主题（2026-10-21）：用户反馈「背景色也不跟随主题变化」。
-                    开启时终端底色取当前 UI 主题的 --shell，换主题即变；
-                    关闭时取所选「终端配色方案」自带底色（Tokyo Night 等原色）。 */}
-                <div className="settings-pref-row">
-                  <span className="settings-pref-label"><strong>背景跟随主题</strong><span>开启后终端底色随 UI 主题变化；关闭则用配色方案自带底色</span></span>
-                  <span className="settings-pref-value">
-                    <label className="slc-switch">
-                      <input
-                        type="checkbox"
-                        checked={props.preferenceSection.terminalBgFollowTheme}
-                        onChange={(event) => props.preferenceSection.onTerminalBgFollowThemeChange(event.target.checked)}
-                        aria-label="终端背景跟随主题"
-                      />
-                      <span />
-                    </label>
-                  </span>
-                </div>
-                {/* 终端配色（独立槽位，8 款）：渐变 swatch 条 = 底色→主色→成功→错误 */}
+                {/* 终端配色（2026-10-24 重设计）：「跟随主题」卡 + 7 深色方案，单控件定底色。
+                    原独立「背景跟随主题」开关取消（迁移见 useUiTheme）；「日光」浅色方案移除
+                    （与跟随主题架构冲突，深浅主题下均不可读）。 */}
                 <div className="settings-pref-row settings-pref-row-wide">
-                  <span className="settings-pref-label"><strong>终端配色</strong><span>独立于 UI 主题；映射 xterm ITheme（前景/背景/光标/选区 + ANSI 16 色）</span></span>
+                  <span className="settings-pref-label"><strong>终端配色</strong><span>映射 xterm ITheme（前景/背景/光标/选区 + ANSI 16 色）</span></span>
                   <div className="slc-term-grid" role="radiogroup" aria-label="终端配色">
-                    {props.preferenceSection.terminalSchemeOptions.map((scheme) => {
-                      const active = props.preferenceSection.uiTerminalScheme === scheme.id;
-                      return (
-                        <button
-                          key={scheme.id}
-                          type="button"
-                          role="radio"
-                          aria-checked={active}
-                          title={scheme.desc}
-                          className={active ? "slc-term-card slc-term-card-active" : "slc-term-card"}
-                          onClick={() => props.preferenceSection.onUiTerminalSchemeChange(scheme.id)}
-                        >
-                          <TerminalPreview scheme={scheme} />
-                          <span className="slc-term-name">{scheme.name}</span>
-                        </button>
-                      );
-                    })}
+                    {(() => {
+                      const consoleScheme = props.preferenceSection.terminalSchemeOptions.find((s) => s.id === "console") ?? props.preferenceSection.terminalSchemeOptions[0];
+                      const followScheme: TerminalColorScheme = {
+                        ...consoleScheme,
+                        id: "follow",
+                        name: "跟随主题",
+                        desc: "底色随 UI 主题 · 推荐",
+                        theme: {
+                          ...consoleScheme.theme,
+                          background: props.preferenceSection.terminalFollowPreview.background,
+                          foreground: props.preferenceSection.terminalFollowPreview.foreground,
+                          cursor: props.preferenceSection.terminalFollowPreview.cursor,
+                          cursorAccent: props.preferenceSection.terminalFollowPreview.background,
+                        },
+                      };
+                      const cards = [followScheme, ...props.preferenceSection.terminalSchemeOptions];
+                      return cards.map((scheme) => {
+                        const active = props.preferenceSection.uiTerminalScheme === scheme.id;
+                        return (
+                          <button
+                            key={scheme.id}
+                            type="button"
+                            role="radio"
+                            aria-checked={active}
+                            title={scheme.desc}
+                            className={active ? "slc-term-card slc-term-card-active" : "slc-term-card"}
+                            onClick={() => props.preferenceSection.onUiTerminalSchemeChange(scheme.id)}
+                          >
+                            <TerminalPreview scheme={scheme} />
+                            <span className="slc-term-name">
+                              {scheme.name}
+                              {scheme.id === "follow" ? <span className="slc-term-badge">推荐</span> : null}
+                            </span>
+                          </button>
+                        );
+                      });
+                    })()}
                   </div>
+                </div>
+                {/* 实时预览：配色 / 字体 / 字号 / 行高 / 光标 全部即时联动（对齐 VRC 控制台外观） */}
+                <div className="settings-pref-row settings-pref-row-wide">
+                  <span className="settings-pref-label"><strong>实时预览</strong><span>改动即时可见，无需重连会话</span></span>
+                  <TerminalLivePreview
+                    theme={(() => {
+                      const fp = props.preferenceSection.terminalFollowPreview;
+                      const scheme = props.preferenceSection.terminalSchemeOptions.find((s) => s.id === props.preferenceSection.uiTerminalScheme);
+                      if (props.preferenceSection.uiTerminalScheme === "follow" || !scheme) {
+                        return {
+                          background: fp.background, foreground: fp.foreground, cursor: fp.cursor,
+                          green: fp.green, red: fp.red, yellow: fp.yellow, cyan: fp.cyan, brightBlack: fp.brightBlack,
+                        };
+                      }
+                      const t = scheme.theme;
+                      return {
+                        background: t.background, foreground: t.foreground, cursor: t.cursor,
+                        green: t.green, red: t.red, yellow: t.yellow, cyan: t.cyan, brightBlack: t.brightBlack,
+                      };
+                    })()}
+                    fontFamily={monoFontFamilyValue(props.preferenceSection.terminalFontFamily)}
+                    fontSize={props.preferenceSection.terminalFontSize}
+                    lineHeight={props.preferenceSection.terminalLineHeight}
+                    cursorStyle={props.preferenceSection.terminalCursorStyle}
+                    cursorBlink={props.preferenceSection.terminalCursorBlink}
+                  />
                 </div>
               </div>
             </section>
@@ -2106,38 +2210,6 @@ export function ConnectionSettingsWorkspace(props: Props) {
             <section id="pref-advanced" data-anchor className="settings-pref-section">
               <div className="settings-card-kicker">高级</div>
               <div className="settings-pref-card">
-                <div className="settings-pref-row settings-pref-row-wide">
-                  <span className="settings-pref-label"><strong>强调色覆盖</strong><span>默认跟随主题；on-accent 黑白按对比度自动派生</span></span>
-                  <span className="slc-accent-row">
-                    <button
-                      type="button"
-                      className={props.preferenceSection.uiAccentOverride === null ? "csw csw-on" : "csw"}
-                      title="跟随主题"
-                      onClick={() => props.preferenceSection.onUiAccentOverrideChange(null)}
-                    >
-                      <i style={{ background: "color-mix(in srgb, var(--accent) 40%, transparent)" }} />
-                    </button>
-                    {ACCENT_OVERRIDES.map((accent) => (
-                      <button
-                        key={accent}
-                        type="button"
-                        className={props.preferenceSection.uiAccentOverride?.toLowerCase() === accent ? "csw csw-on" : "csw"}
-                        style={{ color: accent }}
-                        title={accent}
-                        onClick={() => props.preferenceSection.onUiAccentOverrideChange(accent)}
-                      >
-                        <i style={{ background: accent }} />
-                      </button>
-                    ))}
-                    <label className="settings-color-field slc-accent-custom">
-                      <input
-                        type="color"
-                        value={props.preferenceSection.uiAccentOverride ?? "#0070f3"}
-                        onChange={(event) => props.preferenceSection.onUiAccentOverrideChange(event.target.value)}
-                      />
-                    </label>
-                  </span>
-                </div>
                 <button type="button" className="settings-pref-row settings-pref-row-click settings-pref-reset" onClick={props.preferenceSection.onResetUiPreferences}>
                   <span className="settings-pref-label"><strong>恢复默认显示</strong><span>重置主题、背景、字号等显示偏好</span></span>
                   <span className="settings-pref-value">重置</span>

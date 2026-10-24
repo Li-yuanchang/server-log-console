@@ -1089,3 +1089,76 @@
 .slc-pv-frame > *:not(.slc-pv-bg):not(.slc-pv-veil) { position: relative; z-index: 1; }
 .slc-pv-right { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .slc-pv-log { flex: 1; min-height: 0; overflow: hidden; padding: 6px 8px; }
+
+/* ---------- 终端实时预览面板 + 跟随主题徽标（2026-10-24 重设计实装） ---------- */
+.slc-term-badge {
+  margin-left: auto;
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  border-radius: 999px;
+  padding: 0 6px;
+}
+.slc-term-live {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.slc-term-live-bar {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  background: var(--panel-muted);
+  border-bottom: 1px solid var(--line);
+}
+.slc-term-live-bar i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--line-strong);
+}
+.slc-term-live-bar i:first-child { background: #e0655a; }
+.slc-term-live-bar i:nth-child(2) { background: #e0b04e; }
+.slc-term-live-bar i:nth-child(3) { background: #5aab4e; }
+.slc-term-live-name {
+  margin-left: 6px;
+  font-family: var(--mono);
+  font-size: var(--fs-2xs);
+  color: var(--ink-muted);
+}
+.slc-term-live-tag {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  color: var(--ink-muted);
+}
+.slc-term-live-tag .lv {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--green-dot, #4cae62);
+}
+.slc-term-live-body {
+  padding: 10px 14px;
+  display: grid;
+  gap: 0;
+  align-content: start;
+  white-space: pre;
+  overflow: hidden;
+  min-height: 148px;
+  transition: background 0.2s, color 0.2s, font-size 0.15s, line-height 0.15s;
+}
+.slc-term-live-body .lp-cursor {
+  display: inline-block;
+  width: 0.55em;
+  height: 1.1em;
+  vertical-align: -0.18em;
+}
+.slc-term-live-body .lp-cursor.bar { width: 2px; }
+.slc-term-live-body .lp-cursor.underline { height: 2px; vertical-align: 0.1em; }
+.slc-term-live-body .lp-cursor.blink { animation: pl 1s steps(1) infinite; }

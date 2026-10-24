@@ -438,8 +438,6 @@ export function App() {
     setTerminalCursorStyle,
     terminalCursorBlink,
     setTerminalCursorBlink,
-    terminalBgFollowTheme,
-    setTerminalBgFollowTheme,
     uiFontSize,
     setUiFontSize,
     logFontFamily,
@@ -3407,15 +3405,33 @@ export function App() {
   const appShellClassName = `app-shell${uiTheme === "modern" ? " theme-modern" : ""} ui-density-${uiDensity} ui-theme-${resolvedTheme.id} ui-bg-${uiBackground}${uiBackground !== "solid" ? " ui-bg-fancy" : ""} ui-motion-${motionMode}${dynamicBackground && motionMode !== "reduced" ? " ui-dynamic-background" : ""}${isElectron ? " electron-immersive" : ""}${isElectron && isMacOS ? " electron-macos-immersive" : ""}${hasWinControls ? " has-win-controls" : ""}`;
 
   /* 终端配色（独立槽位）：背景与 ITheme 都来自所选方案。
+     follow = 「跟随主题」卡：底色/文字取主题 shell，ANSI 用默认控制台色。
      定义位置必须早于 appShellStyle —— 后者要把配色注入 --terminal-background。 */
+  const terminalSchemeFollow = uiTerminalScheme === "follow";
   const terminalScheme = TERMINAL_SCHEMES.find((s) => s.id === uiTerminalScheme) ?? TERMINAL_SCHEMES[0];
 
   /* 终端底色单一来源（2026-10-21）：CSS 层（--terminal-background）与 xterm 实例
      （terminalBackgroundColor prop）必须取同一个值，否则外壳与画布撞色。
-     跟随主题时取 resolvedTheme.v.shell，换主题即变；否则取配色方案自带背景。 */
-  const terminalBackgroundColor = terminalBgFollowTheme
+     follow 时取 resolvedTheme.v.shell，换主题即变；否则取配色方案自带背景。 */
+  const terminalBackgroundColor = terminalSchemeFollow
     ? resolvedTheme.v.shell
     : terminalScheme.theme.background;
+
+  /* 「跟随主题」卡的预览色（2026-10-24）：主题 shell 底/ink 文字 + 控制台方案 ANSI，
+     与 buildTerminalTheme 的 follow 语义一致。传给设置中心的配色网格与实时预览。 */
+  const terminalFollowPreview = useMemo(() => {
+    const consoleScheme = TERMINAL_SCHEMES.find((s) => s.id === "console") ?? TERMINAL_SCHEMES[0];
+    return {
+      background: resolvedTheme.v.shell,
+      foreground: resolvedTheme.v.shellInk,
+      cursor: resolvedTheme.v.shellInk,
+      green: consoleScheme.theme.green,
+      red: consoleScheme.theme.red,
+      yellow: consoleScheme.theme.yellow,
+      cyan: consoleScheme.theme.cyan,
+      brightBlack: consoleScheme.theme.brightBlack,
+    };
+  }, [resolvedTheme]);
 
   const appShellStyle = {
     /* 界面字号梯度：uiFontSize 驱动全套 --fs-* token（设置中心可调） */
@@ -3426,13 +3442,13 @@ export function App() {
     /* S14：日志 / 终端字体族独立（原型：字体三处独立，日志字体族是原缺失能力） */
     "--log-font-family": monoFontFamilyValue(logFontFamily),
     "--terminal-font-family": monoFontFamilyValue(terminalFontFamily),
-    /* 终端背景（2026-10-21 增加「跟随主题」开关）：
-       - terminalBgFollowTheme=true（默认）→ 取当前 UI 主题的 --shell，
-         换主题时终端底色一起变（用户反馈「背景色也不跟随主题变化」）。
-       - false → 取所选「终端配色方案」自带背景（Tokyo Night / Dracula 等原色）。
+    /* 终端背景（2026-10-24 随配色重构更新）：
+       - uiTerminalScheme="follow"（默认）→ 取当前 UI 主题的 --shell，
+         换主题时终端底色一起变。
+       - 其余方案 → 取方案自带背景（Tokyo Night / Dracula 等原色）。
        CSS 层与 xterm 实例必须取同一个值，否则外壳与画布撞色。 */
-    "--terminal-background": terminalBgFollowTheme ? resolvedTheme.v.shell : terminalScheme.theme.background,
-    "--terminal-background-soft": terminalBgFollowTheme ? resolvedTheme.v.shell : terminalScheme.theme.background,
+    "--terminal-background": terminalBackgroundColor,
+    "--terminal-background-soft": terminalBackgroundColor,
     "--custom-background-image": toCssImageUrl(customBackgroundImage),
     /* 背景层图片模式：遮罩亮度 / 模糊由设置滑杆驱动（原型 T1）。
        只注入 -alpha（0..1，供 CSS calc 使用）与 blur；旧的百分比版
@@ -4959,8 +4975,7 @@ export function App() {
                 onTerminalCursorStyleChange: setTerminalCursorStyle,
                 terminalCursorBlink,
                 onTerminalCursorBlinkChange: setTerminalCursorBlink,
-                terminalBgFollowTheme,
-                onTerminalBgFollowThemeChange: setTerminalBgFollowTheme,
+                terminalFollowPreview,
                 logFontFamily,
                 onLogFontFamilyChange: setLogFontFamily,
                 terminalFontFamily,

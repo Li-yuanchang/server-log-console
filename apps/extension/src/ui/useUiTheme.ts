@@ -23,8 +23,10 @@ export type UiThemePreset =
 export type UiToneMode = "system" | "light" | "dark";
 export type UiBackgroundLayer =
   | "solid" | "aurora" | "linear" | "grid" | "dots" | "diag" | "noise" | "image";
+/** 终端配色：follow = 底色/文字跟随 UI 主题（ANSI 用默认控制台色），其余为自带底色的深色方案。
+    「日光」浅色方案已移除（2026-10-24）：与背景跟随主题架构冲突，深浅主题下均不可读。 */
 export type TerminalColorSchemeId =
-  | "console" | "tokyo" | "mocha" | "dracula" | "nord" | "rose" | "solar" | "daylight";
+  | "follow" | "console" | "tokyo" | "mocha" | "dracula" | "nord" | "rose" | "solar";
 /** 终端光标样式：对齐 VRC「光标样式」三档（块 / 竖线 / 下划线） */
 export type TerminalCursorStyle = "block" | "bar" | "underline";
 
@@ -152,10 +154,6 @@ export const TERMINAL_SCHEMES: TerminalColorScheme[] = [
     theme: { background: "#002b36", foreground: "#93a1a1", cursor: "#93a1a1", cursorAccent: "#002b36", selectionBackground: "#073642",
       black: "#073642", red: "#dc322f", green: "#859900", yellow: "#b58900", blue: "#268bd2", magenta: "#d33682", cyan: "#2aa198", white: "#eee8d5",
       brightBlack: "#002b36", brightRed: "#cb4b16", brightGreen: "#586e75", brightYellow: "#657b83", brightBlue: "#839496", brightMagenta: "#6c71c4", brightCyan: "#93a1a1", brightWhite: "#fdf6e3" } },
-  { id: "daylight", name: "日光", desc: "浅色终端 · 打印/截图友好", grad: ["#fbfbfa", "#0184bc", "#50a14f", "#e45649"],
-    theme: { background: "#fbfbfa", foreground: "#383a42", cursor: "#526fff", cursorAccent: "#fbfbfa", selectionBackground: "#eceff4",
-      black: "#383a42", red: "#e45649", green: "#50a14f", yellow: "#c18401", blue: "#0184bc", magenta: "#a626a4", cyan: "#0997b3", white: "#fafafa",
-      brightBlack: "#4f525e", brightRed: "#e06c75", brightGreen: "#98c379", brightYellow: "#e5c07b", brightBlue: "#61afef", brightMagenta: "#c678dd", brightCyan: "#56b6c2", brightWhite: "#ffffff" } },
 ];
 
 /** WCAG 相对亮度 → on-accent：黑/白中取对比度更高者（禁用亮度阈值法，历史 bug 见方案文档 3.3）。 */
@@ -234,10 +232,7 @@ export type UiThemeAPI = {
   /** 终端光标闪烁（xterm cursorBlink）。参考 VRC「光标闪烁」开关。 */
   terminalCursorBlink: boolean;
   setTerminalCursorBlink: (value: boolean) => void;
-  /** 终端背景跟随 UI 主题（true=主题 --shell / false=所选终端配色方案自带底色） */
-  terminalBgFollowTheme: boolean;
-  setTerminalBgFollowTheme: (value: boolean) => void;
-  /** 强调色覆盖（null = 跟随主题；入口在高级节） */
+  /** 强调色覆盖（null = 跟随主题；入口在外观节） */
   uiAccentOverride: string | null;
   setUiAccentOverride: (accent: string | null) => void;
   uiFontFamily: UiFontFamily;
@@ -281,7 +276,7 @@ const DEFAULT_UI_TONE_MODE: UiToneMode = "system";
    aurora 是顶部蓝紫径向光晕，用户多次反馈「渐变色看着太花了」「AI 公式化」。
    改为 solid（直接用主题自身底色，最干净），aurora 仍可在设置中心选用。 */
 const DEFAULT_UI_BACKGROUND: UiBackgroundLayer = "solid";
-const DEFAULT_UI_TERMINAL_SCHEME: TerminalColorSchemeId = "console";
+const DEFAULT_UI_TERMINAL_SCHEME: TerminalColorSchemeId = "follow";
 const DEFAULT_CUSTOM_BACKGROUND_IMAGE = "";
 const DEFAULT_UI_IMG_OVERLAY = 30;
 const DEFAULT_UI_IMG_BLUR = 6;
@@ -437,7 +432,20 @@ export function useUiTheme(): UiThemeAPI {
   });
   const [uiTerminalScheme, setUiTerminalScheme] = useState<TerminalColorSchemeId>(() => {
     const value = readLocalStorageValue("ui-terminal-scheme");
-    return TERMINAL_SCHEMES.some((s) => s.id === value) ? (value as TerminalColorSchemeId) : DEFAULT_UI_TERMINAL_SCHEME;
+    /* 一次性迁移（2026-10-24）：「背景跟随主题」开关并入配色网格 —— 开关开启（默认）
+       或原方案为「日光」（已移除）→ 统一迁到 follow 卡；用户主动关闭过跟随主题的
+       保留原方案。迁移后写标记，不再覆盖。 */
+    const migrated = readLocalStorageValue("terminal-scheme-migrated") === "1";
+    if (!migrated) {
+      const followFlag = readLocalStorageValue("terminal-bg-follow-theme");
+      if (followFlag !== "off") return "follow";
+      if (value === "daylight") return "follow";
+      if (TERMINAL_SCHEMES.some((s) => s.id === value)) return value as TerminalColorSchemeId;
+      return "follow";
+    }
+    return value === "follow" || TERMINAL_SCHEMES.some((s) => s.id === value)
+      ? (value as TerminalColorSchemeId)
+      : DEFAULT_UI_TERMINAL_SCHEME;
   });
   const [uiAccentOverride, setUiAccentOverrideState] = useState<string | null>(() => {
     const value = readLocalStorageValue("ui-accent-override");
@@ -476,13 +484,6 @@ export function useUiTheme(): UiThemeAPI {
   const [terminalCursorBlink, setTerminalCursorBlink] = useState(() => {
     const value = readLocalStorageValue("terminal-cursor-blink");
     return value === "" ? DEFAULT_TERMINAL_CURSOR_BLINK : value === "on";
-  });
-  /* 终端背景是否跟随 UI 主题（2026-10-21）：用户反馈「背景色也不跟随主题变化」。
-     开启时终端底色取主题 --shell；关闭时取所选「终端配色方案」的背景
-     （Tokyo Night / Dracula 等自带底色）。默认开启以贴合主题观感。 */
-  const [terminalBgFollowTheme, setTerminalBgFollowTheme] = useState(() => {
-    const value = readLocalStorageValue("terminal-bg-follow-theme");
-    return value === "" ? true : value === "on";
   });
   /* 界面字号：--fs-* 梯度基准（12~18），驱动全套界面字号 token */
   const [uiFontSize, setUiFontSize] = useState(() => {
@@ -617,9 +618,10 @@ export function useUiTheme(): UiThemeAPI {
     persistLocalStorageValue("terminal-cursor-blink", terminalCursorBlink ? "on" : "off");
   }, [terminalCursorBlink]);
 
+  /* 配色迁移标记：写过值即视为完成迁移，避免下次启动再次覆盖 */
   useEffect(() => {
-    persistLocalStorageValue("terminal-bg-follow-theme", terminalBgFollowTheme ? "on" : "off");
-  }, [terminalBgFollowTheme]);
+    persistLocalStorageValue("terminal-scheme-migrated", "1");
+  }, [uiTerminalScheme]);
 
   useEffect(() => {
     persistLocalStorageValue("ui-font-size", String(uiFontSize));
@@ -679,7 +681,6 @@ export function useUiTheme(): UiThemeAPI {
     setTerminalLineHeight(DEFAULT_TERMINAL_LINE_HEIGHT);
     setTerminalCursorStyle(DEFAULT_TERMINAL_CURSOR_STYLE);
     setTerminalCursorBlink(DEFAULT_TERMINAL_CURSOR_BLINK);
-    setTerminalBgFollowTheme(true);
     setUiFontSize(DEFAULT_UI_FONT_SIZE);
     setLogFontFamily(DEFAULT_MONO_FONT_FAMILY);
     setTerminalFontFamily(DEFAULT_MONO_FONT_FAMILY);
@@ -727,8 +728,6 @@ export function useUiTheme(): UiThemeAPI {
     setTerminalCursorStyle,
     terminalCursorBlink,
     setTerminalCursorBlink,
-    terminalBgFollowTheme,
-    setTerminalBgFollowTheme,
     uiFontSize,
     setUiFontSize,
     logFontFamily,
