@@ -70,6 +70,7 @@ import { useLocalService } from "./useLocalService.js";
 import { useSearchTimer } from "./useSearchTimer.js";
 import { usePanelResize } from "./usePanelResize.js";
 import { useElectronEnv } from "./useElectronEnv.js";
+import { WindowControls } from "./WindowControls.js";
 import { useUiTheme, monoFontFamilyValue, uiFontSizeVars, THEME_PRESETS, BG_LAYERS, TERMINAL_SCHEMES, onAccentColor, accentHoverColor, accentSoftColor } from "./useUiTheme.js";
 import { useWorkspaceTabDrag } from "./useWorkspaceTabDrag.js";
 import { useTransferHistory } from "./useTransferHistory.js";
@@ -298,6 +299,9 @@ export function App() {
   const [recordingSession, setRecordingSession] = useState<LogRecordingSessionResponse | null>(null);
   const [previewDialog, setPreviewDialog] = useState<PreviewDialogState | null>(null);
   const { isElectron, isMacOS } = useElectronEnv();
+  /* Windows 自绘窗口控制（2026-10-24 方案 B）：仅主窗口渲染，
+     PiP/独立小窗仍走系统原生标题栏；macOS 用系统红绿灯。 */
+  const hasWinControls = isElectron && !isStandalonePipWindow && (window as any).electronAPI?.platform === "win32";
   const { toasts, showToast, updateToast, dismissToast } = useToasts();
   const { isBusy, actionStatus, activityLines, setIsBusy, setActionStatus, pushActivity, withBusy } = useAsyncStatus({ showToast, updateToast, dismissToast });
   const { localServiceState, localServiceStatusText, checkLocalServiceHealth } = useLocalService({ isElectron, setActionStatus, pushActivity, onServiceRestored: async () => { await fetchServers(); await fetchFinalShellSettings(); } });
@@ -3400,7 +3404,7 @@ export function App() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [selectedFilePaths.length, clearSelectedFiles, confirmDialog, renameDialog, moveDialog, batchMoveDialog, mkdirDialog, previewDialog, contextMenu, workspaceTabMenu, blankContextMenu, showViewerDebugPanel, paletteOpen, showConnectionSettings, setActionStatus]);
 
-  const appShellClassName = `app-shell${uiTheme === "modern" ? " theme-modern" : ""} ui-density-${uiDensity} ui-theme-${resolvedTheme.id} ui-bg-${uiBackground}${uiBackground !== "solid" ? " ui-bg-fancy" : ""} ui-motion-${motionMode}${dynamicBackground && motionMode !== "reduced" ? " ui-dynamic-background" : ""}${isElectron ? " electron-immersive" : ""}${isElectron && isMacOS ? " electron-macos-immersive" : ""}`;
+  const appShellClassName = `app-shell${uiTheme === "modern" ? " theme-modern" : ""} ui-density-${uiDensity} ui-theme-${resolvedTheme.id} ui-bg-${uiBackground}${uiBackground !== "solid" ? " ui-bg-fancy" : ""} ui-motion-${motionMode}${dynamicBackground && motionMode !== "reduced" ? " ui-dynamic-background" : ""}${isElectron ? " electron-immersive" : ""}${isElectron && isMacOS ? " electron-macos-immersive" : ""}${hasWinControls ? " has-win-controls" : ""}`;
 
   /* 终端配色（独立槽位）：背景与 ITheme 都来自所选方案。
      定义位置必须早于 appShellStyle —— 后者要把配色注入 --terminal-background。 */
@@ -3577,6 +3581,7 @@ export function App() {
 
   return (
     <main className={`${appShellClassName}${isStandalonePipWindow ? " pip-standalone" : ""}${showTransferHistory || showQueryAdvanced || (showUtilityWorkspace && canShowEmbeddedUtilityWorkspace) ? " v2-drawer-push" : ""}`} style={appShellStyle}>
+      {hasWinControls ? <WindowControls /> : null}
       <section className="shell-layout">
         <SidebarPanel
           uiTheme={uiTheme}
