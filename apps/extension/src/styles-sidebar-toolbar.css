@@ -811,3 +811,66 @@ button:disabled {
 .context-menu-danger:hover {
   background: rgba(185, 74, 72, 0.08);
 }
+
+/* ---------- Windows 自绘窗口控制（2026-10-24 方案 B） ----------
+   Windows 主窗口无边框（main.cjs titleBarStyle:"hidden"），右上角三枚
+   最小化/最大化/关闭按钮由 WindowControls.tsx 渲染。按钮背景透明、颜色全走
+   主题 token → 天然跟随主题（含 ui-surface 切换），transition 提供切主题时
+   的渐进过渡；这是 titleBarOverlay（系统绘制、只能纯色瞬切）做不到的。
+   选择器统一带 .has-win-controls 前缀提权，避免被 .theme-modern button /
+   .theme-modern .workspace-session-strip 洗掉（见 style-architecture.md §5.1 按钮通病）。 */
+.has-win-controls .win-window-controls {
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: 40px;
+  display: flex;
+  align-items: stretch;
+  z-index: 60;
+  -webkit-app-region: no-drag;
+}
+
+/* 顶条右侧为三枚按钮（3 × 46px）让位，避免页签/加号被盖住 */
+.has-win-controls .workspace-session-strip,
+.theme-modern.has-win-controls .workspace-session-strip {
+  padding-right: 148px;
+}
+
+.has-win-controls .win-window-controls .win-ctl-btn {
+  width: 46px;
+  height: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: default;
+  transition: background-color 0.18s ease, color 0.18s ease;
+}
+
+.has-win-controls .win-window-controls .win-ctl-btn svg {
+  display: block;
+  stroke: currentColor;
+}
+
+.has-win-controls .win-window-controls .win-ctl-btn:hover {
+  background: color-mix(in srgb, var(--ink) 10%, transparent);
+  color: var(--ink);
+}
+
+.has-win-controls .win-window-controls .win-ctl-btn:active {
+  background: color-mix(in srgb, var(--ink) 16%, transparent);
+}
+
+.has-win-controls .win-window-controls .win-ctl-close:hover {
+  background: var(--red);
+  color: #ffffff;
+}
+
+.has-win-controls .win-window-controls .win-ctl-close:active {
+  background: color-mix(in srgb, var(--red) 82%, black 18%);
+  color: #ffffff;
+}

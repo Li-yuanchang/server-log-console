@@ -722,6 +722,37 @@ ipcMain.handle("toggle-pin", () => {
 
 ipcMain.handle("get-pin", () => isAlwaysOnTop);
 
+// --- 窗口控制（2026-10-24 方案 B：Windows 自绘标题栏）---
+/* Windows 主窗口无边框后，最小化/最大化/关闭由网页按钮经这里触发。
+   按 event.sender 定位窗口：目前只有主窗口渲染控制按钮，PiP 小窗保持
+   系统原生标题栏，但这样写之后 PiP 想接入也不用改主进程。 */
+ipcMain.handle("slc:win:minimize", (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (win && !win.isDestroyed()) win.minimize();
+});
+
+ipcMain.handle("slc:win:toggle-maximize", (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (!win || win.isDestroyed()) return false;
+  if (win.isMaximized()) {
+    win.unmaximize();
+  } else {
+    win.maximize();
+  }
+  return win.isMaximized();
+});
+
+ipcMain.handle("slc:win:close", (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (win && !win.isDestroyed()) win.close();
+});
+
+ipcMain.handle("slc:win:is-maximized", (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  return Boolean(win && !win.isDestroyed() && win.isMaximized());
+});
+
+
 ipcMain.handle("save-file", async (_event, buffer, defaultName) => {
   const win = BrowserWindow.getFocusedWindow() || mainWindow;
   const { canceled, filePath } = await dialog.showSaveDialog(win, {
@@ -1136,16 +1167,18 @@ function createWindow() {
     title: "",
     show: false,
     backgroundColor: "#fafafa",
-    /* 标题栏（2026-10-23 回退为系统原生方案）：
-       曾尝试 Windows 用 titleBarStyle:"hidden" + titleBarOverlay 让框架跟随主题，
-       但实测带来两个更严重的问题，故回退：
-         ① hidden 会把**系统绘制的窗口标题文字**一并去掉 → 顶部标题消失；
-         ② 覆盖层由系统单独绘制，与网页内容的让位带难对齐 → 出现上下两条色带。
-       现统一用 hiddenInset（macOS 沉浸式红绿灯），Windows/Linux 由系统绘制
-       原生标题栏：标题文字、窗口按钮、拖拽全部交给系统，稳定不会出错。
-       代价：Windows 那条标题栏底色由系统决定、不跟随 UI 主题。
+    /* 标题栏（2026-10-24 方案 B：Windows 自绘）：
+       - macOS：hiddenInset + 红绿灯位置，内容延伸到标题栏下方（不变）。
+       - Windows：titleBarStyle:"hidden"（无边框但保留系统缩放边/阴影），
+         最小化/最大化/关闭按钮由网页自绘（App.tsx 的 WindowControls，
+         经 slc:win:* IPC 控制窗口），拖拽复用 electron-immersive 的
+         -webkit-app-region 拖拽区体系。顶栏因此是普通 DOM，颜色/渐变/
+         过渡全部随主题 CSS 自动生效 —— 0.3.296 的 titleBarOverlay 方案
+         覆盖层由系统绘制、只能纯色瞬间切换且与网页让位带难对齐，本方案没有这些问题。
+         系统标题文字随之消失，属预期（应用不需要窗口标题文字）。
+       - Linux：保持默认边框（自绘标题栏暂不覆盖 Linux）。
        另：不再需要 titleBarOverlay / slc:set-titlebar-overlay / 让位带。 */
-    titleBarStyle: "hiddenInset",
+    titleBarStyle: process.platform === "darwin" ? "hiddenInset" : process.platform === "win32" ? "hidden" : "default",
     /* Windows 隐藏系统菜单栏（2026-10-23 用户反馈「wind 版顶部工具条隐藏」）：
        Windows 下 BrowserWindow 默认会渲染「文件/编辑/视图/窗口」菜单栏，
        而 macOS 的菜单在系统顶栏、不在窗口内 —— 所以只有 Windows 会多出一条。
@@ -1175,6 +1208,15 @@ function createWindow() {
     app.focus({ steal: true });
   });
   mainWindow.once("ready-to-show", () => probe("createWindow ready-to-show"));
+  /* 最大化状态变化推送（2026-10-24 方案 B）：自绘标题栏的按钮要在
+     最大化/还原图标间切换。macOS 用系统红绿灯、不受影响。 */
+  const sendMaximizeState = () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("slc:win:maximize-changed", mainWindow.isMaximized());
+    }
+  };
+  mainWindow.on("maximize", sendMaximizeState);
+  mainWindow.on("unmaximize", sendMaximizeState);
   mainWindow.webContents.on("did-finish-load", () => probe("createWindow did-finish-load"));
   mainWindow.webContents.on("did-fail-load", (_event, code, description) => probe(`createWindow did-fail-load ${code} ${description}`));
   mainWindow.webContents.on("render-process-gone", (_event, details) => handleMainRendererGone(details));
