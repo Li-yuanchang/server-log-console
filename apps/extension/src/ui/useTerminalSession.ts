@@ -65,14 +65,18 @@ function readTerminalTheme(container: HTMLElement | null, overrideBackground?: s
   return { shellBg, shellInk };
 }
 
-/** 终端配色 → xterm ITheme。背景仍可被 terminalBackgroundColor 覆盖（WinPiP 等）。 */
+/** 终端配色 → xterm ITheme。背景仍可被 terminalBackgroundColor 覆盖（WinPiP 等）。
+    follow：底色/文字/光标随 UI 主题（theme shell），ANSI 16 色用默认控制台方案 ——
+    所有主题的 shell 均为深色，one-dark 系 ANSI 恒可读；此前「跟随主题 + 日光浅色
+    方案」会把深色前景画到深色底上（不可读），follow 卡模型从根上消除该组合。 */
 function buildTerminalTheme(schemeId: TerminalColorSchemeId | undefined, shellBg: string, shellInk: string) {
-  const scheme = TERMINAL_SCHEMES.find((s) => s.id === schemeId) ?? TERMINAL_SCHEMES[0];
+  const follow = schemeId === "follow";
+  const scheme = TERMINAL_SCHEMES.find((s) => s.id === (follow ? "console" : schemeId)) ?? TERMINAL_SCHEMES[0];
   const t = scheme.theme;
   return {
     background: shellBg || t.background,
-    foreground: t.foreground === "#d7dde5" ? shellInk : t.foreground,
-    cursor: t.cursor,
+    foreground: follow ? (shellInk || t.foreground) : (t.foreground === "#d7dde5" ? shellInk : t.foreground),
+    cursor: follow ? (shellInk || t.cursor) : t.cursor,
     cursorAccent: shellBg || t.background,
     selectionBackground: t.selectionBackground,
     black: t.black, red: t.red, green: t.green, yellow: t.yellow,
