@@ -2818,6 +2818,29 @@ body.is-resizing-tree .theme-modern .browser-resizer::after {
   padding: 10px 14px 8px 88px;
 }
 
+/* 日志独立小窗头部：与终端小窗（上方 pip-terminal-standalone 块）完全同规格。
+   此前只在 styles-pip-toast.css 写了 (0,1,0) 规则，被本文件后加载的
+   `.theme-modern .viewer-floating-header { background: var(--panel-muted) }`（0,2,0）
+   压住 → 背景发灰、规格未跟上（用户反馈「没按终端的规格改，工具栏背景色也不对」）。
+   背景改 --panel 与终端一致；高度/内边距同值；mac 同样为红绿灯让位。 */
+.theme-modern.pip-standalone .viewer-floating-header-standalone,
+.theme-modern .pip-standalone .viewer-floating-header-standalone {
+  min-height: 40px;
+  padding: 8px 14px;
+  background: var(--panel);
+}
+
+.theme-modern.electron-macos-immersive.pip-standalone .viewer-floating-header-standalone,
+.theme-modern.electron-macos-immersive .pip-standalone .viewer-floating-header-standalone {
+  padding: 10px 14px 8px 88px;
+}
+
+/* 动作按钮同款胶囊规格（对齐 .terminal-panel-bar-standalone .terminal-panel-bar-actions button） */
+.theme-modern .pip-standalone .viewer-floating-header-actions button {
+  min-height: 32px;
+  border-radius: 999px;
+}
+
 .theme-modern .terminal-panel-bar-title strong,
 .theme-modern .terminal-panel-bar-title span {
   font-family: var(--font-ui);

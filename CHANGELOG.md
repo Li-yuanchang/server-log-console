@@ -6,6 +6,14 @@
 - **`docs/版本修复归档-2026-04-14.md`** — 记录问题背景、根因、修改点、经验教训和防复发清单。
 - **维护约定** — 详细代码链、安装版资源命中、排查过程与复盘结论统一写入归档，不在 `CHANGELOG.md` 重复展开。
 
+## [0.3.301] — 2026-10-24
+
+macOS 日志小窗头部规格对齐版本。
+
+### 修复
+
+- **macOS 日志小窗头部仍未对齐终端小窗** — 0.3.299 的对齐规则写在 styles-pip-toast.css（特异性 0,1,0），被后加载的 theme-modern.css `.theme-modern .viewer-floating-header { background: var(--panel-muted) }`（0,2,0）压住，导致背景发灰、规格未生效；现照终端小窗（pip-terminal-standalone 块）的写法在 theme-modern.css 以同特异性补齐：背景 `--panel`、高度/内边距同值（40px / `8px 14px`）、mac 为红绿灯让位（`10px 14px 8px 88px`），动作按钮同为 32px 胶囊规格。
+
 ## [0.3.300] — 2026-10-24
 
 Windows 小窗无边框化版本。
