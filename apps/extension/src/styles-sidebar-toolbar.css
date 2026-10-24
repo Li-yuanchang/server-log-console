@@ -830,9 +830,20 @@ button:disabled {
   -webkit-app-region: no-drag;
 }
 
-/* 顶条右侧为三枚按钮（3 × 46px）让位，避免页签/加号被盖住 */
+/* 顶条：右侧为三枚按钮（3 × 46px）让位，避免页签/加号被盖住。
+   同时补齐 mac 早已有、Windows 却漏掉的两条重置（2026-10-24 用户反馈
+   「wind 的 tab 都贴顶了，mac 有呼吸间距」）：
+   ① margin: 0 —— 网页版基础规则是 `margin: -6px -6px 0`（靠负边距贴边），
+      但沉浸式下 .main-panel 已无 padding，负边距会把整条往上推出可视区，
+      页签因此顶到窗口最上沿。macOS 有 .electron-macos-immersive 的重置，
+      Windows 一直缺这条。
+   ② min-height: 40px —— 与 mac 一致（3px + 34px 页签 + 3px = 40），
+      也与三枚窗口按钮的 40px 等高，右侧按钮不会比顶条高出一截。
+   上下 padding 由 .theme-modern .workspace-session-strip 的 3px 提供（对称）。 */
 .has-win-controls .workspace-session-strip,
 .theme-modern.has-win-controls .workspace-session-strip {
+  margin: 0;
+  min-height: 40px;
   padding-right: 148px;
 }
 

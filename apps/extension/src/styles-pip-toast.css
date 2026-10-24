@@ -612,8 +612,15 @@
 .viewer-pip-placeholder .ghost-button {
   align-self: center;
   display: inline-flex;
+  /* 垂直居中（2026-10-24 用户反馈「小窗时主窗口的按钮样式不对、文字没有垂直居中」）：
+     原只有 justify-content:center（管水平），缺 align-items → inline-flex 下行盒按
+     基线定位，文字整体偏上；且父容器 align-items:center 会把按钮宽度收缩到内容宽，
+     与 .ghost-button 的 height:28px + 左右 12px padding 叠加后显得又窄又扁。
+     这里补齐 align-items 并把最小宽度交回按钮自身规格。 */
+  align-items: center;
   justify-content: center;
   text-align: center;
+  min-width: fit-content;
 }
 
 .pip-viewer-wrap {
@@ -694,30 +701,46 @@
   flex-shrink: 0;
 }
 
+/* 对齐终端小窗的头部骨架（2026-10-24 用户反馈「日志小窗比终端小窗弱一档，
+   名称和快捷键跟顶部 header 分开了，照终端小窗的结构与样式调整」）：
+   两列 grid（标题 1fr + 动作 auto），标题左对齐、动作靠右，
+   与 .terminal-panel-bar-standalone 同构。
+   原先此处只给了 padding-left: 88px，grid 仍是基础规则的三列
+   （72px 1fr auto）→ 标题落进中间弹性列且 text-align:center，
+   视觉上脱离左缘、与顶部 header 分离。 */
 .viewer-floating-header-standalone {
-  padding-left: 88px;
-}
-
-.electron-macos-immersive .viewer-floating-header-standalone {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 8px;
-  row-gap: 8px;
-  padding-top: 10px;
+  gap: 10px;
+  /* 高度/内边距取终端小窗的实测规格（theme-modern 下 40px + 8px 14px），
+     两个小窗的头部因此等高齐平，不再「日志小窗弱一档」。 */
+  min-height: 40px;
+  padding: 8px 14px;
 }
 
-.electron-macos-immersive .viewer-floating-header-standalone .viewer-floating-header-spacer {
+/* standalone 下占位元素不再需要（标题 1fr 撑开，动作自然靠右） */
+.viewer-floating-header-standalone .viewer-floating-header-spacer {
   display: none;
 }
 
-.electron-macos-immersive .viewer-floating-header-standalone .viewer-floating-header-title {
+.viewer-floating-header-standalone .viewer-floating-header-title {
+  justify-items: start;
   text-align: left;
-  align-self: start;
+  align-self: center;
 }
 
-.electron-macos-immersive .viewer-floating-header-standalone .viewer-floating-header-actions {
+.viewer-floating-header-standalone .viewer-floating-header-actions {
   justify-self: end;
-  align-self: start;
+  align-self: center;
+  gap: 4px;
+}
+
+/* macOS：为红绿灯让位（88px）+ 顶部呼吸，与终端小窗同名规则一致。
+   Windows 的 PiP 窗口 titleBarStyle:hiddenInset 不被支持 → 退回系统原生
+   标题栏（自带上边距），故不需要这些让位。 */
+.electron-macos-immersive .viewer-floating-header-standalone {
+  padding-top: 10px;
+  padding-left: 88px;
 }
 
 .viewer-floating-header-standalone .viewer-floating-header-actions {
@@ -1023,12 +1046,25 @@
 
 .terminal-panel-bar-standalone {
   display: grid;
-  grid-template-columns: 88px minmax(0, 1fr) auto;
+  /* 跨平台统一两列（2026-10-24 用户反馈「wind 的小窗样式也有问题」）：
+     原基础规则是三列 `88px minmax(0,1fr) auto`，第一列 88px 本是给 macOS
+     红绿灯预留的安全区 —— 但 DOM 里并没有 safearea 元素（只有 title /
+     spacer / actions 三个），且只有 macOS 才把列覆盖成两列。
+     结果 Windows 走基础规则：标题被塞进 88px 窄列、超出即省略号截断。
+     现两列对所有平台生效，macOS 的 88px 让位改由 padding-left 承担。 */
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  min-height: 54px;
-  padding: 8px 12px;
+  min-height: 40px;
+  padding: 8px 14px;
   gap: 10px;
   -webkit-app-region: drag;
+}
+
+/* 两列网格下必须隐藏 spacer（2026-10-24）：DOM 始终渲染
+   title / spacer / actions 三个子元素，若 spacer 仍参与布局，
+   第三个元素会被挤到第二行、头部高度翻倍。原三列时它正好占满中间列。 */
+.terminal-panel-bar-standalone .terminal-panel-bar-spacer {
+  display: none;
 }
 
 .electron-macos-immersive .terminal-panel-bar-standalone {
