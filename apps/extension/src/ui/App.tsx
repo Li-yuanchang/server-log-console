@@ -4012,10 +4012,15 @@ export function App() {
                   </div>
                   ) : (
                   <div className={`viewer-floating-header${isStandaloneViewerWindow ? " viewer-floating-header-standalone" : ""}`}>
-                    <div className="viewer-floating-header-spacer" />
+                    {/* 顺序对齐终端小窗（2026-10-24 用户反馈「日志小窗的名称和快捷键
+                        跟顶部 header 分开了，照终端小窗的结构改」）：
+                        标题在前 → 占位弹性撑开 → 动作靠右。
+                        原先 spacer 在标题之前、基础规则又是三列 grid（72px 1fr auto），
+                        标题被挤进中间的弹性列并居中，视觉上与左缘脱开。 */}
                     <div className="viewer-floating-header-title">
                       <strong>{compactViewerTitle}</strong>
                     </div>
+                    <div className="viewer-floating-header-spacer" />
                     <div className="viewer-floating-header-actions">
                       <div className="viewer-debug-anchor" ref={viewerDebugRef}>
                         <button
