@@ -4098,6 +4098,11 @@ export function App() {
                           <PipExpandIcon size={14} />
                         </button>
                       ) : null}
+                      {/* Windows 无边框小窗：自绘最小化/最大化/关闭（2026-10-24）。
+                          关闭走 win.close() → 主进程 pip-window-closed 通知链 → 主窗口自动收回。 */}
+                      {isStandaloneViewerWindow && (window as any).electronAPI?.platform === "win32" ? (
+                        <WindowControls />
+                      ) : null}
                     </div>
                   </div>
                   )}

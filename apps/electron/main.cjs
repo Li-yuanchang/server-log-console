@@ -899,8 +899,21 @@ ipcMain.handle("open-pip-window", (_event, config = {}) => {
     minHeight: 420,
     title: config.title || "日志控制台",
     alwaysOnTop: isUtilityMode ? false : true,
-    titleBarStyle: isUtilityMode ? "default" : "hiddenInset",
-    trafficLightPosition: isUtilityMode ? undefined : { x: 12, y: 12 },
+    /* 标题栏按平台分三套（2026-10-24，与主窗口方案 B 一致）：
+       - macOS：hiddenInset，红绿灯浮在内容上（头部用 padding-left 88px 让位）。
+       - Windows：hidden 无边框 —— hiddenInset 在 Windows 不受支持会退回原生
+         标题栏，多出一条与 UI 无关的系统条（用户反馈「大量空白、标题分离」）。
+         无边框后窗口按钮由网页自绘（WindowControls，slc:win:* IPC），
+         头部直接顶到窗口最上沿，与 mac 结构一致。
+       - Linux / 工具小窗：保持系统默认边框。 */
+    titleBarStyle: isUtilityMode
+      ? "default"
+      : process.platform === "darwin"
+        ? "hiddenInset"
+        : process.platform === "win32"
+          ? "hidden"
+          : "default",
+    ...(isUtilityMode || process.platform !== "darwin" ? {} : { trafficLightPosition: { x: 12, y: 12 } }),
     /* 小窗同样隐藏系统菜单栏（2026-10-23 用户反馈「小窗顶部 wind 快捷键没去掉」）：
        主窗口早已设了 autoHideMenuBar，但 PiP 这里漏了 —— Windows 下小窗顶部
        因此仍有一条「文件/编辑/视图/窗口」菜单栏，占掉一块高度、还把小窗内容压扁。
@@ -923,6 +936,15 @@ ipcMain.handle("open-pip-window", (_event, config = {}) => {
   }
 
   bindDevToolsShortcut(nextPipWindow);
+  /* 最大化状态推送（2026-10-24）：Windows 自绘标题栏的按钮要在
+     最大化/还原图标间切换；每个小窗推给自己的 webContents。 */
+  const pushPipMaximizeState = () => {
+    if (!nextPipWindow.isDestroyed()) {
+      nextPipWindow.webContents.send("slc:win:maximize-changed", nextPipWindow.isMaximized());
+    }
+  };
+  nextPipWindow.on("maximize", pushPipMaximizeState);
+  nextPipWindow.on("unmaximize", pushPipMaximizeState);
   nextPipWindow.webContents.on("render-process-gone", (_event, details) => {
     probe(`pip render-process-gone ${pipMode} ${details.reason} ${details.exitCode}`);
     if (isQuitting || details.reason === "clean-exit") return;
