@@ -3640,8 +3640,14 @@ export function App() {
                而窗口拖拽区正是由 .workspace-session-strip 承担
                （styles-sidebar-toolbar.css 的 -webkit-app-region: drag）。
                补一条空条后，未连接状态下顶部同样是可拖拽区，且高度/背景与有
-               tab 时一致，不产生布局跳动。 */
-            <div className="workspace-session-strip workspace-session-strip-empty" aria-hidden="true" />
+               tab 时一致，不产生布局跳动。
+               2026-10-24：独立小窗（日志/终端/工具）不渲染 —— 小窗有自己的
+               头部拖拽区（viewer-floating-header / terminal-panel-bar），
+               再叠一条空条会把头部顶下去、上方多出一段空白
+               （用户反馈「这是什么玩意」）。 */
+            !isStandalonePipWindow ? (
+              <div className="workspace-session-strip workspace-session-strip-empty" aria-hidden="true" />
+            ) : null
           )}
           <section className="toolbar-panel">
             {/* 侧栏移动档顶栏（sp-appbar + 服务器 chip）：宽档由 CSS display:none 隐藏，DOM 常驻 */}
