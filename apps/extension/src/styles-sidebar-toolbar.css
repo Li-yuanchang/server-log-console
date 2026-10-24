@@ -946,3 +946,13 @@ body.is-win32 .pip-standalone .viewer-floating-header-standalone,
 body.is-win32 .pip-standalone .terminal-panel-bar-standalone {
   padding-right: 152px;
 }
+
+/* 错位根因（2026-10-24 实测）：头部动作区带着嵌入态悬浮显隐动效残留的
+   `transform: translateY(0)`（identity 矩阵也是 transform）——任何非 none 的
+   transform 都会成为 fixed 子元素的包含块，WindowControls 因此相对动作区
+   而非窗口定位，落在动作图标下方（用户截图的错位）。standalone 下显式清零。
+   特异性 (0,3,0) —— 高于 styles-pip-toast.css 的 (0,2,0) 残留声明。 */
+.pip-standalone .viewer-floating-header .viewer-floating-header-actions,
+.pip-standalone .terminal-panel-bar-standalone .terminal-panel-bar-actions {
+  transform: none;
+}
