@@ -4,6 +4,7 @@ import { Columns2, Command, Ellipsis, LayoutGrid, Rows2, Search, Terminal as Ter
 import type { Terminal } from "@xterm/xterm";
 import type { ServerSummary } from "@server-log-console/shared";
 import { localServiceBase } from "./api.js";
+import { WindowControls } from "./WindowControls.js";
 import type { TerminalColorSchemeId } from "./useUiTheme.js";
 import { copyText } from "./utils.js";
 import { TerminalTabStrip, type TerminalTabItem, type TerminalTabStatus } from "./TerminalTabStrip.js";
@@ -794,6 +795,11 @@ export function TerminalPanel(props: TerminalPanelProps) {
         ) : null}
         <span className="terminal-panel-bar-spacer" />
         <div className="terminal-panel-bar-actions">
+          {/* Windows 无边框小窗：自绘最小化/最大化/关闭（2026-10-24，与日志小窗一致）。
+              关闭走 win.close() → 主进程 pip-window-closed 通知链 → 主窗口恢复会话状态。 */}
+          {isStandalone && isElectronRuntime && (window as any).electronAPI?.platform === "win32" ? (
+            <WindowControls />
+          ) : null}
           <button
             type="button"
             className="terminal-toolbar-button terminal-toolbar-button-icon"
