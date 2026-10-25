@@ -52,12 +52,11 @@ export interface ProviderPreset {
 
 export const PROVIDER_PRESETS: ProviderPreset[] = [
   {
-    label: "智谱 GLM (免费)",
+    label: "智谱 GLM",
     protocol: "openai",
     endpoint: "https://open.bigmodel.cn/api/paas/v4",
     model: "glm-4-flash",
-    apiKey: "***REDACTED***",
-    note: "GLM-4-Flash 免费，开箱即用",
+    note: "GLM-4-Flash 免费，注册后填入自己的 API Key",
   },
   {
     label: "DeepSeek",
@@ -78,8 +77,7 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     protocol: "ollama",
     endpoint: "http://localhost:11434",
     model: "qwen2.5:7b",
-    apiKey: "ollama",
-    note: "需本地安装 Ollama",
+    note: "需本地安装 Ollama，无需 API Key",
   },
 ];
 
@@ -156,7 +154,7 @@ function makeDefaultConfig(): AIConfig {
     name: preset.label.replace(/\s*\(.*\)$/, ""),
     protocol: preset.protocol,
     endpoint: preset.endpoint,
-    apiKey: preset.apiKey ?? "",
+    apiKey: "",
     models: [preset.model],
   };
   return {
@@ -190,7 +188,7 @@ export function readAIConfig(): AIConfig {
         endpoint: typeof parsed.apiEndpoint === "string" && parsed.apiEndpoint
           ? parsed.apiEndpoint.replace(/\/chat\/completions\/?$/, "")
           : preset.endpoint,
-        apiKey: typeof parsed.apiKey === "string" ? parsed.apiKey : (preset.apiKey ?? ""),
+        apiKey: typeof parsed.apiKey === "string" ? parsed.apiKey : "",
         models: [typeof parsed.model === "string" && parsed.model ? parsed.model : preset.model],
       };
       const legacyAttach = localStorage.getItem(LEGACY_ATTACH_KEY);
