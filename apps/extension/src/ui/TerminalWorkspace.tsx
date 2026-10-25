@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent as ReactMouseEvent } from "react";
 import { Columns2, Command, Ellipsis, LayoutGrid, Rows2, Search, Terminal as TerminalIcon, Upload, X, Zap } from "lucide-react";
 import type { Terminal } from "@xterm/xterm";
@@ -20,6 +20,7 @@ import { useTerminalTabs, TERMINAL_QUICKBAR_OPEN_STORAGE_KEY } from "./useTermin
 import { TerminalSplitView, type FocusedPaneSnapshot, type PaneStateSnapshot } from "./TerminalSplitView.js";
 import { useBrowserTerminalPip } from "./useBrowserTerminalPip.js";
 import { TerminalAI } from "./TerminalAI.js";
+import type { TerminalAIController } from "./ai-service.js";
 import { PipExpandIcon } from "./PipExpandIcon.js";
 import { EmptyWorkbench } from "./EmptyWorkbench.js";
 import { formatKeyHint } from "./key-hints.js";
@@ -50,6 +51,8 @@ type TerminalSessionApi = ReturnType<typeof useTerminalSession>;
 
 /** 断线自动重试上限（StatusBar 显示 n/N；达到上限后的“停止重试”属批6 范围，本期仅封顶展示） */
 const TERMINAL_RETRY_MAX = 5;
+/** AI 自动附带的终端画面行数（可视区 + 少量回滚） */
+const TERMINAL_CONTEXT_LINES = 30;
 
 const isElectronRuntime = typeof window !== "undefined" && Boolean((window as any).electronAPI);
 
@@ -471,6 +474,74 @@ export function TerminalPanel(props: TerminalPanelProps) {
   const pasteToActiveTerminal = useCallback((text: string) => {
     getActionApi()?.pasteToTerminal(text);
   }, [getActionApi]);
+
+  /** 终端画面快照：读激活终端 buffer 的最近若干行（AI 自动附带上下文用）。
+      纯客户端读 buffer，不向 PTY 写任何字节；全屏应用（alt screen）下返回空串。 */
+  const getTerminalContextText = useCallback((): string => {
+    const terminal = getActionTerminal();
+    if (!terminal || terminal.buffer.active.type === "alternate") return "";
+    const buffer = terminal.buffer.active;
+    const total = buffer.length;
+    const start = Math.max(0, total - TERMINAL_CONTEXT_LINES);
+    const lines: string[] = [];
+    for (let index = start; index < total; index += 1) {
+      const line = buffer.getLine(index);
+      if (line) lines.push(line.translateToString(true).replace(/\s+$/u, ""));
+    }
+    while (lines.length > 0 && !lines[lines.length - 1].trim()) lines.pop();
+    return lines.join("\n");
+  }, [getActionTerminal]);
+
+  /** AI 命令执行回路：命令写入 PTY 后轮询 buffer，「出现新输出且 ~1s 无新增行」视为落定，
+      超时兜底 15s；返回两次快照之间除末尾提示符外的全部行。 */
+  const executeAndCapture = useCallback((command: string): Promise<{ output: string; timedOut: boolean }> => {
+    return new Promise((resolve) => {
+      const terminal = getActionTerminal();
+      if (!terminal || terminal.buffer.active.type === "alternate") {
+        resolve({ output: "", timedOut: false });
+        return;
+      }
+      const baseline = terminal.buffer.active.length;
+      pasteToActiveTerminal(`${command}\n`);
+      const startedAt = Date.now();
+      let lastLength = baseline;
+      let idleTicks = 0;
+      const timer = window.setInterval(() => {
+        const current = terminal.buffer.active;
+        const length = current.length;
+        const elapsed = Date.now() - startedAt;
+        if (length > lastLength) {
+          lastLength = length;
+          idleTicks = 0;
+        } else {
+          idleTicks += 1;
+        }
+        const settled = length > baseline && idleTicks >= 4;
+        const timedOut = elapsed >= 15000;
+        if (!settled && !timedOut) return;
+        window.clearInterval(timer);
+        if (current.type === "alternate") {
+          resolve({ output: "", timedOut: false });
+          return;
+        }
+        const lines: string[] = [];
+        for (let index = baseline; index < lastLength; index += 1) {
+          const line = current.getLine(index);
+          if (line) lines.push(line.translateToString(true).replace(/\s+$/u, ""));
+        }
+        while (lines.length > 0 && !lines[lines.length - 1].trim()) lines.pop();
+        if (lines.length > 0 && /(\]#|\$|%)\s*$/u.test(lines[lines.length - 1].trim())) lines.pop();
+        resolve({ output: lines.join("\n"), timedOut });
+      }, 250);
+    });
+  }, [getActionTerminal, pasteToActiveTerminal]);
+
+  /** AI 面板的终端控制器（纯客户端能力：读 buffer / 写 PTY） */
+  const aiTerminalController: TerminalAIController = useMemo(() => ({
+    getContextText: getTerminalContextText,
+    executeAndCapture,
+    isAvailable: () => getActionTerminal() != null,
+  }), [getTerminalContextText, executeAndCapture, getActionTerminal]);
 
   const clearActiveTerminal = useCallback(() => {
     /* 只清本地回滚缓冲，不向远端发送任何字符（JumpServer 兼容红线）；
@@ -1067,7 +1138,7 @@ export function TerminalPanel(props: TerminalPanelProps) {
                 serverId={props.serverId}
                 serverLabel={props.server?.name || props.server?.host || props.serverId}
                 selectionText={selectionText}
-                onExecute={(command) => pasteToActiveTerminal(command)}
+                controller={aiTerminalController}
                 onClose={() => props.onToggleTerminalOverlay("ai")}
               />
             </aside>

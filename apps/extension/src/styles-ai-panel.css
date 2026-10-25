@@ -1,0 +1,1258 @@
+/* ===========================================================================
+   Terminal AI 面板（tai-*）—— 单一样式源
+   ---------------------------------------------------------------------------
+   本文件取代散落在 styles-tsc.css / theme-modern.css / theme-modern-v2.css /
+   align-s5-terminal.css §14 的全部 .tai-* 规则（旧规则已删除，加载序在最后）。
+   设计口径：
+   - 颜色全部走主题 token（--panel/--line/--ink/--accent/...），浅色深色自动跟随
+   - 命令卡代表「终端」本体：恒用 --terminal-background/--shell-ink（全主题下终端区恒深色），
+     卡上的强调按钮（发送到终端 / 让 AI 分析）用 --accent + --on-accent 跟随应用主题
+   - 布局保护（320px 侧板钉宽 / 头部收缩 / <1024px 悬浮覆盖）仍在 align-s5-terminal.css §15/16
+   =========================================================================== */
+
+/* ---------- 容器 ---------- */
+.tai-dropdown {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--panel, #fff);
+  color: var(--ink, #171717);
+  font-size: var(--fs-sm);
+  overflow: hidden;
+}
+
+/* ---------- 头部 ---------- */
+.tai-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  height: 44px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--line, #eaeaea);
+  background: var(--panel, #fff);
+}
+.tai-header-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-sm);
+  font-weight: 650;
+  color: var(--ink, #171717);
+}
+.tai-sparkle {
+  color: var(--accent, #0070f3);
+}
+.tai-badge-unconfigured {
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 7px;
+  border-radius: 9px;
+  font-size: var(--fs-2xs);
+  color: var(--amber, #d97706);
+  background: color-mix(in srgb, var(--amber, #d97706) 12%, transparent);
+}
+.tai-header-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.tai-hdr-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: var(--r-s, 7px);
+  background: transparent;
+  color: var(--ink-soft, #666);
+}
+.tai-hdr-btn:hover:not(:disabled) {
+  background: var(--panel-muted, #f5f5f5);
+  color: var(--ink, #171717);
+}
+.tai-hdr-btn:disabled {
+  opacity: 0.4;
+}
+
+/* ---------- 上下文条 ---------- */
+.tai-ctx {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: none;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--line, #eaeaea);
+}
+.tai-ctx-label {
+  font-size: var(--fs-xs);
+  color: var(--ink-muted, #8f8f8f);
+}
+.tai-ctx-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid var(--line, #eaeaea);
+  border-radius: 12px;
+  background: var(--panel-muted, #f5f5f5);
+  color: var(--ink-soft, #666);
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+}
+button.tai-ctx-chip:not(:disabled) {
+  cursor: pointer;
+}
+button.tai-ctx-chip:hover:not(:disabled) {
+  border-color: var(--line-strong, #d4d4d4);
+  color: var(--ink, #171717);
+}
+.tai-ctx-chip-on {
+  border-color: transparent;
+  background: var(--accent-soft, rgba(0, 112, 243, 0.08));
+  color: var(--accent, #0070f3);
+  font-weight: 550;
+}
+.tai-ctx-chip:disabled {
+  opacity: 0.45;
+}
+.tai-ctx-chip-quote {
+  cursor: default;
+}
+
+/* ---------- 消息区 ---------- */
+.tai-messages {
+  flex: 1 1 0%;
+  min-height: 0;
+  width: 100%;
+  overflow-y: auto;
+  padding: 16px 14px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.tai-messages::-webkit-scrollbar {
+  width: 6px;
+}
+.tai-messages::-webkit-scrollbar-thumb {
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--ink-muted, #8f8f8f) 30%, transparent);
+}
+.tai-divider {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: none;
+  padding: 6px 10px;
+  border-radius: var(--r-s, 8px);
+  background: var(--accent-soft, rgba(0, 112, 243, 0.08));
+  color: var(--accent, #0070f3);
+  font-size: var(--fs-xs);
+}
+
+/* 用户消息：右对齐强调底气泡 */
+.tai-msg {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.tai-msg-user {
+  align-items: flex-end;
+}
+.tai-user-bubble {
+  max-width: 88%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 5px;
+  padding: 9px 13px;
+  border-radius: var(--r-m, 10px);
+  border-bottom-right-radius: 4px;
+  background: var(--accent-soft, rgba(0, 112, 243, 0.08));
+  color: var(--ink, #171717);
+}
+.tai-user-text {
+  margin: 0;
+  font-size: var(--fs-sm);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.tai-quote-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--fs-2xs);
+  color: var(--accent, #0070f3);
+  white-space: nowrap;
+}
+
+/* AI 消息：不再套气泡，直接排文本 + 命令卡 */
+.tai-msg-ai {
+  align-items: flex-start;
+  gap: 8px;
+}
+.tai-ai-text {
+  margin: 0;
+  max-width: 100%;
+  font-size: var(--fs-sm);
+  line-height: 1.66;
+  color: var(--ink, #171717);
+  overflow-wrap: anywhere;
+}
+.tai-ai-text code {
+  font-family: var(--mono-font-family, monospace);
+  font-size: var(--fs-xs);
+  padding: 0 4px;
+  border: 1px solid var(--line, #eaeaea);
+  border-radius: 4px;
+  background: var(--panel-muted, #f5f5f5);
+}
+.tai-cmd-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+.tai-msg-streaming .tai-ai-text {
+  color: var(--ink-soft, #666);
+}
+.tai-thinking {
+  flex-direction: row;
+  align-items: center;
+  gap: 7px;
+  color: var(--ink-muted, #8f8f8f);
+  font-size: var(--fs-xs);
+}
+@keyframes tai-spin {
+  to { transform: rotate(360deg); }
+}
+.tai-spin {
+  animation: tai-spin 0.8s linear infinite;
+}
+
+/* ---------- 命令卡：终端本体色（恒深色），强调按钮跟随 --accent ---------- */
+.tai-cmd-card {
+  width: 100%;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, #ffffff 8%, transparent);
+  border-radius: var(--r-m, 10px);
+  background: var(--terminal-background, var(--shell, #0a0a0a));
+  color: var(--shell-ink, #d7dde5);
+  font-family: var(--mono-font-family, monospace);
+  font-size: var(--fs-xs);
+}
+.tai-cmd-card-blocked {
+  border-color: color-mix(in srgb, var(--red, #dc2626) 45%, transparent);
+  opacity: 0.9;
+}
+.tai-cmd-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.tai-cmd-prompt {
+  flex: none;
+  color: color-mix(in srgb, var(--green, #16a34a) 70%, #ffffff 30%);
+  font-weight: 550;
+}
+.tai-cmd-code {
+  flex: 1 1 0%;
+  min-width: 0;
+  overflow-x: auto;
+  white-space: pre;
+  scrollbar-width: none;
+  color: inherit;
+}
+.tai-cmd-code::-webkit-scrollbar {
+  display: none;
+}
+.tai-cmd-actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.tai-cmd-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid color-mix(in srgb, #ffffff 12%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, #ffffff 5%, transparent);
+  color: var(--shell-mut, #5c6b7a);
+  font-size: var(--fs-2xs);
+  white-space: nowrap;
+}
+.tai-cmd-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, #ffffff 10%, transparent);
+  color: var(--shell-ink, #d7dde5);
+}
+.tai-cmd-btn:disabled {
+  opacity: 0.4;
+}
+.tai-cmd-btn svg {
+  display: block;
+  margin: 0;
+}
+.tai-cmd-btn-primary {
+  border-color: transparent;
+  background: var(--accent, #0070f3);
+  color: var(--on-accent, #ffffff);
+  font-weight: 550;
+}
+.tai-cmd-btn-primary:hover:not(:disabled) {
+  background: var(--accent-strong, var(--accent, #0070f3));
+  color: var(--on-accent, #ffffff);
+}
+.tai-cmd-btn-icon {
+  width: 22px;
+  padding: 0;
+}
+/* 安全徽章 */
+.tai-badge {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 18px;
+  padding: 0 7px;
+  border-radius: 9px;
+  font-family: inherit;
+  font-size: var(--fs-2xs);
+  white-space: nowrap;
+}
+.tai-badge-safe {
+  color: color-mix(in srgb, var(--green, #16a34a) 65%, #ffffff 35%);
+  background: color-mix(in srgb, var(--green, #16a34a) 18%, transparent);
+}
+.tai-badge-info {
+  color: color-mix(in srgb, var(--accent, #0070f3) 70%, #ffffff 30%);
+  background: color-mix(in srgb, var(--accent, #0070f3) 18%, transparent);
+}
+.tai-badge-warn {
+  color: color-mix(in srgb, var(--amber, #d97706) 70%, #ffffff 30%);
+  background: color-mix(in srgb, var(--amber, #d97706) 20%, transparent);
+}
+.tai-badge-danger {
+  color: color-mix(in srgb, var(--red, #dc2626) 75%, #ffffff 25%);
+  background: color-mix(in srgb, var(--red, #dc2626) 22%, transparent);
+}
+/* 等待输出 / 已捕获 */
+.tai-cmd-wait {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--shell-mut, #5c6b7a);
+  font-family: inherit;
+  font-size: var(--fs-2xs);
+  white-space: nowrap;
+}
+.tai-cmd-result {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed color-mix(in srgb, #ffffff 12%, transparent);
+}
+.tai-cmd-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.tai-cmd-captured {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: color-mix(in srgb, var(--green, #16a34a) 60%, #ffffff 40%);
+  font-family: inherit;
+  font-size: var(--fs-2xs);
+}
+.tai-cmd-foot .tai-cmd-btn-primary {
+  margin-left: auto;
+}
+.tai-cmd-output {
+  margin: 8px 0 0;
+  max-height: 140px;
+  overflow: auto;
+  padding: 7px 9px;
+  border-radius: var(--r-s, 7px);
+  background: color-mix(in srgb, #ffffff 4%, transparent);
+  color: color-mix(in srgb, var(--shell-ink, #d7dde5) 82%, transparent);
+  font-family: var(--mono-font-family, monospace);
+  font-size: var(--fs-2xs);
+  line-height: 1.6;
+  white-space: pre;
+}
+
+/* ---------- 空态 / 欢迎页 ---------- */
+.tai-welcome {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 28px 8px 12px;
+  text-align: center;
+}
+.tai-welcome-icon {
+  color: var(--accent, #0070f3);
+  margin-bottom: 4px;
+}
+.tai-welcome-title {
+  margin: 0;
+  font-size: var(--fs-sm);
+  font-weight: 650;
+  color: var(--ink, #171717);
+}
+.tai-welcome-desc {
+  margin: 0 0 10px;
+  max-width: 240px;
+  font-size: var(--fs-xs);
+  line-height: 1.6;
+  color: var(--ink-muted, #8f8f8f);
+}
+.tai-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+}
+.tai-suggestion {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 11px;
+  border: 1px solid var(--line, #eaeaea);
+  border-radius: 999px;
+  background: var(--panel, #fff);
+  color: var(--ink-soft, #666);
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+}
+.tai-suggestion:hover:not(:disabled) {
+  border-color: var(--line-strong, #d4d4d4);
+  color: var(--ink, #171717);
+}
+.tai-suggestion:disabled {
+  opacity: 0.45;
+}
+
+/* ---------- 输入区（composer 卡片） ---------- */
+.tai-composer {
+  flex: none;
+  margin: 8px 12px 12px;
+  border: 1px solid var(--line, #eaeaea);
+  border-radius: var(--r-m, 10px);
+  background: var(--panel, #fff);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.tai-composer:focus-within {
+  border-color: var(--accent, #0070f3);
+  box-shadow: 0 0 0 3px var(--accent-soft, rgba(0, 112, 243, 0.08));
+}
+.tai-textarea {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 38px;
+  padding: 10px 12px 4px;
+  border: none;
+  border-radius: var(--r-m, 10px) var(--r-m, 10px) 0 0;
+  background: transparent;
+  color: var(--ink, #171717);
+  font-family: inherit;
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  resize: none;
+  outline: none;
+}
+.tai-textarea::placeholder {
+  color: var(--ink-muted, #8f8f8f);
+}
+.tai-textarea:disabled {
+  opacity: 0.6;
+}
+.tai-comp-bar {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 8px 8px;
+}
+.tai-attach {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: var(--r-s, 8px);
+  background: transparent;
+  color: var(--ink-muted, #8f8f8f);
+}
+.tai-attach-on {
+  background: var(--accent-soft, rgba(0, 112, 243, 0.08));
+  color: var(--accent, #0070f3);
+}
+.tai-attach:disabled {
+  opacity: 0.4;
+}
+.tai-attach svg,
+.tai-send svg {
+  display: block;
+  margin: 0;
+}
+.tai-quick {
+  flex: 1 1 0%;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.tai-quick::-webkit-scrollbar {
+  display: none;
+}
+.tai-qchip {
+  flex: none;
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid var(--line, #eaeaea);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--ink-soft, #666);
+  font-size: var(--fs-2xs);
+  white-space: nowrap;
+}
+.tai-qchip:hover:not(:disabled) {
+  color: var(--ink, #171717);
+  background: var(--panel-muted, #f5f5f5);
+}
+.tai-qchip:disabled {
+  opacity: 0.45;
+}
+.tai-send {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 50%;
+  background: var(--accent, #0070f3);
+  color: var(--on-accent, #ffffff);
+}
+.tai-send:hover:not(:disabled) {
+  background: var(--accent-strong, var(--accent, #0070f3));
+}
+.tai-send:disabled {
+  opacity: 0.4;
+}
+
+/* ---------- 设置面板 ---------- */
+.tai-settings {
+  flex: 1 1 0%;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: var(--panel, #fff);
+  color: var(--ink, #171717);
+  font-size: var(--fs-xs);
+}
+.tai-settings-title {
+  font-size: var(--fs-sm);
+  font-weight: 650;
+  color: var(--ink, #171717);
+}
+.tai-settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.tai-settings-field > span {
+  color: var(--ink-soft, #666);
+}
+.tai-input {
+  height: 30px;
+  padding: 0 9px;
+  border: 1px solid var(--line, #eaeaea);
+  border-radius: var(--r-s, 7px);
+  background: var(--panel-muted, #f5f5f5);
+  color: var(--ink, #171717);
+  font-size: var(--fs-xs);
+}
+.tai-input:focus {
+  outline: none;
+  border-color: var(--accent, #0070f3);
+}
+.tai-settings-check {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--ink-soft, #666);
+}
+.tai-preset-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.tai-preset-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid var(--line, #eaeaea);
+  border-radius: var(--r-s, 7px);
+  background: var(--panel-muted, #f5f5f5);
+  text-align: left;
+}
+.tai-preset-btn strong {
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--ink, #171717);
+}
+.tai-preset-btn span {
+  font-size: var(--fs-2xs);
+  color: var(--ink-muted, #8f8f8f);
+}
+.tai-preset-btn:hover {
+  border-color: var(--line-strong, #d4d4d4);
+}
+.tai-preset-active {
+  border-color: var(--accent, #0070f3);
+  background: var(--accent-soft, rgba(0, 112, 243, 0.08));
+}
+.tai-settings-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 2px;
+}
+.tai-btn-save {
+  flex: 1;
+  height: 28px;
+  border: none;
+  border-radius: var(--r-s, 7px);
+  background: var(--accent, #0070f3);
+  color: var(--on-accent, #ffffff);
+  font-size: var(--fs-xs);
+  font-weight: 550;
+}
+.tai-btn-save:hover {
+  background: var(--accent-strong, var(--accent, #0070f3));
+}
+.tai-btn-cancel {
+  flex: 1;
+  height: 28px;
+  border: 1px solid var(--line, #eaeaea);
+  border-radius: var(--r-s, 7px);
+  background: transparent;
+  color: var(--ink-soft, #666);
+  font-size: var(--fs-xs);
+}
+.tai-btn-cancel:hover {
+  background: var(--panel-muted, #f5f5f5);
+}
+
+/* ---------- 工具行 AI 开关高亮（TerminalWorkspace 头部按钮） ---------- */
+.tai-toggle-active {
+  color: var(--accent, #0070f3) !important;
+}
+
+/* ---------- 收缩保护 ---------- */
+.tai-comp-bar {
+  flex-wrap: nowrap;
+}
+.tai-ctx .tai-ctx-chip {
+  min-width: 0;
+}
+@media (max-width: 420px) {
+  .tai-cmd-row .tai-badge {
+    display: none;
+  }
+  .tai-cmd-row .tai-cmd-code {
+    font-size: var(--fs-2xs);
+  }
+}
+
+/* ===========================================================================
+   AI 设置面板（tai-set-*）与对话内模型选择器（tai-model-*）
+   颜色一律走主题 token（--panel/--line/--ink/--accent/...），浅深主题自动跟随；
+   控件高度全部 box-sizing:border-box + min-height + 纵向 padding 兜底，避免被宿主样式压扁。
+   =========================================================================== */
+
+/* ---------- 分区 tabs ---------- */
+.tai-set-tabs {
+  display: flex;
+  gap: 2px;
+  flex: none;
+  margin: 10px 12px 0;
+  padding: 2px;
+  border-radius: var(--r-s, 8px);
+  background: var(--panel-muted, #f5f5f5);
+}
+.tai-set-tabs button {
+  flex: 1 1 0%;
+  box-sizing: border-box;
+  height: 26px;
+  min-height: 26px;
+  padding: 2px 6px;
+  border: none;
+  border-radius: calc(var(--r-s, 8px) - 2px);
+  background: transparent;
+  color: var(--ink-muted, #8f8f8f);
+  font-size: var(--fs-xs);
+}
+.tai-set-tabs button.on {
+  background: var(--panel, #fff);
+  color: var(--ink, #171717);
+  font-weight: 550;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+/* ---------- 内容滚动区 ---------- */
+.tai-set-body {
+  flex: 1 1 0%;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.tai-set-sec {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-xs);
+  color: var(--ink-muted, #8f8f8f);
+}
+.tai-set-sec .n {
+  margin-left: auto;
+}
+
+/* ---------- 服务商卡片 ---------- */
+.tai-set-p {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 10px 12px;
+  border: 1px solid var(--line, #eaeaea);
+  border-radius: var(--r-m, 10px);
+  background: var(--panel, #fff);
+}
+.tai-set-p.is-default {
+  border-color: var(--accent, #0070f3);
+  box-shadow: 0 0 0 3px var(--accent-soft, rgba(0, 112, 243, 0.08));
+}
+.tai-set-p-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+.tai-set-p-row .sp {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+}
+.tai-set-p-name {
+  flex: none;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--ink, #171717);
+}
+.tai-set-p-meta {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  font-size: var(--fs-xs);
+  color: var(--ink-muted, #8f8f8f);
+}
+.tai-set-p-meta .host {
+  font-family: var(--mono-font-family, monospace);
+  font-size: var(--fs-2xs);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tai-set-radio {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1.5px solid var(--line-strong, #d4d4d4);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.tai-set-p.is-default .tai-set-radio {
+  border-color: var(--accent, #0070f3);
+}
+.tai-set-p.is-default .tai-set-radio::after {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent, #0070f3);
+}
+.tai-set-defbadge {
+  flex: none;
+  font-size: var(--fs-2xs);
+  color: var(--accent, #0070f3);
+  background: var(--accent-soft, rgba(0, 112, 243, 0.08));
+  border-radius: 9px;
+  padding: 1px 8px;
+}
+.tai-set-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+.tai-set-dot.ok {
+  background: var(--green, #16a34a);
+}
+.tai-set-dot.na {
+  background: var(--ink-muted, #8f8f8f);
+  opacity: 0.5;
+}
+.tai-set-add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  box-sizing: border-box;
+  height: 36px;
+  min-height: 36px;
+  padding: 6px 12px;
+  border: 1px dashed var(--line-strong, #d4d4d4);
+  border-radius: var(--r-m, 10px);
+  background: transparent;
+  color: var(--ink-muted, #8f8f8f);
+  font-size: var(--fs-xs);
+}
+.tai-set-add:hover {
+  color: var(--accent, #0070f3);
+  border-color: var(--accent, #0070f3);
+}
+
+/* ---------- 编辑表单 ---------- */
+.tai-set-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line, #eaeaea);
+  border-radius: var(--r-m, 10px);
+  background: var(--panel-muted, #f5f5f5);
+}
+.tai-set-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.tai-set-field > span {
+  font-size: var(--fs-xs);
+  color: var(--ink-muted, #8f8f8f);
+}
+.tai-set-field .row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.tai-set-input {
+  box-sizing: border-box;
+  height: 32px;
+  min-height: 32px;
+  padding: 5px 10px;
+  border: 1px solid var(--line, #eaeaea);
+  border-radius: var(--r-s, 7px);
+  background: var(--panel, #fff);
+  color: var(--ink, #171717);
+  font-size: var(--fs-xs);
+  line-height: 1.4;
+  min-width: 0;
+}
+.tai-set-input:focus {
+  outline: none;
+  border-color: var(--accent, #0070f3);
+  box-shadow: 0 0 0 3px var(--accent-soft, rgba(0, 112, 243, 0.08));
+}
+.tai-set-mono {
+  font-family: var(--mono-font-family, monospace);
+  font-size: var(--fs-2xs);
+}
+.tai-set-proto {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--line, #eaeaea);
+  border-radius: var(--r-s, 8px);
+  background: var(--panel, #fff);
+}
+.tai-set-proto button {
+  flex: 1 1 0%;
+  box-sizing: border-box;
+  height: 24px;
+  min-height: 24px;
+  padding: 2px 6px;
+  border: none;
+  border-radius: calc(var(--r-s, 8px) - 2px);
+  background: transparent;
+  color: var(--ink-muted, #8f8f8f);
+  font-size: var(--fs-2xs);
+  white-space: nowrap;
+}
+.tai-set-proto button.on {
+  background: var(--accent, #0070f3);
+  color: var(--on-accent, #ffffff);
+  font-weight: 550;
+}
+.tai-set-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  font-size: var(--fs-2xs);
+  line-height: 1.5;
+  color: var(--ink-muted, #8f8f8f);
+}
+.tai-set-hint svg {
+  flex: none;
+  margin-top: 2px;
+}
+.tai-set-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.tai-set-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  box-sizing: border-box;
+  height: 30px;
+  min-height: 30px;
+  padding: 4px 12px;
+  border: 1px solid var(--line, #eaeaea);
+  border-radius: var(--r-s, 7px);
+  background: var(--panel, #fff);
+  color: var(--ink, #171717);
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+}
+.tai-set-btn:hover:not(:disabled) {
+  border-color: var(--accent, #0070f3);
+  color: var(--accent, #0070f3);
+}
+.tai-set-btn:disabled {
+  opacity: 0.45;
+}
+.tai-set-btn.primary {
+  border-color: transparent;
+  background: var(--accent, #0070f3);
+  color: var(--on-accent, #ffffff);
+  font-weight: 550;
+}
+.tai-set-btn.primary:hover:not(:disabled) {
+  background: var(--accent-strong, var(--accent, #0070f3));
+  color: var(--on-accent, #ffffff);
+}
+.tai-set-test {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--fs-xs);
+}
+.tai-set-test.ok {
+  color: var(--green, #16a34a);
+}
+.tai-set-test.err {
+  color: var(--red, #dc2626);
+}
+.tai-set-test .lat {
+  font-family: var(--mono-font-family, monospace);
+}
+
+/* ---------- 模型 chips ---------- */
+.tai-set-models {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.tai-set-mchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  box-sizing: border-box;
+  height: 24px;
+  min-height: 24px;
+  padding: 2px 10px;
+  border: 1px solid var(--line, #eaeaea);
+  border-radius: 12px;
+  background: var(--panel, #fff);
+  color: var(--ink-muted, #8f8f8f);
+  font-family: var(--mono-font-family, monospace);
+  font-size: var(--fs-2xs);
+  white-space: nowrap;
+}
+.tai-set-mchip.on {
+  border-color: transparent;
+  background: var(--accent-soft, rgba(0, 112, 243, 0.08));
+  color: var(--accent, #0070f3);
+  font-weight: 550;
+}
+.tai-set-mchip-add {
+  height: 24px;
+  min-height: 24px;
+  padding: 2px 9px;
+  flex: 1 1 120px;
+  border-style: dashed;
+}
+
+/* ---------- 会话参数 ---------- */
+.tai-set-srow {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 11px 12px;
+  border: 1px solid var(--line, #eaeaea);
+  border-radius: var(--r-m, 10px);
+  background: var(--panel, #fff);
+}
+.tai-set-srow .lbl {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-xs);
+  font-weight: 550;
+  color: var(--ink, #171717);
+}
+.tai-set-srow .lbl .val {
+  margin-left: auto;
+  font-family: var(--mono-font-family, monospace);
+  font-size: var(--fs-xs);
+  color: var(--accent, #0070f3);
+}
+.tai-set-srow .desc {
+  font-size: var(--fs-2xs);
+  line-height: 1.55;
+  color: var(--ink-muted, #8f8f8f);
+}
+.tai-set-range {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line, #eaeaea);
+  outline: none;
+}
+.tai-set-range::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: none;
+  background: var(--accent, #0070f3);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+.tai-set-range::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border: none;
+  border-radius: 50%;
+  background: var(--accent, #0070f3);
+}
+.tai-set-switch {
+  position: relative;
+  flex: none;
+  width: 34px;
+  height: 20px;
+  margin-left: auto;
+  border: none;
+  border-radius: 10px;
+  background: var(--line-strong, #d4d4d4);
+  transition: background 0.15s;
+}
+.tai-set-switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--panel, #fff);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  transition: left 0.15s;
+}
+.tai-set-switch.on {
+  background: var(--accent, #0070f3);
+}
+.tai-set-switch.on::after {
+  left: 16px;
+}
+
+/* ---------- 对话内模型选择器 ---------- */
+.tai-model-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  box-sizing: border-box;
+  height: 24px;
+  min-height: 24px;
+  max-width: 40%;
+  padding: 2px 9px;
+  border: 1px solid var(--line, #eaeaea);
+  border-radius: 12px;
+  background: var(--panel-muted, #f5f5f5);
+  color: var(--ink, #171717);
+  font-size: var(--fs-2xs);
+  white-space: nowrap;
+  flex: none;
+}
+.tai-model-btn:hover:not(:disabled),
+.tai-model-btn.on {
+  border-color: var(--accent, #0070f3);
+  color: var(--accent, #0070f3);
+}
+.tai-model-btn:disabled {
+  opacity: 0.45;
+}
+.tai-model-btn svg {
+  flex: none;
+  color: var(--ink-muted, #8f8f8f);
+}
+.tai-model-btn-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--mono-font-family, monospace);
+}
+.tai-model-pop {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  width: 288px;
+  max-width: calc(100vw - 32px);
+  background: var(--panel, #fff);
+  border: 1px solid var(--line, #eaeaea);
+  border-radius: var(--r-m, 12px);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.22);
+  overflow: hidden;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+}
+.tai-model-pop-hd {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 12px 6px;
+  font-size: var(--fs-xs);
+  color: var(--ink-muted, #8f8f8f);
+}
+.tai-model-pop-list {
+  max-height: 262px;
+  overflow-y: auto;
+  padding: 0 6px 6px;
+}
+.tai-model-pop-group {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 6px 3px;
+  font-size: var(--fs-2xs);
+  color: var(--ink-muted, #8f8f8f);
+}
+.tai-model-pop-group .proto {
+  font-size: var(--fs-2xs);
+  border: 1px solid var(--line, #eaeaea);
+  border-radius: 4px;
+  padding: 0 4px;
+}
+.tai-model-pop-empty {
+  padding: 6px 8px;
+  font-size: var(--fs-2xs);
+  color: var(--ink-muted, #8f8f8f);
+}
+.tai-model-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 8px;
+  border: none;
+  border-radius: var(--r-s, 8px);
+  background: transparent;
+  color: var(--ink, #171717);
+  font-size: var(--fs-xs);
+  text-align: left;
+}
+.tai-model-row:hover {
+  background: var(--panel-muted, #f5f5f5);
+}
+.tai-model-row .mono {
+  font-family: var(--mono-font-family, monospace);
+  font-size: var(--fs-2xs);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tai-model-row .check {
+  margin-left: auto;
+  color: var(--accent, #0070f3);
+  flex: none;
+}
+.tai-model-row.on {
+  color: var(--accent, #0070f3);
+  font-weight: 550;
+}
+.tai-model-pop-ft {
+  display: flex;
+  border-top: 1px solid var(--line, #eaeaea);
+}
+.tai-model-pop-ft button {
+  flex: 1 1 0%;
+  box-sizing: border-box;
+  height: 32px;
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: none;
+  background: transparent;
+  color: var(--ink-muted, #8f8f8f);
+  font-size: var(--fs-xs);
+}
+.tai-model-pop-ft button:hover {
+  color: var(--accent, #0070f3);
+  background: var(--panel-muted, #f5f5f5);
+}
