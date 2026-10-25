@@ -1,7 +1,7 @@
 // @ts-ignore vite 的 ?inline 导入返回 CSS 文本，无类型声明
 import aiPanelCss from "./ai-panel.css?inline";
 import { useState, useRef, useEffect, useCallback, useMemo, Fragment } from "react";
-import { Send, Loader, Sparkles, Plus, X, Terminal as TerminalIcon, Copy, CornerDownLeft, TextSelect, CircleCheck, ChevronsUpDown, Settings2 } from "lucide-react";
+import { Send, Loader, Sparkles, Plus, X, Terminal as TerminalIcon, Copy, CornerDownLeft, TextSelect, CircleCheck, ChevronsUpDown, Settings2, Zap } from "lucide-react";
 import {
   readAIConfig,
   saveAIConfig,
@@ -191,6 +191,25 @@ function saveChatHistory(serverId: string, messages: ChatMessage[]) {
   localStorage.setItem(key, JSON.stringify(messages.slice(-50)));
 }
 
+/* 快捷命令展开态（默认折叠，避免与模型选择器挤在一行） */
+const QUICK_OPEN_KEY = "server-log-console:ai-quick-open";
+
+function readQuickOpen(): boolean {
+  try {
+    return localStorage.getItem(QUICK_OPEN_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function saveQuickOpen(on: boolean) {
+  try {
+    localStorage.setItem(QUICK_OPEN_KEY, on ? "1" : "0");
+  } catch {
+    /* ignore */
+  }
+}
+
 /* 命令卡运行态：idle → running（等待输出） → captured（已捕获输出，可分析） */
 type CardPhase = { state: "running" } | { state: "captured"; output: string; timedOut: boolean };
 type RunningCards = Record<string, CardPhase>;
@@ -362,6 +381,7 @@ export function TerminalAI(props: TerminalAIProps) {
   const [executedBackupTokens, setExecutedBackupTokens] = useState<string[]>([]);
   const [contextLineCount, setContextLineCount] = useState(0);
   const [modelPopOpen, setModelPopOpen] = useState(false);
+  const [quickOpen, setQuickOpen] = useState<boolean>(() => readQuickOpen());
   /* 命令卡运行态：key = msgId:index */
   const [runningCards, setRunningCards] = useState<RunningCards>({});
   const [analyzingKey, setAnalyzingKey] = useState<string | null>(null);
@@ -465,30 +485,27 @@ export function TerminalAI(props: TerminalAIProps) {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [showSettings, modelPopOpen, isLoading]);
 
-  /** 组装请求历史：会话轮数截断 + 终端画面 / 选中引用作为隐藏上下文 */
+  /** 组装请求历史：会话轮数截断；终端画面 / 选中引用并入最后一条用户消息（紧贴问题，弱模型也能注意到） */
   const buildHistory = useCallback((nextMessages: ChatMessage[], question: string): AIMessage[] => {
     const turnWindow = Math.max(1, config.session.contextTurns) * 2;
     const history: AIMessage[] = nextMessages.slice(-turnWindow).map((m) => ({
       role: m.role,
       content: m.content,
     }));
+    const contextParts: string[] = [];
     if (terminalAvailable) {
       const contextText = controller.getContextText();
       if (contextText) {
-        history.unshift({
-          role: "user",
-          content: `【终端画面（自动附带，最近 ${contextLineCount || "若干"} 行）】\n${contextText}`,
-        });
+        contextParts.push(`【终端画面（真实终端内容，自动附带）】\n${contextText}`);
       }
     }
     if (selectionText) {
-      history.push({
-        role: "user",
-        content: `【终端选中内容（已引用）】\n${selectionText}\n\n【问题】${question}`,
-      });
+      contextParts.push(`【终端选中内容（真实终端内容）】\n${selectionText}`);
     }
+    contextParts.push(`【问题】${question}`);
+    history.push({ role: "user", content: contextParts.join("\n\n") });
     return history;
-  }, [config.session.contextTurns, controller, selectionText, terminalAvailable, contextLineCount]);
+  }, [config.session.contextTurns, controller, selectionText, terminalAvailable]);
 
   const runRequest = useCallback(async (nextMessages: ChatMessage[], history: AIMessage[]) => {
     setIsLoading(true);
@@ -747,7 +764,7 @@ export function TerminalAI(props: TerminalAIProps) {
         )}
       </div>
 
-      {/* 输入区：附加开关 + 快捷追问（横向滚动） + 模型选择 + 圆形发送键 */}
+      {/* 输入区：附加开关 + 快捷命令（默认折叠，展开为独立一行） + 模型选择 + 圆形发送键 */}
       <div className="tai-composer">
         <textarea
           ref={inputRef}
@@ -759,18 +776,8 @@ export function TerminalAI(props: TerminalAIProps) {
           rows={1}
           disabled={!configured}
         />
-        <div className="tai-comp-bar">
-          <button
-            type="button"
-            className={`tai-attach ${terminalAvailable ? "tai-attach-on" : ""}`}
-            title={terminalAvailable ? "自动附带终端画面：开" : "自动附带终端画面：关"}
-            aria-pressed={terminalAvailable}
-            disabled={!controller.isAvailable()}
-            onClick={() => commitConfig({ ...config, session: { ...config.session, attachContext: !attachContext } })}
-          >
-            <TerminalIcon size={14} />
-          </button>
-          <div className="tai-quick">
+        {quickOpen ? (
+          <div className="tai-quickrow">
             {QUICK_ASKS.map((ask) => (
               <button
                 key={ask}
@@ -783,6 +790,28 @@ export function TerminalAI(props: TerminalAIProps) {
               </button>
             ))}
           </div>
+        ) : null}
+        <div className="tai-comp-bar">
+          <button
+            type="button"
+            className={`tai-attach ${terminalAvailable ? "tai-attach-on" : ""}`}
+            title={terminalAvailable ? "自动附带终端画面：开" : "自动附带终端画面：关"}
+            aria-pressed={terminalAvailable}
+            disabled={!controller.isAvailable()}
+            onClick={() => commitConfig({ ...config, session: { ...config.session, attachContext: !attachContext } })}
+          >
+            <TerminalIcon size={14} />
+          </button>
+          <button
+            type="button"
+            className={`tai-quick-toggle ${quickOpen ? "on" : ""}`}
+            title={quickOpen ? "收起快捷命令" : "展开快捷命令"}
+            aria-pressed={quickOpen}
+            onClick={() => setQuickOpen((v) => { saveQuickOpen(!v); return !v; })}
+          >
+            <Zap size={14} />
+          </button>
+          <div className="tai-comp-spacer" />
           <button
             type="button"
             className={`tai-model-btn ${modelPopOpen ? "on" : ""}`}

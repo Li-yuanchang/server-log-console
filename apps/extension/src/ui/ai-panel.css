@@ -360,18 +360,41 @@
 .tai-dropdown button.tai-attach:disabled {
   opacity: 0.4;
 }
-.tai-dropdown .tai-quick {
-  flex: 1 1 0%;
-  min-width: 0;
+.tai-dropdown .tai-quickrow {
   display: flex;
   align-items: center;
   gap: 5px;
-  padding: 2px 0;
+  padding: 2px 8px 8px;
   overflow-x: auto;
   scrollbar-width: none;
 }
-.tai-dropdown .tai-quick::-webkit-scrollbar {
+.tai-dropdown .tai-quickrow::-webkit-scrollbar {
   display: none;
+}
+.tai-dropdown button.tai-quick-toggle {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 26px;
+  height: 26px;
+  padding: 2px;
+  border: none;
+  border-radius: var(--r-s, 8px);
+  background: transparent;
+  color: var(--ink-muted, #8f8f8f);
+}
+.tai-dropdown button.tai-quick-toggle:hover {
+  color: var(--ink, #171717);
+  background: var(--panel-muted, #f5f5f5);
+}
+.tai-dropdown button.tai-quick-toggle.on {
+  background: var(--accent-soft, rgba(0, 112, 243, 0.08));
+  color: var(--accent, #0070f3);
+}
+.tai-dropdown .tai-comp-spacer {
+  flex: 1 1 0%;
 }
 .tai-dropdown button.tai-qchip {
   flex: none;
