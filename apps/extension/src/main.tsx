@@ -26,8 +26,6 @@ import "./styles-empty-workbench.css";
 // 环境覆盖层：Chrome 扩展侧栏（body.extension-sidepanel）窄容器适配，
 // 双主题生效 + grid 语义；必须最后加载（2026-10-02 自 theme-modern.css 迁出）
 import "./styles-sidepanel.css";
-// 终端 AI 面板（tai-*）单一样式源：颜色全走主题 token，取代散落四处的旧 .tai-* 规则；必须最后加载
-import "./styles-ai-panel.css";
 
 /** 最小 ErrorBoundary：渲染期未捕获错误（含 PiP 搬迁等 DOM 失配引发的 reconcile 崩溃）
     时显示可见降级页（错误摘要 + 刷新按钮），而不是整页白屏。 */

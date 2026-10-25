@@ -1,3 +1,5 @@
+// @ts-ignore vite 的 ?inline 导入返回 CSS 文本，无类型声明
+import aiPanelCss from "./ai-panel.css?inline";
 import { useState, useRef, useEffect, useCallback, useMemo, Fragment } from "react";
 import { Send, Loader, Sparkles, Plus, X, Terminal as TerminalIcon, Copy, CornerDownLeft, TextSelect, CircleCheck, ChevronsUpDown, Settings2 } from "lucide-react";
 import {
@@ -12,17 +14,126 @@ import {
   isAIConfigured,
   PROTOCOL_LABELS,
 } from "./ai-service.js";
-import type { AIConfig, AIMessage, ChatMessage, TerminalAIController } from "./ai-service.js";
+import type { AIConfig, AIMessage, ChatMessage } from "./ai-service.js";
 import { TerminalAISettings } from "./TerminalAISettings.js";
 import { formatKeyHint } from "./key-hints.js";
+
+/* 抽屉样式运行时注入：不进全局样式加载链，对抽屉外组件零影响 */
+let panelStyleInjected = false;
+function ensurePanelStyles() {
+  if (panelStyleInjected || typeof document === "undefined") return;
+  if (!document.getElementById("tai-panel-style")) {
+    const el = document.createElement("style");
+    el.id = "tai-panel-style";
+    el.textContent = aiPanelCss;
+    document.head.appendChild(el);
+  }
+  panelStyleInjected = true;
+}
+ensurePanelStyles();
+
+/* ---------------------------------------------------------------------------
+   终端上下文控制器（纯 DOM 实现，不改工作台）：
+   xterm DOM renderer 把可视区行渲染在 .xterm-rows 下，读取可见行即可拿到终端画面；
+   命令输出捕获 = 发送命令后轮询可见行，按「滚动重叠差分」累积新行，空闲 1s 视为落定。
+   --------------------------------------------------------------------------- */
+
+function queryTerminalEl(): HTMLElement | null {
+  const terms = Array.from(document.querySelectorAll<HTMLElement>(".xterm"));
+  const visible = terms.filter((el) => el.offsetParent !== null && el.getBoundingClientRect().height > 40);
+  if (!visible.length) return null;
+  const active = document.activeElement;
+  if (active instanceof HTMLElement) {
+    const focused = visible.find((el) => el.contains(active));
+    if (focused) return focused;
+  }
+  return visible[0];
+}
+
+function readVisibleRows(termEl: HTMLElement): string[] {
+  const container = termEl.querySelector(".xterm-rows");
+  if (!container) return [];
+  const out: string[] = [];
+  for (let i = 0; i < container.children.length; i += 1) {
+    out.push((container.children[i].textContent || "").replace(/\s+$/u, ""));
+  }
+  while (out.length > 0 && !out[out.length - 1].trim()) out.pop();
+  return out;
+}
+
+/** 滚动差分：prev 尾部与 cur 头部的最大重合之后的行即新输出 */
+function scrollNewLines(prev: string[], cur: string[]): string[] {
+  const maxK = Math.min(prev.length, cur.length);
+  for (let k = maxK; k >= 0; k -= 1) {
+    let overlap = true;
+    for (let i = 0; i < k; i += 1) {
+      if (prev[prev.length - k + i] !== cur[i]) {
+        overlap = false;
+        break;
+      }
+    }
+    if (overlap) return cur.slice(k);
+  }
+  return [];
+}
+
+interface TerminalDomController {
+  getContextText: () => string;
+  executeAndCapture: (command: string) => Promise<{ output: string; timedOut: boolean }>;
+  isAvailable: () => boolean;
+}
+
+function useTerminalDomController(onExecute: (command: string) => void): TerminalDomController {
+  return useMemo(() => ({
+    getContextText: () => {
+      const termEl = queryTerminalEl();
+      return termEl ? readVisibleRows(termEl).join("\n") : "";
+    },
+    executeAndCapture: (command: string) => new Promise((resolve) => {
+      const termEl = queryTerminalEl();
+      onExecute(`${command}\n`);
+      if (!termEl) {
+        resolve({ output: "", timedOut: false });
+        return;
+      }
+      let prev = readVisibleRows(termEl);
+      const acc: string[] = [];
+      let ticks = 0;
+      let idleTicks = 0;
+      const startedAt = Date.now();
+      const timer = window.setInterval(() => {
+        ticks += 1;
+        const cur = readVisibleRows(termEl);
+        const fresh = scrollNewLines(prev, cur);
+        prev = cur;
+        if (fresh.length > 0) {
+          idleTicks = 0;
+          for (const line of fresh) acc.push(line);
+        } else {
+          idleTicks += 1;
+        }
+        const settled = (ticks >= 6 && idleTicks >= 4) || Date.now() - startedAt >= 15000;
+        if (!settled) return;
+        window.clearInterval(timer);
+        const lines = [...acc];
+        /* 命令回显行与末尾提示符不作为输出 */
+        if (lines.length > 0 && lines[0].includes(command)) lines.shift();
+        while (lines.length > 0 && !lines[lines.length - 1].trim()) lines.pop();
+        if (lines.length > 0 && /(\]#|\$|%)\s*$/u.test(lines[lines.length - 1].trim())) lines.pop();
+        resolve({ output: lines.join("\n"), timedOut: Date.now() - startedAt >= 15000 });
+      }, 250);
+    }),
+    isAvailable: () => queryTerminalEl() != null,
+  }), [onExecute]);
+}
 
 interface TerminalAIProps {
   serverId: string;
   serverLabel: string;
   /* 自动引用终端选中内容 */
   selectionText?: string;
-  /* 终端上下文控制器：读终端画面 / 执行命令并捕获输出 */
-  controller: TerminalAIController;
+  /* 把命令写入激活终端（工作台既有管道） */
+  onExecute: (command: string) => void;
   onClose: () => void;
 }
 
@@ -160,7 +271,7 @@ function CommandCard(props: {
             ) : (
               <span className="tai-cmd-captured">
                 <CircleCheck size={12} />
-                {phase.timedOut ? "输出等待超时，已捕获部分内容" : `已捕获 ${phase.output.split("\n").length} 行输出，已附加到上下文`}
+                {phase.timedOut ? "输出等待超时，已捕获部分内容" : `已捕获 ${phase.output.split("\n").filter((l) => l.trim()).length} 行输出，已附加到上下文`}
               </span>
             )}
             {!props.analyzing ? (
@@ -194,7 +305,7 @@ function MessageBubble(props: {
   const { msg } = props;
   if (msg.role === "user") {
     return (
-      <div className="tai-msg tai-msg-user">
+      <div className="tai-row-user">
         <div className="tai-user-bubble">
           {props.selectionLineCount ? (
             <span className="tai-quote-chip"><TextSelect size={11} />已引用选中 {props.selectionLineCount} 行</span>
@@ -208,13 +319,13 @@ function MessageBubble(props: {
   const parts = msg.content.split(/(```(?:bash|sh|shell)?\s*\n[\s\S]*?```)/g);
 
   return (
-    <div className="tai-msg tai-msg-ai">
+    <div className="tai-row-ai">
       {parts.map((part, i) => {
         if (/^```(?:bash|sh|shell)?\s*\n/.test(part)) {
           const inner = part.replace(/^```(?:bash|sh|shell)?\s*\n/, "").replace(/```$/, "").trim();
           const lines = inner.split("\n").filter((l) => l.trim() && !l.trim().startsWith("#"));
           return (
-            <div key={i} className="tai-cmd-group">
+            <div key={i} className="tai-cmdlist">
               {lines.map((line, j) => {
                 const id = cardKey(msg.id, j);
                 return (
@@ -259,6 +370,12 @@ export function TerminalAI(props: TerminalAIProps) {
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const popRef = useRef<HTMLDivElement | null>(null);
 
+  /* 稳定的 onExecute 引用 → DOM 控制器仅在 onExecute 变化时重建 */
+  const onExecuteRef = useRef(props.onExecute);
+  onExecuteRef.current = props.onExecute;
+  const stableExecute = useCallback((cmd: string) => onExecuteRef.current(cmd), []);
+  const controller = useTerminalDomController(stableExecute);
+
   const activeProvider = getActiveProvider(config);
   const activeModel = getActiveModel(config);
   const configured = isAIConfigured(config);
@@ -274,7 +391,7 @@ export function TerminalAI(props: TerminalAIProps) {
     const flat = selectionText.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).join(" ");
     return flat.length > 90 ? `${flat.slice(0, 90)}…` : flat;
   }, [selectionText]);
-  const terminalAvailable = attachContext && props.controller.isAvailable();
+  const terminalAvailable = attachContext && controller.isAvailable();
   const inputPlaceholder = !configured
     ? "请先在 AI 设置中配置服务商"
     : (selectionText ? "针对选中内容提问…" : "描述你想做的事…");
@@ -285,13 +402,13 @@ export function TerminalAI(props: TerminalAIProps) {
 
   /* 上下文行数：面板挂载 / 切换开关 / 切换会话 / 收到新消息时刷新 */
   useEffect(() => {
-    if (!terminalAvailable || !props.controller.isAvailable()) {
+    if (!terminalAvailable) {
       setContextLineCount(0);
       return;
     }
-    const text = props.controller.getContextText();
+    const text = controller.getContextText();
     setContextLineCount(text ? text.split("\n").filter((line) => line.trim()).length : 0);
-  }, [terminalAvailable, props.serverId, messages, props.controller]);
+  }, [terminalAvailable, props.serverId, messages, controller]);
 
   useEffect(() => {
     if (showSettings) {
@@ -356,7 +473,7 @@ export function TerminalAI(props: TerminalAIProps) {
       content: m.content,
     }));
     if (terminalAvailable) {
-      const contextText = props.controller.getContextText();
+      const contextText = controller.getContextText();
       if (contextText) {
         history.unshift({
           role: "user",
@@ -371,7 +488,7 @@ export function TerminalAI(props: TerminalAIProps) {
       });
     }
     return history;
-  }, [config.session.contextTurns, props.controller, selectionText, terminalAvailable, contextLineCount]);
+  }, [config.session.contextTurns, controller, selectionText, terminalAvailable, contextLineCount]);
 
   const runRequest = useCallback(async (nextMessages: ChatMessage[], history: AIMessage[]) => {
     setIsLoading(true);
@@ -433,7 +550,7 @@ export function TerminalAI(props: TerminalAIProps) {
 
     setRunningCards((prev) => ({ ...prev, [cardId]: { state: "running" } }));
     try {
-      const { output, timedOut } = await props.controller.executeAndCapture(command);
+      const { output, timedOut } = await controller.executeAndCapture(command);
       setRunningCards((prev) => ({ ...prev, [cardId]: { state: "captured", output, timedOut } }));
     } catch {
       setRunningCards((prev) => {
@@ -442,7 +559,7 @@ export function TerminalAI(props: TerminalAIProps) {
         return next;
       });
     }
-  }, [executedBackupTokens, props.controller]);
+  }, [executedBackupTokens, controller]);
 
   /** 命令卡「让 AI 分析」：把捕获到的输出作为隐藏上下文发给模型，回复追加到对话 */
   const handleAnalyze = useCallback(async (command: string, output: string, cardId: string) => {
@@ -513,7 +630,7 @@ export function TerminalAI(props: TerminalAIProps) {
       onMouseDown={(event) => event.stopPropagation()}
       onClick={(event) => event.stopPropagation()}
     >
-      {/* Header */}
+      {/* Header（共享类，视觉沿用旧 token 化适配层） */}
       <div className="tai-header">
         <div className="tai-header-title">
           <Sparkles size={13} className="tai-sparkle" />
@@ -551,7 +668,7 @@ export function TerminalAI(props: TerminalAIProps) {
           className={`tai-ctx-chip ${terminalAvailable ? "tai-ctx-chip-on" : ""}`}
           title={terminalAvailable ? "提问时自动附带终端最近输出，AI 能看到命令和结果" : "终端不可用时关闭"}
           aria-pressed={terminalAvailable}
-          disabled={!props.controller.isAvailable()}
+          disabled={!controller.isAvailable()}
           onClick={() => commitConfig({ ...config, session: { ...config.session, attachContext: !attachContext } })}
         >
           <TerminalIcon size={12} />
@@ -617,13 +734,13 @@ export function TerminalAI(props: TerminalAIProps) {
         ))}
 
         {isLoading && streamContent && (
-          <div className="tai-msg tai-msg-ai tai-msg-streaming">
+          <div className="tai-row-ai tai-ai-streaming">
             <p className="tai-ai-text">{streamContent}</p>
           </div>
         )}
 
         {isLoading && !streamContent && (
-          <div className="tai-msg tai-msg-ai tai-thinking">
+          <div className="tai-thinking">
             <Loader size={12} className="tai-spin" />
             <span>思考中…</span>
           </div>
@@ -634,7 +751,7 @@ export function TerminalAI(props: TerminalAIProps) {
       <div className="tai-composer">
         <textarea
           ref={inputRef}
-          className="tai-textarea"
+          className="tai-inputarea"
           placeholder={inputPlaceholder}
           value={input}
           onChange={(e) => setInput(e.target.value)}
@@ -648,7 +765,7 @@ export function TerminalAI(props: TerminalAIProps) {
             className={`tai-attach ${terminalAvailable ? "tai-attach-on" : ""}`}
             title={terminalAvailable ? "自动附带终端画面：开" : "自动附带终端画面：关"}
             aria-pressed={terminalAvailable}
-            disabled={!props.controller.isAvailable()}
+            disabled={!controller.isAvailable()}
             onClick={() => commitConfig({ ...config, session: { ...config.session, attachContext: !attachContext } })}
           >
             <TerminalIcon size={14} />

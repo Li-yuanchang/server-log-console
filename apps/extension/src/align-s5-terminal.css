@@ -132,6 +132,50 @@
   padding: 1px 8px;
   background: transparent;
   color: var(--ink-muted);
+}
+/* 引用卡（原型 585-588：1px 描边 + radius --r-m + padding 9px 11px + dim 正文；
+   原型容器 padding 12px 14px，故卡片左右内缩 14px） */
+.theme-modern .tai-quote-card {
+  margin: 4px 14px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-m);
+  padding: 9px 11px;
+  font-size: var(--fs-xs);
+  line-height: 1.7;
+  color: var(--ink-soft);
+  background: var(--panel);
+}
+.theme-modern .tai-quote-card .tai-quote-chip {
+  margin-bottom: 5px;
+}
+.theme-modern .tai-quote-preview {
+  display: block;
+  font-family: var(--mono-font-family);
+  font-size: var(--fs-2xs);
+  color: var(--ink-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* 输入框下方 3 个 fchip 快捷追问（原型 598）：在输入行内换行到第二行 */
+.theme-modern .tai-input-bar {
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 14px;
+}
+.theme-modern .tai-quick-asks {
+  flex: 0 0 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.theme-modern .tai-quick-ask {
+  font-size: var(--fs-2xs);
+}
+.theme-modern .tai-quick-ask:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 /* styles-tsc.css 的 .tai-suggestion 用 border-radius:14px !important 且未被 v2 覆盖，
    原型 fchip 为 999px 全圆角；这里同等 !important 压过它（S5-11）。 */
 .theme-modern .tai-suggestion {
@@ -1343,6 +1387,432 @@
 }
 .theme-modern .terminal-statusbar-reconnect {
   align-self: center;
+}
+
+/* ---------- 14. terminal-ai-v2：终端 AI 抽屉对齐原型 S5（用户反馈「样式问题很大」2026-10-01） ----------
+   原型 s5() 619-636 行：dhead 头部（终端 AI + chip GLM-4 · ⌘J + ×）→ 主体（引用块 + AI 回复块）
+   → 底部输入框 + fchip 追问。settings-tsc.css 的 .tai-* 深色遗留 + theme-modern(-v2).css 的
+   !important 适配层与此处竞争，故本段统一用 `.theme-modern .tai-dropdown .tai-*`（0,3,0）
+   特异性 + 同位 !important 压过（本文件加载序晚于两者；align-controls.css 的
+   `.tai-dropdown button{height:auto}` 仅 (0,2,1)，也被 0,3,0 覆盖）。
+   字号一律 --fs-* token（禁裸 font-size）；颜色只用现有 token。 */
+.theme-modern .tai-dropdown {
+  border-radius: var(--r-m);
+  box-shadow: var(--v2-shadow-pop);
+}
+/* B. 头部 = 原型 .dhead 口径：padding 11px 14px / gap 8px / 1px --line 下边框 */
+.theme-modern .tai-dropdown .tai-header {
+  gap: 8px;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+.theme-modern .tai-dropdown .tai-header-title {
+  gap: 6px;
+  color: var(--ink);
+  font-size: var(--fs-sm);
+  font-weight: 650;
+}
+.theme-modern .tai-dropdown .tai-sparkle {
+  color: var(--accent);
+}
+.theme-modern .tai-dropdown .tai-badge-unconfigured {
+  color: var(--amber);
+  background: color-mix(in srgb, var(--amber) 12%, transparent);
+}
+.theme-modern .tai-dropdown .tai-header-actions {
+  gap: 5px;
+}
+/* +新对话 = 小号 ghost 按钮（原型 .btn.sm：24px 高 / --r-s 圆角 / 1px --line） */
+.theme-modern .tai-dropdown .tai-hdr-btn-chat {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: auto;
+  min-width: 0;
+  height: 24px;
+  padding: 0 9px;
+  gap: 5px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-s);
+  background: var(--panel);
+  color: var(--ink-soft);
+}
+.theme-modern .tai-dropdown .tai-hdr-btn-chat span {
+  font-size: var(--fs-2xs);
+}
+.theme-modern .tai-dropdown .tai-hdr-btn-chat svg {
+  width: 12px;
+  height: 12px;
+}
+.theme-modern .tai-dropdown .tai-hdr-btn-chat:hover:not(:disabled) {
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 26%, transparent);
+  color: var(--ink);
+}
+/* 设置 / 关闭 = 原型 .btn.icon.sm：24×24 幽灵图标钮，hover accent-soft 护栏 */
+.theme-modern .tai-dropdown .tai-hdr-btn {
+  width: 24px;
+  height: 24px;
+  border: 1px solid transparent;
+  border-radius: var(--r-s);
+  background: transparent;
+  color: var(--ink-soft);
+}
+.theme-modern .tai-dropdown .tai-hdr-btn:hover:not(:disabled) {
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 26%, transparent);
+  color: var(--ink);
+}
+
+/* A. 消息列表：原型主体容器口径 padding 12px 14px / gap 10px，气泡 max-width 92% */
+.theme-modern .tai-dropdown .tai-messages {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+}
+.theme-modern .tai-dropdown .tai-messages::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+}
+.theme-modern .tai-dropdown .tai-msg {
+  padding: 0;
+}
+/* 顶部引用卡（原型 585-588）：灰底 + 1px --line + --r-m 圆角 + mono 摘要 */
+.theme-modern .tai-dropdown .tai-quote-card {
+  margin: 0;
+  background: var(--panel-muted);
+}
+/* 用户消息 = 右对齐紧凑引用块：1px --line 描边 + --panel 底（禁用旧蓝色大气泡） */
+.theme-modern .tai-dropdown .tai-msg-user {
+  display: flex;
+  justify-content: flex-end;
+  border: none !important;
+  background: transparent !important;
+  border-radius: 0;
+  text-align: right;
+}
+.theme-modern .tai-dropdown .tai-user-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  max-width: 92%;
+  padding: 8px 11px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-m);
+  background: var(--panel);
+  text-align: left;
+}
+.theme-modern .tai-dropdown .tai-user-quote-chip {
+  align-self: flex-start;
+}
+.theme-modern .tai-dropdown .tai-user-text {
+  margin: 0;
+  align-self: stretch;
+  font-size: var(--fs-xs);
+  line-height: 1.7;
+  color: var(--ink);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+/* AI 回复块（原型 589-595）：1px accent 30% 描边 + --accent-soft 底 + --r-m 圆角 +
+   行高 1.75 + --fs-xs 正文 */
+.theme-modern .tai-dropdown .tai-msg-ai {
+  max-width: 92%;
+  padding: 9px 11px;
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent) !important;
+  border-radius: var(--r-m);
+  background: var(--accent-soft) !important;
+  align-self: flex-start;
+}
+.theme-modern .tai-dropdown .tai-msg-ai > * {
+  color: var(--ink) !important;
+}
+.theme-modern .tai-dropdown .tai-msg-text {
+  margin: 0;
+  font-size: var(--fs-xs);
+  line-height: 1.75;
+  color: var(--ink);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.theme-modern .tai-dropdown .tai-msg-streaming {
+  opacity: 0.75;
+}
+.theme-modern .tai-dropdown .tai-thinking {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+  font-size: var(--fs-2xs);
+}
+/* 空态推荐 = 原型 .fchip 胶囊（压过 theme-modern.css 深色 !important 残留） */
+.theme-modern .tai-dropdown .tai-welcome {
+  padding: 24px 4px 8px;
+}
+.theme-modern .tai-dropdown .tai-welcome-icon {
+  color: var(--accent);
+}
+.theme-modern .tai-dropdown .tai-suggestion {
+  height: 24px;
+  padding: 0 11px !important;
+  border: 1px solid var(--line) !important;
+  border-radius: 999px !important;
+  background: var(--panel) !important;
+  color: var(--ink-soft) !important;
+  font-size: var(--fs-2xs);
+  white-space: nowrap;
+}
+.theme-modern .tai-dropdown .tai-suggestion:hover:not(:disabled) {
+  border-color: var(--line-strong) !important;
+  background: var(--panel) !important;
+  color: var(--ink) !important;
+}
+.theme-modern .tai-dropdown .tai-suggestion:disabled {
+  opacity: 0.5;
+}
+/* 回复内命令块（原型式）：mono 小字 + 1px --line 浅底 + 右侧「↵ 发送」 */
+.theme-modern .tai-dropdown .tai-cmd-group {
+  gap: 4px;
+  margin: 8px 0 0;
+}
+.theme-modern .tai-dropdown .tai-cmd-block {
+  padding: 5px 8px;
+  border: 1px solid var(--line) !important;
+  border-radius: var(--r-s);
+  background: var(--panel) !important;
+}
+.theme-modern .tai-dropdown .tai-cmd-danger {
+  border-color: color-mix(in srgb, var(--red) 36%, transparent) !important;
+  background: color-mix(in srgb, var(--red) 6%, transparent) !important;
+}
+.theme-modern .tai-dropdown .tai-cmd-needs-backup {
+  border-color: color-mix(in srgb, var(--amber) 40%, transparent) !important;
+  background: color-mix(in srgb, var(--amber) 8%, transparent) !important;
+}
+.theme-modern .tai-dropdown .tai-cmd-warn-icon {
+  color: var(--amber);
+}
+.theme-modern .tai-dropdown .tai-cmd-badge-danger {
+  color: var(--red);
+  background: color-mix(in srgb, var(--red) 10%, transparent);
+}
+.theme-modern .tai-dropdown .tai-cmd-badge-backup {
+  color: var(--amber);
+  background: color-mix(in srgb, var(--amber) 12%, transparent);
+}
+.theme-modern .tai-dropdown .tai-cmd-badge-safe {
+  color: var(--green);
+  background: color-mix(in srgb, var(--green) 10%, transparent);
+}
+.theme-modern .tai-dropdown .tai-cmd-run {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: auto;
+  height: 18px;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: var(--r-s);
+  color: var(--accent);
+  font-size: var(--fs-2xs);
+  white-space: nowrap;
+}
+.theme-modern .tai-dropdown .tai-cmd-run:hover:not(:disabled) {
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 26%, transparent);
+  color: var(--accent);
+}
+.theme-modern .tai-dropdown .tai-cmd-run:disabled {
+  opacity: 0.4;
+}
+/* 底部输入区（原型 597-598）：1px --line 上边框 + padding 10px 14px + 输入框 + fchip 行 */
+.theme-modern .tai-dropdown .tai-input-bar {
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--line) !important;
+  background: var(--panel) !important;
+}
+.theme-modern .tai-dropdown .tai-textarea {
+  min-height: 28px;
+  padding: 5px 10px;
+  border: 1px solid var(--line) !important;
+  border-radius: var(--r-s);
+  background: var(--panel) !important;
+  color: var(--ink) !important;
+  font-size: var(--fs-xs);
+  line-height: 1.5;
+}
+.theme-modern .tai-dropdown .tai-textarea:focus {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 2px var(--accent-soft);
+  outline: none;
+}
+.theme-modern .tai-dropdown .tai-textarea::placeholder {
+  color: var(--ink-muted);
+}
+.theme-modern .tai-dropdown .tai-send-btn {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--accent);
+  border-radius: var(--r-s);
+  background: var(--accent) !important;
+  color: var(--on-accent) !important;
+}
+.theme-modern .tai-dropdown .tai-send-btn:hover:not(:disabled) {
+  border-color: var(--accent-strong);
+  background: var(--accent-strong) !important;
+  color: var(--on-accent) !important;
+}
+/* D. 追问 chips = 原型 .fchip：24px 高 / 999px 胶囊 / 1px --line / --ink-soft 字 */
+.theme-modern .tai-dropdown .tai-quick-asks {
+  flex: 0 0 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.theme-modern .tai-dropdown .tai-quick-ask {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 11px;
+  border: 1px solid var(--line) !important;
+  border-radius: 999px;
+  background: var(--panel) !important;
+  color: var(--ink-soft) !important;
+  font-size: var(--fs-2xs);
+  white-space: nowrap;
+}
+.theme-modern .tai-dropdown .tai-quick-ask:hover:not(:disabled) {
+  border-color: var(--line-strong) !important;
+  background: var(--panel) !important;
+  color: var(--ink) !important;
+}
+.theme-modern .tai-dropdown .tai-quick-ask:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* C. 设置子视图：文字三级 --ink/--ink-soft/--ink-muted，控件 = 原型 .input，
+   底部按钮 = 原型 .btn.pri（保存）+ .btn（取消）。修复深色遗留文字色
+   （rgba(248,250,252,*)/rgba(191,219,254,*)）在浅底上近乎不可见的问题。 */
+.theme-modern .tai-dropdown .tai-settings {
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--panel) !important;
+  color: var(--ink) !important;
+}
+.theme-modern .tai-dropdown .tai-settings-title {
+  color: var(--ink);
+  font-size: var(--fs-sm);
+  font-weight: 650;
+}
+.theme-modern .tai-dropdown .tai-settings-field {
+  gap: 4px;
+}
+.theme-modern .tai-dropdown .tai-settings-field > span {
+  color: var(--ink-muted);
+  font-size: var(--fs-2xs);
+}
+.theme-modern .tai-dropdown .tai-settings .tai-input {
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--line) !important;
+  border-radius: var(--r-s);
+  background: var(--panel) !important;
+  color: var(--ink) !important;
+  font-size: var(--fs-xs);
+}
+.theme-modern .tai-dropdown .tai-settings .tai-input::placeholder {
+  color: var(--ink-muted);
+}
+.theme-modern .tai-dropdown .tai-settings .tai-input:focus {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 2px var(--accent-soft);
+  outline: none;
+}
+.theme-modern .tai-dropdown .tai-settings-check {
+  color: var(--ink-soft);
+  font-size: var(--fs-xs);
+}
+.theme-modern .tai-dropdown .tai-settings-check input[type="checkbox"] {
+  accent-color: var(--accent);
+}
+.theme-modern .tai-dropdown .tai-preset-btn {
+  padding: 7px 9px !important;
+  border: 1px solid var(--line) !important;
+  border-radius: var(--r-s) !important;
+  background: var(--panel) !important;
+}
+.theme-modern .tai-dropdown .tai-preset-btn:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 26%, transparent) !important;
+  background: var(--accent-soft) !important;
+}
+.theme-modern .tai-dropdown .tai-preset-btn strong {
+  color: var(--ink);
+  font-size: var(--fs-2xs);
+}
+.theme-modern .tai-dropdown .tai-preset-btn span {
+  color: var(--ink-muted);
+  font-size: var(--fs-2xs);
+}
+.theme-modern .tai-dropdown .tai-preset-active,
+.theme-modern .tai-dropdown .tai-preset-active:hover:not(:disabled) {
+  border-color: var(--accent) !important;
+  background: var(--accent-soft) !important;
+}
+.theme-modern .tai-dropdown .tai-preset-active strong {
+  color: var(--accent);
+}
+.theme-modern .tai-dropdown .tai-settings-actions {
+  gap: 6px;
+  margin-top: 2px;
+}
+.theme-modern .tai-dropdown .tai-btn-save {
+  flex: 1;
+  height: 28px;
+  border: 1px solid var(--accent) !important;
+  border-radius: var(--r-s);
+  background: var(--accent) !important;
+  color: var(--on-accent) !important;
+  font-size: var(--fs-xs);
+  font-weight: 550;
+}
+.theme-modern .tai-dropdown .tai-btn-save:hover:not(:disabled) {
+  border-color: var(--accent-strong) !important;
+  background: var(--accent-strong) !important;
+  color: var(--on-accent) !important;
+}
+.theme-modern .tai-dropdown .tai-btn-cancel {
+  flex: 1;
+  height: 28px;
+  border: 1px solid var(--line) !important;
+  border-radius: var(--r-s);
+  background: var(--panel) !important;
+  color: var(--ink) !important;
+  font-size: var(--fs-xs);
+}
+.theme-modern .tai-dropdown .tai-btn-cancel:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 26%, transparent) !important;
+  background: var(--accent-soft) !important;
+  color: var(--ink) !important;
+}
+
+/* 用户消息文字：压过 styles-tsc.css 的 .tai-msg-user p 遗留深色气泡规则
+   （inline-block + max-width:85% 在内容自适应卡片里导致两三个字就换行） */
+.theme-modern .tai-dropdown .tai-user-card .tai-user-text {
+  display: block;
+  max-width: 100%;
+  width: auto;
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+}
+.theme-modern .tai-dropdown .tai-hdr-btn-chat {
+  white-space: nowrap;
+  flex: none;
 }
 
 /* ---------- 15. AI 侧板宽度与头部收缩保护（用户反馈 2026-10-01：消息换行/按钮重叠/模型名截断） ----------
