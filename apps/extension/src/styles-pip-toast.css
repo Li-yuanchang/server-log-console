@@ -745,7 +745,8 @@
 
 .viewer-floating-header-standalone .viewer-floating-header-actions {
   opacity: 1;
-  transform: translateY(0);
+  /* 同 hover 块：不写 translateY(0)（2026-10-25）—— transform 会成为 fixed 子元素
+     （Windows 自绘 WindowControls）的包含块，导致其脱离窗口右上角。 */
   pointer-events: auto;
 }
 
@@ -793,7 +794,15 @@
 .pip-viewer-wrap:hover .viewer-floating-header-actions,
 .viewer-floating-header:focus-within .viewer-floating-header-actions {
   opacity: 1;
-  transform: translateY(0);
+  /* ⚠️ 不写 transform:translateY(0)（2026-10-25 修复「hover 后按钮排布错乱」）：
+     任何非 none 的 transform（含 identity 的 translateY(0)）都会成为 fixed 子元素
+     的包含块 —— Windows 独立小窗的 WindowControls（自绘最小化/最大化/关闭）是
+     actions 的 fixed 子元素，一旦 actions 带 transform，它就从"相对窗口右上角"
+     变成"相对 actions 盒"定位，落到图标下方。
+     styles-sidebar-toolbar.css 里曾加 .pip-standalone…{transform:none} 修复，
+     但本 hover 块与其同特异性 (0,3,0) 且在产物中更靠后 → hover（:focus-within，
+     鼠标点过头部按钮后）触发时 translateY(0) 又把 transform:none 盖掉，错位复现
+     —— 正是"默认正常、hover 后变乱"的现象。从头显隐只靠 opacity 即可。 */
   pointer-events: auto;
 }
 
