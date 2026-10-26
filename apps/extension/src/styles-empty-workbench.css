@@ -16,17 +16,16 @@
    L2 = 上下文（mono 只用于 host · path / 阶段）
    ============================================================ */
 
-/* 折叠态高度契约更新：一行式 30px → 两行五态卡。
-   （原规则 theme-modern-v2.css 2720：为与终端状态栏 30px 对齐；
-   2026-10-04 用户确认一行式截断不可用，改两行，见实施方案偏差②）
-   卡化：1px 边框 + 10px 圆角 + 侧栏内边距呼吸（对齐原型 10.1/10.3），
-   取代旧「border-top 贴平分隔行」。 */
+/* 折叠态去卡片化（用户反馈 2026-10-25：左下角与右侧终端状态栏高度不一致、底边错位）。
+   折叠态与终端状态栏（align-s5 §9）完全同规格：30px 定高 + 1px 上边框 + 0 12px 内边距，
+   左右底栏同高同线；展开态（.sidebar-status-open，服务器选择列表）保留卡片形态。 */
 .theme-modern .sidebar-status {
-  padding: 0;
+  padding: 0 12px;
   line-height: inherit;
-  margin: 4px 10px 8px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
+  margin: 0;
+  border: none;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
   background: var(--panel);
   overflow: hidden;
 }
@@ -36,13 +35,19 @@
 .theme-modern .sidebar-status:not(.sidebar-status-open) {
   /* 折叠态 30px 定高 + 内容水平/垂直居中（用户反馈 2026-10-06：待命贴上沿不居中）。
      本文件加载晚于 theme-modern-v2.css，同特异性下此块才是实际生效规则；
-     此前 height:auto/stretch → 卡高随内容、文字贴上沿。
      st-l2 详情行已由 v2 折叠隐藏（单行卡），展开态不受影响。 */
+  box-sizing: border-box;
   height: 30px;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   overflow: hidden;
+}
+/* 展开态（点开后为服务器选择列表，非状态栏形态）恢复卡片 */
+.theme-modern .sidebar-status.sidebar-status-open {
+  margin: 4px 10px 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
 }
 
 .sidebar-status .st-progress {
