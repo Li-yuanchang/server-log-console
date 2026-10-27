@@ -555,6 +555,8 @@ export function ConnectionSettingsWorkspace(props: Props) {
      纯导航状态，非宽度分支——宽度判断只发生在 CSS 容器查询里。 */
   const [mobileShowDetail, setMobileShowDetail] = useState(false);
   const [currentAnchor, setCurrentAnchor] = useState(PREF_ANCHORS[0].id);
+  /* 终端节子页（2026-10-27）：控件 20+ 单屏过载，按「配色 / 字体 / 光标」分页 */
+  const [terminalTab, setTerminalTab] = useState<"scheme" | "font" | "cursor">("font");
   /* 密码 / 私钥「明文可见」开关（2026-10-23 用户需求：加可查看小眼睛）。
      默认均为 false（掩码），仅用户主动点击才明文 —— 私钥原先直接明文可读，
      现在默认掩码更安全；切换只在本地视图，不影响存盘内容。 */
@@ -2030,10 +2032,30 @@ export function ConnectionSettingsWorkspace(props: Props) {
 
             <section id="pref-terminal" data-anchor className="settings-pref-section">
               <div className="settings-card-kicker">终端</div>
+              <div className="slc-subtabs" role="tablist" aria-label="终端设置分类">
+                {([
+                  { id: "font", label: "字体" },
+                  { id: "scheme", label: "配色与背景" },
+                  { id: "cursor", label: "光标与细节" },
+                ] as const).map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={terminalTab === tab.id}
+                    className={terminalTab === tab.id ? "slc-subtab slc-subtab-active" : "slc-subtab"}
+                    onClick={() => setTerminalTab(tab.id)}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
               <div className="settings-pref-card">
                 {/* 2026-10-24 重设计：终端设置全部归位本区 —— 字体 / 字号从「外观 → 字体矩阵」
                     移入（与矩阵时代的去重决策相反：分散在各区更贴合上下文，原型已确认）。 */}
-                <div className="settings-pref-row">
+                {terminalTab === "font" ? (
+                  <>
+<div className="settings-pref-row">
                   <span className="settings-pref-label"><strong>终端字体</strong><span>等宽字体族；改动后 xterm 自动重排</span></span>
                   <span className="settings-pref-value">
                     <ThemedSelect
@@ -2103,7 +2125,12 @@ export function ConnectionSettingsWorkspace(props: Props) {
                     </span>
                   </span>
                 </div>
-                <div className="settings-pref-row">
+                                  </>
+                ) : null}
+
+                {terminalTab === "cursor" ? (
+                  <>
+<div className="settings-pref-row">
                   <span className="settings-pref-label"><strong>光标样式</strong><span>按终端使用习惯选择</span></span>
                   <span className="settings-pref-value">
                     <span className="seg lite" role="radiogroup" aria-label="终端光标样式">
@@ -2143,7 +2170,11 @@ export function ConnectionSettingsWorkspace(props: Props) {
                 {/* 终端配色（2026-10-24 重设计）：「跟随主题」卡 + 7 深色方案，单控件定底色。
                     原独立「背景跟随主题」开关取消（迁移见 useUiTheme）；「日光」浅色方案移除
                     （与跟随主题架构冲突，深浅主题下均不可读）。 */}
-                <div className="settings-pref-row settings-pref-row-wide">
+                                  </>
+                ) : null}
+
+                {terminalTab === "scheme" ? (
+<div className="settings-pref-row settings-pref-row-wide">
                   <span className="settings-pref-label"><strong>终端配色</strong><span>映射 xterm ITheme（前景/背景/光标/选区 + ANSI 16 色）</span></span>
                   <div className="slc-term-grid" role="radiogroup" aria-label="终端配色">
                     {(() => {
@@ -2185,6 +2216,8 @@ export function ConnectionSettingsWorkspace(props: Props) {
                     })()}
                   </div>
                 </div>
+                ) : null}
+
                 {/* 实时预览：配色 / 字体 / 字号 / 行高 / 光标 全部即时联动（对齐 VRC 控制台外观） */}
                 <div className="settings-pref-row settings-pref-row-wide">
                   <span className="settings-pref-label"><strong>实时预览</strong><span>改动即时可见，无需重连会话</span></span>
@@ -2215,7 +2248,8 @@ export function ConnectionSettingsWorkspace(props: Props) {
                 {/* 背景纹理（2026-10-27）：默认 none。
                     纹理是背景层最低优先级 —— 只提供空间感，不与内容争注意力。
                     强度默认 55%，对应纹理线透明度约 3%（几乎无感）。 */}
-                <div className="settings-pref-row settings-pref-row-wide">
+                {terminalTab === "scheme" ? (
+<div className="settings-pref-row settings-pref-row-wide">
                   <span className="settings-pref-label">
                     <strong>背景纹理</strong>
                     <span>终端背景的技术感纹理，默认关闭</span>
@@ -2249,6 +2283,8 @@ export function ConnectionSettingsWorkspace(props: Props) {
                     })}
                   </div>
                 </div>
+
+                ) : null}
 
                 {props.preferenceSection.terminalTexture !== "none" ? (
                   <div className="settings-pref-row settings-pref-row-wide">

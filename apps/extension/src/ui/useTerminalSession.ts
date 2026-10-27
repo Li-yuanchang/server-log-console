@@ -78,8 +78,13 @@ function buildTerminalTheme(schemeId: TerminalColorSchemeId | undefined, shellBg
   const scheme = TERMINAL_SCHEMES.find((s) => s.id === (follow ? "console" : schemeId)) ?? TERMINAL_SCHEMES[0];
   const t = scheme.theme;
   return {
-    background: shellBg || t.background,
-    foreground: follow ? (shellInk || t.foreground) : (t.foreground === "#d7dde5" ? shellInk : t.foreground),
+    /* 2026-10-27 修复短路 bug：原来写 `shellBg || t.background`，
+       而 shellBg 恒有值（readTerminalTheme 从 --terminal-background 读到），
+       导致 t.background 永远不会被使用 —— 选任何主题底色都不变。
+       现在：follow 用 UI 主题 shell，非 follow 用方案自带背景。
+       并且设为 transparent：背景改由 CSS 层渲染，这样纹理才能透出来。 */
+    background: "transparent",
+    foreground: follow ? (shellInk || t.foreground) : t.foreground,
     cursor: follow ? (shellInk || t.cursor) : t.cursor,
     cursorAccent: shellBg || t.background,
     selectionBackground: t.selectionBackground,
@@ -296,6 +301,10 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
       /* 搜索高亮（addon-search decorations）与客户端着色（registerDecoration）依赖提案 API，
          未开启时 findNext 在高亮环节抛错（被 safeSearchCall 吞掉 → 恒 0/0）、着色静默失效。 */
       allowProposedApi: true,
+      /* 2026-10-27 关键修复：不开启时 xterm 的 canvas 会用 theme.background 铺满不透明，
+         完全盖住 .xterm-container 上的背景纹理层 —— 表现为「选了方格纹理但看不到任何变化」。
+         开启后画布透明，背景由 CSS 层（--terminal-background + --terminal-texture-image）承担。 */
+      allowTransparency: true,
       /* 原型 .term（prototype.html 190 行）原为 11px，用户确认过小 → 默认 14
          （= useUiTheme DEFAULT_TERMINAL_FONT_SIZE，设置中心可调）；字体兜底栈 = --mono token。 */
       fontSize: options.terminalFontSize || 14,
