@@ -115,15 +115,31 @@
    加在容器而非 .xterm：.xterm 有 padding，背景会被 padding 区裁掉。 */
 .theme-modern .terminal-panel-body .xterm-container,
 .theme-modern .terminal-pane-body .xterm-container {
-  /* 统一呼吸间距 16px（用户要求）：上下左右一致，
-     且 padding 落在容器上、底色也在容器上，所以不会出现色差圈。
-     注意 FitAddon 只减 .xterm 自身 padding，容器 padding 会让可用宽度变小、
-     由 fit 自动算出更少的列数 —— 不会溢出。 */
-  padding: 16px;
+  /* 2026-10-27 呼吸间距改由父级提供，容器本身 padding 归零：
+     FitAddon 的 proposeDimensions() 读 parentElement 的宽高、只减 .xterm 自身
+     padding —— 容器若带 padding，它算出的行列数会多出约 2 行，实测
+     screen 702px vs viewport 671px，内容顶到容器右下边缘，
+     表现为「只留了上左、下右被吃掉了」。
+     现在容器零 padding，留白交给 .terminal-panel-body（见下条）。 */
+  padding: 0;
   box-sizing: border-box;
   background-image: var(--terminal-texture-image, none);
   background-size: var(--terminal-texture-size, auto);
   background-color: var(--terminal-background, var(--shell));
+}
+
+/* 呼吸间距 16px：加在承载 xterm-container 的父级上。
+   这样 FitAddon 读到的 parentElement 尺寸已扣除留白，算出的行列与实际可用区一致。
+   关键：父级必须同时承担「底色 + 纹理」—— 否则 padding 那圈没有背景，
+   会露出更外层页面底色，形成用户反馈的那圈浅色/异色边框。
+   现在 body 与容器同色同纹理，视觉上是一个连续的整体。 */
+.theme-modern .terminal-panel-body,
+.theme-modern .terminal-pane-body {
+  padding: 16px;
+  box-sizing: border-box;
+  background-color: var(--terminal-background, var(--shell));
+  background-image: var(--terminal-texture-image, none);
+  background-size: var(--terminal-texture-size, auto);
 }
 .theme-modern .terminal-panel-body .xterm-container .xterm,
 .theme-modern .terminal-pane-body .xterm-container .xterm {

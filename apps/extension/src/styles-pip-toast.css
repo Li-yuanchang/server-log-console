@@ -155,10 +155,23 @@
   height: 100%;
 }
 
+/* 2026-10-27 修正高度基准：
+   原来 screen/viewport/scroll-area 都是 width:100% + 由 .xterm 的 height:100% 撑开。
+   当 .xterm-container 带 padding 16px 时，.xterm 的 height:100% 取的是容器
+   「外部高度」（703px），而可用内容高度只有 671px —— 实测 screen 702px、
+   viewport 671px，超出 31px，导致内容顶到容器右下边缘、视觉上「只留了上左」。
+   现在显式用 box-sizing + 100% 高度对齐内容盒；容器已是 border-box，
+   子级各自的 100% 会正确落在 padding box 内。 */
 .xterm-container .xterm-screen,
 .xterm-container .xterm-viewport,
 .xterm-container .xterm-scroll-area {
   width: 100% !important;
+  box-sizing: border-box;
+}
+
+/* DOM 渲染器的行容器必须跟随 viewport 高度，不能自己撑出容器 */
+.xterm-container .xterm-rows {
+  box-sizing: border-box;
 }
 
 /* 视口底色以 xterm 内联主题底色为准（terminalScheme.theme.background，

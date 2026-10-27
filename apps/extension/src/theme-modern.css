@@ -2536,9 +2536,17 @@ body.is-resizing-tree .theme-modern .browser-resizer::after {
 .theme-modern .main-panel-with-terminal .terminal-body-layout,
 .theme-modern .main-panel-with-terminal .terminal-main-shell,
 .theme-modern .main-panel-with-terminal .terminal-tab-panes,
-.theme-modern .main-panel-with-terminal .terminal-tab-pane,
-.theme-modern .main-panel-with-terminal .terminal-panel-body {
+.theme-modern .main-panel-with-terminal .terminal-tab-pane {
   background: transparent;
+}
+/* 2026-10-27：.terminal-panel-body 从上面的 transparent 组里移出。
+   它现在承担 16px 呼吸间距（padding），必须同时承担底色 + 纹理，
+   否则 padding 圈会露出更外层页面底色，形成用户反馈的浅色边框。
+   与 .xterm-container 同色同纹理 → 视觉连续。 */
+.theme-modern .main-panel-with-terminal .terminal-panel-body {
+  background-color: var(--terminal-background, var(--shell));
+  background-image: var(--terminal-texture-image, none);
+  background-size: var(--terminal-texture-size, auto);
 }
 
 /* 容器：承担主题底色 + 背景纹理（不透明，作为画布的底） */
