@@ -7,9 +7,11 @@ import {
   apiUploadStart,
   apiUploadChunk,
   apiUploadFinish,
+  apiGetDirectoryListing,
 } from "./api.js";
 import type { TransferHistoryEntry } from "./storage.js";
 import { TransferGate, TransferCancelledError } from "./transferControl.js";
+import type { ConflictResolution, UploadConflictItem } from "./UploadConflictDialog.js";
 
 const UPLOAD_JUNK_FILES = new Set([
   ".DS_Store", "._.DS_Store", "Thumbs.db", "thumbs.db", "desktop.ini", "Desktop.ini",
@@ -139,6 +141,19 @@ export type FileTransferAPI = {
   uploadFileList: (files: File[]) => Promise<void>;
   uploadDirectory: () => Promise<void>;
   handleFileDrop: (e: React.DragEvent) => void;
+  /** 本轮上传的逐文件状态（供传输抽屉展示"哪个文件卡住了"） */
+  uploadFileQueue: Array<{
+    name: string;
+    size: number;
+    transferred: number;
+    status: "pending" | "uploading" | "done" | "error";
+  }>;
+  /** 上传前冲突检测结果（非空时由 App 弹确认框，用户确认后再调用 confirmUpload） */
+  uploadConflicts: UploadConflictItem[] | null;
+  /** 用户确认冲突处理方式后继续上传 */
+  confirmUpload: (options: { resolution: ConflictResolution; perFile?: Record<string, ConflictResolution> }) => Promise<void>;
+  /** 放弃本次冲突待确认的上传 */
+  cancelUploadConflicts: () => void;
   /** 上传是否处于暂停态（驱动抽屉按钮的「暂停/继续」切换） */
   uploadPaused: boolean;
   pauseUpload: () => void;
@@ -520,6 +535,9 @@ export function useFileTransfer(deps: {
         return;
       }
       const detail = error instanceof Error ? error.message : "未知错误";
+      setUploadFileQueue((prev) => prev.map((item) =>
+        item.status === "uploading" ? { ...item, status: "error" as const } : item
+      ));
       setActionStatus(`上传失败：${detail}`);
       pushActivity(`上传失败：${detail}`);
       if (currentUpload) {
@@ -539,7 +557,61 @@ export function useFileTransfer(deps: {
     }
   }, [serverId, directoryPath, setUploadProgress, setActionStatus, pushActivity, showToast, appendTransferHistory, browseLogFiles, onUploadStarted]);
 
-  const uploadFileList = useCallback(async (fileList: File[]) => {
+  /* ---------- 上传冲突检测 ----------
+     此前是静默覆盖：同名文件直接顶掉远端文件，没有任何提示。
+     现在改成「先查目录、有冲突则挂起等用户确认」。
+     无冲突时行为完全不变（不多一次对话框，也不阻塞）。 */
+  const [uploadConflicts, setUploadConflicts] = useState<UploadConflictItem[] | null>(null);
+  /* 逐文件队列：现有 uploadProgress 只有"当前文件"，50 个小文件卡在第 3 个时
+     看不出是谁卡了。这里在每轮上传开始时初始化，逐文件推进。 */
+  const [uploadFileQueue, setUploadFileQueue] = useState<Array<{
+    name: string;
+    size: number;
+    transferred: number;
+    status: "pending" | "uploading" | "done" | "error";
+  }>>([]);
+  const pendingUploadRef = useRef<{
+    files: File[];
+    localFiles: LocalUploadFile[] | null;
+    perFile: Record<string, ConflictResolution>;
+  } | null>(null);
+
+  const cancelUploadConflicts = useCallback(() => {
+    setUploadConflicts(null);
+    pendingUploadRef.current = null;
+  }, []);
+
+  /** 检测同名文件。返回 null 表示无需确认（无冲突或检测失败 —— 失败时按原行为继续，
+      不因为一次目录读失败就阻断上传）。 */
+  const detectConflicts = useCallback(async (files: File[]): Promise<UploadConflictItem[] | null> => {
+    if (!serverId || !directoryPath) return null;
+    try {
+      const listing = await apiGetDirectoryListing({ serverId, directoryPath });
+      const existing = new Map(
+        listing.entries
+          .filter((entry) => entry.kind === "file")
+          .map((entry) => [entry.name, entry.size ?? 0])
+      );
+      const items: UploadConflictItem[] = files.map((file) => {
+        const name = getUploadRelativePath(file) || file.name;
+        const existingSize = existing.get(name);
+        return {
+          name,
+          incomingSize: file.size,
+          existingSize,
+          conflicted: existingSize !== undefined
+        };
+      });
+      return items.some((item) => item.conflicted) ? items : null;
+    } catch {
+      /* 目录读不到（权限、路径不存在、网络抖动）→ 不做冲突拦截，
+         沿原有流程上传，由上传本身报错。 */
+      return null;
+    }
+  }, [serverId, directoryPath]);
+
+  /** 实际执行上传（不含冲突检测）。fileList 已由调用方确认过冲突处理方式。 */
+  const performUpload = useCallback(async (fileList: File[]) => {
     if (!serverId || !directoryPath || fileList.length === 0) return;
     const { accepted, skipped } = splitUploadFiles(fileList);
     if (accepted.length === 0) {
@@ -566,6 +638,15 @@ export function useFileTransfer(deps: {
     const skippedCount = skipped.length;
     const total = accepted.length;
     const totalBytes = getUploadBatchSize(accepted);
+    /* 初始化逐文件队列：全部先标 pending，随循环推进 */
+    setUploadFileQueue(
+      accepted.map((file) => ({
+        name: getUploadRelativePath(file) || file.name,
+        size: file.size,
+        transferred: 0,
+        status: "pending" as const
+      }))
+    );
     const uploadDir = directoryPath.endsWith("/") ? directoryPath.slice(0, -1) : directoryPath;
     let currentUpload: { fileName: string; relativePath: string; localPath: string; targetPath: string; size: number } | null = null;
     let uploadedBefore = 0;
@@ -581,6 +662,9 @@ export function useFileTransfer(deps: {
         const localPath = getUploadLocalPath(file);
         const targetPath = `${uploadDir}/${relativePath}`;
         currentUpload = { fileName: file.name, relativePath, localPath, targetPath, size: file.size };
+        setUploadFileQueue((prev) => prev.map((item, index) =>
+          index === i ? { ...item, status: "uploading" as const } : item
+        ));
         setUploadProgress({
           current: getUploadPercent(uploadedBefore, totalBytes),
           total,
@@ -603,6 +687,9 @@ export function useFileTransfer(deps: {
           speedState,
         }, gate);
         uploadedBefore += file.size;
+        setUploadFileQueue((prev) => prev.map((item, index) =>
+          index === i ? { ...item, transferred: file.size, status: "done" as const } : item
+        ));
         pushActivity(`已上传文件：${targetPath}`);
         appendTransferHistory({
           direction: "upload",
@@ -660,12 +747,139 @@ export function useFileTransfer(deps: {
     }
   }, [serverId, directoryPath, uploadOneFileWithBatchProgress, uploadLocalFileList, setUploadProgress, setActionStatus, pushActivity, showToast, appendTransferHistory, browseLogFiles, onUploadStarted]);
 
+  /**
+   * 上传入口：先检测同名冲突，有冲突则挂起等用户确认；无冲突直接开始。
+   * pendingUploadRef 保存本次待上传内容，确认后走 confirmUpload。
+   */
+  /** 本地路径直传（Electron）的同名检测。返回 null 表示无需确认。 */
+  const detectLocalFileConflicts = useCallback(async (
+    localFiles: Array<{ name: string; size: number }>
+  ): Promise<UploadConflictItem[] | null> => {
+    if (!serverId || !directoryPath) return null;
+    try {
+      const listing = await apiGetDirectoryListing({ serverId, directoryPath });
+      const existing = new Map(
+        listing.entries
+          .filter((entry) => entry.kind === "file")
+          .map((entry) => [entry.name, entry.size ?? 0])
+      );
+      const items: UploadConflictItem[] = localFiles.map((file) => {
+        const existingSize = existing.get(file.name);
+        return {
+          name: file.name,
+          incomingSize: file.size,
+          existingSize,
+          conflicted: existingSize !== undefined
+        };
+      });
+      return items.some((item) => item.conflicted) ? items : null;
+    } catch {
+      return null;
+    }
+  }, [serverId, directoryPath]);
+
+  const uploadFileList = useCallback(async (fileList: File[]) => {
+    if (!serverId || !directoryPath || fileList.length === 0) return;
+    const { accepted } = splitUploadFiles(fileList);
+    if (accepted.length === 0) {
+      /* 全部被过滤：交给 performUpload 走原有的提示逻辑 */
+      await performUpload(fileList);
+      return;
+    }
+    const conflicts = await detectConflicts(accepted);
+    if (conflicts) {
+      pendingUploadRef.current = { files: accepted, localFiles: null, perFile: {} };
+      setUploadConflicts(conflicts);
+      return;
+    }
+    await performUpload(accepted);
+  }, [serverId, directoryPath, performUpload, detectConflicts]);
+
+  /**
+   * 用户确认冲突处理：对 skip 的文件排除，对 rename 的加后缀，其余原样覆盖。
+   */
+  const confirmUpload = useCallback(async (options: {
+    resolution: ConflictResolution;
+    perFile?: Record<string, ConflictResolution>;
+  }) => {
+    const pending = pendingUploadRef.current;
+    setUploadConflicts(null);
+    pendingUploadRef.current = null;
+    if (!pending) return;
+
+    /* Electron 本地路径直传分支 */
+    if (pending.localFiles && pending.localFiles.length > 0) {
+      const resolutionOfLocal = (name: string): ConflictResolution =>
+        (options.perFile || {})[name] ?? options.resolution;
+      const kept = pending.localFiles.filter((file) => resolutionOfLocal(file.name) !== "skip");
+      const skippedLocal = pending.localFiles.length - kept.length;
+      if (skippedLocal > 0) {
+        const message = `已跳过 ${skippedLocal} 个同名文件`;
+        setActionStatus(message);
+        pushActivity(message);
+      }
+      if (kept.length > 0) {
+        await uploadLocalFileList(kept, beginUploadGate());
+      }
+      return;
+    }
+
+    const perFile = options.perFile || {};
+    const resolutionOf = (file: File): ConflictResolution => {
+      const name = getUploadRelativePath(file) || file.name;
+      return perFile[name] ?? options.resolution;
+    };
+
+    const toUpload: File[] = [];
+    let skippedCount = 0;
+    for (const file of pending.files) {
+      const resolution = resolutionOf(file);
+      if (resolution === "skip") {
+        skippedCount += 1;
+        continue;
+      }
+      if (resolution === "rename") {
+        /* 重命名走「加时间戳后缀」，不改文件内容；
+           远端落点由 performUpload 用 file.name 推导，这里替换 name。 */
+        const stamp = Date.now().toString().slice(-6);
+        const dot = file.name.lastIndexOf(".");
+        const renamed = dot > 0
+          ? `${file.name.slice(0, dot)}.${stamp}${file.name.slice(dot)}`
+          : `${file.name}.${stamp}`;
+        toUpload.push(new File([file], renamed, { type: file.type, lastModified: file.lastModified }));
+        continue;
+      }
+      toUpload.push(file);
+    }
+
+    if (skippedCount > 0) {
+      const message = `已跳过 ${skippedCount} 个同名文件`;
+      setActionStatus(message);
+      pushActivity(message);
+    }
+    if (toUpload.length > 0) {
+      await performUpload(toUpload);
+    }
+  }, [performUpload, setActionStatus, pushActivity]);
+
   const uploadFiles = useCallback(async () => {
     if (!serverId || !directoryPath) return;
     const electronAPI = (window as any).electronAPI;
     if (electronAPI?.localPickFiles) {
       const result = await electronAPI.localPickFiles();
-      if (result?.ok && Array.isArray(result.files)) {
+      if (result?.ok && Array.isArray(result.files) && result.files.length > 0) {
+        /* Electron 走本地路径直传，没有 File 对象；
+           仍要做同名检测 —— 否则这条路径依旧是静默覆盖。 */
+        const conflictItems = await detectLocalFileConflicts(result.files);
+        if (conflictItems) {
+          pendingUploadRef.current = {
+            files: [],
+            localFiles: result.files as LocalUploadFile[],
+            perFile: {}
+          };
+          setUploadConflicts(conflictItems);
+          return;
+        }
         await uploadLocalFileList(result.files, beginUploadGate());
       }
       return;
@@ -726,6 +940,12 @@ export function useFileTransfer(deps: {
     uploadFileList,
     uploadDirectory,
     handleFileDrop,
+    /* 逐文件队列（供传输抽屉展示哪个文件卡住） */
+    uploadFileQueue,
+    /* 同名冲突检测（静默覆盖修复） */
+    uploadConflicts,
+    confirmUpload,
+    cancelUploadConflicts,
     /* 上传流程控制（暂停 / 继续 / 取消） */
     uploadPaused,
     pauseUpload,

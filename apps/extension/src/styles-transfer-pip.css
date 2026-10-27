@@ -1,0 +1,214 @@
+/* ============================================================
+   上传进度小窗（Electron PiP mode="transfer"）
+   前缀 tpw-，独立命名空间；浅色跟随主题，与日志小窗一致。
+   ============================================================ */
+
+.tpw-root {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  min-height: 0;
+  background: var(--panel, #fbfbf7);
+  color: var(--ink, #27302a);
+  font-family: var(--font, -apple-system, "PingFang SC", sans-serif);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.tpw-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--line, #d9ded0);
+  background: var(--panel-strong, #fff);
+}
+
+.tpw-head strong {
+  font-size: 12px;
+  font-weight: 600;
+  flex: 1;
+  min-width: 0;
+}
+
+.tpw-count {
+  font-size: 10px;
+  color: var(--ink-muted, #92988d);
+  font-variant-numeric: tabular-nums;
+}
+
+.tpw-dot {
+  flex: 0 0 7px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.tpw-dot-active { background: var(--amber, #b77935); }
+.tpw-dot-ok { background: var(--green-dot, #4cae62); }
+.tpw-dot-bad { background: var(--red, #a5483d); }
+.tpw-dot-idle { background: var(--line-strong, #b8c2ae); }
+
+.tpw-meta {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--line, #d9ded0);
+  font-size: 10px;
+  color: var(--ink-muted, #92988d);
+  min-width: 0;
+}
+
+.tpw-dir {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--mono, monospace);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tpw-stat { flex: 0 0 auto; font-variant-numeric: tabular-nums; }
+
+.tpw-bar {
+  flex: 0 0 auto;
+  height: 3px;
+  background: var(--line, #d9ded0);
+  overflow: hidden;
+}
+
+.tpw-bar i {
+  display: block;
+  height: 100%;
+  background: var(--accent, #426b57);
+  transition: width 0.2s ease;
+}
+
+.tpw-bar i.done { background: var(--green-dot, #4cae62); }
+.tpw-bar i.bad { background: var(--red, #a5483d); }
+
+.tpw-files {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+
+.tpw-file {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 12px;
+  font-size: 10.5px;
+  min-width: 0;
+}
+
+.tpw-file + .tpw-file {
+  border-top: 1px solid color-mix(in srgb, var(--line, #d9ded0) 55%, transparent);
+}
+
+.tpw-file-name {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--mono, monospace);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tpw-file-bar {
+  flex: 0 0 54px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--line, #d9ded0);
+  overflow: hidden;
+}
+
+.tpw-file-bar i {
+  display: block;
+  height: 100%;
+  background: var(--accent, #426b57);
+  transition: width 0.2s ease;
+}
+
+.tpw-file-done .tpw-file-bar i { background: var(--green-dot, #4cae62); }
+.tpw-file-done .tpw-file-name { color: var(--ink-muted, #92988d); }
+.tpw-file-error .tpw-file-bar i { background: var(--red, #a5483d); }
+.tpw-file-error .tpw-file-name { color: var(--red, #a5483d); }
+
+.tpw-file-size {
+  flex: 0 0 auto;
+  font-size: 9.5px;
+  color: var(--ink-muted, #92988d);
+  font-variant-numeric: tabular-nums;
+}
+
+.tpw-empty {
+  padding: 20px 12px;
+  text-align: center;
+  font-size: 10.5px;
+  color: var(--ink-muted, #92988d);
+}
+
+.tpw-msg {
+  flex: 0 0 auto;
+  margin: 0 12px 6px;
+  padding: 7px 9px;
+  border-radius: 5px;
+  background: rgba(165, 72, 61, 0.07);
+  border: 1px solid rgba(165, 72, 61, 0.24);
+  color: #8a3a31;
+  font-size: 10.5px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.tpw-foot {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border-top: 1px solid var(--line, #d9ded0);
+  background: var(--panel-strong, #fff);
+}
+
+.tpw-speed {
+  font-size: 10px;
+  color: var(--ink-muted, #92988d);
+  font-variant-numeric: tabular-nums;
+}
+
+.tpw-btn {
+  font: inherit;
+  font-size: 10.5px;
+  height: 22px;
+  padding: 0 9px;
+  border: 1px solid var(--line, #d9ded0);
+  border-radius: 4px;
+  background: var(--panel, #fbfbf7);
+  color: var(--ink, #27302a);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tpw-btn:hover { background: var(--panel-muted, #eef1e8); }
+
+.tpw-btn-ghost {
+  color: var(--ink-muted, #92988d);
+  border-color: transparent;
+  background: transparent;
+}
+
+.tpw-note {
+  flex: 0 0 auto;
+  padding: 7px 12px 9px;
+  border-top: 1px solid var(--line, #d9ded0);
+  background: var(--panel, #fbfbf7);
+  font-size: 9.5px;
+  color: var(--ink-muted, #92988d);
+  line-height: 1.6;
+}

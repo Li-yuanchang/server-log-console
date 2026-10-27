@@ -51,6 +51,13 @@ export default defineConfig({
   ],
   server: {
     host: "127.0.0.1",
+    /* 固定端口，有两个目的：
+       1) 网关的 CORS 白名单需要精确到端口，默认 5173 会与本机其它 vite 项目
+          （如 virtual-resource-console）撞车，导致白名单放行错误的服务；
+       2) strictPort 让它抢占失败时直接报错，而不是静默换端口 —— 否则端口一换
+          白名单又对不上，前端会被自身 gateway 拒绝。 */
+    port: 5273,
+    strictPort: true,
   },
   build: {
     outDir: "dist",

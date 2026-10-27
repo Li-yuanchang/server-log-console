@@ -1,0 +1,286 @@
+/* ============================================================
+   重新导入 · 变更预览弹层（ImportPreviewDialog）
+   前缀 ipd-，独立于既有 settings-* / conn-* 体系，避免影响设置中心。
+   ============================================================ */
+
+.ipd-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(16, 20, 17, 0.34);
+  backdrop-filter: blur(2px);
+}
+
+.ipd-panel {
+  display: flex;
+  flex-direction: column;
+  width: min(560px, 100%);
+  max-height: min(680px, calc(100vh - 48px));
+  background: var(--panel-strong, #fff);
+  border: 1px solid var(--line, #d9ded0);
+  border-radius: 12px;
+  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.24);
+  overflow: hidden;
+}
+
+.ipd-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line, #d9ded0);
+  flex: 0 0 auto;
+}
+
+.ipd-head > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.ipd-head strong {
+  display: block;
+  font-size: 13.5px;
+  font-weight: 650;
+  color: var(--ink, #27302a);
+}
+
+.ipd-head span {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--ink-muted, #92988d);
+}
+
+.ipd-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px 18px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ipd-hint {
+  padding: 14px 12px;
+  font-size: 11.5px;
+  color: var(--ink-muted, #92988d);
+  text-align: center;
+}
+
+.ipd-error {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(165, 72, 61, 0.25);
+  background: rgba(165, 72, 61, 0.07);
+  font-size: 11px;
+  color: #8a3a31;
+  line-height: 1.6;
+}
+
+.ipd-error strong {
+  font-size: 11.5px;
+  font-weight: 650;
+  color: #7a2f27;
+}
+
+.ipd-error .ghost-button {
+  align-self: flex-start;
+  margin-top: 4px;
+}
+
+.ipd-section {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line, #d9ded0);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.ipd-section-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 11px;
+  background: var(--panel-muted, #eef1e8);
+  border-bottom: 1px solid var(--line, #d9ded0);
+}
+
+.ipd-kicker {
+  flex: 1;
+  min-width: 0;
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-muted, #92988d);
+}
+
+.ipd-count {
+  font-size: 10px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  border-radius: 999px;
+  padding: 0 7px;
+  border: 1px solid transparent;
+}
+
+.ipd-count-add { color: #477a45; background: rgba(71, 122, 69, 0.1); border-color: rgba(71, 122, 69, 0.26); }
+.ipd-count-warn { color: #b77935; background: rgba(183, 121, 53, 0.1); border-color: rgba(183, 121, 53, 0.3); }
+.ipd-count-info { color: #2f5f8f; background: rgba(47, 95, 143, 0.09); border-color: rgba(47, 95, 143, 0.26); }
+
+.ipd-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 11px;
+  min-width: 0;
+}
+
+.ipd-row + .ipd-row {
+  border-top: 1px solid var(--line, #d9ded0);
+}
+
+.ipd-row-check {
+  cursor: pointer;
+}
+
+.ipd-row-check:hover {
+  background: var(--panel-muted, #eef1e8);
+}
+
+.ipd-row-on {
+  background: rgba(66, 107, 87, 0.06);
+}
+
+.ipd-row-stack {
+  align-items: flex-start;
+}
+
+.ipd-row-stack input {
+  margin-top: 3px;
+}
+
+.ipd-row input[type="checkbox"] {
+  flex: 0 0 auto;
+  accent-color: var(--accent, #426b57);
+}
+
+.ipd-dot {
+  flex: 0 0 7px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.ipd-dot-add { background: #4cae62; }
+
+.ipd-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.ipd-main strong {
+  font-size: 12px;
+  font-weight: 550;
+  color: var(--ink, #27302a);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ipd-main .mono {
+  font-family: var(--mono, monospace);
+  font-size: 10px;
+  color: var(--ink-muted, #92988d);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ipd-warn {
+  margin-top: 2px;
+  font-size: 10px;
+  color: #b77935;
+  line-height: 1.5;
+}
+
+.ipd-tag {
+  flex: 0 0 auto;
+  font-size: 9.5px;
+  font-weight: 600;
+  border-radius: 999px;
+  padding: 1px 7px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.ipd-tag-add { color: #477a45; background: rgba(71, 122, 69, 0.1); border-color: rgba(71, 122, 69, 0.26); }
+.ipd-tag-warn { color: #a5483d; background: rgba(165, 72, 61, 0.07); border-color: rgba(165, 72, 61, 0.26); }
+.ipd-tag-info { color: #2f5f8f; background: rgba(47, 95, 143, 0.09); border-color: rgba(47, 95, 143, 0.26); }
+.ipd-tag-keep { color: var(--ink-muted, #92988d); background: var(--panel-muted, #eef1e8); border-color: var(--line, #d9ded0); }
+
+.ipd-field {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10.5px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.ipd-field-label {
+  color: var(--ink-muted, #92988d);
+  flex: 0 0 auto;
+}
+
+.ipd-field-old {
+  color: var(--ink-muted, #92988d);
+  text-decoration: line-through;
+}
+
+.ipd-field-arrow {
+  color: var(--ink-muted, #92988d);
+}
+
+.ipd-field-new {
+  color: var(--ink, #27302a);
+  font-weight: 550;
+}
+
+.ipd-note {
+  padding: 6px 11px;
+  font-size: 10px;
+  color: var(--ink-muted, #92988d);
+  background: var(--panel, #fbfbf7);
+  border-top: 1px solid var(--line, #d9ded0);
+  line-height: 1.55;
+}
+
+.ipd-foot {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--line, #d9ded0);
+  background: var(--panel, #fbfbf7);
+}
+
+.ipd-foot-hint {
+  flex: 1;
+  min-width: 0;
+  font-size: 10.5px;
+  color: var(--ink-muted, #92988d);
+  font-variant-numeric: tabular-nums;
+}

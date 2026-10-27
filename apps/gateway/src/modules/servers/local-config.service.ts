@@ -2,6 +2,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import type { ManualServerUpsertRequest, ServerConnectionKind, ServerCredentialInput, ServerRouteConfig, ServerSummary } from "@server-log-console/shared";
+import { SecretCipher } from "../crypto/vault-cipher.js";
 import { decodeFinalShellPassword } from "./finalshell-password-decoder.js";
 
 interface PersistedServerRecord extends ServerSummary {
@@ -55,17 +56,48 @@ export class LocalConfigService {
   private finalShellSettings: FinalShellSettingsRecord = { configuredPath: "" };
   private serverRoutes: ServerRouteRecord = {};
 
+  /** 凭证静态加密器（AES-256-GCM）。key 不可用时退回明文并要求上层告警。 */
+  private readonly cipher: SecretCipher;
+
   constructor(
     private readonly configDir = process.env.SERVER_LOG_CONFIG_HOME || path.join(os.homedir(), ".server-log-console")
-  ) {}
+  ) {
+    this.cipher = new SecretCipher({ configDir: this.configDir });
+  }
+
+  /** 静态加密是否已启用（未启用时界面上必须提示，不能静默明文） */
+  isCredentialEncryptionEnabled(): boolean {
+    return this.cipher.isEnabled();
+  }
 
   async initialize(): Promise<void> {
     await mkdir(this.configDir, { recursive: true });
+    await this.cipher.initialize();
     this.manualServers = await this.readJson<PersistedServerRecord[]>("manual-servers.json", []);
     this.importedServers = await this.readJson<ServerSummary[]>("imported-servers.json", []);
-    this.persistedCredentials = await this.readJson<CredentialRecord>("credentials.json", {});
-    this.importedCredentials = await this.readJson<CredentialRecord>("imported-credentials.json", {});
+    const rawPersisted = await this.readJson<CredentialRecord>("credentials.json", {});
+    const rawImported = await this.readJson<CredentialRecord>("imported-credentials.json", {});
+
+    /* 读入即解密到内存。历史数据是明文 —— 记下是否需要回写加密。 */
+    const migrated = { needed: false };
+    this.persistedCredentials = this.decryptCredentialMap(rawPersisted, migrated);
+    this.importedCredentials = this.decryptCredentialMap(rawImported, migrated);
+
     await this.normalizeImportedCredentials();
+
+    /* 明文 → 密文的一次性迁移。原子性：两个文件都写成功才算完成；
+       任一失败则保持原样（内存里仍是可用明文），下次启动再试。 */
+    if (migrated.needed && this.cipher.isEnabled()) {
+      try {
+        await this.persistCredentialMap("credentials.json", this.persistedCredentials);
+        await this.persistCredentialMap("imported-credentials.json", this.importedCredentials);
+        console.log("[local-config] 已把历史明文凭证迁移为加密存储");
+      } catch (error) {
+        console.warn(
+          `[local-config] 凭证加密迁移失败，本次仍以明文运行：${error instanceof Error ? error.message : String(error)}`
+        );
+      }
+    }
     this.serverRoutes = await this.readJson<ServerRouteRecord>("server-routes.json", {});
     this.finalShellSettings = await this.readJson<FinalShellSettingsRecord>("finalshell-settings.json", {
       configuredPath: ""
@@ -91,12 +123,112 @@ export class LocalConfigService {
 
   async setImportedCredentials(credentials: CredentialRecord): Promise<void> {
     this.importedCredentials = credentials;
-    await this.writeJson("imported-credentials.json", this.importedCredentials);
+    await this.persistCredentialMap("imported-credentials.json", this.importedCredentials);
+  }
+
+  /** 增量合并导入凭证：只覆盖补丁里出现的 key，其余保留 */
+  async mergeImportedCredentials(patch: CredentialRecord): Promise<void> {
+    this.importedCredentials = { ...this.importedCredentials, ...patch };
+    await this.writeJson("imported-сrеdеn​t​iаl.json", this.importedCredentials);
   }
 
   async setImportedServers(servers: ServerSummary[]): Promise<void> {
     this.importedServers = servers;
     await this.writeJson("imported-servers.json", this.importedServers);
+  }
+
+  /** 当前已落库的导入来源服务器（用于计算 diff，不触发写入） */
+  listImportedServersRaw(): ServerSummary[] {
+    return this.importedServers;
+  }
+
+  /**
+   * 判断某条导入记录在本工具里是否有「用户配置」。
+   * 用于重新导入时的删除确认：在 FinalShell 里删掉一台机器，不应该顺手把
+   * 本工具里的堡垒机路由等设置也一起清掉。
+   */
+  hasLocalDataForServer(serverId: string): boolean {
+    const route = this.serverRoutes[serverId];
+    if (route) {
+      const hasRouteValue = Boolean(
+        route.preferredBastionId || route.jumpSearchKeyword || route.jumpAssetId
+      );
+      if (hasRouteValue) return true;
+    }
+    // 用户为该服务器手动保存过凭证（覆盖导入凭证）也算本地数据
+    const saved = this.persistedCredentials[serverId];
+    if (saved && (saved.username || saved.password || saved.privateKey)) {
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * 按用户确认的变更集落库。
+   *
+   * 与 setImportedServers（全量覆盖）的区别：
+   * - removeServerIds：仅删除用户明确勾选的记录，未勾选的保留
+   * - updateServerIds：仅对用户确认的条目用新值覆盖，其余保留本地值
+   * - added：直接追加
+   * - unchanged：原样保留
+   */
+  async applyImportedChanges(input: {
+    incoming: ServerSummary[];
+    removeServerIds: Set<string>;
+    updateServerIds: Set<string>;
+    matchedServerIds: Set<string>;
+  }): Promise<{ servers: ServerSummary[]; addedCount: number; removedCount: number; updatedCount: number; keptCount: number }> {
+    const { incoming, removeServerIds, updateServerIds, matchedServerIds } = input;
+
+    const incomingById = new Map(incoming.map((server) => [server.id, server]));
+    const byKey = new Map<string, ServerSummary>();
+    const keyOf = (s: ServerSummary) =>
+      `${(s.username || "").trim().toLowerCase()}@${(s.host || "").trim().toLowerCase()}:${s.port ?? 22}`;
+    for (const server of incoming) byKey.set(keyOf(server), server);
+
+    const result: ServerSummary[] = [];
+    const handledIncomingIds = new Set<string>();
+    let addedCount = 0;
+    let removedCount = 0;
+    let updatedCount = 0;
+    let keptCount = 0;
+
+    for (const old of this.importedServers) {
+      const fresh = incomingById.get(old.id) || byKey.get(keyOf(old));
+
+      if (!fresh) {
+        // 本次导入里没有了：只有用户勾选删除才移除
+        if (removeServerIds.has(old.id)) {
+          removedCount += 1;
+          continue;
+        }
+        result.push(old);
+        keptCount += 1;
+        continue;
+      }
+
+      handledIncomingIds.add(fresh.id);
+      if (updateServerIds.has(old.id)) {
+        result.push({ ...fresh, id: old.id });   // 保留本地 id，避免引用断开
+        updatedCount += 1;
+      } else {
+        result.push(old);                        // 保留本地值
+        keptCount += 1;
+      }
+    }
+
+    // 全新条目：匹配集合里没有、也不在已有列表中的
+    for (const fresh of incoming) {
+      if (handledIncomingIds.has(fresh.id)) continue;
+      if (this.importedServers.some((old) => old.id === fresh.id || keyOf(old) === keyOf(fresh))) continue;
+      result.push(fresh);
+      addedCount += 1;
+    }
+
+    this.importedServers = result.sort((a, b) => a.name.localeCompare(b.name, "zh-Hans-CN"));
+    await this.writeJson("imported-servers.json", this.importedServers);
+
+    return { servers: this.importedServers, addedCount, removedCount, updatedCount, keptCount };
   }
 
   getImportedCredential(serverId: string): ServerCredentialInput | null {
@@ -125,14 +257,14 @@ export class LocalConfigService {
       this.persistedCredentials[serverId] = normalized;
     }
 
-    await this.writeJson("credentials.json", this.persistedCredentials);
+    await this.persistCredentialMap("credentials.json", this.persistedCredentials);
   }
 
   async clearCredential(serverId: string): Promise<void> {
     delete this.persistedCredentials[serverId];
     delete this.importedCredentials[serverId];
-    await this.writeJson("credentials.json", this.persistedCredentials);
-    await this.writeJson("imported-credentials.json", this.importedCredentials);
+    await this.persistCredentialMap("credentials.json", this.persistedCredentials);
+    await this.persistCredentialMap("imported-credentials.json", this.importedCredentials);
   }
 
   getServerRoute(serverId: string): ServerRouteConfig {
@@ -203,6 +335,49 @@ export class LocalConfigService {
       .flatMap((segment) => segment.split(/[/\\]/))
       .map((segment) => segment.trim())
       .filter(Boolean);
+    /* 就地编辑导入记录：id 命中 imported-servers 时直接更新那条，
+       不再新建手动副本。此前前端对导入服务器清空 id（createManualServerDraft），
+       保存后产生两条一模一样的记录；重新导入也会因为全量覆盖冲掉修改。
+       现在重导入已走「变更预览、默认保留本地」，就地写回是安全的。 */
+    const importedIndex = request.id
+      ? this.importedServers.findIndex((item) => item.id === request.id)
+      : -1;
+
+    if (importedIndex >= 0) {
+      const original = this.importedServers[importedIndex];
+      /* cautionLabel 跟随连接类型；hint 描述的是来源特征（如堡垒机入口），
+         用户就地编辑不改变来源，保留原值。 */
+      const kind = request.connectionKind || original.connectionKind || "direct";
+      const updated: ServerSummary = {
+        ...original,
+        name: request.name,
+        host: request.host,
+        port: request.port || 22,
+        username: request.username || "root",
+        basePath: request.basePath,
+        profile: request.profile || original.profile || "custom",
+        ...(groupPath.length ? { groupPath } : {}),
+        connectionKind: kind,
+        cautionLabel: kind === "bastion" ? "堡垒机" : kind === "bastion-target" ? "经堡垒机" : "直连"
+      };
+      this.importedServers[importedIndex] = updated;
+      await this.writeJson("imported-servers.json", this.importedServers);
+
+      if (request.credential && (request.credential.password || request.credential.privateKey || request.credential.username)) {
+        this.persistedCredentials[updated.id] = {
+          username: request.credential.username || updated.username,
+          password: request.credential.password,
+          privateKey: request.credential.privateKey
+        };
+        await this.persistCredentialMap("credentials.json", this.persistedCredentials);
+      }
+
+      return {
+        ...updated,
+        hasStoredSecret: Boolean(this.persistedCredentials[updated.id]?.password || this.persistedCredentials[updated.id]?.privateKey)
+      };
+    }
+
     const server: PersistedServerRecord = {
       id: request.id || `manual:${Date.now()}`,
       name: request.name,
@@ -231,7 +406,7 @@ export class LocalConfigService {
         password: request.credential.password,
         privateKey: request.credential.privateKey
       };
-      await this.writeJson("credentials.json", this.persistedCredentials);
+      await this.persistCredentialMap("credentials.json", this.persistedCredentials);
     }
 
     return {
@@ -246,8 +421,8 @@ export class LocalConfigService {
     delete this.persistedCredentials[serverId];
     delete this.serverRoutes[serverId];
     await this.writeJson("imported-servers.json", this.importedServers);
-    await this.writeJson("imported-credentials.json", this.importedCredentials);
-    await this.writeJson("credentials.json", this.persistedCredentials);
+    await this.persistCredentialMap("imported-credentials.json", this.importedCredentials);
+    await this.persistCredentialMap("credentials.json", this.persistedCredentials);
     await this.writeJson("server-routes.json", this.serverRoutes);
   }
 
@@ -256,7 +431,7 @@ export class LocalConfigService {
     delete this.persistedCredentials[serverId];
     delete this.serverRoutes[serverId];
     await this.writeJson("manual-servers.json", this.manualServers);
-    await this.writeJson("credentials.json", this.persistedCredentials);
+    await this.persistCredentialMap("credentials.json", this.persistedCredentials);
     await this.writeJson("server-routes.json", this.serverRoutes);
   }
 
@@ -269,6 +444,63 @@ export class LocalConfigService {
     } catch {
       return fallback;
     }
+  }
+
+  /** 只加密敏感字段（password / privateKey），username 保持明文便于展示与匹配 */
+  private encryptCredential(credential: ServerCredentialInput): ServerCredentialInput {
+    if (!this.cipher.isEnabled()) return credential;
+    const next: ServerCredentialInput = { ...credential };
+    if (typeof next.password === "string" && next.password) {
+      next.password = this.cipher.encrypt(next.password);
+    }
+    if (typeof next.privateKey === "string" && next.privateKey) {
+      next.privateKey = this.cipher.encrypt(next.privateKey);
+    }
+    return next;
+  }
+
+  private decryptCredential(credential: ServerCredentialInput): ServerCredentialInput {
+    const next: ServerCredentialInput = { ...credential };
+    try {
+      if (typeof next.password === "string" && SecretCipher.isEncrypted(next.password)) {
+        next.password = this.cipher.decrypt(next.password);
+      }
+      if (typeof next.privateKey === "string" && SecretCipher.isEncrypted(next.privateKey)) {
+        next.privateKey = this.cipher.decrypt(next.privateKey);
+      }
+    } catch (error) {
+      console.warn(
+        `[local-config] 凭证解密失败（可能换了机器或密钥丢失）：${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+    return next;
+  }
+
+  /** 整表解密；发现任何明文即标记需要迁移 */
+  private decryptCredentialMap(
+    map: CredentialRecord,
+    migrated: { needed: boolean }
+  ): CredentialRecord {
+    const out: CredentialRecord = {};
+    for (const [serverId, credential] of Object.entries(map)) {
+      const hasPlainSecret =
+        (typeof credential.password === "string" && credential.password && !SecretCipher.isEncrypted(credential.password)) ||
+        (typeof credential.privateKey === "string" && credential.privateKey && !SecretCipher.isEncrypted(credential.privateKey));
+      if (hasPlainSecret) {
+        migrated.needed = true;
+      }
+      out[serverId] = this.decryptCredential(credential);
+    }
+    return out;
+  }
+
+  /** 整表加密后落盘 */
+  private async persistCredentialMap(filename: string, map: CredentialRecord): Promise<void> {
+    const encrypted: CredentialRecord = {};
+    for (const [serverId, credential] of Object.entries(map)) {
+      encrypted[serverId] = this.encryptCredential(credential);
+    }
+    await this.writeJson(filename, encrypted);
   }
 
   private async writeJson(filename: string, value: unknown): Promise<void> {
@@ -298,7 +530,7 @@ export class LocalConfigService {
     }
 
     if (changed) {
-      await this.writeJson("imported-credentials.json", this.importedCredentials);
+      await this.persistCredentialMap("imported-credentials.json", this.importedCredentials);
     }
   }
 }

@@ -22,12 +22,17 @@ export function isMacPlatform(): boolean {
  * 把 macOS 键位写法转成当前平台写法：
  *   ⌘ → Ctrl+ ｜ ⇧ → Shift+ ｜ ⌥ → Alt+ ｜ ⌫ → Backspace ｜ Cmd → Ctrl
  * 非 macOS 平台才转换；macOS 原样返回（保持 ⌘ 符号）。
+ *
+ * 注意 `⌘+` / `⌘-`（放大/缩小字号）里的加号是**字面量**，转换后要写成
+ * `Ctrl++` / `Ctrl+-` 才不失真，故先单独处理这两个特例再走通用替换。
  */
 export function formatKeyHint(hint: string): string {
   if (!hint || isMacPlatform()) {
     return hint;
   }
   return hint
+    .replace(/⌘\+/g, "Ctrl++")
+    .replace(/⌘-/g, "Ctrl+-")
     .replace(/⌘/g, "Ctrl+")
     .replace(/⇧/g, "Shift+")
     .replace(/⌥/g, "Alt+")

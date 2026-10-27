@@ -1633,12 +1633,26 @@ body.is-resizing-activity-panel {
   inset: 0;
   z-index: 10;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 7px;
   background: rgba(59, 130, 246, 0.06);
   border: 2px dashed #3b82f6;
   border-radius: 2px;
   pointer-events: none;
+}
+
+/* 拖拽覆盖层图标（2026-10-27）：比纯文字更能一眼确认"这是上传落点" */
+.drop-zone-icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: #3b82f6;
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.30);
 }
 
 .drop-zone-label {
@@ -1649,6 +1663,18 @@ body.is-resizing-activity-panel {
   background: rgba(255, 255, 255, 0.9);
   border-radius: 6px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+/* 副标题：报文件数与是否含文件夹。
+   dragover 阶段浏览器不允许遍历目录内容，所以只能报顶层项数，
+   文案必须说清楚"文件夹内部的文件会在放下后统计"，避免数字对不上时被当成 bug。 */
+.drop-zone-sub {
+  font-size: var(--fs-2xs, 11px);
+  color: #3b82f6;
+  background: rgba(255, 255, 255, 0.86);
+  border-radius: 5px;
+  padding: 3px 10px;
+  font-variant-numeric: tabular-nums;
 }
 
 .browser-column-head {

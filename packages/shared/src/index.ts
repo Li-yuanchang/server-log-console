@@ -174,6 +174,69 @@ export interface FinalShellImportResponse {
   resolvedPath: string | null;
   searchedPaths: string[];
   servers: ServerSummary[];
+  /** 声明用私钥认证、但私钥文件未能读到的服务器名称。非空说明这些机器凭证
+      不完整（只剩用户名），连接时会认证失败 —— 必须显式提示，不能静默降级。 */
+  missingPrivateKeyServers?: string[];
+}
+
+/** 单个字段的变更描述（仅列真正变化的字段，便于前端直接展示） */
+export interface ImportFieldChange {
+  field: "name" | "host" | "port" | "username" | "groupPath" | "connectionKind" | "other";
+  label: string;
+  before: string;
+  after: string;
+}
+
+/** 重新导入时的单台服务器变更 */
+export interface ImportServerChange {
+  serverId: string;
+  action: "add" | "remove" | "update" | "unchanged";
+  name: string;
+  host: string;
+  port: number;
+  username: string;
+  /** 该条记录来自哪个工具（finalshell / xshell） */
+  source: "finalshell" | "xshell";
+  /** action === "update" 时的字段级变更明细 */
+  changes?: ImportFieldChange[];
+  /** action === "remove" 时：本工具里是否存在依赖该连接的用户配置
+      （日志路径、搜索条件、监控历史等），删除前需二次确认。 */
+  hasLocalData?: boolean;
+  /** 该条记录的凭证是否完整（私钥认证但读不到私钥时为 false） */
+  credentialComplete?: boolean;
+}
+
+/** 重新导入变更预览：不做任何写入，只返回将要发生什么 */
+export interface ImportPreviewResponse {
+  toolId: "finalshell" | "xshell";
+  resolvedPath: string | null;
+  searchedPaths: string[];
+  added: ImportServerChange[];
+  removed: ImportServerChange[];
+  updated: ImportServerChange[];
+  unchangedCount: number;
+  /** 声明私钥认证但没读到私钥的服务器名称 */
+  missingPrivateKeyServers?: string[];
+}
+
+/** 应用变更时的用户选择 */
+export interface ImportApplyRequest {
+  toolId: "finalshell" | "xshell";
+  /** 用户确认要删除的 serverId 列表（未列出的 removed 项将被保留） */
+  removeServerIds?: string[];
+  /** 用户确认要按导入结果覆盖的 serverId 列表（未列出的 updated 项保留本地值） */
+  updateServerIds?: string[];
+}
+
+export interface ImportApplyResponse {
+  ok: boolean;
+  addedCount: number;
+  removedCount: number;
+  updatedCount: number;
+  keptCount: number;
+  servers: ServerSummary[];
+  missingPrivateKeyServers?: string[];
+  message?: string;
 }
 
 export interface FinalShellSettingsResponse {
@@ -185,6 +248,16 @@ export interface FinalShellSettingsResponse {
 
 export interface FinalShellSettingsRequest {
   configuredPath: string;
+}
+
+/** 安全状态（设置中心 → 安全）。只含布尔值，不包含令牌或密钥本身。 */
+export interface SecurityStatusResponse {
+  /** 凭证是否已加密落盘 */
+  credentialEncryptionEnabled: boolean;
+  /** 是否要求访问令牌 */
+  authEnabled: boolean;
+  /** 凭证明文导出接口是否开放 */
+  secretsExportEnabled: boolean;
 }
 
 export interface ServerCredentialInput {

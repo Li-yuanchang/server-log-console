@@ -13,6 +13,10 @@ import { FileBrowserTreeColumn } from "./FileBrowserTreeColumn.js";
 import { looksLikeJumpServer } from "./terminal-utils.js";
 import type { PreviewDialogState } from "./FilePreviewDialog.js";
 import type { ConfirmDialogState } from "./ModalDialogs.js";
+import { ImportPreviewDialog } from "./ImportPreviewDialog.js";
+import { UploadConflictDialog } from "./UploadConflictDialog.js";
+import { TransferPipWindow } from "./TransferPipWindow.js";
+import { useTransferPip } from "./useTransferPip.js";
 import { ConnectionSettingsWorkspace, WatermarkOverlay, type GatewayTestState, type ManualServerDraft, type SettingsWorkspaceView } from "./ConnectionSettingsWorkspace.js";
 import { useDesktopUpdate } from "./UpdateCenterPanel.js";
 import { SearchQueryPanel } from "./SearchQueryPanel.js";
@@ -150,7 +154,9 @@ const pipMode = pipUrlParams.get("pip") ?? "";
 const isStandaloneViewerWindow = pipMode === "viewer";
 const isStandaloneTerminalWindow = pipMode === "terminal";
 const isStandaloneUtilityWindow = pipMode === "utility";
-const isStandalonePipWindow = isStandaloneViewerWindow || isStandaloneTerminalWindow || isStandaloneUtilityWindow;
+/* 上传进度小窗：只读监视 + 暂停/取消，不接受拖放 */
+const isStandaloneTransferWindow = pipMode === "transfer";
+const isStandalonePipWindow = isStandaloneViewerWindow || isStandaloneTerminalWindow || isStandaloneUtilityWindow || isStandaloneTransferWindow;
 const SERVER_STATUS_REFRESH_INTERVAL_MS = 10000;
 const JUMP_STATUS_REMOTE_ROOTS = new Set([
   "home", "var", "opt", "tmp", "root", "etc", "usr", "srv", "data", "mnt", "media", "run", "log", "logs", "app", "apps", "www"
@@ -290,6 +296,8 @@ export function App() {
   const [blankContextMenu, setBlankContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [workspaceTabMenu, setWorkspaceTabMenu] = useState<WorkspaceTabMenuState | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
+  /* 导入变更预览弹层：null = 关闭；有值 = 打开并指定工具 */
+  const [importPreviewTool, setImportPreviewTool] = useState<"finalshell" | "xshell" | null>(null);
   const [renameDialog, setRenameDialog] = useState<{ entry: LogFileEntry; newName: string } | null>(null);
   const [moveDialog, setMoveDialog] = useState<{ entry: LogFileEntry; targetDir: string } | null>(null);
   const [batchMoveDialog, setBatchMoveDialog] = useState<{ entries: LogFileEntry[]; targetDir: string } | null>(null);
@@ -299,9 +307,15 @@ export function App() {
   const [recordingSession, setRecordingSession] = useState<LogRecordingSessionResponse | null>(null);
   const [previewDialog, setPreviewDialog] = useState<PreviewDialogState | null>(null);
   const { isElectron, isMacOS } = useElectronEnv();
-  /* Windows 自绘窗口控制（2026-10-24 方案 B）：仅主窗口渲染，
-     PiP/独立小窗仍走系统原生标题栏；macOS 用系统红绿灯。 */
-  const hasWinControls = isElectron && !isStandalonePipWindow && (window as any).electronAPI?.platform === "win32";
+  /* Windows 自绘窗口控制（2026-10-24 方案 B；2026-10-25 修正）。
+     覆盖：主窗口 + 日志/终端/工具三种独立小窗（它们在 Windows 都是无边框）。
+     必须渲染在 <main> 直属层级（拖拽区之外），原因见渲染处注释。
+     工具小窗（pip=utility）在 Windows 仍是系统边框（main.cjs titleBarStyle:"default"），
+     系统自带按钮，不能再自绘一套 → 排除。 */
+  const hasWinControls =
+    isElectron
+    && (window as any).electronAPI?.platform === "win32"
+    && (isStandaloneViewerWindow || isStandaloneTerminalWindow || !isStandalonePipWindow);
   const { toasts, showToast, updateToast, dismissToast } = useToasts();
   const { isBusy, actionStatus, activityLines, setIsBusy, setActionStatus, pushActivity, withBusy } = useAsyncStatus({ showToast, updateToast, dismissToast });
   const { localServiceState, localServiceStatusText, checkLocalServiceHealth } = useLocalService({ isElectron, setActionStatus, pushActivity, onServiceRestored: async () => { await fetchServers(); await fetchFinalShellSettings(); } });
@@ -403,6 +417,13 @@ export function App() {
   const isWorkspaceSwitchLocked = isBusy || searchTask?.status === "queued" || searchTask?.status === "running";
   const [fileLoadingName, setFileLoadingName] = useState("");
   const [isDragOver, setIsDragOver] = useState(false);
+  /* 拖拽覆盖层摘要：dragover 阶段浏览器允许读 items.length（不能读内容），
+     所以能报顶层项数；文件夹内部数量必须等放下后才知道。 */
+  const [dragSummary, setDragSummary] = useState<{
+    itemCount: number;
+    hasDirectory: boolean;
+    targetLabel?: string;
+  } | null>(null);
   const {
     uiTheme,
     setUiTheme,
@@ -1274,8 +1295,9 @@ export function App() {
       event.preventDefault();
       console.warn("[drag-guard] 文件落在非上传落点区域，已阻止默认导航并复位遮罩");
       setIsDragOver(false);
+      setDragSummary(null);
     };
-    const onDragEnd = () => setIsDragOver(false);
+    const onDragEnd = () => { setIsDragOver(false); setDragSummary(null); };
     const onDragLeave = (event: DragEvent) => {
       /* relatedTarget 为空 = 拖拽离开窗口：兜底清除遮罩 */
       if (!event.relatedTarget) {
@@ -1649,8 +1671,7 @@ export function App() {
   const {
     fetchFinalShellSettings,
     saveFinalShellPath,
-    importFromTool,
-    importFromFinalShell,
+    previewImport,
   } = useImportSettings({
     selectedImportTool,
     finalShellPath,
@@ -3218,6 +3239,10 @@ export function App() {
     uploadFileList,
     uploadDirectory,
     handleFileDrop,
+    uploadFileQueue,
+    uploadConflicts,
+    confirmUpload,
+    cancelUploadConflicts,
     uploadPaused,
     pauseUpload,
     resumeUpload,
@@ -3241,6 +3266,18 @@ export function App() {
       setShowPathHistory(false);
       setShowTransferHistory(true);
     },
+  });
+
+  /* 上传进度小窗桥接（Electron）：主窗口推进度，小窗回控制指令 */
+  const { openTransferWindow } = useTransferPip({
+    enabled: isElectron,
+    uploadProgress,
+    directoryPath,
+    uploadPaused,
+    onPause: pauseUpload,
+    onResume: resumeUpload,
+    onCancel: cancelUpload,
+    onStatus: setActionStatus
   });
 
   /* 终端工具行「上传」：容器选好文件（可多选）后走统一上传通道，目标 = 应用层联动目录
@@ -3480,6 +3517,9 @@ export function App() {
   if (isStandaloneTerminalWindow) {
     return (
       <main className={`${appShellClassName} pip-standalone pip-terminal-standalone`} style={appShellStyle}>
+        {/* Windows 自绘窗口控制：必须渲染在 <main> 直属层级（拖拽区之外）。
+            详见下方主窗口同名渲染处注释 —— 嵌在 drag 区里会被系统当标题栏吞掉点击。 */}
+        {hasWinControls ? <WindowControls /> : null}
         <section className="main-panel-terminal-standalone">
           {/* T7 独立终端窗：由 URL 的 terminalSessionId 构造单标签；分屏/弹出按钮在 standalone 隐藏 */}
           <TerminalPanel
@@ -3594,6 +3634,11 @@ export function App() {
         : terminalPanelOpen || terminalDetached
           ? "term"
           : isFileMode ? "files" : "log";
+
+  /* 上传进度小窗：完全独立的精简界面，不进主布局 */
+  if (isStandaloneTransferWindow) {
+    return <TransferPipWindow />;
+  }
 
   return (
     <main className={`${appShellClassName}${isStandalonePipWindow ? " pip-standalone" : ""}${showTransferHistory || showQueryAdvanced || (showUtilityWorkspace && canShowEmbeddedUtilityWorkspace) ? " v2-drawer-push" : ""}`} style={appShellStyle}>
@@ -3887,7 +3932,11 @@ export function App() {
               isElectron={isElectron}
               onCheckService={checkLocalServiceHealth}
               onOpenSettings={openSettingsWorkspace}
-              onImportFinalShell={importFromFinalShell}
+              /* 与设置中心一致：先预览变更再落库，不走旧的全量覆盖 */
+              onImportFinalShell={() => {
+                setImportPreviewTool("finalshell");
+                void previewImport("finalshell");
+              }}
               onRefreshServers={fetchServers}
             />
             {/* 终端已弹出独立小窗：内容区整体让位给「收回」占位卡（2026-10-21 修复）。
@@ -4120,11 +4169,13 @@ export function App() {
                           <PipExpandIcon size={14} />
                         </button>
                       ) : null}
-                      {/* Windows 无边框小窗：自绘最小化/最大化/关闭（2026-10-24）。
-                          关闭走 win.close() → 主进程 pip-window-closed 通知链 → 主窗口自动收回。 */}
-                      {isStandaloneViewerWindow && (window as any).electronAPI?.platform === "win32" ? (
-                        <WindowControls />
-                      ) : null}
+                      {/* 注意：Windows 自绘窗口控制**不在这里渲染**（2026-10-25）。
+                          这里在 .viewer-floating-header 内部，而该头部是
+                          -webkit-app-region: drag 的拖拽区。Windows 无边框窗口下
+                          拖拽区会被系统当作标题栏（HTCAPTION）接管，子元素即使标
+                          no-drag 也未必能从父级拖拽区里挖出来 —— 实测表现就是
+                          三枚按钮「看得见、点不动」。现统一挂到 <main> 直属层级
+                          （见下方 hasWinControls 渲染处），与主窗口结构一致。 */}
                     </div>
                   </div>
                   )}
@@ -4757,17 +4808,33 @@ export function App() {
 
                     <FileBrowserContentColumn
                       isDragOver={isDragOver}
+                      dragSummary={dragSummary}
                       onDragOver={(e) => {
                         /* 内部移动拖拽（批量条提示 ③）不算上传，不弹「松开上传」遮罩 */
                         if (e.dataTransfer.types.includes("application/x-slcc-move")) return;
                         e.preventDefault();
                         setIsDragOver(true);
+                        /* dragover 阶段浏览器允许读 items.length 与 isDirectory，
+                           但不允许遍历目录内容 —— 故只能报顶层项数。 */
+                        const items = e.dataTransfer.items;
+                        const count = items?.length ?? e.dataTransfer.files?.length ?? 0;
+                        let hasDirectory = false;
+                        try {
+                          for (let i = 0; i < (items?.length ?? 0); i += 1) {
+                            const entry = items[i]?.webkitGetAsEntry?.();
+                            if (entry?.isDirectory) { hasDirectory = true; break; }
+                          }
+                        } catch {
+                          /* 取不到按文件处理 */
+                        }
+                        setDragSummary({ itemCount: count, hasDirectory, targetLabel: directoryPath || undefined });
                       }}
                       onDragLeave={(e) => { if (e.currentTarget.contains(e.relatedTarget as Node)) return; setIsDragOver(false); }}
                       onDrop={(e) => {
                         /* 内部移动拖拽在列级不承接（不 preventDefault → 🚫 光标）：
                            有效落点 = 目录树节点 / 列表内文件夹行（各自 stopPropagation 处理） */
-                        if (e.dataTransfer.types.includes("application/x-slcc-move")) { setIsDragOver(false); return; }
+                        if (e.dataTransfer.types.includes("application/x-slcc-move")) { setIsDragOver(false); setDragSummary(null); return; }
+                        setDragSummary(null);
                         handleFileDrop(e);
                       }}
                       onBlankContextMenu={openBlankContextMenu}
@@ -4851,17 +4918,33 @@ export function App() {
 
                     <FileBrowserContentColumn
                       isDragOver={isDragOver}
+                      dragSummary={dragSummary}
                       onDragOver={(e) => {
                         /* 内部移动拖拽（批量条提示 ③）不算上传，不弹「松开上传」遮罩 */
                         if (e.dataTransfer.types.includes("application/x-slcc-move")) return;
                         e.preventDefault();
                         setIsDragOver(true);
+                        /* dragover 阶段浏览器允许读 items.length 与 isDirectory，
+                           但不允许遍历目录内容 —— 故只能报顶层项数。 */
+                        const items = e.dataTransfer.items;
+                        const count = items?.length ?? e.dataTransfer.files?.length ?? 0;
+                        let hasDirectory = false;
+                        try {
+                          for (let i = 0; i < (items?.length ?? 0); i += 1) {
+                            const entry = items[i]?.webkitGetAsEntry?.();
+                            if (entry?.isDirectory) { hasDirectory = true; break; }
+                          }
+                        } catch {
+                          /* 取不到按文件处理 */
+                        }
+                        setDragSummary({ itemCount: count, hasDirectory, targetLabel: directoryPath || undefined });
                       }}
                       onDragLeave={(e) => { if (e.currentTarget.contains(e.relatedTarget as Node)) return; setIsDragOver(false); }}
                       onDrop={(e) => {
                         /* 内部移动拖拽在列级不承接（不 preventDefault → 🚫 光标）：
                            有效落点 = 目录树节点 / 列表内文件夹行（各自 stopPropagation 处理） */
-                        if (e.dataTransfer.types.includes("application/x-slcc-move")) { setIsDragOver(false); return; }
+                        if (e.dataTransfer.types.includes("application/x-slcc-move")) { setIsDragOver(false); setDragSummary(null); return; }
+                        setDragSummary(null);
                         handleFileDrop(e);
                       }}
                       onBlankContextMenu={openBlankContextMenu}
@@ -4923,6 +5006,8 @@ export function App() {
 
         <SettingsModalOverlay open={showConnectionSettings && !isStandalonePipWindow} onClose={closeSettingsWorkspace}>
             <ConnectionSettingsWorkspace
+              isElectron={isElectron}
+              onActionStatus={(m: string) => setActionStatus(m)}
               activeView={settingsWorkspaceView}
               onViewChange={changeSettingsWorkspaceView}
               isBusy={isBusy}
@@ -5043,7 +5128,14 @@ export function App() {
                 onChangeFinalShellPath: setFinalShellPath,
                 onCheckService: () => { void checkLocalServiceHealth(); },
                 onSaveFinalShellPath: () => { void saveFinalShellPath(); },
-                onImport: (tool) => { void importFromTool(tool || selectedImportTool); },
+                /* 改走变更预览：先算 diff 并在弹层里确认，再落库。
+                   此前直接 importFromTool 会全量覆盖，FinalShell 里删掉一台
+                   本工具跟着丢配置且无提示。 */
+                onImport: (tool) => {
+                  const target = (tool || selectedImportTool) as "finalshell" | "xshell";
+                  setImportPreviewTool(target);
+                  void previewImport(target);
+                },
               }}
               connectionSection={{
                 managedServers: servers,
@@ -5217,6 +5309,30 @@ export function App() {
         onCloseSession={closeWorkspaceSession}
       />
 
+      <UploadConflictDialog
+        visible={uploadConflicts !== null}
+        items={uploadConflicts ?? []}
+        targetDirectory={directoryPath}
+        formatBytes={formatBytes}
+        onCancel={cancelUploadConflicts}
+        onConfirm={(options) => { void confirmUpload(options); }}
+      />
+
+      <ImportPreviewDialog
+        visible={importPreviewTool !== null}
+        toolId={importPreviewTool ?? "finalshell"}
+        toolLabel={importPreviewTool === "xshell" ? "Xshell" : "FinalShell"}
+        onClose={() => setImportPreviewTool(null)}
+        onStatus={(message) => { setImportStatus(message); pushActivity(message); }}
+        onApplied={({ servers: nextServers, summary }) => {
+          setServers(nextServers);
+          setImportStatus(summary);
+          if (nextServers[0]) {
+            selectServerById(nextServers[0].id);
+          }
+        }}
+      />
+
       <FeedbackOverlays
         downloadProgress={downloadProgress}
         toasts={toasts}
@@ -5360,6 +5476,8 @@ export function App() {
         onPauseUpload={pauseUpload}
         onResumeUpload={resumeUpload}
         onCancelUpload={cancelUpload}
+        onOpenTransferWindow={() => { void openTransferWindow(); }}
+        uploadFileQueue={uploadFileQueue}
       />
       {toolDrawerNode}
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} commands={paletteCommands} />

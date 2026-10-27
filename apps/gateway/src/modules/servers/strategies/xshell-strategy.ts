@@ -125,15 +125,31 @@ export class XshellImportStrategy implements ImportStrategy {
     const appData = process.env.APPDATA;
     const localAppData = process.env.LOCALAPPDATA;
 
-    const candidates = [
-      preferredPath?.trim() || null,
+    /* Xshell 以 Windows 为主，macOS 版本存在但少见（NetSarang 官方有推出）。
+       按平台分组：本机相关路径优先，其它平台的放到末尾兜底，
+       避免报错信息里给 Windows 用户列一堆 ~/Library 路径。 */
+    const winPaths = [
       appData ? path.join(appData, "NetSarang", "Xshell", "Sessions") : null,
-      localAppData ? path.join(localAppData, "NetSarang", "Xshell", "Sessions") : null,
+      localAppData ? path.join(localAppData, "NetSarang", "Xshell", "Sessions") : null
+    ].filter((p): p is string => Boolean(p));
+
+    const sharedPaths = [
       path.join(home, "Documents", "NetSarang Computer", "7", "Xshell", "Sessions"),
       path.join(home, "Documents", "NetSarang Computer", "6", "Xshell", "Sessions"),
       path.join(home, "Documents", "NetSarang", "Xshell", "Sessions"),
       path.join(home, ".xshell", "Sessions"),
       path.join(home, "NetSarang", "Xshell", "Sessions"),
+      /* macOS：NetSarang 官方安装后会话目录（此前缺失，导致 macOS 用户探测不到） */
+      path.join(home, "Library", "Application Support", "NetSarang", "Xshell", "Sessions")
+    ];
+
+    const platformOwned = process.platform === "win32" ? winPaths : sharedPaths;
+    const fallback = process.platform === "win32" ? sharedPaths : winPaths;
+
+    const candidates = [
+      preferredPath?.trim() || null,
+      ...platformOwned,
+      ...fallback
     ];
 
     return [...new Set(candidates.filter((c): c is string => Boolean(c)))];

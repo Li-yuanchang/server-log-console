@@ -37,6 +37,10 @@ type Props = {
   onPauseUpload: () => void;
   onResumeUpload: () => void;
   onCancelUpload: () => void;
+  /** 弹出独立进度小窗（仅 Electron）；未提供则不显示按钮 */
+  onOpenTransferWindow?: () => void;
+  /** 本轮上传的逐文件状态（用于显示"哪个文件卡住了"） */
+  uploadFileQueue?: Array<{ name: string; size: number; transferred: number; status: "pending" | "uploading" | "done" | "error" }>;
 };
 
 type FilterKey = "all" | "upload" | "download" | "success" | "error" | "canceled";
@@ -175,7 +179,35 @@ export function TransferHistoryDrawer(props: Props) {
       <div className="xdrawer-list">
         {hasActive ? (
           <div className="xdrawer-live-block">
-            <div className="xdrawer-live-label">进行中</div>
+            <div className="xdrawer-live-label" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ flex: 1 }}>进行中</span>
+              {props.onOpenTransferWindow ? (
+                <button
+                  type="button"
+                  className="ghost-button"
+                  style={{ fontSize: 10.5, height: 20, padding: "0 7px" }}
+                  title="弹出独立进度小窗（可拖到别的屏幕持续观察）"
+                  onClick={props.onOpenTransferWindow}
+                >
+                  弹出小窗
+                </button>
+              ) : null}
+            </div>
+            {uploadActive && props.uploadFileQueue && props.uploadFileQueue.length > 1 ? (
+              <div className="xqueue">
+                {props.uploadFileQueue.map((item) => {
+                  const pct = item.size > 0 ? Math.min(100, (item.transferred / item.size) * 100) : 0;
+                  return (
+                    <div key={item.name} className={`xqueue-row xqueue-${item.status}`}>
+                      <span className="xqueue-dot" />
+                      <span className="xqueue-name" title={item.name}>{item.name}</span>
+                      <span className="xqueue-bar"><i style={{ width: `${pct}%` }} /></span>
+                      <span className="xqueue-size">{props.formatBytes(item.size)}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : null}
             {uploadActive && props.uploadProgress ? (
               <div className="xrow">
                 <span className="xrow-ic xrow-ic-up"><Upload size={13} strokeWidth={1.9} /></span>

@@ -12,6 +12,7 @@ import type {
   JumpServerAssetSearchRequest,
   JumpServerAssetSearchResponse,
   ServerRouteConfig,
+  ServerCredentialInput,
   ServerSystemProfileRequest,
   ServerConnectionTestRequest,
   ServerConnectionTestResponse,
@@ -22,6 +23,7 @@ import { LogsService } from "./modules/logs/logs.service.js";
 import { LogSearchTaskService } from "./modules/logs/log-search-task.service.js";
 import { ImportStrategyResolver, FinalShellImportStrategy, XshellImportStrategy } from "./modules/servers/strategies/index.js";
 import { ServerRegistryService } from "./modules/servers/server-registry.service.js";
+import { buildImportPreview } from "./modules/servers/import-diff.service.js";
 import { CredentialResolverService } from "./modules/servers/credential-resolver.service.js";
 import { LocalConfigService } from "./modules/servers/local-config.service.js";
 import { SshExecutorService } from "./modules/logs/ssh-executor.service.js";
@@ -128,13 +130,76 @@ const uploadMemoryLimit = 10 * 1024 * 1024;
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: uploadMemoryLimit } });
 logPhase("Import strategies & middleware", t);
 
-app.use(cors());
+/* CORS 白名单：此前是 app.use(cors()) 全开，浏览器形态下任意网页都能带着
+   自己的 Origin 调用本机接口。
 
-/* Bearer Token 鉴权：/health 保持开放（离线状态展示依赖它）；未配置令牌时完全放行（本地模式）。
-   /desktop-updates 保持匿名可读（electron-updater 检查更新不带令牌）。
-   浏览器 WebSocket 无法携带请求头，upgrade 阶段用 ?token= 校验，这里同样接受该参数。 */
+   注意不能用 /:\d+/ 之类的端口通配 —— 那等价于放行「本机所有服务」，而本机
+   上的其它项目（例如 5173 上的 virtual-resource-console）与本工具毫无关系，
+   它的页面属于第三方代码，与 evil.example.com 风险相同。这里精确到端口。 */
+const GATEWAY_SELF_ORIGINS = [
+  `http://127.0.0.1:${Number(process.env.PORT) || 4040}`,
+  `http://localhost:${Number(process.env.PORT) || 4040}`
+];
+/** SLC 自己的 vite 开发服务器（vite.config.ts 已固定 5273 + strictPort） */
+const DEV_ORIGINS = ["http://127.0.0.1:5273", "http://localhost:5273"];
+
+const corsAllowlist: (string | RegExp)[] = [
+  /^chrome-extension:\/\/[a-z]{32}$/i,
+  ...GATEWAY_SELF_ORIGINS,
+  ...DEV_ORIGINS
+];
+
+/* 共享部署 / 内网网关场景：前端从别的地址访问时用逗号分隔追加。
+   例：GATEWAY_CORS_ORIGINS=https://ops.example.com,http://10.20.0.9:8080 */
+const extraOrigins = (process.env.GATEWAY_CORS_ORIGINS || "")
+  .split(",")
+  .map((item) => item.trim())
+  .filter(Boolean);
+
+function isOriginAllowed(origin: string): boolean {
+  if (extraOrigins.includes(origin)) return true;
+  return corsAllowlist.some((rule) =>
+    typeof rule === "string" ? rule === origin : rule.test(origin)
+  );
+}
+
+app.use(
+  cors({
+    origin(origin, callback) {
+      /* 无 Origin：原生应用 / curl / 同源导航，放行
+         （跨源浏览器请求一定带 Origin，因此这里不会放宽攻击面） */
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+      if (isOriginAllowed(origin)) {
+        callback(null, true);
+        return;
+      }
+      callback(null, false);
+    },
+    credentials: true
+  })
+);
+
+/* Bearer Token 鉴权。
+ *
+ * 只保护 API 与 WebSocket —— 静态资源（JS/CSS/icon/index.html）必须免鉴权：
+ * 浏览器加载 <script src>、<link rel=stylesheet> 时不会附带 Authorization 头，
+ * 若一并拦截，前端 bundle 全部 401，页面永远停在启动页（实测踩到）。
+ *
+ * 开放清单：
+ *   /health              离线状态展示依赖它
+ *   /desktop-updates/*   electron-updater 检查更新不带令牌
+ *   非 /api 且非 /ws     SPA 入口与静态产物
+ * 浏览器 WebSocket 无法携带请求头，upgrade 阶段用 ?token= 校验，这里同样接受该参数。 */
 app.use((req, res, next) => {
-  if (!authService.isEnabled() || req.path === "/health" || req.path.startsWith("/desktop-updates/")) {
+  if (!authService.isEnabled()) {
+    next();
+    return;
+  }
+  const isApiOrWs = req.path.startsWith("/api/") || req.path.startsWith("/ws/");
+  if (!isApiOrWs || req.path === "/health" || req.path.startsWith("/desktop-updates/")) {
     next();
     return;
   }
@@ -146,6 +211,7 @@ app.use((req, res, next) => {
   const candidate = authService.extractBearer(req.headers.authorization)
     ?? (typeof req.query.token === "string" ? req.query.token : null);
   if (authService.verify(candidate)) {
+    authService.recordSuccess(ip);
     next();
     return;
   }
@@ -164,6 +230,16 @@ app.get("/health", (_req, res) => {
 
 app.get("/api/servers", (_req, res) => {
   res.json(serverRegistryService.listServers());
+});
+
+/* 安全状态：前端据此提示「凭证是否已加密」「鉴权是否已启用」。
+   只暴露布尔值，绝不返回令牌或密钥本身。 */
+app.get("/api/security/status", (_req, res) => {
+  res.json({
+    credentialEncryptionEnabled: localConfigService.isCredentialEncryptionEnabled(),
+    authEnabled: authService.isEnabled(),
+    secretsExportEnabled
+  });
 });
 
 app.get("/api/servers/:serverId/credential", (req, res) => {
@@ -225,7 +301,137 @@ app.get("/api/import/finalshell", async (_req, res) => {
       importedAt: result.importedAt,
       resolvedPath: result.resolvedPath,
       searchedPaths: result.searchedPaths,
-      servers: result.servers
+      servers: result.servers,
+      /* 私钥认证但没读到私钥的服务器：让前端显式提示，不静默降级 */
+      missingPrivateKeyServers: result.missingPrivateKeyServers
+    });
+  } catch (error) {
+    res.status(500).json({ message: error instanceof Error ? error.message : "Unknown error" });
+  }
+});
+
+/* ============================================================
+   重新导入 · 变更预览与应用
+   ------------------------------------------------------------
+   背景：此前重新导入直接 setImportedServers(全量覆盖)。用户在 FinalShell
+   里删掉一台机器，本工具里的日志路径/搜索条件/堡垒机路由会一起消失，而界面
+   只显示「导入成功」，用户没有任何察觉机会。
+   现在改为：先预览 diff（不写库），用户确认后再按变更集落库。
+   ============================================================ */
+
+/** 预览：只计算，不写任何文件 */
+app.post("/api/import/preview", async (req, res) => {
+  try {
+    const toolId = String(req.body?.toolId || "finalshell").trim();
+    if (toolId !== "finalshell" && toolId !== "xshell") {
+      res.status(400).json({ message: `不支持的导入工具：${toolId}` });
+      return;
+    }
+
+    const strategy = importResolver.resolve(toolId);
+    const preferredPath = toolId === "finalshell"
+      ? localConfigService.getFinalShellConfiguredPath() || undefined
+      : undefined;
+    const result = await strategy.importServers(preferredPath);
+
+    if (!result.resolvedPath) {
+      res.status(404).json({
+        message: `未找到配置目录。已检查：${result.searchedPaths.join(" | ")}。若工具装在自定义位置，请在设置中心填写配置目录后重试。`
+      });
+      return;
+    }
+
+    const preview = buildImportPreview({
+      toolId,
+      resolvedPath: result.resolvedPath,
+      searchedPaths: result.searchedPaths,
+      existing: localConfigService.listImportedServersRaw(),
+      incoming: result.servers,
+      missingPrivateKeyServers: result.missingPrivateKeyServers,
+      hasLocalData: (serverId) => localConfigService.hasLocalDataForServer(serverId)
+    });
+
+    res.json(preview);
+  } catch (error) {
+    res.status(500).json({ message: error instanceof Error ? error.message : "Unknown error" });
+  }
+});
+
+/** 应用：按用户勾选执行合并落库 */
+app.post("/api/import/apply", async (req, res) => {
+  try {
+    const toolId = String(req.body?.toolId || "finalshell").trim();
+    if (toolId !== "finalshell" && toolId !== "xshell") {
+      res.status(400).json({ message: `不支持的导入工具：${toolId}` });
+      return;
+    }
+
+    const strategy = importResolver.resolve(toolId);
+    const preferredPath = toolId === "finalshell"
+      ? localConfigService.getFinalShellConfiguredPath() || undefined
+      : undefined;
+    const result = await strategy.importServers(preferredPath);
+
+    if (!result.resolvedPath) {
+      res.status(404).json({
+        message: `未找到配置目录。已检查：${result.searchedPaths.join(" | ")}。`
+      });
+      return;
+    }
+
+    const removeServerIds = new Set<string>(
+      Array.isArray(req.body?.removeServerIds) ? req.body.removeServerIds.map(String) : []
+    );
+    const updateServerIds = new Set<string>(
+      Array.isArray(req.body?.updateServerIds) ? req.body.updateServerIds.map(String) : []
+    );
+
+    // 先重算一次匹配关系（与预览同一套规则），只用于判定哪些 incoming 已存在
+    const preview = buildImportPreview({
+      toolId,
+      resolvedPath: result.resolvedPath,
+      searchedPaths: result.searchedPaths,
+      existing: localConfigService.listImportedServersRaw(),
+      incoming: result.servers,
+      hasLocalData: (serverId) => localConfigService.hasLocalDataForServer(serverId)
+    });
+    const matchedServerIds = new Set<string>(preview.updated.map((c) => c.serverId));
+
+    const applied = await localConfigService.applyImportedChanges({
+      incoming: result.servers,
+      removeServerIds,
+      updateServerIds,
+      matchedServerIds
+    });
+
+    // 凭证只补新增/更新的条目，保留中的旧记录凭证不动
+    const keepOldCredentialIds = new Set<string>(
+      applied.servers
+        .filter((s) => !result.servers.some((n) => n.id === s.id))
+        .map((s) => s.id)
+    );
+    const credentialPatch: Record<string, ServerCredentialInput> = {};
+    for (const [id, cred] of Object.entries(result.credentials)) {
+      if (keepOldCredentialIds.has(id)) continue;
+      credentialPatch[id] = cred;
+    }
+    if (Object.keys(credentialPatch).length > 0) {
+      await localConfigService.mergeImportedCredentials(credentialPatch);
+    }
+
+    serverRegistryService.setImportedServers(localConfigService.listImportedServers());
+    if (toolId === "finalshell") {
+      await localConfigService.markFinalShellImported(result.importedAt, preferredPath);
+    }
+
+    res.json({
+      ok: true,
+      addedCount: applied.addedCount,
+      removedCount: applied.removedCount,
+      updatedCount: applied.updatedCount,
+      keptCount: applied.keptCount,
+      servers: applied.servers,
+      missingPrivateKeyServers: result.missingPrivateKeyServers
     });
   } catch (error) {
     res.status(500).json({ message: error instanceof Error ? error.message : "Unknown error" });

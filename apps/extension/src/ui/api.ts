@@ -1,6 +1,9 @@
 import type {
   FinalShellImportResponse,
   FinalShellSettingsResponse,
+  ImportApplyRequest,
+  ImportApplyResponse,
+  ImportPreviewResponse,
   JumpServerAssetSearchResponse,
   LogFileListResponse,
   LogFileMetaResponse,
@@ -18,6 +21,7 @@ import type {
   ServerConnectionTestResponse,
   ServerDraftConnectionTestRequest,
   ServerDraftConnectionTestResponse,
+  SecurityStatusResponse,
   ServerCredentialSecret,
   ServerCredentialStatus,
   ServerRouteConfig,
@@ -25,7 +29,7 @@ import type {
   ServerSummary
 } from "@server-log-console/shared";
 
-import { readGatewayConfig } from "./storage.js";
+import { readGatewayConfig, writeGatewayConfig } from "./storage.js";
 
 const runtimeOrigin = globalThis.location?.origin ?? "";
 export const DEFAULT_GATEWAY_BASE = "http://localhost:4040";
@@ -57,7 +61,59 @@ export let localServiceBase = (() => {
   return runtimeOrigin && /:4040$/.test(runtimeOrigin) ? runtimeOrigin : DEFAULT_GATEWAY_BASE;
 })();
 
-let gatewayToken = readGatewayConfig().token.trim();
+/* 令牌解析顺序：URL ?token=（浏览器打开自托管页面时携带一次）> localStorage（手动填写 / 上次保存）。
+   必须在模块初始化时同步完成 —— 组件首次渲染就会发请求，异步补令牌来不及。 */
+function readUrlToken(): string {
+  try {
+    const search = globalThis.location?.search;
+    if (!search) return "";
+    return new URLSearchParams(search).get("token")?.trim() || "";
+  } catch {
+    return "";
+  }
+}
+
+const initialUrlToken = readUrlToken();
+let gatewayToken = initialUrlToken || readGatewayConfig().token.trim();
+
+/* URL 里的令牌用后立刻持久化并从地址栏抹掉，避免留在浏览器历史里 */
+if (initialUrlToken) {
+  try {
+    const current = readGatewayConfig();
+    writeGatewayConfig({ baseUrl: current.baseUrl, token: initialUrlToken });
+  } catch {
+    /* localStorage 不可用：本次会话内仍有效 */
+  }
+  try {
+    const url = new URL(globalThis.location.href);
+    url.searchParams.delete("token");
+    globalThis.history?.replaceState(null, "", url.toString());
+  } catch {
+    /* 清理失败不影响功能 */
+  }
+}
+
+/* 桌面端（Electron）自动取令牌：主进程已生成并注入给 gateway，
+   前端从 file:// 打开时无法读取密钥文件，因此走 IPC。
+   浏览器 / Chrome 扩展形态没有该能力，继续用手动配置的令牌。 */
+async function hydrateDesktopGatewayToken(): Promise<void> {
+  const bridge = (globalThis as { electronAPI?: { getGatewayToken?: () => Promise<string | null> } }).electronAPI;
+  if (!bridge?.getGatewayToken) return;
+  if (gatewayToken) return;   // 已手动配置则不覆盖
+  try {
+    const token = await bridge.getGatewayToken();
+    if (typeof token === "string" && token.trim()) {
+      gatewayToken = token.trim();
+    }
+  } catch {
+    /* IPC 不可用：保持无令牌，由 401 引导用户手动填写 */
+  }
+}
+
+/** 启动时调用一次；不阻塞渲染。URL 令牌已在模块初始化时同步取到，这里只管桌面端 IPC。 */
+export function bootstrapGatewayAuth(): void {
+  void hydrateDesktopGatewayToken();
+}
 
 export function getGatewayToken(): string {
   return gatewayToken;
@@ -330,6 +386,29 @@ export async function apiSaveFinalShellPath(configuredPath: string): Promise<Fin
     body: JSON.stringify({ configuredPath })
   });
   return readPayload<FinalShellSettingsResponse>(response, "保存 FinalShell 目录失败");
+}
+
+export async function apiPreviewImport(toolId: string): Promise<ImportPreviewResponse> {
+  const response = await gatewayFetch(`${localServiceBase}/api/import/preview`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ toolId })
+  });
+  return readPayload<ImportPreviewResponse>(response, "读取导入变更失败");
+}
+
+export async function apiApplyImport(payload: ImportApplyRequest): Promise<ImportApplyResponse> {
+  const response = await gatewayFetch(`${localServiceBase}/api/import/apply`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  return readPayload<ImportApplyResponse>(response, "应用导入变更失败");
+}
+
+export async function apiGetSecurityStatus(): Promise<SecurityStatusResponse> {
+  const response = await gatewayFetch(`${localServiceBase}/api/security/status`);
+  return readPayload<SecurityStatusResponse>(response, "读取安全状态失败");
 }
 
 export async function apiGetCredentialStatus(serverId: string): Promise<ServerCredentialStatus> {

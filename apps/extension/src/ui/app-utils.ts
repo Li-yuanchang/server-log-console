@@ -5,7 +5,9 @@ import { VIEWER_PIP_SNAPSHOT_KEY } from "./types.js";
 
 export function createManualServerDraft(server?: ServerSummary | null): ManualServerDraft {
   return {
-    id: server?.source === "manual" ? server.id : "",
+    /* 对所有来源保留 id：导入记录也就地编辑（网关按 id 命中 imported-servers 更新原记录）。
+       此前导入服务器被清空 id，保存后另存为手动副本，列表出现两条重复。 */
+    id: server?.id || "",
     name: server?.name || "",
     host: server?.host || "",
     port: String(server?.port || 22),

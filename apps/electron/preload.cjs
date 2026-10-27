@@ -14,6 +14,29 @@ if (document.body) addPlatformClasses();
 else document.addEventListener("DOMContentLoaded", addPlatformClasses);
 
 contextBridge.exposeInMainWorld("electronAPI", {
+  /** 网关访问令牌（桌面端自动注入，用户无需配置） */
+  getGatewayToken: () => ipcRenderer.invoke("slc:gateway-token"),
+
+  /* ---------- 上传进度小窗 ---------- */
+  /** 打开上传进度小窗（只在 Electron 可用；浏览器形态无此入口） */
+  openTransferPip: (config) => ipcRenderer.invoke("open-pip-window", { ...config, mode: "transfer" }),
+  /** 主窗口 → 小窗：推送进度 */
+  sendTransferProgress: (payload) => ipcRenderer.send("slc:transfer:progress", payload),
+  /** 小窗 → 主窗口：请求暂停/继续/取消 */
+  sendTransferControl: (action) => ipcRenderer.send("slc:transfer:control", action),
+  /** 主窗口订阅小窗控制指令（返回取消订阅函数） */
+  onTransferControl: (handler) => {
+    const listener = (_event, action) => handler(action);
+    ipcRenderer.on("slc:transfer:control", listener);
+    return () => ipcRenderer.removeListener("slc:transfer:control", listener);
+  },
+  /** 小窗订阅进度更新 */
+  onTransferProgress: (handler) => {
+    const listener = (_event, payload) => handler(payload);
+    ipcRenderer.on("slc:transfer:progress", listener);
+    return () => ipcRenderer.removeListener("slc:transfer:progress", listener);
+  },
+
   /* 平台标识：前端据此决定是否渲染自绘窗口控制按钮 */
   platform: process.platform,
   /* Windows 自绘标题栏的窗口控制（2026-10-24 方案 B）。

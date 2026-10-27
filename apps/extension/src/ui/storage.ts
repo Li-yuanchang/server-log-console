@@ -461,7 +461,7 @@ export function clearGatewayConfig() {
 }
 
 const settingsViewStorageKey = "server-log-console:settings-view";
-const SETTINGS_VIEW_VALUES = ["connections", "gateway", "preferences", "update"] as const;
+const SETTINGS_VIEW_VALUES = ["connections", "gateway", "security", "preferences", "update"] as const;
 type SettingsViewValue = (typeof SETTINGS_VIEW_VALUES)[number];
 
 /* 设置中心记住上次停留的视图；无有效记录时回退「偏好设置」 */

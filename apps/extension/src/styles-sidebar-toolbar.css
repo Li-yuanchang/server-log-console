@@ -940,10 +940,21 @@ button:disabled {
   color: #ffffff;
 }
 
-/* 小窗头部动作区为三枚窗口按钮让位（138px 控件 + 14px 右内边距）。
-   仅 Windows 无边框小窗需要（mac 红绿灯走 88px 左让位、Linux 保留系统边框）。 */
+/* 小窗头部右侧为三枚窗口按钮让位（3 × 46px = 138px + 14px 内边距 = 152px）。
+   仅 Windows 无边框小窗需要（mac 红绿灯走 88px 左让位、Linux 保留系统边框）。
+
+   ⚠️ 必须带 body.is-win32 + 与 theme-modern 版同特异性（2026-10-25 实测）：
+   主题文件里有 `.theme-modern.pip-standalone .viewer-floating-header-standalone
+   { padding: 8px 14px }`（简写，特异性 0,3,0，产物中更靠后）。若本条只用
+   `body.is-win32 .pip-standalone .xxx`（0,3,0 但更早），padding-right 会被那条
+   简写整体重置 → 右侧图标被窗口按钮压住。故显式加 .theme-modern 并把选择器
+   写成与其等价或更高的形态，保证后出者仍是我们。 */
 body.is-win32 .pip-standalone .viewer-floating-header-standalone,
-body.is-win32 .pip-standalone .terminal-panel-bar-standalone {
+body.is-win32 .pip-standalone .terminal-panel-bar-standalone,
+body.is-win32 .pip-standalone .theme-modern .viewer-floating-header-standalone,
+body.is-win32 .pip-standalone .theme-modern .terminal-panel-bar-standalone,
+body.is-win32 .theme-modern.pip-standalone .viewer-floating-header-standalone,
+body.is-win32 .theme-modern.pip-standalone .terminal-panel-bar-standalone {
   padding-right: 152px;
 }
 

@@ -8,6 +8,7 @@ import {
 export type ImportSettingsAPI = {
   fetchFinalShellSettings: () => Promise<void>;
   saveFinalShellPath: () => Promise<void>;
+  previewImport: (toolId?: string) => Promise<void>;
   importFromTool: (toolId?: string) => Promise<void>;
   importFromFinalShell: () => Promise<void>;
 };
@@ -81,6 +82,16 @@ export function useImportSettings(deps: {
     });
   }, [finalShellPath, withBusy, setFinalShellPath, setFinalShellDetectedPaths, setFinalShellLastImportedAt, setImportPath, setActionStatus, pushActivity]);
 
+  /** 打开变更预览（不写库）。真正的落库由弹层确认后调用 apply。 */
+  const previewImport = useCallback(async (toolId: string = selectedImportTool) => {
+    const toolLabel = toolId === "finalshell" ? "FinalShell" : toolId === "xshell" ? "Xshell" : toolId;
+    if (!(await checkLocalServiceHealth({ silentFailure: false }))) {
+      setImportStatus("连接服务不可用，无法读取导入变更。");
+      return;
+    }
+    setImportStatus(`正在比对 ${toolLabel} 配置变更…`);
+  }, [selectedImportTool, checkLocalServiceHealth, setImportStatus]);
+
   const importFromTool = useCallback(async (toolId: string = selectedImportTool) => {
     const toolLabel = toolId === "finalshell" ? "FinalShell" : toolId === "xshell" ? "Xshell" : toolId;
     await withBusy(`正在导入 ${toolLabel} 连接...`, async () => {
@@ -102,6 +113,20 @@ export function useImportSettings(deps: {
       }
 
       setServers(payload.servers);
+
+      /* 私钥认证但没读到私钥：显式提示，不要等到连接时才表现为「认证失败」。
+         以前这里是静默降级（只剩用户名），排查成本极高。 */
+      const missingKeys = payload.missingPrivateKeyServers ?? [];
+      if (missingKeys.length > 0) {
+        const names = missingKeys.slice(0, 3).join("、");
+        const more = missingKeys.length > 3 ? ` 等 ${missingKeys.length} 台` : "";
+        setImportStatus(
+          `已导入，但 ${names}${more} 的私钥未读到，凭证不完整。请在导入设置里检查私钥目录后重新导入。`
+        );
+        pushActivity(
+          `${toolLabel} 导入：${missingKeys.length} 台服务器的私钥未能读取（${names}${more}），这些连接会认证失败。`
+        );
+      }
       selectServerById(payload.servers[0]?.id ?? "");
       setFilePath("");
       setImportStatus(`已导入 ${payload.servers.length} 台服务器，时间 ${payload.importedAt}`);
@@ -124,6 +149,7 @@ export function useImportSettings(deps: {
   return {
     fetchFinalShellSettings,
     saveFinalShellPath,
+    previewImport,
     importFromTool,
     importFromFinalShell,
   };

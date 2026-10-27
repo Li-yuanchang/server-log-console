@@ -8,3 +8,8 @@
 @import url("./styles-tsc.css");
 @import url("./styles-file-reader.css");
 @import url("./styles-responsive.css");
+@import url("./styles-import-preview.css");
+@import url("./styles-security-settings.css");
+@import url("./styles-terminal-history.css");
+@import url("./styles-upload-conflict.css");
+@import url("./styles-transfer-pip.css");

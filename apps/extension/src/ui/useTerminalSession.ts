@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { TERMINAL_SCHEMES, type TerminalColorSchemeId } from "./useUiTheme.js";
+import { CommandLineBuffer, appendTerminalHistory } from "./useTerminalHistory.js";
 import type { ServerSummary } from "@server-log-console/shared";
 import { looksLikeJumpServer } from "./terminal-utils.js";
 import { getGatewayToken } from "./api.js";
@@ -27,6 +28,9 @@ interface UseTerminalSessionOptions {
   cwd?: string;
   onStatus: (message: string) => void;
   onActivity: (message: string) => void;
+  /** 一条命令执行完毕（按 Enter 提交）时回调，用于命令历史记录。
+      只记录用户键入的命令行，不解析终端输出。 */
+  onCommandSubmitted?: (command: string) => void;
   onSessionIdChange?: (sessionId: string) => void;
   preserveSessionOnInactive?: boolean;
   preserveSessionOnDispose?: boolean;
@@ -145,6 +149,8 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
   const expectedCloseRef = useRef(false);
   const sessionKeyRef = useRef("");
   const onDataDisposableRef = useRef<{ dispose: () => void } | null>(null);
+  /** 命令行累积器：把原始键入流还原为可记录的命令（见 useTerminalHistory） */
+  const commandBufferRef = useRef<CommandLineBuffer | null>(null);
   const onResizeDisposableRef = useRef<{ dispose: () => void } | null>(null);
   const reconnectTimerRef = useRef<number | null>(null);
   const fitTimersRef = useRef<number[]>([]);
@@ -560,7 +566,15 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
     }
 
     onDataDisposableRef.current?.dispose();
+    commandBufferRef.current = new CommandLineBuffer();
     onDataDisposableRef.current = terminal.onData((data: string) => {
+      /* 命令历史采集：只累积用户键入的字符，遇到 Enter 提交一条。
+         放在发送之前 —— 即使用户输入被远端忽略，本地记录仍反映真实意图。
+         含方向键/Tab 的输入会被缓冲器整体放弃（宁可漏记也不要错记）。 */
+      const submitted = commandBufferRef.current?.feed(data);
+      if (submitted) {
+        options.onCommandSubmitted?.(submitted);
+      }
       const socket = socketRef.current;
       if (socket?.readyState === WebSocket.OPEN && terminalReadyRef.current) {
         socket.send(JSON.stringify({ action: "input", sessionId: activeSessionIdRef.current || undefined, data }));

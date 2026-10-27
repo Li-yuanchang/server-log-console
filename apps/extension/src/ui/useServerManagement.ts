@@ -184,7 +184,7 @@ export function useServerManagement(deps: {
       return;
     }
 
-    await withBusy("正在保存手动服务器...", async () => {
+    await withBusy("正在保存连接...", async () => {
       const payload = await apiUpsertManualServer({
         id: manualServerDraft.id || undefined,
         name,
@@ -210,7 +210,7 @@ export function useServerManagement(deps: {
       setManualServerDraft(createManualServerDraft(savedServer));
       setSettingsWorkspaceView("connections");
       setActionStatus(`已保存连接：${savedServer.name}`);
-      pushActivity(`已保存手动服务器：${savedServer.name}（${savedServer.host}:${savedServer.port}）`);
+      pushActivity(`已保存连接：${savedServer.name}（${savedServer.host}:${savedServer.port}）`);
       showToast("success", `已保存 ${savedServer.name}`);
     });
   }, [manualServerDraft, withBusy, fetchServers, selectServerById, setManualServerDraft, setSettingsWorkspaceView, setActionStatus, pushActivity, showToast, openSettingsWorkspace]);

@@ -4,12 +4,13 @@ import { Columns2, Command, Ellipsis, LayoutGrid, Rows2, Search, Terminal as Ter
 import type { Terminal } from "@xterm/xterm";
 import type { ServerSummary } from "@server-log-console/shared";
 import { localServiceBase } from "./api.js";
-import { WindowControls } from "./WindowControls.js";
 import type { TerminalColorSchemeId } from "./useUiTheme.js";
 import { copyText } from "./utils.js";
 import { TerminalTabStrip, type TerminalTabItem, type TerminalTabStatus } from "./TerminalTabStrip.js";
 import { TerminalStatusBar } from "./TerminalStatusBar.js";
 import { TerminalFindBar } from "./TerminalFindBar.js";
+import { TerminalHistoryPanel } from "./TerminalHistoryPanel.js";
+import { appendTerminalHistory } from "./useTerminalHistory.js";
 import { useTerminalSearch } from "./useTerminalSearch.js";
 import { TerminalContextMenu, TerminalMenuShell, TerminalMoreMenu, type TerminalContextMenuActions, type TerminalMenuItem } from "./TerminalMenus.js";
 import { TerminalQuickBar } from "./TerminalQuickBar.js";
@@ -161,6 +162,15 @@ function TerminalTabPane(props: TerminalTabPaneProps) {
     preserveSessionOnInactive: true,
     preserveSessionOnDispose: true,
     onSelectionTextChange: handleSelectionText,
+    /* 命令历史采集：只记用户键入的命令行，不解析输出 */
+    onCommandSubmitted: (command: string) => {
+      appendTerminalHistory(command, {
+        serverId: props.serverId,
+        serverLabel: props.selectedServer
+          ? `${props.selectedServer.username}@${props.selectedServer.host}`
+          : props.serverId
+      });
+    },
     onTerminalInstanceChange: setTerminalInstance,
     terminalFontSize: props.terminalFontSize,
     terminalFontFamily: props.terminalFontFamily,
@@ -283,6 +293,8 @@ export function TerminalPanel(props: TerminalPanelProps) {
   tabsRef.current = tabs;
   const propsRef = useRef(props);
   propsRef.current = props;
+  /* 命令历史面板（⌘R）。只存本地，不联网。 */
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [activeTerminal, setActiveTerminal] = useState<Terminal | null>(null);
   const activeApiRef = useRef<TerminalSessionApi | null>(null);
 
@@ -501,6 +513,12 @@ export function TerminalPanel(props: TerminalPanelProps) {
         lines.push(line.translateToString(true));
       }
     }
+    /* 去掉末尾连续空行：终端底部通常有若干未使用的空行，
+       原样导出会让日志文件尾部拖出一大片空行。 */
+    while (lines.length > 0 && lines[lines.length - 1].trim() === "") {
+      lines.pop();
+    }
+
     const host = (props.server?.host || props.server?.name || props.serverId || "server").replace(/[^\w.-]+/g, "_");
     const now = new Date();
     const pad = (value: number) => String(value).padStart(2, "0");
@@ -512,7 +530,12 @@ export function TerminalPanel(props: TerminalPanelProps) {
     anchor.download = `terminal-${host}-${stamp}.log`;
     anchor.click();
     window.setTimeout(() => URL.revokeObjectURL(url), 4000);
-    props.onStatus("已导出终端会话记录");
+    const scrollbackLimit = typeof terminal.options.scrollback === "number" ? terminal.options.scrollback : 1000;
+    props.onStatus(
+      lines.length >= scrollbackLimit
+        ? `已导出最近 ${lines.length} 行（已达缓冲区上限，更早的输出未保留）`
+        : `已导出终端会话记录（${lines.length} 行）`
+    );
   }, [props.server, props.serverId, props.onStatus, getActionTerminal]);
 
   const revealInFiles = useCallback(() => {
@@ -730,6 +753,9 @@ export function TerminalPanel(props: TerminalPanelProps) {
       if (key === "f") {
         searchRef.current.open();
         handled = true;
+      } else if (key === "r") {
+        setHistoryOpen((open) => !open);
+        handled = true;
       } else if (key === "j") {
         shortcutsRef.current.onToggleTerminalOverlay("ai");
         handled = true;
@@ -795,11 +821,12 @@ export function TerminalPanel(props: TerminalPanelProps) {
         ) : null}
         <span className="terminal-panel-bar-spacer" />
         <div className="terminal-panel-bar-actions">
-          {/* Windows 无边框小窗：自绘最小化/最大化/关闭（2026-10-24，与日志小窗一致）。
-              关闭走 win.close() → 主进程 pip-window-closed 通知链 → 主窗口恢复会话状态。 */}
-          {isStandalone && isElectronRuntime && (window as any).electronAPI?.platform === "win32" ? (
-            <WindowControls />
-          ) : null}
+          {/* 注意：Windows 自绘窗口控制**不在这里渲染**（2026-10-25）。
+              这里在 .terminal-panel-bar-standalone 内部，而该条是
+              -webkit-app-region: drag 的拖拽区；Windows 无边框窗口下拖拽区
+              被系统当作标题栏接管，子元素的 no-drag 未必能挖出来 ——
+              表现为三枚按钮「看得见、点不动」。改由 App.tsx 渲染在
+              <main> 直属层级（拖拽区之外），与主窗口结构一致。 */}
           <button
             type="button"
             className="terminal-toolbar-button terminal-toolbar-button-icon"
@@ -1007,6 +1034,25 @@ export function TerminalPanel(props: TerminalPanelProps) {
                   />
                 ) : null}
                 {search.isOpen ? <TerminalFindBar search={search} /> : null}
+                <TerminalHistoryPanel
+                  open={historyOpen}
+                  serverId={props.serverId}
+                  serverLabel={props.server
+                    ? `${props.server.username}@${props.server.host}`
+                    : props.serverId}
+                  onClose={() => setHistoryOpen(false)}
+                  /* 只填入不执行：误按 Enter 就重启服务太危险 */
+                  onFill={(command) => {
+                    activeApiRef.current?.pasteToTerminal(command);
+                    activeApiRef.current?.focusTerminalSoon?.();
+                  }}
+                  onRun={(command) => {
+                    activeApiRef.current?.pasteToTerminal(command);
+                    activeApiRef.current?.focusTerminalSoon?.();
+                    /* 执行交给用户自己按 Enter：命令已填入光标处，
+                       不在此处注入 \r，避免与用户当前输入叠加。 */
+                  }}
+                />
                 {contextMenu ? (
                   <TerminalContextMenu
                     x={contextMenu.x}

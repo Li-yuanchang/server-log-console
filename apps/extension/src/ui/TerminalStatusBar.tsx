@@ -5,7 +5,7 @@ import { formatKeyHint } from "./key-hints.js";
    结构：左 = 状态点 + 连接文案 + 主机 + 时长（断线时：红点 + 原因 + 自动重试 n/N + 立即重连）；
         中 = CPU / 内存 / 磁盘迷你条（42×4px 圆角槽，<60 绿 / 60-85 橙 / >85 红，
              来自网关每 10s 采集，整组可点打开监控）；
-        右 = UTF-8 · ⌘F 查找 提示。
+        右 = UTF-8 · ⌘R 历史 · ⌘F 查找 提示。
    悬浮提示一律用原生 title 属性（ImmediateTooltip 会拦截 [title] 渲染即时提示），不另造 tooltip。
    样式类前缀 terminal-statusbar-*，定义在 align-s5-terminal.css 第 9 节。 */
 
@@ -202,6 +202,8 @@ export function TerminalStatusBar(props: TerminalStatusBarProps) {
       {/* 右：编码与查找提示 */}
       <span className="terminal-statusbar-right">
         <span className="terminal-statusbar-mono">UTF-8</span>
+        <span className="terminal-statusbar-sep" />
+        <span className="terminal-statusbar-hint">{formatKeyHint("⌘R")} 历史</span>
         <span className="terminal-statusbar-sep" />
         <span className="terminal-statusbar-hint">{formatKeyHint("⌘F")} 查找</span>
       </span>

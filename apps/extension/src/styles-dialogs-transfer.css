@@ -2499,3 +2499,80 @@ button.class-outline-row {
   background: rgba(194, 91, 91, 0.1);
   border: 1px solid rgba(194, 91, 91, 0.14);
 }
+
+/* ============================================================
+   传输抽屉 · 逐文件队列（2026-10-27）
+   背景：uploadProgress 只带"当前文件"，50 个小文件卡在第 3 个时看不出是谁卡了。
+   这里列全部，行内进度条 + 状态点。
+   ============================================================ */
+
+.xqueue {
+  margin: 6px 0 8px;
+  border: 1px solid var(--line, #d9ded0);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--panel, #fbfbf7);
+}
+
+.xqueue-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 9px;
+  font-size: 10.5px;
+  min-width: 0;
+}
+
+.xqueue-row + .xqueue-row {
+  border-top: 1px solid color-mix(in srgb, var(--line, #d9ded0) 60%, transparent);
+}
+
+.xqueue-dot {
+  flex: 0 0 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--line-strong, #b8c2ae);
+}
+
+.xqueue-uploading .xqueue-dot { background: var(--amber, #b77935); }
+.xqueue-done .xqueue-dot { background: var(--green-dot, #4cae62); }
+.xqueue-error .xqueue-dot { background: var(--red, #a5483d); }
+
+.xqueue-name {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--mono, monospace);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--ink, #27302a);
+}
+
+.xqueue-done .xqueue-name { color: var(--ink-muted, #92988d); }
+.xqueue-error .xqueue-name { color: var(--red, #a5483d); }
+
+.xqueue-bar {
+  flex: 0 0 48px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--line, #d9ded0);
+  overflow: hidden;
+}
+
+.xqueue-bar i {
+  display: block;
+  height: 100%;
+  background: var(--accent, #426b57);
+  transition: width 0.2s ease;
+}
+
+.xqueue-done .xqueue-bar i { background: var(--green-dot, #4cae62); }
+.xqueue-error .xqueue-bar i { background: var(--red, #a5483d); }
+
+.xqueue-size {
+  flex: 0 0 auto;
+  font-size: 9.5px;
+  color: var(--ink-muted, #92988d);
+  font-variant-numeric: tabular-nums;
+}

@@ -58,6 +58,8 @@ export type DialogOverlaysProps = {
   onPauseUpload: () => void;
   onResumeUpload: () => void;
   onCancelUpload: () => void;
+  onOpenTransferWindow?: () => void;
+  uploadFileQueue?: Array<{ name: string; size: number; transferred: number; status: "pending" | "uploading" | "done" | "error" }>;
 };
 
 export function DialogOverlays(props: DialogOverlaysProps) {
@@ -113,6 +115,8 @@ export function DialogOverlays(props: DialogOverlaysProps) {
     onPauseUpload,
     onResumeUpload,
     onCancelUpload,
+    onOpenTransferWindow,
+    uploadFileQueue,
   } = props;
 
   return (
@@ -227,6 +231,8 @@ export function DialogOverlays(props: DialogOverlaysProps) {
         onPauseUpload={onPauseUpload}
         onResumeUpload={onResumeUpload}
         onCancelUpload={onCancelUpload}
+        onOpenTransferWindow={onOpenTransferWindow}
+        uploadFileQueue={uploadFileQueue}
       />
 
       <ConfirmDialog dialog={confirmDialog} onClose={onConfirmDialogClose} />

@@ -1,5 +1,5 @@
 import { useRef, useEffect, useCallback } from "react";
-import { EditorState, type Extension } from "@codemirror/state";
+import { EditorState, Compartment, type Extension } from "@codemirror/state";
 import { EditorView, keymap, lineNumbers, highlightActiveLineGutter, highlightActiveLine, drawSelection, rectangularSelection, highlightSpecialChars } from "@codemirror/view";
 import { defaultKeymap, indentWithTab, history, historyKeymap } from "@codemirror/commands";
 import { SearchQuery, openSearchPanel, search, searchKeymap, highlightSelectionMatches, setSearchQuery } from "@codemirror/search";
@@ -283,8 +283,9 @@ function braceFoldRange(state: EditorState, lineStart: number, lineEnd: number):
 }
 
 // 浅色外观：全部引用主题令牌（随主题/皮肤变化），不再写死色值。
+// 字号经 Compartment 动态重配（fontSizeCompartment），故此处不再写死 fontSize。
 const lightTheme = EditorView.theme({
-  "&": { height: "100%", fontSize: "12.5px", background: "var(--panel)", color: "var(--ink)" },
+  "&": { height: "100%", background: "var(--panel)", color: "var(--ink)" },
   ".cm-scroller": { overflow: "auto", fontFamily: "var(--log-font-family, 'SFMono-Regular', 'Consolas', monospace)" },
   ".cm-gutters": { background: "var(--panel)", borderRight: "1px solid var(--line)", color: "var(--ink-muted)" },
   ".cm-activeLineGutter": { background: "var(--accent-soft)" },
@@ -296,7 +297,6 @@ const lightTheme = EditorView.theme({
 const darkOverride = EditorView.theme({
   "&": {
     height: "100%",
-    fontSize: "12.5px",
     background: "#050607",
     color: "#d7dde5"
   },
@@ -356,11 +356,13 @@ interface CodeEditorProps {
   focusLine?: number | null;
   focusLineToken?: number;
   openSearchToken?: number;
+  /** 编辑器字号（px）：由外层缩放控件/⌘+ ⌘- 驱动，缺省 12.5 */
+  fontSize?: number;
   onChange?: (v: string) => void;
   onSave?: () => void;
 }
 
-export function CodeEditor({ value, fileName, documentKey, theme = "modern", appearance = "light", readOnly, focusLine, focusLineToken, openSearchToken, onChange, onSave }: CodeEditorProps) {
+export function CodeEditor({ value, fileName, documentKey, theme = "modern", appearance = "light", readOnly, focusLine, focusLineToken, openSearchToken, fontSize = 12.5, onChange, onSave }: CodeEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const initTokenRef = useRef(0);
@@ -368,9 +370,18 @@ export function CodeEditor({ value, fileName, documentKey, theme = "modern", app
   const applyingExternalValueRef = useRef(false);
   const cbRef = useRef({ onChange, onSave });
   const focusRef = useRef<{ line?: number | null; searchToken?: number }>({});
+  /* 字号 compartment：⌘+/⌘- 变更字号时只重配主题，不重建编辑器（保住滚动位置与选区） */
+  const fontSizeCompartmentRef = useRef(new Compartment());
+  const fontSizeRef = useRef(fontSize);
   valueRef.current = value;
   cbRef.current = { onChange, onSave };
   focusRef.current = { line: focusLine, searchToken: openSearchToken };
+
+  const buildFontSizeTheme = (size: number) => EditorView.theme({
+    "&": { fontSize: `${size}px` },
+    ".cm-content": { fontSize: `${size}px` },
+    ".cm-gutters": { fontSize: `${size}px` },
+  });
 
   const scrollToLine = useCallback((view: EditorView, lineNumber?: number | null) => {
     if (!lineNumber || lineNumber < 1) {
@@ -406,6 +417,7 @@ export function CodeEditor({ value, fileName, documentKey, theme = "modern", app
       EditorState.phrases.of(searchPhrases),
       keymap.of([...closeBracketsKeymap, ...defaultKeymap, ...searchKeymap, ...historyKeymap, ...foldKeymap, indentWithTab]),
       languageExtension,
+      fontSizeCompartmentRef.current.of(buildFontSizeTheme(fontSizeRef.current)),
       isDark ? [oneDark, darkOverride] : [syntaxHighlighting(defaultHighlightStyle, { fallback: true }), lightTheme],
       /* 语法高亮按外观选色（2026-10-16）：浅色底必须用深色系，否则关键字/键名看不清 */
       syntaxHighlighting(isDark ? editorHighlightStyleDark : editorHighlightStyleLight),
@@ -436,6 +448,16 @@ export function CodeEditor({ value, fileName, documentKey, theme = "modern", app
       viewRef.current = null;
     };
   }, [init]);
+
+  /* 字号变化：只重配 compartment（不重建编辑器，滚动与选区保持不变） */
+  useEffect(() => {
+    fontSizeRef.current = fontSize;
+    const view = viewRef.current;
+    if (!view) return;
+    view.dispatch({
+      effects: fontSizeCompartmentRef.current.reconfigure(buildFontSizeTheme(fontSize)),
+    });
+  }, [fontSize]);
 
   useEffect(() => {
     const view = viewRef.current;

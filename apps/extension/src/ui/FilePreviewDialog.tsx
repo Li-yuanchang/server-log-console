@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { EditorView } from "@codemirror/view";
-import { SearchQuery, findNext, findPrevious, getSearchQuery, openSearchPanel, searchPanelOpen, setSearchQuery } from "@codemirror/search";
+import { SearchQuery, findNext, findPrevious, getSearchQuery, openSearchPanel, closeSearchPanel, searchPanelOpen, setSearchQuery } from "@codemirror/search";
 import {
   ChevronLeft,
   ChevronRight,
@@ -8,6 +8,7 @@ import {
   Maximize2,
   Minimize2,
   MoreHorizontal,
+  Save,
   Search,
   X,
 } from "lucide-react";
@@ -60,6 +61,11 @@ interface FilePreviewDialogProps {
 }
 
 type EditorSearchStats = { total: number; current: number };
+
+/* 编辑器字号缩放范围（⌘+ / ⌘- 步进 1px，⌘0 复位） */
+const EDITOR_FONT_SIZE_DEFAULT = 12.5;
+const EDITOR_FONT_SIZE_MIN = 10;
+const EDITOR_FONT_SIZE_MAX = 22;
 type EditorVisibleRange = { from: number; to: number; total: number };
 
 // 文件内搜索行（原型 S7 第 708-718 行）：把查询写进 CodeMirror（命中高亮）、
@@ -73,6 +79,8 @@ function useEditorSearch(
   const [query, setQuery] = useState("");
   const [stats, setStats] = useState<EditorSearchStats>({ total: 0, current: 0 });
   const [range, setRange] = useState<EditorVisibleRange>({ from: 1, to: 1, total: 1 });
+  /* 搜索栏按需展开（用户反馈 2026-10-25：常驻搜索条吃掉编辑区高度） */
+  const [open, setOpen] = useState(false);
 
   const getView = useCallback((): EditorView | null => {
     const root = rootRef.current;
@@ -118,9 +126,24 @@ function useEditorSearch(
   }, [getView]);
 
   const focusInput = useCallback(() => {
-    inputRef.current?.focus();
-    inputRef.current?.select();
+    setOpen(true);
+    window.requestAnimationFrame(() => {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    });
   }, []);
+
+  /** 关闭搜索栏：清空命中高亮并把焦点还给编辑器 */
+  const close = useCallback(() => {
+    setOpen(false);
+    setQuery("");
+    const view = getView();
+    if (view) {
+      view.dispatch({ effects: setSearchQuery.of(new SearchQuery({ search: "" })) });
+      if (searchPanelOpen(view.state)) closeSearchPanel(view);
+      view.focus();
+    }
+  }, [getView]);
 
   const step = useCallback((direction: 1 | -1) => {
     const view = getView();
@@ -192,7 +215,7 @@ function useEditorSearch(
     };
   }, [enabled, documentKey, getView, refreshRange]);
 
-  return { query, setQuery, stats, range, focusInput, step, inputRef };
+  return { query, setQuery, stats, range, focusInput, close, step, inputRef, open };
 }
 
 export function FilePreviewDialog(props: FilePreviewDialogProps) {
@@ -208,22 +231,45 @@ export function FilePreviewDialog(props: FilePreviewDialogProps) {
   } = props;
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
+  /* 编辑器字号（⌘+ / ⌘- 缩放，10–22px；按会话记忆，不写进文件） */
+  const [fontSize, setFontSize] = useState(EDITOR_FONT_SIZE_DEFAULT);
   const isStructuredPreview = dialog?.previewKind === "archive" || dialog?.previewKind === "class";
   const isTextPreview = Boolean(dialog && dialog.previewKind !== "archive" && dialog.previewKind !== "class");
   const search = useEditorSearch(dialogRef, isTextPreview && !dialog?.loading, dialog?.filePath);
   useEscapeToClose(Boolean(dialog), onClose);
 
-  // ⌘F 聚焦内联搜索框（原型 S7 第 708-718 行取代 CodeMirror 自带面板）
+  // ⌘F 搜索 · ⌘+ / ⌘- 字号缩放 · ⌘0 复位（原型 S7 第 708-718 行取代 CodeMirror 自带面板）
   useEffect(() => {
     if (!isTextPreview) {
       return;
     }
     const focusSearch = search.focusInput;
     const handleKeyDown = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "f") {
+      if (!event.metaKey && !event.ctrlKey) return;
+      const key = event.key;
+      if (key.toLowerCase() === "f") {
         event.preventDefault();
         event.stopPropagation();
         focusSearch();
+        return;
+      }
+      /* 注意：+ 在多数键盘上是 ⇧= ，故同时接受 "+" 与 "=" */
+      if (key === "+" || key === "=") {
+        event.preventDefault();
+        event.stopPropagation();
+        setFontSize((prev) => Math.min(EDITOR_FONT_SIZE_MAX, prev + 1));
+        return;
+      }
+      if (key === "-" || key === "_") {
+        event.preventDefault();
+        event.stopPropagation();
+        setFontSize((prev) => Math.max(EDITOR_FONT_SIZE_MIN, prev - 1));
+        return;
+      }
+      if (key === "0") {
+        event.preventDefault();
+        event.stopPropagation();
+        setFontSize(EDITOR_FONT_SIZE_DEFAULT);
       }
     };
     window.addEventListener("keydown", handleKeyDown, { capture: true });
@@ -281,16 +327,41 @@ export function FilePreviewDialog(props: FilePreviewDialogProps) {
       >
         <div className="dialog-titlebar preview-header">
           <b className="preview-title" title={dialog.filePath}>{dialog.fileName}</b>
+          {!dialog.readOnly && dialog.content !== dialog.originalContent ? (
+            <span className="preview-dirty-dot" title="有未保存的修改" aria-label="有未保存的修改" />
+          ) : null}
           {dialog.readOnly ? (
             <span className="chip preview-chip-gold">{readonlyLabel} · {formatBytes(dialog.size)}</span>
           ) : null}
           {dialog.readOnly ? <span className="chip preview-chip-muted">只读</span> : null}
-          {!dialog.readOnly && dialog.content !== dialog.originalContent ? (
-            <span className="preview-dirty">已修改</span>
-          ) : null}
           {dialog.loading ? <span className="preview-loading-badge">加载中…</span> : null}
           <span className="preview-header-spacer" />
           <div className="preview-actions">
+            {/* 保存：显式主按钮（仅可编辑且确有改动时可用），替代原先藏在「更多」菜单里 */}
+            {!dialog.readOnly ? (
+              <button
+                type="button"
+                className="preview-save-btn"
+                title={`保存 ${formatKeyHint("⌘S")}`}
+                disabled={dialog.content === dialog.originalContent || dialog.saving}
+                onClick={onSave}
+              >
+                <Save size={13} strokeWidth={1.9} />
+                {dialog.saving ? "保存中…" : "保存"}
+              </button>
+            ) : null}
+            {isTextPreview ? (
+              <button
+                type="button"
+                className={`preview-icon-btn${search.open ? " preview-icon-btn-on" : ""}`}
+                title={`在文件中搜索 ${formatKeyHint("⌘F")}`}
+                aria-label="在文件中搜索"
+                aria-pressed={search.open}
+                onClick={search.focusInput}
+              >
+                <Search size={14} strokeWidth={1.9} />
+              </button>
+            ) : null}
             <button type="button" className="preview-icon-btn" title="下载" aria-label="下载" onClick={onDownload}>
               <Download size={14} strokeWidth={1.9} />
             </button>
@@ -322,17 +393,17 @@ export function FilePreviewDialog(props: FilePreviewDialogProps) {
                 </button>
                 {moreOpen ? (
                   <div className="preview-more-menu" role="menu">
+                    {/* 保存已提升为头部主按钮，此处不再重复 */}
                     <button
                       type="button"
                       role="menuitem"
                       className="preview-more-item"
-                      disabled={dialog.content === dialog.originalContent || dialog.saving}
                       onClick={() => {
                         setMoreOpen(false);
-                        onSave();
+                        onDownload();
                       }}
                     >
-                      {dialog.saving ? "保存中…" : `保存 ${formatKeyHint("⌘S")}`}
+                      下载到本地
                     </button>
                   </div>
                 ) : null}
@@ -349,57 +420,73 @@ export function FilePreviewDialog(props: FilePreviewDialogProps) {
           <StructuredPreview dialog={dialog} theme={theme} onPreviewArchiveEntry={onPreviewArchiveEntry} />
         ) : (
           <>
-            <div className="preview-searchbar">
-              <span className="preview-search-shell">
-                <Search size={11} strokeWidth={2} />
-                <input
-                  ref={search.inputRef}
-                  value={search.query}
-                  onChange={(event) => search.setQuery(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.preventDefault();
-                      search.step(event.shiftKey ? -1 : 1);
-                    }
-                  }}
-                  placeholder="在文件中搜索…"
-                  aria-label="在文件中搜索"
-                />
-              </span>
-              <span className="preview-search-count">
-                {search.query ? `${search.stats.current} / ${search.stats.total}` : ""}
-              </span>
-              <button
-                type="button"
-                className="preview-search-nav"
-                title="上一个"
-                aria-label="上一个匹配"
-                disabled={!search.stats.total}
-                onClick={() => search.step(-1)}
-              >
-                <ChevronLeft size={12} strokeWidth={2} />
-              </button>
-              <button
-                type="button"
-                className="preview-search-nav"
-                title="下一个"
-                aria-label="下一个匹配"
-                disabled={!search.stats.total}
-                onClick={() => search.step(1)}
-              >
-                <ChevronRight size={12} strokeWidth={2} />
-              </button>
-              <span className="preview-search-spacer" />
-              <span className="preview-search-range">
-                {`${search.range.from.toLocaleString("en-US")} – ${search.range.to.toLocaleString("en-US")} 行 · 共 ${search.range.total.toLocaleString("en-US")} 行`}
-              </span>
-            </div>
+            {search.open ? (
+              <div className="preview-searchbar">
+                <span className="preview-search-shell">
+                  <Search size={11} strokeWidth={2} />
+                  <input
+                    ref={search.inputRef}
+                    value={search.query}
+                    onChange={(event) => search.setQuery(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        search.step(event.shiftKey ? -1 : 1);
+                      } else if (event.key === "Escape") {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        search.close();
+                      }
+                    }}
+                    placeholder="在文件中搜索…"
+                    aria-label="在文件中搜索"
+                  />
+                </span>
+                <span className="preview-search-count">
+                  {search.query ? `${search.stats.current} / ${search.stats.total}` : ""}
+                </span>
+                <button
+                  type="button"
+                  className="preview-search-nav"
+                  title="上一个"
+                  aria-label="上一个匹配"
+                  disabled={!search.stats.total}
+                  onClick={() => search.step(-1)}
+                >
+                  <ChevronLeft size={12} strokeWidth={2} />
+                </button>
+                <button
+                  type="button"
+                  className="preview-search-nav"
+                  title="下一个"
+                  aria-label="下一个匹配"
+                  disabled={!search.stats.total}
+                  onClick={() => search.step(1)}
+                >
+                  <ChevronRight size={12} strokeWidth={2} />
+                </button>
+                <span className="preview-search-spacer" />
+                <span className="preview-search-range">
+                  {`${search.range.from.toLocaleString("en-US")} – ${search.range.to.toLocaleString("en-US")} 行 · 共 ${search.range.total.toLocaleString("en-US")} 行`}
+                </span>
+                <button
+                  type="button"
+                  className="preview-search-nav"
+                  title="关闭搜索"
+                  aria-label="关闭搜索"
+                  onClick={search.close}
+                >
+                  <X size={12} strokeWidth={2} />
+                </button>
+              </div>
+            ) : null}
             <CodeEditor
               value={dialog.content}
               fileName={dialog.fileName}
               documentKey={dialog.filePath}
               theme={theme}
               readOnly={dialog.readOnly}
+              fontSize={fontSize}
               onChange={onChange}
               onSave={onSave}
             />
@@ -408,10 +495,34 @@ export function FilePreviewDialog(props: FilePreviewDialogProps) {
         {!dialog.loading && !isStructuredPreview ? (
           <div className="preview-footer">
             <span className="preview-footer-note">
-              {dialog.readOnly ? "只读 · 大文件仅加载最后 1MB" : `可编辑文件：${formatKeyHint("⌘S")} 保存回写远程`}
+              {dialog.readOnly ? "只读 · 大文件仅加载最后 1MB" : `${formatKeyHint("⌘S")} 保存回写远程`}
             </span>
             <span className="preview-footer-spacer" />
-            <span className="preview-footer-meta">UTF-8 · {eol} · Geist Mono 12px</span>
+            {/* 字号缩放：⌘+ / ⌘- 步进、⌘0 复位，底栏显示真实字号 */}
+            <span className="preview-zoom" role="group" aria-label="编辑器字号">
+              <button
+                type="button"
+                className="preview-zoom-btn"
+                title={`缩小 ${formatKeyHint("⌘-")}`}
+                aria-label="缩小字号"
+                disabled={fontSize <= EDITOR_FONT_SIZE_MIN}
+                onClick={() => setFontSize((prev) => Math.max(EDITOR_FONT_SIZE_MIN, prev - 1))}
+              >
+                −
+              </button>
+              <span className="preview-zoom-value" title={`复位 ${formatKeyHint("⌘0")}`}>{fontSize}px</span>
+              <button
+                type="button"
+                className="preview-zoom-btn"
+                title={`放大 ${formatKeyHint("⌘+")}`}
+                aria-label="放大字号"
+                disabled={fontSize >= EDITOR_FONT_SIZE_MAX}
+                onClick={() => setFontSize((prev) => Math.min(EDITOR_FONT_SIZE_MAX, prev + 1))}
+              >
+                +
+              </button>
+            </span>
+            <span className="preview-footer-meta">UTF-8 · {eol}</span>
           </div>
         ) : null}
         <div className="preview-resize-handle" />

@@ -16,6 +16,8 @@ export interface ImportResult {
   resolvedPath: string | null;
   searchedPaths: string[];
   servers: ServerSummary[];
+  /** 声明私钥认证、但私钥文件未能读到的服务器名称（凭证不完整，需显式提示） */
+  missingPrivateKeyServers?: string[];
   credentials: Record<string, ServerCredentialInput>;
 }
 

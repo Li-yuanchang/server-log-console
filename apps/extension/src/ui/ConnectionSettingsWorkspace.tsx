@@ -8,11 +8,12 @@ import { apiGetCredentialSecret, apiTestConnection, apiTestDraftConnection } fro
 import { ThemedSelect } from "./ThemedSelect.js";
 import type { SlcDesktopUpdateState } from "../types/desktop-update.js";
 import { UpdateCenterPanel, type DesktopUpdateCheckLogEntry } from "./UpdateCenterPanel.js";
+import { SecuritySettingsView } from "./SecuritySettingsView.js";
 import type { ToastState } from "./FeedbackOverlays.js";
 import type { MonoFontFamily, UiBackgroundLayer, UiDensity, UiFontFamily, UiMotionMode, UiThemePreset, UiToneMode, ThemePreset, TerminalColorScheme, TerminalColorSchemeId } from "./useUiTheme.js";
 import { monoFontFamilyValue } from "./useUiTheme.js";
 
-export type SettingsWorkspaceView = "connections" | "gateway" | "preferences" | "update";
+export type SettingsWorkspaceView = "connections" | "gateway" | "security" | "preferences" | "update";
 export type SettingsConnectionPane = "detail" | "form";
 
 /** 连接服务「测试连接」结果（设置中心 → 连接服务） */
@@ -46,6 +47,10 @@ export interface ManualServerDraft {
 interface Props {
   activeView: SettingsWorkspaceView;
   onViewChange: (view: SettingsWorkspaceView) => void;
+  /** 是否 Electron 宿主（安全页文案据此区分钥匙串 / 浏览器形态） */
+  isElectron: boolean;
+  /** 操作反馈（安全页刷新等） */
+  onActionStatus?: (message: string) => void;
   isBusy: boolean;
   localServiceState: "checking" | "online" | "offline";
   localServiceStatusText: string;
@@ -893,6 +898,14 @@ export function ConnectionSettingsWorkspace(props: Props) {
         </button>
         <button
           type="button"
+          className={props.activeView === "security" ? "settings-rail-item settings-rail-item-active" : "settings-rail-item"}
+          onClick={() => props.onViewChange("security")}
+        >
+          <svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M8 1.8l5.2 2.1v4.3c0 2.7-2.2 5-5.2 6.1-3-1.1-5.2-3.4-5.2-6.1V3.9z" /><path d="M5.9 8.1l1.6 1.6 3-3.2" /></svg>
+          安全
+        </button>
+        <button
+          type="button"
           className={props.activeView === "preferences" ? "settings-rail-item settings-rail-item-active" : "settings-rail-item"}
           onClick={() => props.onViewChange("preferences")}
         >
@@ -1087,7 +1100,7 @@ export function ConnectionSettingsWorkspace(props: Props) {
               {detailPane === "form" ? (
                 <section className="settings-card">
                   <div className="settings-card-head">
-                    <span className="settings-card-kicker">手动连接 · {props.connectionSection.draft.id ? "编辑现有服务器" : "新增服务器"}</span>
+                    <span className="settings-card-kicker">{props.connectionSection.draft.id ? (props.connectionSection.draft.id.startsWith("finalshell:") || props.connectionSection.draft.id.startsWith("xshell:") ? "编辑导入连接 · 就地保存" : "手动连接 · 编辑现有服务器") : "手动连接 · 新增服务器"}</span>
                     <div className="settings-inline-actions">
                       <button className="ghost-button" type="button" onClick={() => {
                         props.connectionSection.onResetDraft();
@@ -1313,7 +1326,7 @@ export function ConnectionSettingsWorkspace(props: Props) {
                             <strong>{activeListServer.name}</strong>
                           </div>
                           <div className="settings-inline-actions">
-                            <button className="ghost-button" type="button" title={activeListServer.source === "manual" ? "编辑连接" : "导入服务器将以手动连接副本打开编辑"} onClick={() => {
+                            <button className="ghost-button" type="button" title={activeListServer.source === "manual" ? "编辑连接" : "编辑连接（就地修改导入记录；重新导入时默认保留你的修改）"} onClick={() => {
                               props.connectionSection.onEditManualServer(activeListServer);
                               setDetailPane("form");
                             }}>编辑</button>
@@ -1545,6 +1558,11 @@ export function ConnectionSettingsWorkspace(props: Props) {
             </section>
           </div>
         </div>
+      ) : props.activeView === "security" ? (
+        <SecuritySettingsView
+          isElectron={props.isElectron}
+          onStatus={(message) => props.onActionStatus?.(message)}
+        />
       ) : props.activeView === "update" ? (
         <UpdateCenterPanel
           state={props.updateSection.state}

@@ -1,6 +1,7 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./ui/App";
+import { bootstrapGatewayAuth } from "./ui/api";
 import "./fonts.css";
 import "./styles.css";
 import "./theme-modern.css";
@@ -90,6 +91,10 @@ class RootErrorBoundary extends React.Component<{ children: React.ReactNode }, {
     return this.props.children;
   }
 }
+
+/* 桌面端启动时先取网关访问令牌（主进程生成并注入给 gateway）。
+   浏览器 / 扩展形态下该 IPC 不存在，静默跳过。 */
+bootstrapGatewayAuth();
 
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

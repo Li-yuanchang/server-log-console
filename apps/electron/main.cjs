@@ -1,14 +1,126 @@
-const { app, BrowserWindow, Menu, Tray, nativeImage, ipcMain, shell, dialog } = require("electron");
+const { app, BrowserWindow, Menu, Tray, nativeImage, ipcMain, shell, dialog, safeStorage } = require("electron");
 const { spawn } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 const http = require("http");
+const crypto = require("crypto");
 const { pathToFileURL } = require("url");
 
 if (app && app.setName) app.setName("日志控制台");
 
 const PORT = 4040;
 const HOST = "127.0.0.1";
+
+/* ============================================================
+   凭证加密密钥与访问令牌托管
+   ------------------------------------------------------------
+   背景：gateway 以 ELECTRON_RUN_AS_NODE=1 运行，该模式下 require("electron")
+   拿不到 safeStorage（实测为 undefined），所以密钥与令牌必须由主进程在这里
+   派生，再通过环境变量注入给 gateway。
+   - 主密钥：safeStorage 保护后落地，用户在界面上不输入任何东西。
+   - 访问令牌：桌面端自动生成并注入，前端无需配置。
+   ============================================================ */
+
+const CONFIG_DIR = process.env.SERVER_LOG_CONFIG_HOME
+  || path.join(app.getPath("home"), ".server-log-console");
+
+function ensureDirSync(dir) {
+  try {
+    fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+  } catch { /* 已存在 */ }
+}
+
+/** 读取或创建主密钥（base64，32 字节）。
+ *  safeStorage 可用时以密文保存；不可用（部分 Linux）则退回明文密钥文件，
+ *  仍然好于把凭证本身明文落盘，并在启动日志中告警。 */
+function ensureMasterKey() {
+  ensureDirSync(CONFIG_DIR);
+  const keyPath = path.join(CONFIG_DIR, "master.key.enc");
+  const plainPath = path.join(CONFIG_DIR, "master.key");
+
+  const canEncrypt = safeStorage && safeStorage.isEncryptionAvailable && safeStorage.isEncryptionAvailable();
+
+  // 1) 已有加密密钥
+  if (canEncrypt) {
+    try {
+      const buf = fs.readFileSync(keyPath);
+      const decoded = safeStorage.decryptString(buf);
+      if (decoded && Buffer.from(decoded, "base64").length === 32) {
+        return decoded;
+      }
+    } catch { /* 不存在或解不开，继续 */ }
+  }
+
+  // 2) 已有明文密钥（gateway 兜底生成的），接管过来
+  try {
+    const existing = fs.readFileSync(plainPath, "utf8").trim();
+    if (Buffer.from(existing, "base64").length === 32) {
+      if (canEncrypt) {
+        try {
+          const enc = safeStorage.encryptString(existing);
+          fs.writeFileSync(keyPath, enc, { mode: 0o600 });
+          fs.chmodSync(keyPath, 0o600);
+          try { fs.unlinkSync(plainPath); } catch {}
+          probe("master key migrated to safeStorage");
+        } catch { /* 保留明文密钥文件 */ }
+      }
+      return existing;
+    }
+  } catch { /* 不存在 */ }
+
+  // 3) 全新生成
+  const fresh = crypto.randomBytes(32).toString("base64");
+  if (canEncrypt) {
+    try {
+      const enc = safeStorage.encryptString(fresh);
+      fs.writeFileSync(keyPath, enc, { mode: 0o600 });
+      fs.chmodSync(keyPath, 0o600);
+      probe("master key generated (safeStorage)");
+      return fresh;
+    } catch (error) {
+      probe(`master key safeStorage write failed: ${error && error.message ? error.message : String(error)}`);
+    }
+  }
+  fs.writeFileSync(plainPath, fresh, { encoding: "utf8", mode: 0o600 });
+  try { fs.chmodSync(plainPath, 0o600); } catch {}
+  probe("master key generated (plain file fallback)");
+  return fresh;
+}
+
+/** 读取或创建访问令牌 */
+function ensureGatewayToken() {
+  ensureDirSync(CONFIG_DIR);
+  const tokenPath = path.join(CONFIG_DIR, "gateway-auth.json");
+  try {
+    const parsed = JSON.parse(fs.readFileSync(tokenPath, "utf8"));
+    if (parsed && typeof parsed.token === "string" && parsed.token.trim()) {
+      return parsed.token.trim();
+    }
+  } catch { /* 不存在或损坏，重新生成 */ }
+
+  const token = crypto.randomBytes(32).toString("base64url");
+  try {
+    fs.writeFileSync(tokenPath, JSON.stringify({ token }, null, 2) + "\n", { encoding: "utf8", mode: 0o600 });
+    fs.chmodSync(tokenPath, 0o600);
+    probe("gateway token generated");
+  } catch (error) {
+    probe(`gateway token write failed: ${error && error.message ? error.message : String(error)}`);
+  }
+  return token;
+}
+
+/** 提供给 gateway 的环境变量（进程内 import 与 spawn 共用） */
+function buildGatewaySecretEnv() {
+  try {
+    return {
+      SLC_MASTER_KEY: ensureMasterKey(),
+      GATEWAY_TOKEN: ensureGatewayToken()
+    };
+  } catch (error) {
+    probe(`secret env build failed: ${error && error.message ? error.message : String(error)}`);
+    return {};
+  }
+}
 const GATEWAY_URL = `http://${HOST}:${PORT}`;
 
 let mainWindow = null;
@@ -18,6 +130,7 @@ let isAlwaysOnTop = false;
 let isQuitting = false;
 let gatewayStartPromise = null;
 let viewerPipWindow = null;
+let transferPipWindow = null;
 const terminalPipWindows = new Map();
 
 function listPipWindows() {
@@ -229,6 +342,10 @@ async function importGatewayInProcess(entry) {
   process.env.HOST = HOST;
   process.env.ELECTRON = "1";
   process.env.EXTENSION_DIST_DIR = getExtensionDistDir();
+  /* 凭证加密密钥与访问令牌：主进程派生后注入（gateway 侧拿不到 safeStorage） */
+  const secretEnv = buildGatewaySecretEnv();
+  if (secretEnv.SLC_MASTER_KEY) process.env.SLC_MASTER_KEY = secretEnv.SLC_MASTER_KEY;
+  if (secretEnv.GATEWAY_TOKEN) process.env.GATEWAY_TOKEN = secretEnv.GATEWAY_TOKEN;
   /* 加载前先挂桥：网关在 import 期间就会打印启动横幅与路由注册日志 */
   bridgeInProcessGatewayConsole();
   await import(`${pathToFileURL(entry).href}?ts=${Date.now()}`);
@@ -249,6 +366,8 @@ async function spawnGatewayProcess(entry, cwd) {
       ELECTRON: "1",
       ELECTRON_RUN_AS_NODE: "1",
       EXTENSION_DIST_DIR: getExtensionDistDir(),
+      /* 与进程内 import 同一套密钥与令牌 */
+      ...buildGatewaySecretEnv(),
     },
     stdio: ["ignore", "pipe", "pipe"],
     windowsHide: true,
@@ -722,6 +841,37 @@ ipcMain.handle("toggle-pin", () => {
 
 ipcMain.handle("get-pin", () => isAlwaysOnTop);
 
+/* 前端取网关访问令牌：桌面端从 file:// 打开时也要能通过 Bearer 鉴权。
+   只回给已加载的本地页面，且不写探针日志。 */
+/* 上传进度广播：主窗口渲染层把进度推给主进程，主进程转发给上传进度小窗。
+   大文件上传时进度刷新很密（每个 chunk 一次），这里做节流，
+   避免小窗因高频 IPC 消息卡顿（实测 200ms 一次人眼已足够平滑）。 */
+let transferProgressThrottle = 0;
+ipcMain.on("slc:transfer:progress", (_event, payload) => {
+  if (!transferPipWindow || transferPipWindow.isDestroyed()) return;
+  const now = Date.now();
+  /* 完成/失败/取消等终态必须立即送达，不做节流 */
+  const isTerminalState = payload && (payload.stage === "done" || payload.stage === "error" || payload.stage === "canceled");
+  if (!isTerminalState && now - transferProgressThrottle < 200) return;
+  transferProgressThrottle = now;
+  transferPipWindow.webContents.send("slc:transfer:progress", payload);
+});
+
+/* 小窗发起的控制（暂停/继续/取消）转回主窗口执行 */
+ipcMain.on("slc:transfer:control", (_event, action) => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("slc:transfer:control", action);
+  }
+});
+
+ipcMain.handle("slc:gateway-token", () => {
+  try {
+    return ensureGatewayToken();
+  } catch {
+    return null;
+  }
+});
+
 // --- 窗口控制（2026-10-24 方案 B：Windows 自绘标题栏）---
 /* Windows 主窗口无边框后，最小化/最大化/关闭由网页按钮经这里触发。
    按 event.sender 定位窗口：目前只有主窗口渲染控制按钮，PiP 小窗保持
@@ -844,6 +994,10 @@ ipcMain.handle("open-pip-window", (_event, config = {}) => {
   const pipMode = config.mode || "viewer";
   const isTerminalMode = pipMode === "terminal";
   const isUtilityMode = pipMode === "utility";
+  /* 上传进度小窗：只做监视与暂停/取消，**不接受拖放** ——
+     独立窗口没有目录浏览器，拖进去容易传错地方。
+     因此这里只带 serverId + directoryPath 作为上下文展示，不做落点。 */
+  const isTransferMode = pipMode === "transfer";
   const terminalSessionId = String(config.terminalSessionId || "").trim();
   if (isTerminalMode && !terminalSessionId) {
     return { ok: false, message: "缺少终端会话标识" };
@@ -851,7 +1005,9 @@ ipcMain.handle("open-pip-window", (_event, config = {}) => {
 
   const existingWindow = isTerminalMode
     ? terminalPipWindows.get(terminalSessionId)
-    : viewerPipWindow;
+    : isTransferMode
+      ? transferPipWindow
+      : viewerPipWindow;
   if (existingWindow && !existingWindow.isDestroyed()) {
     if (!isTerminalMode) {
       const nextPipState = {
@@ -898,7 +1054,7 @@ ipcMain.handle("open-pip-window", (_event, config = {}) => {
     minWidth: 720,
     minHeight: 420,
     title: config.title || "日志控制台",
-    alwaysOnTop: isUtilityMode ? false : true,
+    alwaysOnTop: isUtilityMode || isTransferMode ? false : true,
     /* 标题栏按平台分三套（2026-10-24，与主窗口方案 B 一致）：
        - macOS：hiddenInset，红绿灯浮在内容上（头部用 padding-left 88px 让位）。
        - Windows：hidden 无边框 —— hiddenInset 在 Windows 不受支持会退回原生
@@ -931,6 +1087,8 @@ ipcMain.handle("open-pip-window", (_event, config = {}) => {
 
   if (isTerminalMode) {
     terminalPipWindows.set(terminalSessionId, nextPipWindow);
+  } else if (isTransferMode) {
+    transferPipWindow = nextPipWindow;
   } else {
     viewerPipWindow = nextPipWindow;
   }
@@ -974,6 +1132,8 @@ ipcMain.handle("open-pip-window", (_event, config = {}) => {
       if (terminalPipWindows.get(terminalSessionId) === nextPipWindow) {
         terminalPipWindows.delete(terminalSessionId);
       }
+    } else if (isTransferMode && transferPipWindow === nextPipWindow) {
+      transferPipWindow = null;
     } else if (viewerPipWindow === nextPipWindow) {
       viewerPipWindow = null;
       // Forward last known PiP state to main window before reset
