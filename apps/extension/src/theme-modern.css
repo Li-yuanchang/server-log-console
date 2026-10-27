@@ -2522,18 +2522,31 @@ body.is-resizing-tree .theme-modern .browser-resizer::after {
 .theme-modern .workspace-panel.workspace-panel-terminal .terminal-bottom-panel,
 .theme-modern .workspace-panel.workspace-panel-terminal .terminal-body-layout,
 .theme-modern .workspace-panel.workspace-panel-terminal .terminal-main-shell,
+/* 2026-10-27 关键修正：
+   原先这里把 .xterm-container 也设为 background: transparent，本意是
+   「露出更外层的 --terminal-background」。但 xterm 画布如今也透明
+   （allowTransparency + theme.background: transparent），容器再透明就
+   一路透到页面白底 —— 表现为「浅色底 + 浅灰字，内容几乎看不见」。
+   现在：外层容器保持透明（由 .main-panel 承担底色），
+   但 .xterm-container 必须自己承担底色与纹理。 */
 .theme-modern .workspace-panel.workspace-panel-terminal .terminal-tab-panes,
 .theme-modern .workspace-panel.workspace-panel-terminal .terminal-tab-pane,
 .theme-modern .workspace-panel.workspace-panel-terminal .terminal-panel-body,
-.theme-modern .workspace-panel.workspace-panel-terminal .xterm-container,
 .theme-modern .main-panel-with-terminal .terminal-bottom-panel,
 .theme-modern .main-panel-with-terminal .terminal-body-layout,
 .theme-modern .main-panel-with-terminal .terminal-main-shell,
 .theme-modern .main-panel-with-terminal .terminal-tab-panes,
 .theme-modern .main-panel-with-terminal .terminal-tab-pane,
-.theme-modern .main-panel-with-terminal .terminal-panel-body,
-.theme-modern .main-panel-with-terminal .xterm-container {
+.theme-modern .main-panel-with-terminal .terminal-panel-body {
   background: transparent;
+}
+
+/* 容器：承担主题底色 + 背景纹理（不透明，作为画布的底） */
+.theme-modern .workspace-panel.workspace-panel-terminal .xterm-container,
+.theme-modern .main-panel-with-terminal .xterm-container {
+  background-color: var(--terminal-background, var(--shell));
+  background-image: var(--terminal-texture-image, none);
+  background-size: var(--terminal-texture-size, auto);
 }
 
 /* 黑窗口四角圆角（v3 反馈：面板圆角碰不到中部黑块，必须圆黑块本身）；
@@ -2545,7 +2558,10 @@ body.is-resizing-tree .theme-modern .browser-resizer::after {
 .theme-modern .main-panel-with-terminal .terminal-panel-body .xterm-container {
   border-radius: 0;
   overflow: hidden;
-  background: transparent;
+  /* 同上：容器必须保留底色与纹理，否则透出白底 */
+  background-color: var(--terminal-background, var(--shell));
+  background-image: var(--terminal-texture-image, none);
+  background-size: var(--terminal-texture-size, auto);
 }
 
 /* 终端黑窗左右呼吸（用户反馈 2026-10-05）：黑窗此前左右贴死工作区边缘，
