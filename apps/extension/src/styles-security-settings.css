@@ -130,3 +130,21 @@
   background: var(--panel-muted, #eef1e8);
   border-color: var(--line, #d9ded0);
 }
+
+/* ============================================================
+   滚动容器：左右各 20px 与设置中心其余视图保持一致
+   （conn-detail-head 是 padding: 12px 20px，此处必须对齐，
+   否则标题与卡片左缘会错开）
+   ============================================================ */
+
+.sec-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px 20px 24px;
+}
+
+/* 窄档（侧栏推挤 / 小窗）：收窄到 14px，避免卡片被挤成一条 */
+@media (max-width: 720px) {
+  .sec-scroll { padding: 12px 14px 20px; }
+}

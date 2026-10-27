@@ -47,20 +47,25 @@ export function SecuritySettingsView(props: SecuritySettingsViewProps) {
   const hasRisk = status !== null && (!encryptionOn || !authOn);
 
   return (
-    <div className="view">
-      <div className="view-head">
-        <div style={{ flex: 1 }}>
-          <h1>安全</h1>
-          <div className="desc">
+    /* 复用设置中心既有骨架：settings-pref-view / conn-detail-head / settings-pref-scroll。
+       此前用了原型的 .view / .view-head / .view-scroll —— 那三个类在本项目 CSS 里
+       根本不存在，导致标题与内容全部贴左侧、毫无呼吸间距。 */
+    <div className="settings-pref-view">
+      <div className="conn-detail-head">
+        <div>
+          <h2>安全</h2>
+          <p>
             {loading ? "正在读取…" : status ? (hasRisk ? "存在需要关注的风险项" : "关键防护已生效") : "无法读取状态"}
-          </div>
+          </p>
         </div>
-        <button type="button" className="ghost-button" onClick={() => { void load(); onStatus("已刷新安全状态"); }} disabled={loading}>
-          刷新
-        </button>
+        <div className="conn-head-actions">
+          <button type="button" className="ghost-button" onClick={() => { void load(); onStatus("已刷新安全状态"); }} disabled={loading}>
+            刷新
+          </button>
+        </div>
       </div>
 
-      <div className="view-scroll">
+      <div className="sec-scroll">
         {error ? (
           <div className="sec-alert sec-alert-bad">
             <strong>无法读取安全状态</strong>

@@ -295,6 +295,11 @@ export function TerminalPanel(props: TerminalPanelProps) {
   propsRef.current = props;
   /* 命令历史面板（⌘R）。只存本地，不联网。 */
   const [historyOpen, setHistoryOpen] = useState(false);
+  /* 终端拖拽上传（2026-10-27 用户反馈「终端拖拽上传没实现」）：
+     此前终端区完全没有拖拽处理，拖文件过来被全局兜底吞掉、什么都不发生。
+     现在复用现有上传通道（onUploadFiles → uploadFileList），目标 = 文件浏览器
+     当前目录（与工具栏「上传」按钮一致，不做另一套语义）。 */
+  const [terminalDragOver, setTerminalDragOver] = useState(false);
   const [activeTerminal, setActiveTerminal] = useState<Terminal | null>(null);
   const activeApiRef = useRef<TerminalSessionApi | null>(null);
 
@@ -810,8 +815,53 @@ export function TerminalPanel(props: TerminalPanelProps) {
     : null;
   const toolbarDisabled = !hasTabs;
 
+  /* 终端区拖拽：只认外部文件（含文件夹），内部拖拽（批量条移动）不拦。
+     未连接服务器 / 上传通道未就绪时不显示落点提示 —— 免得用户拖进来才发现传不了。 */
+  const canAcceptDrop = Boolean(props.onUploadFiles) && Boolean(props.serverId);
+  const handleTerminalDragOver = (event: React.DragEvent<HTMLElement>) => {
+    if (event.dataTransfer.types.includes("application/x-slcc-move")) return;
+    if (!event.dataTransfer.types.includes("Files")) return;
+    if (!canAcceptDrop) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+    setTerminalDragOver(true);
+  };
+  const handleTerminalDragLeave = (event: React.DragEvent<HTMLElement>) => {
+    /* 只在真正离开容器时复位（子元素间移动会连续触发 dragleave） */
+    if (event.currentTarget.contains(event.relatedTarget as Node)) return;
+    setTerminalDragOver(false);
+  };
+  const handleTerminalDrop = (event: React.DragEvent<HTMLElement>) => {
+    if (event.dataTransfer.types.includes("application/x-slcc-move")) return;
+    setTerminalDragOver(false);
+    const files = event.dataTransfer.files;
+    if (!files || files.length === 0) return;
+    if (!canAcceptDrop) return;
+    /* 必须 preventDefault，否则全局兜底会当成"落在非落点区域"并触发导航保护 */
+    event.preventDefault();
+    event.stopPropagation();
+    props.onUploadFiles?.(files);
+  };
+
   return (
-    <section className={`terminal-bottom-panel${isStandalone ? " terminal-bottom-panel-standalone" : ""}`}>
+    <section
+      className={`terminal-bottom-panel${isStandalone ? " terminal-bottom-panel-standalone" : ""}${terminalDragOver ? " terminal-drop-active" : ""}`}
+      onDragOver={handleTerminalDragOver}
+      onDragLeave={handleTerminalDragLeave}
+      onDrop={handleTerminalDrop}
+    >
+      {terminalDragOver ? (
+        <div className="terminal-drop-overlay">
+          <div className="terminal-drop-icon" aria-hidden="true">
+            <svg viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M10 13V4M6.4 7.6L10 4l3.6 3.6" />
+              <path d="M3.4 13.4v2.2a1.4 1.4 0 001.4 1.4h10.4a1.4 1.4 0 001.4-1.4v-2.2" />
+            </svg>
+          </div>
+          <div className="terminal-drop-label">松开上传到文件目录</div>
+          <div className="terminal-drop-sub">传入文件浏览器当前目录 · 不在终端内执行 scp</div>
+        </div>
+      ) : null}
       {/* ① 工具行：左侧标签信息并入 TabStrip，这里只放动作（全图标 + 原生 title） */}
       <div className={`terminal-panel-bar${isStandalone ? " terminal-panel-bar-standalone" : ""}`}>
         {isStandalone ? (

@@ -1288,7 +1288,7 @@ export function App() {
     };
     const onDrop = (event: DragEvent) => {
       if (!isExternalFileDrag(event) || event.defaultPrevented) {
-        /* 非文件拖拽，或已被应用内的上传落点处理 */
+        /* 非文件拖拽，或已被应用内的上传落点处理（文件浏览器列 / 终端面板） */
         return;
       }
       /* 落到非落点区域：吞掉默认行为（避免导航到 file://），并清除残留遮罩 */

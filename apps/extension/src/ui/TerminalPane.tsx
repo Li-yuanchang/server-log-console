@@ -4,6 +4,7 @@ import { X, RefreshCw, Plug } from "lucide-react";
 import type { Terminal } from "@xterm/xterm";
 import type { ServerSummary } from "@server-log-console/shared";
 import { useTerminalSession } from "./useTerminalSession.js";
+import { useTerminalFit } from "./useTerminalFit.js";
 import { localServiceBase } from "./api.js";
 import type { TerminalPaneApiSnapshot } from "./TerminalSplitView.js";
 
@@ -117,6 +118,18 @@ export function TerminalPane(props: Props) {
     };
   }, []);
 
+  /* 尺寸自适应（2026-10-25 修复「分屏后终端底部留一条空白、高度没展开」）：
+     此前这里只在挂载时连发 5 次 fitTerminal（0/48/160/360/720ms）——
+     分屏布局稳定后若容器再变大（拖动分屏比例、窗口缩放、折叠面板、
+     关闭同标签其他窗格），没有任何机制重新 fit，xterm 的 rows 就停在旧值，
+     多出来的高度成为容器底部一条空白色带（用户截图现象）。
+     单屏的 TerminalTabPane 早已用 useTerminalFit（ResizeObserver）解决同一问题，
+     分屏窗格却漏了 —— 现补齐，两条路径行为一致。 */
+  useTerminalFit(session.containerRef, session.fitTerminal);
+
+  /* 首帧兜底：ResizeObserver 只在尺寸「变化」时回调，挂载时若容器尺寸恰好
+     已就绪则不触发 → 仍需一次显式 fit。保留原来的连发窗口，只是把
+     「后续尺寸变化」交给上面的观察器。 */
   useEffect(() => {
     const timers = [0, 48, 160, 360, 720].map((delay) => window.setTimeout(() => {
       session.fitTerminal();
