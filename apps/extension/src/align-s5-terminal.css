@@ -115,16 +115,24 @@
    加在容器而非 .xterm：.xterm 有 padding，背景会被 padding 区裁掉。 */
 .theme-modern .terminal-panel-body .xterm-container,
 .theme-modern .terminal-pane-body .xterm-container {
-  padding: 0;
+  /* 统一呼吸间距 16px（用户要求）：上下左右一致，
+     且 padding 落在容器上、底色也在容器上，所以不会出现色差圈。
+     注意 FitAddon 只减 .xterm 自身 padding，容器 padding 会让可用宽度变小、
+     由 fit 自动算出更少的列数 —— 不会溢出。 */
+  padding: 16px;
+  box-sizing: border-box;
   background-image: var(--terminal-texture-image, none);
   background-size: var(--terminal-texture-size, auto);
-  /* 底色兜底：xterm 画布透明后，若容器没有底色会露出页面白底 */
   background-color: var(--terminal-background, var(--shell));
 }
 .theme-modern .terminal-panel-body .xterm-container .xterm,
 .theme-modern .terminal-pane-body .xterm-container .xterm {
-  padding: 12px 16px;
-  /* 画布透明：让下层的纹理与容器底色透出 */
+  /* 2026-10-27 归零：原 padding 12px 16px 会在画布四周留一圈容器底色，
+     与画布内容形成明显色差（用户反馈「选中区域跟背景出现大范围色差」）。
+     现在终端内容直接铺满容器，呼吸间距由容器统一提供（见下）。
+     FitAddon 读 parentElement 的 computed 宽高并减去自身 padding，
+     归零后计算更精确、不再溢出。 */
+  padding: 0;
   background-color: transparent !important;
 }
 /* xterm 6.x 的 canvas 也会自己填背景，一并置透明 */
