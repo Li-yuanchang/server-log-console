@@ -48,15 +48,15 @@
 /* --- 1. CSS 变量 --- */
 /* html 底色随主题（防深色主题白边；.ui-theme-* 挂在 .app-shell 上） */
 :root:has(.theme-modern) {
-  background: #fafafa;
+  background: var(--bg);
 }
-:root:has(.ui-theme-geist) { background: #fafafa; }
+:root:has(.ui-theme-geist) { background: var(--bg); }
 :root:has(.ui-theme-carbon) { background: #0a0a0a; }
 :root:has(.ui-theme-steel) { background: #f6f8fa; }
 :root:has(.ui-theme-slate) { background: #0b1220; }
 :root:has(.ui-theme-sand) { background: #faf9f7; }
 :root:has(.ui-theme-espresso) { background: #1c1917; }
-:root:has(.ui-theme-cal) { background: #ffffff; }
+:root:has(.ui-theme-cal) { background: var(--panel); }
 :root:has(.ui-theme-ink) { background: #09090b; }
 :root:has(.ui-theme-sage) { background: #f5f6f2; }
 :root:has(.ui-theme-graphite) { background: #171a19; }
@@ -160,7 +160,7 @@
 }
 
 .theme-modern.ui-theme-steel {
-  --bg: #f6f8fa; --panel: #ffffff; --panel-strong: #ffffff; --panel-muted: #eef2f6;
+  --bg: #f6f8fa; --panel: #ffffff; --panel-strong: #ffffff; --panel-muted: #f0f2f4;
   --ink: #0f172a; --ink-soft: #525f70; --ink-muted: #7d8b9c;
   --line: #e2e8f0; --line-strong: #c9d4e0;
   --accent: #2563eb; --accent-strong: #1d4ed8; --accent-soft: rgba(37, 99, 235, 0.09);
@@ -174,7 +174,7 @@
 }
 
 .theme-modern.ui-theme-slate {
-  --bg: #0b1220; --panel: #111827; --panel-strong: #18213a; --panel-muted: #0e1626;
+  --bg: #0b1220; --panel: #111827; --panel-strong: #18213a; --panel-muted: #0f1624;
   --ink: #e2e8f0; --ink-soft: #94a3b8; --ink-muted: #6b7c92;
   --line: #1e293b; --line-strong: #334155;
   --accent: #60a5fa; --accent-strong: color-mix(in srgb, #60a5fa 82%, #ffffff); --accent-soft: rgba(96, 165, 250, 0.14);
@@ -188,7 +188,7 @@
 }
 
 .theme-modern.ui-theme-sand {
-  --bg: #faf9f7; --panel: #ffffff; --panel-strong: #ffffff; --panel-muted: #f3f1ec;
+  --bg: #faf9f7; --panel: #ffffff; --panel-strong: #ffffff; --panel-muted: #f1f0ee;
   --ink: #1c1917; --ink-soft: #6b6259; --ink-muted: #94897e;
   --line: #eae5dd; --line-strong: #d7d0c4;
   --accent: #9a6a1a; --accent-strong: #7e5615; --accent-soft: rgba(154, 106, 26, 0.1);
@@ -202,7 +202,7 @@
 }
 
 .theme-modern.ui-theme-espresso {
-  --bg: #1c1917; --panel: #26221f; --panel-strong: #2f2a25; --panel-muted: #211d1a;
+  --bg: #1c1917; --panel: #26221f; --panel-strong: #2f2a25; --panel-muted: #201d1b;
   --ink: #f5f5f4; --ink-soft: #b8b0a8; --ink-muted: #857a70;
   --line: #332e29; --line-strong: #4a423a;
   --accent: #d97706; --accent-strong: color-mix(in srgb, #d97706 82%, #ffffff); --accent-soft: rgba(217, 119, 6, 0.14);
@@ -250,7 +250,13 @@
    线融入整体色调。故整族改为低饱和灰绿，而非把线改细。
    ============================================================ */
 .theme-modern.ui-theme-sage {
-  --bg: #f5f6f2; --panel: #fbfbf7; --panel-strong: #ffffff; --panel-muted: #eef1e8;
+  /* --panel-muted 2026-10-25：#eef1e8 → #edefeb（用户反馈「这些背景色乱七八糟」）。
+     原值的色度(chroma)=9，是底色 --bg(chroma=4) 的两倍多 —— 凹陷区（输入框、
+     未选中分段、次级卡片）比页面底色还「艳」，和旁边的 --panel(#fbfbf7) 并排时
+     明显一块发绿、一块发白，看着像两套配色。
+     现保持色相（仍偏绿，跟随主题性格），只把 chroma 压到与 --bg 同级(4)，
+     凹陷关系改由**亮度差**表达（--bg 更亮、muted 略暗），不再靠饱和度。 */
+  --bg: #f5f6f2; --panel: #fbfbf7; --panel-strong: #ffffff; --panel-muted: #edefeb;
   --ink: #27302a; --ink-soft: #747b70; --ink-muted: #92988d;
   --line: #d9ded0; --line-strong: #b8c2ae;
   --accent: #426b57; --accent-strong: #355744; --accent-soft: rgba(66, 107, 87, 0.1);
@@ -264,7 +270,7 @@
 }
 
 .theme-modern.ui-theme-graphite {
-  --bg: #171a19; --panel: #202521; --panel-strong: #252b27; --panel-muted: #29312b;
+  --bg: #171a19; --panel: #202521; --panel-strong: #252b27; --panel-muted: #2b2e2c;
   --ink: #e7ebe6; --ink-soft: #a7b0a8; --ink-muted: #7f8981;
   --line: #39433b; --line-strong: #59665c;
   --accent: #73b59a; --accent-strong: color-mix(in srgb, #73b59a 82%, #ffffff); --accent-soft: rgba(115, 181, 154, 0.16);
@@ -976,11 +982,14 @@
   font-size: var(--fs-sm);
   font-weight: 400;
   /* recon S1-22：原型工具栏搜索框 = .input（高 28 / 白底 / 1px 边框 / r6，
-     prototype.html 第 57 / 405 行），此前误做成灰底无边框 r8 高 30。 */
-  height: 28px;
+     prototype.html 第 57 / 405 行），此前误做成灰底无边框 r8 高 30。
+     2026-10-25 用户要求：整行控件统一 32px（tab 容器 38 = 2px padding + 1px 边框
+     ×2 + 32px 内容；主搜索框、过滤框、图标按钮同为 32px 内容高），故此处 28 → 32。
+     圆角同步统一 4px（原 6px，用户要求按钮圆角统一 4px、别太大）。 */
+  height: 32px;
   border: 1px solid var(--line) !important;
   background: var(--panel) !important;
-  border-radius: 6px !important;
+  border-radius: 4px !important;
 }
 
 .theme-modern .command-input-keyword:focus {
@@ -1108,9 +1117,23 @@
   stroke: currentColor;
 }
 
-/* 呼吸与统一按钮系统一致（0 12px），高度交由基础 28px 规格 */
+/* 呼吸与统一按钮系统一致（0 12px）。
+   2026-10-25：高度 28 → 32px，与工具栏其它控件（主搜索框 32 / 视图切换 32 /
+   过滤框 32 / 图标按钮 32）齐平。用户反馈「检索按钮为什么高度不是 32px」。
+   改为弹性盒子形态（用户要求「咋不改成弹性盒子，最高 32px」）：
+   - display:inline-flex + align/justify center：内容（含 spinner、进度文字）
+     始终在盒内垂直居中，不靠行高凑；
+   - max-height:32px 封顶：内部若有边框/内边距叠加也不会超过 32px；
+   - box-sizing:border-box：边框与内边距计入 32px 之内（全局 * 已有此规则，
+     这里显式声明，防某处 reset 把它改回 content-box 时高度又涨 2px）。 */
 .theme-modern .slim-button {
-  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  height: 32px;
+  min-height: 32px;
+  max-height: 32px;
   padding: 0 12px;
 }
 
@@ -1128,9 +1151,19 @@
 }
 
 
+/* 工具栏单行纪律（2026-10-25，用 !important 收口）
+   背景：styles-sidepanel.css 的 `@container slc-sp (max-width:559.9px)` 移动档里
+   有多条 `flex-wrap: wrap`。该容器只在**侧栏宿主**上定义；桌面窗口没有 slc-sp
+   容器上下文 → 浏览器按规范退化为**视口宽度**判定，于是窗口 <560px 时这些
+   移动档规则会在桌面误命中，把工具栏/搜索行改回 wrap，按钮又换行。
+   实测：窗口 340px 时 .toolbar-commandbar 的 flex-wrap 被改成 wrap。
+   这里显式钉死 nowrap（用户要求「尽量不换行，除非小到不能再小」），
+   极小宽度由 overflow-x:auto 横向滚动兜底，而不是纵向堆叠。 */
 .theme-modern .toolbar-commandbar {
+  container-type: inline-size;
+  container-name: slc-toolbar;
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: nowrap !important;
   align-items: center;
   gap: 8px;
   overflow-x: auto;
@@ -1200,29 +1233,78 @@
   flex-wrap: nowrap;
   align-items: center;
   gap: 4px;
-  flex: 1 0 auto;
+  /* 2026-10-25：flex 1 0 auto → 0 0 auto。
+     动作组是固定宽的图标按钮集合，不该参与「抢宽度」：原来的 flex-grow:1
+     会让它在宽屏时把空白都吃掉，窄屏时又不收缩（flex-shrink:0），
+     两头都不合适。改 0 0 auto 后它恒为本征宽度，剩余空间全交给搜索行分配。 */
+  flex: 0 0 auto;
   justify-content: flex-end;
+}
+
+/* 检索工具栏这一排控件统一 32px（2026-10-25）。
+   行内成员：主搜索框 32 / 「检索」32（.slim-button）/ LIVE 等文字按钮 32
+   （.toolbar-action-button）/ 纯图标按钮（置顶、录制、⋯）。
+   最后这组此前仍走通用 `.theme-modern .icon-button { height: 28px }`，
+   于是同一排里图标按钮比两侧矮 4px，看着参差。
+   这里只对「检索工具栏内」的图标按钮提权，不动全局 .icon-button
+   （侧栏头、对话框、传输记录等处仍是 28px，各有各的版式节奏）。 */
+.theme-modern .toolbar-search-actions .icon-button {
+  height: 32px;
+}
+
+/* 窄屏图标化（2026-10-25，用户要求）：
+   「小到一定程度之后，按钮直接 icon 化，去掉文字即可，尽量不换行」。
+   LIVE / 置顶 / 录制 三个按钮结构统一 = <svg> + <span>文字</span>，
+   窄屏下隐藏 span，只留图标，按钮自动收成方形，腾出的宽度还给输入框，
+   因此能更晚才需要换行。
+   ⚠️ 用 @container（工具栏自身宽度）而不是 @media（窗口宽度）：窗口 1200px
+   但侧栏加宽 / 面板内边距变化时，可用宽度差异很大，按窗口判定会误判。
+   为什么用 CSS 而不是 JS 断点：避免 React 重渲染，也避免拖拽窗口时抖动。 */
+@container slc-toolbar (max-width: 860px) {
+  .theme-modern .toolbar-search-actions .toolbar-action-button > span {
+    display: none;
+  }
+  /* 图标化后按钮改为等宽方形，避免残留左右文字内边距导致视觉偏大 */
+  .theme-modern .toolbar-search-actions .toolbar-action-button {
+    width: 32px;
+    min-width: 32px;
+    padding: 0;
+    justify-content: center;
+    gap: 0;
+  }
+  /* 隐藏文字后 title 成为唯一语义来源，各按钮均已设置 */
 }
 
 .theme-modern .toolbar-search-row {
   display: flex;
+  /* 同 toolbar-commandbar：styles-sidepanel.css 的 @container slc-sp(<560)
+     移动档会给 .toolbar-search-row 设 flex-wrap:wrap，桌面窗口 <560 时误命中，
+     导致「检索」按钮落到输入框下一行。这里钉死单行。 */
+  flex-wrap: nowrap !important;
   align-items: center;
   gap: 6px;
+  min-width: 0;
 }
 
 .theme-modern .toolbar-search-row .command-input-keyword {
   flex: 1 1 0%;
-  min-width: 100px;
+  /* 2026-10-25：100 → 72px。窄屏下输入框要能继续收窄来给按钮让位
+     （用户反馈「小屏检索后按钮自己换行了，不应该压缩输入框宽度吗」）。
+     72px 约可显示 5~6 个汉字，再窄就没法确认输入内容，故保留这个下限。 */
+  min-width: 72px;
 }
 
 .theme-modern .toolbar-action-button {
-  /* 对齐统一按钮系统：高 28 / 呼吸 12 / 圆角 --r-m / 过渡 150ms 四属性。 */
-  min-height: 28px;
-  height: 28px;
+  /* 对齐统一按钮系统：高 28 / 呼吸 12 / 圆角 4 / 过渡 150ms 四属性。
+     圆角 2026-10-25 由 var(--r-m)=8px 改为固定 4px（用户反馈「按钮圆角统一改为
+     4px，别太大」；当时只改了输入框没改按钮，本轮补齐）。
+     同时高度提到 32px，与同行主搜索框 / 文件过滤框 / 图标按钮等高。 */
+  min-height: 32px;
+  height: 32px;
   padding: 0 12px;
   font-size: var(--fs-xs);
   font-weight: 500;
-  border-radius: var(--r-m);
+  border-radius: 4px;
   border: 1px solid var(--line);
   background: var(--panel);
   color: var(--ink);
@@ -1635,7 +1717,7 @@
 
 .theme-modern .search-progress-panel[open] .search-progress-summary {
   border-color: rgba(49, 95, 141, 0.38);
-  background: #ffffff;
+  background: var(--panel);
 }
 
 /* --- 15. 状态栏 & Meta --- */
@@ -1948,13 +2030,13 @@
 
 .theme-modern .workspace-session-tab {
   border-color: #e5e7eb;
-  background: #ffffff;
+  background: var(--panel);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
 }
 
 .theme-modern .workspace-session-tab:hover {
   border-color: #d4d4d8;
-  background: #fafafa;
+  background: var(--bg);
 }
 
 .theme-modern .workspace-session-tab-active {
@@ -2456,9 +2538,12 @@ body.is-resizing-tree .theme-modern .browser-resizer::after {
 
 /* 黑窗口四角圆角（v3 反馈：面板圆角碰不到中部黑块，必须圆黑块本身）；
    overflow:hidden 让 xterm 内容随圆角裁剪。分屏 pane 内的 xterm 容器同规则。 */
+/* 2026-10-27 改直角：此前 --r-m(8px) 圆角 + 下面那条左右 12px 内缩，
+   让黑色终端区看起来像一张浮在页面上的独立卡片，与日志预览/文件目录的
+   满铺直角不一致。现改为直角铺满，只靠一条上边框与工具条分隔。 */
 .theme-modern .workspace-panel.workspace-panel-terminal .terminal-panel-body .xterm-container,
 .theme-modern .main-panel-with-terminal .terminal-panel-body .xterm-container {
-  border-radius: var(--r-m);
+  border-radius: 0;
   overflow: hidden;
   background: transparent;
 }
@@ -2471,10 +2556,12 @@ body.is-resizing-tree .theme-modern .browser-resizer::after {
    ⚠️ 必须同时 width:auto：pane 带有 .terminal-panel-body 的 width:100%，
    left+width+right 超约束时 right 被忽略 → 只缩左边、右边溢出 12px。
    黑窗自带圆角随呼吸露出。 */
+/* 2026-10-27 取消左右 12px 内缩：原先是为了让圆角"呼吸"露出，
+   圆角改直角后内缩只留下两条无意义的空隙，且与满铺的日志预览不一致。 */
 .theme-modern .terminal-tab-panes > .terminal-tab-pane {
   width: auto;
-  margin-left: 12px;
-  margin-right: 12px;
+  margin-left: 0;
+  margin-right: 0;
 }
 
 /* --- 20. 终端面板 --- */
@@ -3592,7 +3679,7 @@ body.is-resizing-tree .theme-modern .browser-resizer::after {
 .theme-modern .preview-dialog {
   background: #050607;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 16px;
+  border-radius: 12px;
   box-shadow: 0 24px 72px rgba(15, 23, 42, 0.26);
 }
 
@@ -3810,7 +3897,7 @@ body.is-resizing-tree .theme-modern .browser-resizer::after {
 
 .theme-modern .class-outline-row:hover {
   border-color: #d5e0ec;
-  background: #f4f8fc;
+  background: var(--panel-muted);
 }
 
 .theme-modern .class-outline-row-active {
@@ -4533,7 +4620,11 @@ body.is-electron .settings-exclusive-head input {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  max-width: 760px;
+  /* 2026-10-25 用户反馈：本视图内容右侧没沾满，而「偏好设置 / 安全」等其它
+     设置视图都是满宽的。原 `max-width: 760px` 让内容在宽窗口下靠左缩成一条，
+     右侧留出大片空白，与其它视图不一致。改用 max-width: none，
+     与 .settings-pref-section / .sec-scroll 的同款处理保持一致。 */
+  max-width: none;
   padding: 16px 20px 20px;
 }
 
@@ -4554,7 +4645,8 @@ body.is-electron .settings-exclusive-head input {
   background: var(--accent);
   border: 1px solid var(--accent);
   color: var(--on-accent);
-  font-weight: 550;
+  /* 2026-10-25 统一不加粗字重（用户要求）：550 → 500 */
+  font-weight: 500;
 }
 
 .settings-exclusive .settings-primary-action:hover:not(:disabled),
@@ -5088,19 +5180,29 @@ body.is-electron .settings-exclusive-head input {
 }
 .search-history-item:hover { background: var(--panel-muted); }
 /* 主按钮规格统一收口在 theme-modern-v2.css §1（accent 底 + var(--on-accent) 文字 + 统一呼吸），
-   此处只保留 search-run-button 特有字重，不再重复颜色/padding/hover。 */
+   此处只保留 search-run-button 特有字重，不再重复颜色/padding/hover。
+   2026-10-25：字重 550 → 500（用户要求「统一不要加粗字重」）。 */
 .theme-modern .search-run-button,
 .theme-modern .ghost-button.search-run-button {
-  font-weight: 550;
+  font-weight: 500;
 }
 .btn-spinner {
-  width: 11px;
-  height: 11px;
-  border: 1.5px solid color-mix(in srgb, var(--on-accent) 40%, transparent);
+  /* 2026-10-25 修复「检索中按钮里看起来是一条竖线」（用户截图）：
+     根因是**整圈太淡、只有顶边清晰**，转起来只剩一段弧；动画定格那一帧
+     弧线正好在左侧竖直位置，肉眼就读成"一根竖线"，像个静止的光标。
+     原 40% 的整圈在深色 accent 实心按钮上几乎不可见（像素采样：环上只有
+     36% 达到可见白），而顶边是 100% 纯白 —— 对比过强但覆盖面太小。
+     修法：整圈提到 55%（底衬更明确，环的形状可辨），顶边仍用 --on-accent
+     纯色作"运动方向"指示；同时略加大尺寸与线宽，确保在 32px 按钮里看得清。 */
+  width: 12px;
+  height: 12px;
+  border: 2px solid color-mix(in srgb, var(--on-accent) 55%, transparent);
   border-top-color: var(--on-accent);
   border-radius: 50%;
   animation: slc-spin 0.7s linear infinite;
   flex: none;
+  /* 深色实心按钮上的圆形指示器需要一点外发光才能在低对比主题下也辨识 */
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent-strong) 24%, transparent);
 }
 @keyframes slc-spin { to { transform: rotate(360deg); } }
 .toolbar-summary .summary-nav { display: inline-flex; align-items: center; gap: 1px; }
@@ -5537,12 +5639,15 @@ body.is-electron .settings-exclusive-head input {
   font-weight: 600;
 }
 
-/* 搜索行 = flex 子项（覆盖 grid 基样式） */
+/* 搜索行 = flex 子项（覆盖 grid 基样式）
+   2026-10-25：flex 1 1 300px + min-width 230 → 1 1 auto + 0。
+   230px 硬下限会让窄屏下的输入框拒绝收缩，把右侧按钮挤到下一行
+   （用户反馈「小屏检索后按钮自己换行」）。改后由输入框吸收压缩。 */
 .theme-modern .toolbar-commandbar .toolbar-search-row {
   order: 1;
   display: flex;
-  flex: 1 1 300px;
-  min-width: 230px;
+  flex: 1 1 auto;
+  min-width: 0;
   gap: 6px;
 }
 .theme-modern .toolbar-commandbar .keyword-shell {
@@ -5551,7 +5656,10 @@ body.is-electron .settings-exclusive-head input {
 }
 .theme-modern .toolbar-commandbar .command-input-keyword {
   width: 100%;
-  height: 30px;
+  /* 2026-10-25：整行控件统一 32px（与 tab 内容盒、文件过滤框、图标按钮等高）。
+     本条特异性 (0,3,0) 高于 `.theme-modern .command-input-keyword`（0,2,0），
+     原 30px 会盖掉那里的 32px —— 实测主搜索框仍是 30px 就是被这条吃掉。 */
+  height: 32px;
 }
 
 /* 右侧动作组 */
@@ -5592,16 +5700,38 @@ body.is-electron .settings-exclusive-head input {
   flex-basis: 100%;
 }
 
-/* 窄屏：动作组换行到第二行右对齐（流式收缩顺序） */
+/* 动作组保持单行（2026-10-25，强制收口）
+   背景：actions 的 flex 值被三处争抢 ——
+   ① .theme-modern .toolbar-commandbar .toolbar-search-actions { flex: none }（本文件 5619）
+   ② styles-sidepanel.css 的 @container slc-sp (max-width:559.9px) { flex: 1 1 100% }
+      该容器只在侧栏宿主定义；**桌面窗口没有 slc-sp 容器 → @container 退化为按视口判定**，
+      于是在 1100px 这种"远大于 560"的窗口里也会命中，把动作组撑成整行宽 100%，
+      输入框被压到 72px 下限。这正是用户截图里"输入框占一大块、按钮被顶走"的元凶。
+   ③ 各主题/断点的零散覆盖
+   这里用 !important 钉死本征宽度：动作组是固定宽图标集合，任何情况下都不该
+   grow/shrink 或占满整行；剩余宽度全部让给搜索行（输入框）去分配。 */
+.theme-modern .toolbar-commandbar .toolbar-search-actions {
+  flex: 0 0 auto !important;
+  flex-wrap: nowrap;
+  margin-left: auto;
+}
+
+/* 窄屏（2026-10-25 改）：原策略是「动作组换行到第二行右对齐」，
+   即 @media(max-width:1180px) 时给 .toolbar-search-actions 设 flex-basis:100%，
+   强行独占一整行 —— 这正是用户反馈的「小屏下检索后按钮自己换行了」。
+   用户明确否定该策略：**应当压缩输入框宽度来腾空间，而不是把按钮甩到下一行**
+   （换行会让工具栏高度翻倍，检索/条件/动作被切散，操作路径变长）。
+   现改为：所有控件保持单行（外层已 nowrap），压缩全部由搜索行的
+   flex:1 1 auto + 输入框 min-width:72px 吸收；极端过窄时横向滚动兜底。
+   因此这里不再改变 order / flex-basis，只保留必要的最小间距收紧。 */
 @media (max-width: 1180px) {
-  .theme-modern .toolbar-commandbar .toolbar-search-actions {
-    order: 3;
-    flex-basis: 100%;
-    margin-left: 0;
-    justify-content: flex-end;
+  .theme-modern .toolbar-commandbar {
+    gap: 6px;
+    padding: 6px 10px;
   }
-  .theme-modern .toolbar-commandbar .toolbar-summary { order: 4; }
-  .theme-modern .toolbar-commandbar .advanced-strip { order: 5; }
+  .theme-modern .toolbar-commandbar .toolbar-search-actions {
+    gap: 4px;
+  }
 }
 
 /* 工作区页签 = 下划线式（隐藏“工作区/共N个”标签） */
@@ -5720,7 +5850,8 @@ body.is-electron .settings-exclusive-head input {
 }
 .live-pulse { animation: slc-live-pulse 1.4s ease-in-out infinite; }
 @keyframes slc-live-pulse { 50% { opacity: 0.35; } }
-.theme-modern .toolbar-palette-button { white-space: nowrap; }
+/* .toolbar-palette-button 样式已删除（2026-10-25）：该按钮随「命令面板入口重复」
+   一并移除，入口保留在侧栏头部（.sidebar-head-buttons），此规则已无对应 DOM。 */
 
 .workspace-session-hint {
   margin-left: auto;
@@ -5827,8 +5958,12 @@ body.is-electron .settings-exclusive-head input {
 }
 
 .settings-update-inner {
-  max-width: 720px;
-  margin: 0 auto;
+  /* 2026-10-25 用户反馈：软件更新页内容右侧没沾满（与「连接服务」同一问题）。
+     原 `max-width: 720px; margin: 0 auto` 让内容在宽窗口下居中缩成一条，
+     左右都留空白，与其它设置视图（偏好设置 / 安全 / 连接管理）的满宽布局
+     不一致。去掉限宽与居中，交由父级 .settings-update-scroll 的 padding 控制边距。 */
+  max-width: none;
+  margin: 0;
 }
 
 /* 卡片（原型 .card） */
@@ -6036,7 +6171,8 @@ body.is-electron .settings-exclusive-head input {
   background: var(--accent);
   color: var(--on-accent);
   border: 1px solid var(--accent);
-  font-weight: 550;
+  /* 2026-10-25 统一不加粗字重（用户要求）：550 → 500 */
+  font-weight: 500;
 }
 .settings-update-btn-primary:hover:not(:disabled) {
   /* ⚠️ 上方 .settings-exclusive button (0,2,1) 会压掉本按钮 (0,1,0) 的 accent 常态，

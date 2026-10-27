@@ -40,7 +40,11 @@
   font-size: var(--fs-xs);
   font-weight: 500;
   border: 1px solid var(--line);
-  border-radius: var(--v2-radius-m);
+  /* 圆角统一 4px（2026-10-25 用户要求「按钮圆角统一改为 4px，别太大」）。
+     原 var(--v2-radius-m)=8px。这是全站按钮基础样式（122 处引用），改这里
+     才能让「检索 / LIVE / 置顶 / 录制 / 空态按钮」等文字按钮一起变，而不是只改
+     输入框。胶囊按钮（999px）走各自独立规则，不受影响。 */
+  border-radius: 4px;
   background: var(--panel);
   color: var(--ink);
   white-space: nowrap;
@@ -56,6 +60,21 @@
 .theme-modern .ghost-button:active:not(:disabled) {
   background: color-mix(in srgb, var(--accent) 14%, transparent);
   border-color: color-mix(in srgb, var(--accent) 32%, transparent);
+}
+/* 圆角统一收敛（2026-10-25）：上面基础规则给了 4px，但全站还有十几处
+   特异性更高、且**产物中位置更靠后**的历史规则把个别按钮写成 5px / 6px / 8px
+   （.toolbar-summary .summary-nav .ghost-button、.xdrawer .ghost-button、
+   .slicebar-tail、.viewer-action-group .ghost-button 等），
+   导致「看着还是有大圆角」。
+   实测：仅靠提高特异性不够 —— 那些规则有 (0,4,0) 且排在本文件之后，
+   故这里必须用 !important 才能真正压平（与项目内 .icon-toggle-active 等
+   同类收敛手法一致）。
+   ⚠️ 排除胶囊：.kbd 是键帽；.live-back-to-bottom 等 999px 胶囊维持原样，
+   用 :not() 精确排除，避免把胶囊压成方角。 */
+.theme-modern button.ghost-button:not(.kbd):not(.live-back-to-bottom),
+.theme-modern .ghost-button.icon-button:not(.kbd),
+.theme-modern .toolbar-action-button {
+  border-radius: 4px !important;
 }
 /* 图标按钮常规态 = --ink-soft（theme-modern.css .icon-button 规格值）。
    必须在此显式声明：上面 .ghost-button 的 --ink 与本块同特异性且本块后加载，
@@ -81,13 +100,21 @@
   background: color-mix(in srgb, var(--red) 10%, transparent);
 }
 .theme-modern .ghost-button.file-batch-danger { color: var(--red); }
+/* 主操作按钮（检索 / 保存并重载 等）。
+   2026-10-25 用户反馈「检索按钮没有边框」：原来 border-color 与 background
+   同为 --accent，边框完全融进填充色，视觉上等价于无边框 —— 而同一行其它按钮
+   都有 1px --line 描边，于是主按钮看着「没长齐」。
+   修法：边框用 accent-strong（比填充色深一档），既保留「实心主按钮」的语义，
+   又让轮廓与同行次级按钮的描边在同一视觉体系里。 */
 .theme-modern .ghost-button.settings-primary-action,
 .theme-modern .ghost-button.primary-action,
 .theme-modern button.search-run-button {
   background: var(--accent);
-  border-color: var(--accent);
+  border: 1px solid var(--accent-strong);
   color: var(--on-accent);
-  font-weight: 550;
+  /* 2026-10-25 用户要求「统一不要加粗字重」：550 → 500，与同行次级按钮一致。
+     主按钮的层级靠 accent 实心底 + --on-accent 文字即可，不靠加粗。 */
+  font-weight: 500;
 }
 .theme-modern .ghost-button.settings-primary-action:hover:not(:disabled),
 .theme-modern .ghost-button.primary-action:hover:not(:disabled),
@@ -265,7 +292,7 @@
   font-size: var(--fs-xs);
   /* 2026-10-21 对齐 VRC：圆角 7px（原 --v2-radius-s=6px）。本规则后加载，
      会覆盖 theme-modern.css 里 pane-section input 的 radius，故在此同步。 */
-  border-radius: 7px;
+  border-radius: 6px;
 }
 
 /* 服务器行（原型 .srow：40px，点+名+host+端口）
@@ -507,11 +534,19 @@
 }
 .theme-modern .toolbar-commandbar {
   display: flex;
-  flex-wrap: wrap;
+  /* 2026-10-25 修复「小屏下检索按钮自己换行」（用户反馈）。
+     原为 flex-wrap: wrap —— 窗口变窄时，搜索行把「检索」推到第一行、
+     右侧动作组被挤到第二行，工具栏高度翻倍、视觉很乱。
+     用户明确期望：**宁可压缩输入框，也不要换行**。
+     改为 nowrap，由 .toolbar-search-row 的 min-width:0 + 输入框 flex 收缩
+     来吸收宽度变化；实在过窄时交给横向滚动（overflow-x:auto）兜底，
+     而不是纵向换行。 */
+  flex-wrap: nowrap;
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
   min-width: 0;
+  overflow-x: auto;
 }
 /* 分段控件（原型 .seg / .seg.lite，prototype.html 第 60-64 行）
    两档变体：
@@ -546,8 +581,7 @@
   border: none !important;
   border-right: 1px solid var(--line);
   border-radius: 0 !important;
-  background: var(--panel) !important;
-  color: var(--ink-soft) !important;
+  background: var(--panel) !important;  color: var(--ink-soft) !important;
   font-size: var(--fs-xs);
   font-weight: 500;
   white-space: nowrap;
@@ -559,10 +593,31 @@
    「gap + 选中项白底浮起 + 轻微投影」区分，边界只由容器一圈承担。
    此规则只作用于 .toolbar-view-switch，不影响其它 .seg（工具抽屉等仍用原样式）。 */
 .theme-modern .toolbar-view-switch {
+  /* 2026-10-25 用户要求：**容器外框高必须 32px**，内部用弹性盒子撑满。
+     原先容器是「上下各 2px padding + 32px 按钮 + 2px 边框」= 38px，
+     比同行搜索框（32px）高出一圈。改为定高 32px + flex 居中，
+     内部按钮改为 flex:1 自适应（不再写死 32px，否则会溢出容器）。 */
+  display: inline-flex;
+  align-items: stretch;
+  height: 32px;
+  box-sizing: border-box;
   gap: 2px;
   padding: 2px;
   border: 1px solid var(--line);
+  /* 圆角统一 4px（2026-10-25 用户要求「按钮圆角统一改为 4px，别太大」）。
+     原 8px（--v2-radius-s 在别处被覆盖）/10px 来回打架，现与内部按钮同值，
+     内外圈同心不出「方角里套圆角」的错位感。 */
+  border-radius: 4px;
   background: var(--panel-muted);
+}
+/* 整行控件基准 = 32px（2026-10-25 用户定）。容器定高 32px 后，
+   内部按钮不再写死高度（原为 32px），改由 align-items:stretch 拉伸填满
+   可用内容区（32 - 2×1 边框 - 2×2 padding = 26px）。
+   主搜索框 .command-input-keyword、文件过滤框 .fb-filter-input、
+   图标按钮同为 32px，整行等高。 */
+.theme-modern .toolbar-view-switch-btn {
+  height: auto;
+  align-self: stretch;
 }
 .theme-modern .toolbar-view-switch-btn,
 .theme-modern .toolbar-view-switch-btn + .toolbar-view-switch-btn {
@@ -582,8 +637,7 @@
   font-weight: 600;
   box-shadow: 0 1px 2px color-mix(in srgb, var(--ink) 12%, transparent) !important;
 }
-.theme-modern .seg > button:hover:not(.on):not(:disabled),
-.theme-modern .toolbar-view-switch-btn:hover:not(.is-active) {
+.theme-modern .seg > button:hover:not(.on):not(:disabled),.theme-modern .toolbar-view-switch-btn:hover:not(.is-active) {
   background: var(--panel-muted) !important;
   color: var(--ink) !important;
 }
@@ -614,15 +668,22 @@
 .theme-modern .toolbar-commandbar .toolbar-search-row {
   order: 1;
   display: flex;
-  flex: 1 1 300px;
-  min-width: 230px;
+  /* 2026-10-25（用户反馈「输入框占用了很多空间，不应该压缩输入框宽度吗」）：
+     原 flex: 1 1 300px + min-width: 230px —— 窄屏时 230px 是硬下限，
+     输入框拒绝继续变窄，于是整个行撑破容器、把右侧按钮挤到下一行。
+     改为 flex: 1 1 auto + min-width: 0：允许一路收缩，配合输入框
+     的 min-width:0 可压到很窄；空间富余时仍按 flex-grow 占满。 */
+  flex: 1 1 auto;
+  min-width: 0;
   gap: 6px;
 }
 .theme-modern .toolbar-commandbar .keyword-shell { flex: 1; min-width: 0; }
 .theme-modern .toolbar-commandbar .command-input-keyword {
   width: 100%;
-  /* recon S1-22：原型工具栏搜索框 = .input 高 28（prototype.html 第 57 / 405 行） */
-  height: 28px;
+  /* recon S1-22 原为 28（原型 .input）。2026-10-25 用户定：整行控件统一 32px ——
+     tab 内容盒 32（容器 38）、本主搜索框 32、文件过滤框 32、图标按钮 32，四者等高。
+     本条是产物中最靠后的一条同特异性规则，所以必须在这里改，否则会被它盖回 28。 */
+  height: 32px;
   padding-left: 28px;
   padding-right: 48px;
 }
@@ -1333,6 +1394,12 @@
 .theme-modern .server-list button.server-item {
   flex: 1 1 auto !important;
   min-width: 0 !important;
+  /* 2026-10-25 回退为两行布局（用户否决单行方案）。
+     背景：200px 侧栏里同时塞 名称 + IP + 端口，无论怎么分配列宽都必然有一方
+     被压成省略号（实测单行版名称只剩 4~5 字、IP 也断尾），信息损失比"多占一行"
+     更糟。故恢复「名称在上、IP 在下、端口居右」的经典两行结构。
+     行高 40px（不是当初的 42/46）—— 两行字（12px + 11px，行高 1.35）
+     实测需要 40px 才不挤，低于此值两行字会贴在一起。 */
   display: flex !important;
   align-items: center !important;
   gap: 8px !important;
@@ -1357,9 +1424,13 @@
   flex: 1 1 auto !important;
   min-width: 0 !important;
   display: flex !important;
+  /* 2026-10-25 恢复两行：名称一行、IP 一行（用户否决单行方案）。
+     单行在 200px 侧栏里必然压掉一方信息 —— 实测名称只剩 4~5 字或 IP 断尾，
+     比"占两行"更糟。两行布局下每项都有整行宽度可用，名称与 IP 都能较完整显示。 */
   flex-direction: column !important;
-  gap: 1px !important;
   align-items: flex-start !important;
+  gap: 1px !important;
+  overflow: hidden !important;
 }
 .theme-modern .server-item .server-item-main strong {
   font-size: var(--fs-sm) !important;
@@ -1369,7 +1440,10 @@
   white-space: nowrap !important;
   overflow: hidden !important;
   text-overflow: ellipsis !important;
+  /* 两行布局：名称独占一行，用满可用宽度（不再需要列宽上限） */
+  min-width: 0 !important;
   max-width: 100% !important;
+  width: auto !important;
 }
 .theme-modern .server-item .server-item-main span {
   font-family: var(--v2-mono) !important;
@@ -1378,8 +1452,11 @@
   line-height: 1.35 !important;
   white-space: nowrap !important;
   overflow: hidden !important;
-  text-overflow: ellipsis !important;
+  /* 两行布局：IP 独占第二行，同样用满宽度 */
+  min-width: 0 !important;
   max-width: 100% !important;
+  width: auto !important;
+  text-overflow: ellipsis !important;
 }
 .theme-modern .server-item > .server-item-meta {
   flex: none !important;
@@ -2799,6 +2876,7 @@ body:has(.theme-modern) button:disabled {
 .theme-modern .server-item,
 .theme-modern .server-list button.server-item,
 .theme-modern .server-list .server-item-wrap .server-item {
+  /* 两行布局：40px（2026-10-25 回退单行方案，单行会压掉名称/IP 信息） */
   height: 40px !important;
   min-height: 40px !important;
   border-left: none !important;
@@ -2817,14 +2895,20 @@ body:has(.theme-modern) button:disabled {
   transform: none !important;
   flex: none !important;
 }
-/* 塌缩态（<1024px 图标模式）：复位内边距/间距，避免上面的行几何与
-   v2:1417 的 padding-left:14px!important 压过 theme-modern.css 的塌缩规则。 */
+/* 塌缩态（<1024px）行几何（2026-10-25 修复「状态点紧贴 IP 文字」）：
+   原规则把 padding-left / padding-right / gap 全部清零，注释说明是为了
+   「给图标塌缩模式复位」。但实测：侧栏在 <1024px 时**并没有塌缩成纯图标**，
+   仍然完整显示 名称 + IP + 端口 —— 于是 gap:0 + padding-left:0 直接导致
+   状态点（已改为 position:static 的流内元素）紧贴文字，间距实测 = 0px
+   （>1024px 时是正常的 8px）。
+   现改为保留状态点必要的呼吸：左侧 12px（原 >1024 是 14px，此处略收但不再贴边）
+   + gap 8px 与宽档一致。真正的图标塌缩若将来启用，应由单独的塌缩规则接管。 */
 @media (max-width: 1024px) {
   .theme-modern .sidebar-panel .server-item,
   .theme-modern .sidebar-panel .server-list .server-item-wrap .server-item {
-    padding-left: 0 !important;
-    padding-right: 0 !important;
-    gap: 0 !important;
+    padding-left: 12px !important;
+    padding-right: 10px !important;
+    gap: 8px !important;
   }
 }
 /* 2) 行内字号/字重（2026-10-21 对齐 VRC 源码规格）：

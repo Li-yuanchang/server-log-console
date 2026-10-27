@@ -480,6 +480,15 @@
   background: var(--panel);
   position: relative;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+  /* 2026-10-25 修复「背景色超出圆角」（用户截图：第一行 is-cur 的浅色底在
+     卡片圆角外侧露出方角）。
+     根因：每个 .empty-wb-step 自带背景（.is-cur = --accent-soft），而父级
+     .empty-wb-steps 只有 border-radius、没有 overflow 裁剪 —— 子元素背景是
+     矩形，直接溢出到圆角之外。
+     同文件的 .empty-wb-panel 早就写了 overflow: hidden，这里漏了。
+     ⚠️ 不用给首/末个 step 单独加圆角：容器裁剪更彻底，且能同时处理
+     hover 底色、等待态底色等所有子元素背景。 */
+  overflow: hidden;
 }
 .empty-wb-steps::before {
   content: "";
@@ -500,6 +509,10 @@
   padding: 11px 14px 11px 16px;
   border-bottom: 1px solid var(--line);
   min-width: 0;
+  /* 2026-10-25：极窄容器下允许按钮组换到文字下方，避免文字被压成「一字一行」。
+     只在窄档媒体查询里开启（见下方 @container/媒体规则）——全局开 wrap 会让
+     宽容器下也意外换行（实测 1100px 就触发了，因为 flex-basis 与 gap 之和
+     刚好越过容器宽度）。 */
 }
 .empty-wb-step:last-child { border-bottom: none; }
 .empty-wb-step.is-cur { background: var(--accent-soft); }
@@ -552,7 +565,19 @@
   .empty-wb-step.is-cur .empty-wb-num { animation: none; }
   .empty-wb-step.is-wait .empty-wb-num::before { animation: none; }
 }
-.empty-wb-step-tx { min-width: 0; }
+/* 文字块必须吃掉剩余宽度（2026-10-25 修复「步骤文字被挤成竖排」）：
+   用户截图：352px 窄窗下「输入关键字 / 回车执行；打开文件后可读取尾部」每个字
+   单独占一行，像竖排。
+   根因：本节点只写了 min-width: 0，没有 flex-grow —— 于是它不参与「占用剩余
+   空间」，而同级的 .empty-wb-step-acts 是 flex: none（放两个按钮
+   「打开文件目录」「查看检索示例」，本征宽 ~200px）。两者宽度之和超出容器时，
+   没有 grow 预算可分配，文字块被压到极限（每字一行）。
+   修法：给文字块 flex: 1 1 auto（吃掉剩余宽度），
+   同时给操作组 min-width: 0 之外的合理上限，超窄时按钮组换行到下一行。 */
+.empty-wb-step-tx {
+  flex: 1 1 auto;
+  min-width: 0;
+}
 .empty-wb-step-tx b {
   display: block;
   font-size: 12.5px;
@@ -570,6 +595,10 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  /* 2026-10-25：极窄容器下允许按钮组换到文字下方（配合 .empty-wb-step 的
+     flex-wrap: wrap），避免它把文字块压成竖排。宽容器下不会触发。 */
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 .empty-wb-step .empty-wb-arr {
   margin-left: auto;
@@ -801,6 +830,15 @@
   .empty-wb-steps { margin-top: 15px; }
   .empty-wb-step { padding: 10px 12px; }
   .empty-wb-step-tx span { font-size: 10.5px; }
+  /* 2026-10-25 窄档专用：允许步骤行换行。
+     窄容器（如 352px 小窗）里，右侧操作组的两个按钮本征宽约 200px，
+     若禁止换行，文字块会被压到极限 —— 实测「输入关键字」等每字一行（竖排）。
+     开启 wrap 后，空间不足时按钮组整体落到文字下方，文字块恢复整行宽度。
+     只在窄档开启：宽档下 wrap 会因 flex-basis 与 gap 之和刚好越过容器而误换行
+     （实测 1100px 就会触发）。 */
+  .empty-wb-step { flex-wrap: wrap; row-gap: 6px; }
+  .empty-wb-step .empty-wb-step-acts { margin-left: 0; justify-content: flex-start; }
+  .empty-wb-step .empty-wb-arr { margin-left: auto; }
   /* 触屏宿主：键位行隐藏，捷径改 chips / 明链 */
   .empty-wb-keys { display: none; }
   .empty-wb-side { display: none; }

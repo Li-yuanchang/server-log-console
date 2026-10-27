@@ -528,10 +528,17 @@
   display: flex;
   align-items: center;
   flex: none;
-  height: 31px;
+  /* 统一工具条高度 34px（2026-10-27）：此前 终端标签 31 / 文件预览 41 /
+     目录内容头 34 三个高度并存，切换视图时内容区上下跳动。
+     现统一到 34，并以 min-height 兜底防止内容撑高。 */
+  height: 34px;
+  min-height: 34px;
   min-width: 0;
   background: var(--panel);
   border-bottom: 1px solid var(--line);
+  /* 与其他工具条统一 0 12px；右侧留 6px 让图标不贴边 */
+  padding: 0 6px 0 12px;
+  gap: 4px;
 }
 .theme-modern .terminal-tabs-scroll {
   display: flex;
@@ -539,11 +546,77 @@
   gap: 2px;
   flex: 0 1 auto;
   min-width: 0;
-  padding: 0 8px;
+  /* 外层 .terminal-tabs 已给左内距，这里不再重复 */
+  padding: 0;
   overflow-x: auto;
   overflow-y: hidden;
 }
 /* 右侧空 spacer：父级不传 children 时自然收尾 */
+/* ============================================================
+   独立小窗（PiP）标签条的 macOS 红绿灯避让
+   ------------------------------------------------------------
+   背景：工具栏并入标签条后，原先挂在 .terminal-panel-bar-standalone 上的
+   padding-left: 88px（macOS 红绿灯安全区）随该行一起被删掉，
+   导致独立小窗里 tab 直接压在红绿灯上。
+   Windows 用的是系统/自绘标题栏但窗口内容不延伸到标题栏，故无此问题。
+   ============================================================ */
+
+/* macOS 沉浸式：窗口内容延伸到标题栏区域，必须给红绿灯留位 */
+.electron-macos-immersive .terminal-tabs-standalone {
+  padding-left: 88px;
+  /* 该条同时是窗口拖拽区 */
+  -webkit-app-region: drag;
+}
+
+/* 拖拽区内可交互元素必须显式排除，否则点击被系统吞掉 */
+.electron-macos-immersive .terminal-tabs-standalone .terminal-tab,
+.electron-macos-immersive .terminal-tabs-standalone .terminal-tabs-new,
+.electron-macos-immersive .terminal-tabs-standalone .terminal-tabs-actions,
+.electron-macos-immersive .terminal-tabs-standalone .terminal-tabs-actions button {
+  -webkit-app-region: no-drag;
+}
+
+/* 独立小窗里的标签条高度略增，与红绿灯视觉平衡（红绿灯直径约 12px，
+   31px 的条显得过薄），同时保证点击热区足够 */
+/* 特异性必须压过 .theme-modern .terminal-tabs（0,2,0），
+   否则 height:31px 生效、加高规则失效（实测踩到）。 */
+.theme-modern .terminal-tabs.terminal-tabs-standalone {
+  height: 40px;
+  min-height: 40px;
+}
+
+/* 「＋ 新建」在独立小窗里居中偏右，不贴红绿灯 */
+.electron-macos-immersive .terminal-tabs-standalone .terminal-tabs-scroll {
+  padding-left: 2px;
+}
+
+/* 工具动作区（并入标签条右侧）：与 tab 之间用一条细分隔线区隔，
+   右侧留 6px（外层已给），图标本身 24px 高，在 31px 条内垂直居中。 */
+.theme-modern .terminal-tabs-actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding-left: 10px;
+  margin-left: 4px;
+  position: relative;
+  height: 100%;
+}
+
+/* 分隔线：此前用 border-left + height:100% 贯穿整条，几乎与底边线连成一体，
+   显得过重。改为独立短线 —— 高 14px、居中、不连通上下边，
+   颜色用 line-strong 的 55% 透明度，只作弱提示。 */
+.theme-modern .terminal-tabs-actions::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1px;
+  height: 14px;
+  background: color-mix(in srgb, var(--line-strong) 55%, transparent);
+}
+
 .theme-modern .terminal-tabs-spacer {
   flex: 1 1 0%;
   min-width: 0;

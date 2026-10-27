@@ -647,6 +647,28 @@
   font-weight: 500;
 }
 
+/* 清单顶部「导入」入口（2026-10-27）：与「＋ 新增」同规格，
+   但用 accent 色区分主次——导入是新用户的常用入口，值得一点强调。 */
+.theme-modern .settings-exclusive .conn-list-search .conn-list-import {
+  flex: none;
+  height: var(--ctl-h);
+  padding: 0 10px;
+  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  font-weight: 500;
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 34%, var(--line));
+  background: var(--accent-soft);
+}
+
+.theme-modern .settings-exclusive .conn-list-search .conn-list-import:hover {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  border-color: var(--accent);
+}
+
 /* 头部 ⋯ 菜单（原型头部省略号按钮） */
 .theme-modern .settings-exclusive .conn-more-wrap {
   position: relative;
@@ -841,7 +863,7 @@
   text-align: left;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 9px;
+  border-radius: 8px;
   cursor: pointer;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }

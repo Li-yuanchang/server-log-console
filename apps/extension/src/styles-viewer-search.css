@@ -633,7 +633,7 @@
   gap: 10px;
   margin-bottom: 10px;
   padding: 12px;
-  border-radius: 16px;
+  border-radius: 12px;
   border: 1px solid rgba(148, 163, 184, 0.2);
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(239, 246, 255, 0.88)),
@@ -692,7 +692,7 @@
 .server-status-card {
   margin-bottom: 10px;
   padding: 12px;
-  border-radius: 14px;
+  border-radius: 12px;
   border: 1px solid rgba(148, 163, 184, 0.16);
   background: rgba(255, 255, 255, 0.9);
   box-shadow: 0 10px 24px rgba(15, 23, 42, 0.035);
@@ -725,8 +725,8 @@
 
 .server-status-load-grid div {
   padding: 9px 7px;
-  border-radius: 11px;
-  background: #f8fafc;
+  border-radius: 10px;
+  background: var(--panel-muted);
   border: 1px solid rgba(226, 232, 240, 0.9);
   text-align: center;
 }
@@ -826,7 +826,7 @@
   align-items: center;
   padding: 8px;
   border-radius: 10px;
-  background: #f8fafc;
+  background: var(--panel-muted);
   border: 1px solid rgba(226, 232, 240, 0.82);
 }
 
@@ -1609,7 +1609,7 @@ body.is-resizing-activity-panel {
   padding: 0;
   border: 1px solid #d2dae4;
   border-radius: 6px;
-  background: #fff;
+  background: var(--panel);
   align-content: stretch;
   overflow: hidden;
 }

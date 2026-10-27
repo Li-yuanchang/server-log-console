@@ -135,15 +135,18 @@
 
 /* S6-20/21：工具行 = 常驻过滤输入框（原型 632：150×24）+ 上传/刷新/更多（原型 633-635）
    返回上级按钮已移除（导航归面包屑/目录树），过滤由常驻输入框承担。
-   注：高度统一到设计系统标准 --ctl-h（原型 24px 是按 12.5px 基准；本应用 base 更大，
-      24px 输入框与相邻 28px 按钮落差明显，用户反馈"太小气"，故对齐标准控件高度）。 */
+
+   2026-10-25 用户定：整行控件基准 = **32px**（tab 内容 32 / 容器 38、
+   主搜索框 .command-input-keyword 32、本过滤框 32、图标按钮 32），
+   四者严格等高。原先本条走 --ctl-h(28px) 比 tab 矮一截，是不和谐的来源。 */
 .theme-modern .file-browser-workbench .workspace-actions .fb-filter-input {
   width: 170px;
-  height: var(--ctl-h);
+  height: 32px;
   padding: 0 10px;
   font-size: var(--fs-2xs);
   border: 1px solid var(--line);
-  border-radius: var(--v2-radius-s, 6px);
+  /* 圆角统一 4px（2026-10-25 用户要求）。原 var(--v2-radius-s, 6px) = 6px。 */
+  border-radius: 4px;
   background: var(--panel);
   color: var(--ink);
   outline: none;
@@ -151,11 +154,13 @@
 .theme-modern .file-browser-workbench .workspace-actions .fb-filter-input::placeholder { color: var(--ink-muted); }
 /* 原型工具行图标按钮 = .btn.icon.sm（28 宽 × 24 高）。
    基础 .theme-modern .icon-button 有 min-width:30px（theme-modern.css:1990），
-   须一并压掉否则宽度被锁 30。高度对齐标准控件 28px，与过滤框一致。 */
+   须一并压掉否则宽度被锁 30。高度与过滤框同步 32px。
+   圆角统一 4px（2026-10-25 用户要求）：基础规则是 var(--r-m)=8px，偏大。 */
 .theme-modern .file-browser-workbench .workspace-actions .icon-button {
   width: 28px;
   min-width: 28px;
-  height: var(--ctl-h);
+  height: 32px;
+  border-radius: 4px;
 }
 
 /* S6-18 选中行底色 = var(--accent-soft)（原型 155：rgba(0,112,243,.08)，

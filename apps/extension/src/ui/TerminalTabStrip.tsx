@@ -32,6 +32,7 @@ export function TerminalTabStrip({
   canNew,
   onCloseOthers,
   onCloseAll,
+  isStandalone,
   children,
 }: {
   tabs: TerminalTabItem[];
@@ -42,6 +43,8 @@ export function TerminalTabStrip({
   canNew: boolean;
   onCloseOthers?: (tabId: string) => void;
   onCloseAll?: () => void;
+  /** 独立小窗：macOS 下需要给红绿灯让位（padding-left 88px） */
+  isStandalone?: boolean;
   children?: ReactNode;
 }): JSX.Element {
   const stripRef = useRef<HTMLDivElement | null>(null);
@@ -91,7 +94,10 @@ export function TerminalTabStrip({
   };
 
   return (
-    <div className="terminal-tabs" ref={stripRef}>
+    <div
+      className={`terminal-tabs${isStandalone ? " terminal-tabs-standalone" : ""}`}
+      ref={stripRef}
+    >
       <div className="terminal-tabs-scroll">
         {tabs.map((tab) => {
           const active = tab.tabId === activeTabId;

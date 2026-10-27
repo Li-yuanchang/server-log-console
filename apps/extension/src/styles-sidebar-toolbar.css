@@ -286,7 +286,7 @@
   padding: 0 9px;
   border: 1px solid #d7dde5;
   border-radius: 6px;
-  background: #ffffff;
+  background: var(--panel);
   color: var(--ink);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
 }
@@ -340,7 +340,7 @@
   padding: 0 8px;
   border: 1px solid #d7dde5;
   border-radius: 6px;
-  background: #ffffff;
+  background: var(--panel);
   color: var(--ink);
 }
 
@@ -711,7 +711,8 @@ button:disabled {
   gap: 4px;
 }
 
-.sidebar-empty-box {
+.sidebar-empty-box,
+.theme-modern .empty-box.sidebar-empty-box {
   align-content: start;
   /* 图标水平居中（2026-10-23 用户反馈「未关联服务器的占位符 icon 没有水平居中」）：
      .empty-box 是 display:grid，而 text-align:center 只对行内文字生效、对 grid 子项无效；
@@ -720,6 +721,21 @@ button:disabled {
   justify-items: center;
   text-align: center;
   min-height: 84px;
+  /* 2026-10-25 修复「提示区内容换行很挤」（用户截图）：
+     本容器继承 .theme-modern .empty-box 的 padding: 8px 12px，而外层
+     .sidebar-panel 自己还有 6px 水平内边距、.pane-section 再有一层 ——
+     三层叠加后，200px 侧栏里提示文字可用宽度只剩 129px，19 个汉字被挤成 3 行（实测）。
+     这里收紧横向内边距，把宽度还给文字；留 6px 作卡片内最小呼吸。
+     ⚠️ 选择器必须带 .theme-modern .empty-box 前缀（0,3,0）才能压过
+     theme-modern.css:1858 的 `.theme-modern .empty-box`（0,2,0）设置。 */
+  padding-left: 6px;
+  padding-right: 6px;
+}
+
+/* 提示文案占满可用宽度：容器横向内边距收窄后，文字可用宽度增加约 12px，
+   多数情况下 2 行即可容下；仍不足时正常折行（不做 nowrap 强撑，避免溢出）。 */
+.sidebar-empty-box > span:last-child {
+  max-width: 100%;
 }
 
 .sidebar-empty-box strong {
@@ -788,7 +804,7 @@ button:disabled {
   padding: 4px 0;
   border: 1px solid #d7dde5;
   border-radius: 6px;
-  background: #ffffff;
+  background: var(--panel);
   box-shadow: 0 8px 24px rgba(15, 23, 42, 0.16);
 }
 

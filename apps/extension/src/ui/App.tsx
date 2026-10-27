@@ -2941,13 +2941,15 @@ export function App() {
   const viewerOverviewLabel = viewerOverviewTotalLines
     ? `${formatNumber(viewerOverviewCurrentLine)}/${formatNumber(viewerOverviewTotalLines)}`
     : "--";
-  /* S12 空态文案对齐原型 1037 行：检索「还没有检索结果」+「输入关键字回车，或用 /关键字 语法」+「查看检索示例」。 */
+  /* S12 空态文案对齐原型 1037 行：检索「还没有检索结果」+「输入关键字回车，或用 /关键字 语法」+「查看检索示例」。
+     2026-10-25 精简：去掉「在右下角使用回到底部」这类把操作路径写死的句子 ——
+     按钮位置随视图/窄档变化，写死反而引导失败；改为只说"能做什么"。 */
   const viewerEmptyTitle = "还没有检索结果";
   const viewerEmptyHint = liveFollowEnabled && filePath.trim()
-    ? "实时跟随已开启，等待新日志写入…"
+    ? "实时跟随已开启，等新日志写入…"
     : !filePath
-      ? "输入关键字回车，或用 /关键字 语法"
-      : "输入关键字后回车搜索，或在右下角使用回到底部。";
+      ? "输入关键字回车，或试试 /关键字 语法"
+      : "输入关键字后回车，或打开文件再看";
   const searchElapsedLabel = searchStartedAt ? formatDurationLabel(searchStartedAt, searchNow) : "";
   const isSearchView = activeLogView === "search";
   const activeSearchResultCount = activeViewerTabId === "file" ? (results?.matches.length ?? 0) : activeViewerMatchCount;
@@ -3661,14 +3663,10 @@ export function App() {
           connectionStateText={connectionStateText}
           selectedServer={selectedServer}
           directoryPath={directoryPath}
-          activityPanelHeight={activityPanelHeight}
-          activityPanelVisible={activityPanelVisible}
-          sidebarActivityLines={sidebarActivityLines}
           onDeleteServer={requestDeleteServer}
           onOpenSettingsWorkspace={openSettingsWorkspace}
           onOpenPalette={() => setPaletteOpen(true)}
           onCloseSettingsWorkspace={closeSettingsWorkspace}
-          onActivityPanelResizeStart={handleActivityPanelResizeStart}
           hasPendingUpdate={desktopUpdate.updateAvailable}
           isBusy={isBusy}
           onRetryConnect={() => { void testServerConnection(selectedServer?.basePath?.trim() || "/"); }}
@@ -3830,7 +3828,6 @@ export function App() {
                 liveFollowEnabled={liveFollowEnabled}
                 canToggleLive={canToolbarLive}
                 onToggleLive={toggleToolbarLive}
-                onOpenPalette={() => setPaletteOpen(true)}
                 isPinned={isPinned}
                 onTogglePin={async () => {
                   const p = await (window as any).electronAPI.togglePin();
@@ -4623,21 +4620,21 @@ export function App() {
                     className="viewer-empty-host"
                     icon={<Search size={13} strokeWidth={1.8} />}
                     tipIcon={<Lightbulb size={12} strokeWidth={1.8} />}
-                    eyebrow="日志检索 · 空结果"
+                    eyebrow="日志检索"
                     title={viewerEmptyTitle}
                     sub={viewerEmptyHint}
                     steps={[
                       {
                         title: "输入关键字",
-                        desc: "回车执行；打开文件后可读取尾部",
+                        desc: "回车执行；也可以先打开文件",
                         state: "cur",
                         actions: [
                           { label: "打开文件目录", kind: "ghost", onClick: () => setActiveLogView("files") },
-                          { label: "查看检索示例", kind: "pri", onClick: () => { handleViewerEmptyPrimary(); } },
+                          { label: "查看示例", kind: "pri", onClick: () => { handleViewerEmptyPrimary(); } },
                         ],
                       },
-                      { title: "语法限定", desc: "/ERROR 精确匹配 · /time 10:00 时间段 · 多词逗号拆分" },
-                      { title: "实时跟随", desc: "⌥L 开启后自动滚动到最新写入" },
+                      { title: "语法限定", desc: "/ERROR 精确匹配 · /time 10:00 限定时间" },
+                      { title: "实时跟随", desc: "⌥L 开启后自动滚到最新" },
                     ]}
                     keys={[
                       { kbd: "⌘F", label: "检索" },
@@ -4669,30 +4666,30 @@ export function App() {
                       tipIcon={<ShieldCheck size={12} strokeWidth={1.8} />}
                       eyebrow="文件目录 · 连接中"
                       title={`正在连接 ${selectedServer.name}`}
-                      sub="正在建立 SSH 连接，通常 2 秒内完成；成功后会自动打开目录并记住位置。"
+                      sub="通常 2 秒内完成，连上后自动打开目录。"
                       /* loading 单一化（用户反馈 2026-10-06：live 行与步骤① spinner 重复）：
                          不再渲染独立 live 行，实时 actionStatus 并入步骤①描述，
                          步骤① spinner = 唯一加载指示 */
                       steps={[
-                        { title: "建立连接", desc: isBusy ? (actionStatus || "SSH 握手中") : "等待系统自动建立 SSH 连接", state: "wait" },
-                        { title: "读取根目录", desc: "连接成功后自动挂载目录树" },
-                        { title: "记住位置", desc: "下次启动直达最近目录" },
+                        { title: "建立连接", desc: isBusy ? (actionStatus || "握手中") : "等待建立 SSH 连接", state: "wait" },
+                        { title: "读取目录", desc: "连上后自动加载" },
+                        { title: "记住位置", desc: "下次直达最近目录" },
                       ]}
                       keys={[{ kbd: "⌘,", label: "连接设置" }]}
-                      tip="连接慢或失败？多为网络或凭证问题；导入的密码可在设置中心重新获取。"
+                      tip="连不上？多半是网络或密码问题，可在设置中心改。"
                     />
                   ) : (
                     /* 方案 A 未选服务器（原型 01 屏）：右栏「快速连接」= 真实服务器列表前 4 台；
                        窄档降级 chips + 全宽「选择服务器」按钮（打开选服层）。 */
                     <EmptyWorkbench
                       icon={<Folder size={13} strokeWidth={1.8} />}
-                      eyebrow="文件目录 · 开始"
-                      title="选择一台服务器，开始浏览远程目录"
-                      sub="连接成功后系统会自动展开目录树、记住最近位置，并接管过滤、上传与右键菜单。"
+                      eyebrow="文件目录"
+                      title="先选一台服务器"
+                      sub="选好后就能浏览远程目录、上传文件、打开日志。"
                       steps={[
-                        { title: "选择服务器", desc: "点击左侧列表任意一台；窄档可用下方按钮或最近连接", state: "cur" },
-                        { title: "浏览目录", desc: "目录树自动挂载根目录，双击进入子目录" },
-                        { title: "查看日志", desc: "点击 .log / .txt 文件直接进入日志预览" },
+                        { title: "选择服务器", desc: "点左边任一台，或用下方按钮", state: "cur" },
+                        { title: "浏览目录", desc: "双击文件夹进入下一级" },
+                        { title: "查看日志", desc: "点 .log / .txt 直接打开" },
                       ]}
                       keys={[
                         { kbd: "⌘K", label: "服务器检索" },
@@ -5072,8 +5069,6 @@ export function App() {
                 watermarkOpacity,
                 watermarkScope,
                 errorHighlightEnabled,
-                showPathHistory,
-                showTransferHistory,
                 sliceLengthMode,
                 sliceLength,
                 serverStatusAutoRefresh: serverSystemProfileAutoRefresh,
@@ -5103,14 +5098,6 @@ export function App() {
                 onWatermarkScopeChange: setWatermarkScope,
                 onResetUiPreferences: resetUiPreferences,
                 onToggleErrorHighlight: () => setErrorHighlightEnabled((current) => !current),
-                onTogglePathHistory: () => {
-                  setShowTransferHistory(false);
-                  setShowPathHistory((current) => !current);
-                },
-                onToggleTransferHistory: () => {
-                  setShowPathHistory(false);
-                  setShowTransferHistory((current) => !current);
-                },
                 onSliceLengthModeChange: setSliceLengthMode,
                 onSliceLengthChange: setSliceLength,
                 onToggleServerStatusAutoRefresh: () => setServerSystemProfileAutoRefresh((current) => !current),

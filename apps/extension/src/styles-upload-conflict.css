@@ -1,6 +1,12 @@
 /* ============================================================
    上传冲突确认（UploadConflictDialog）
-   前缀 ucd-，独立命名空间。
+   前缀 ucd-
+   ------------------------------------------------------------
+   2026-10-27 重做要点：
+   1. 去掉头部/目录区的重复描边（此前三个区块各有一圈框，视觉噪音大）
+   2. 加大纵向呼吸：每个区块 14~16px 内距，区块间用细分割线而非边框
+   3. 底部操作区左「批量预设」右「取消/确认」，中间留白，破坏性操作单独成色
+   4. 下拉换成 ThemedSelect（自绘菜单），不再出现系统蓝白菜单
    ============================================================ */
 
 .ucd-scrim {
@@ -11,107 +17,172 @@
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background: rgba(16, 20, 17, 0.34);
+  background: rgba(16, 20, 17, 0.36);
   backdrop-filter: blur(2px);
 }
 
 .ucd-panel {
-  width: min(500px, 100%);
-  max-height: min(620px, calc(100vh - 48px));
   display: flex;
   flex-direction: column;
+  width: min(540px, 100%);
+  max-height: min(640px, calc(100vh - 48px));
   background: var(--panel-strong, #fff);
   border: 1px solid var(--line, #d9ded0);
   border-radius: 12px;
-  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.24);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.26);
   overflow: hidden;
 }
+
+/* ---------- 结论区 ---------- */
 
 .ucd-head {
   flex: 0 0 auto;
   display: flex;
   align-items: flex-start;
-  gap: 10px;
-  padding: 14px 18px;
-  border-bottom: 1px solid var(--line, #d9ded0);
-  color: var(--amber, #b77935);
+  gap: 11px;
+  padding: 16px 20px 14px;
 }
 
-.ucd-head > div { flex: 1; min-width: 0; }
+.ucd-head-icon {
+  flex: 0 0 30px;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: rgba(183, 121, 53, 0.12);
+  color: var(--amber, #b77935);
+  /* 实测图标中心比标题中心低 4.2px：上移对齐（标题行高 19.6、图标 30，
+     差值的一半约 4px）。用 margin-top 而非 transform，避免影响 flex 基线。 */
+  margin-top: -4px;
+}
 
-.ucd-head strong {
+.ucd-head-text {
+  flex: 1;
+  min-width: 0;
+  padding-top: 1px;
+}
+
+.ucd-head-text strong {
   display: block;
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 650;
   color: var(--ink, #27302a);
+  line-height: 1.45;
 }
 
-.ucd-head span {
-  display: block;
-  margin-top: 2px;
-  font-size: 11px;
+.ucd-head-text p {
+  margin-top: 3px;
+  font-size: 11.5px;
   color: var(--ink-muted, #92988d);
+  line-height: 1.6;
 }
+
+/* ---------- 目标目录 ---------- */
 
 .ucd-dir {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 18px;
+  gap: 9px;
+  margin: 0 20px;
+  padding: 8px 11px;
+  border-radius: 6px;
   background: var(--panel-muted, #eef1e8);
-  border-bottom: 1px solid var(--line, #d9ded0);
-  font-size: 10.5px;
   min-width: 0;
 }
 
-.ucd-dir-label { flex: 0 0 auto; color: var(--ink-muted, #92988d); }
+.ucd-dir-label {
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  color: var(--ink-muted, #92988d);
+  text-transform: uppercase;
+}
 
 .ucd-dir-path {
   flex: 1;
   min-width: 0;
   font-family: var(--mono, monospace);
+  font-size: 11px;
   color: var(--ink-soft, #747b70);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
+.ucd-dir-copy {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ink-muted, #92988d);
+  cursor: pointer;
+}
+
+.ucd-dir-copy:hover {
+  background: var(--panel-strong, #fff);
+  color: var(--ink, #27302a);
+}
+
+/* ---------- 逐文件列表 ---------- */
+
 .ucd-body {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 10px 18px;
+  padding: 14px 20px 4px;
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 8px;
 }
 
 .ucd-row {
   display: flex;
   align-items: center;
-  gap: 9px;
-  padding: 8px 11px;
+  gap: 12px;
+  padding: 10px 12px;
   border: 1px solid var(--line, #d9ded0);
-  border-radius: var(--radius-sm, 6px);
+  border-radius: 7px;
   background: var(--panel, #fbfbf7);
   min-width: 0;
+  transition: border-color 0.12s, background 0.12s;
 }
 
-.ucd-ic { flex: 0 0 13px; }
-.ucd-ic-warn { color: var(--amber, #b77935); }
+/* 选「跳过」的文件整体弱化：虚框 + 降透明度 + 名称删除线，
+   让「这一行不会被传」一眼可见（只改文字颜色不够，实测观感偏弱）。 */
+.ucd-row-skip {
+  background: transparent;
+  border-style: dashed;
+  opacity: 0.62;
+}
 
-.ucd-main {
+.ucd-row-skip .ucd-name {
+  color: var(--ink-muted, #92988d);
+  text-decoration: line-through;
+}
+
+/* 跳过行的下拉也用弱化样式，避免和待处理行看起来一样重要 */
+.ucd-row-skip .themed-select-trigger {
+  color: var(--ink-muted, #92988d);
+}
+
+.ucd-row-main {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 3px;
 }
 
 .ucd-name {
   font-family: var(--mono, monospace);
-  font-size: 11px;
+  font-size: 11.5px;
   color: var(--ink, #27302a);
   white-space: nowrap;
   overflow: hidden;
@@ -119,21 +190,30 @@
 }
 
 .ucd-size {
-  font-size: 10px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10.5px;
   color: var(--ink-muted, #92988d);
   font-variant-numeric: tabular-nums;
+  flex-wrap: wrap;
 }
 
-.ucd-select {
-  flex: 0 0 auto;
-  font: inherit;
-  font-size: 10.5px;
-  height: 24px;
+.ucd-size-old { color: var(--ink-muted, #92988d); }
+.ucd-size-arrow { color: var(--line-strong, #b8c2ae); }
+
+.ucd-size-new {
+  color: var(--ink-soft, #747b70);
+  font-weight: 550;
+}
+
+/* 大小完全相同时提示：多半是同名但内容没变，覆盖无意义 */
+.ucd-size-same {
+  font-size: 9.5px;
   padding: 0 5px;
-  border: 1px solid var(--line, #d9ded0);
-  border-radius: 4px;
-  background: var(--panel-strong, #fff);
-  color: var(--ink, #27302a);
+  border-radius: 3px;
+  background: var(--panel-muted, #eef1e8);
+  color: var(--ink-muted, #92988d);
 }
 
 .ucd-fresh {
@@ -141,34 +221,110 @@
   align-items: center;
   gap: 7px;
   padding: 7px 11px;
-  border-radius: var(--radius-sm, 6px);
+  border-radius: 6px;
   background: rgba(71, 122, 69, 0.07);
-  border: 1px solid rgba(71, 122, 69, 0.22);
+  border: 1px solid rgba(71, 122, 69, 0.20);
   font-size: 10.5px;
   color: #3b6139;
 }
+
+/* ---------- 底部操作区 ---------- */
 
 .ucd-foot {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 12px 18px;
+  gap: 16px;
+  padding: 12px 20px;
   border-top: 1px solid var(--line, #d9ded0);
   background: var(--panel, #fbfbf7);
+  flex-wrap: wrap;
 }
 
-.ucd-link {
+/* 批量预设：左组，用无边框小按钮，弱于右侧主操作 */
+.ucd-bulk {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 0 0 auto;
+}
+
+.ucd-bulk-label {
+  font-size: 10px;
+  color: var(--ink-muted, #92988d);
+  margin-right: 4px;
+}
+
+.ucd-bulk-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font: inherit;
   font-size: 10.5px;
-  padding: 0;
+  height: 24px;
+  padding: 0 8px;
   border: none;
-  background: none;
-  color: var(--ink-muted, #92988d);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--ink-soft, #747b70);
   cursor: pointer;
-  text-decoration: underline;
-  text-underline-offset: 2px;
   white-space: nowrap;
 }
 
-.ucd-link:hover { color: var(--ink, #27302a); }
+.ucd-bulk-btn:hover {
+  background: var(--panel-muted, #eef1e8);
+  color: var(--ink, #27302a);
+}
+
+.ucd-bulk-danger:hover {
+  background: rgba(165, 72, 61, 0.08);
+  color: var(--red, #a5483d);
+}
+
+/* 右侧操作组 */
+.ucd-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  flex: 0 0 auto;
+  /* 与左侧批量区之间加一条细分隔线：防止「批量-覆盖」与「取消」挨太近误点 */
+  padding-left: 16px;
+  border-left: 1px solid var(--line, #d9ded0);
+}
+
+.ucd-actions-hint {
+  font-size: 10px;
+  color: var(--ink-muted, #92988d);
+  font-variant-numeric: tabular-nums;
+  margin-right: 2px;
+}
+
+/* 有覆盖项时，主按钮染成危险色 —— 让"我正在做破坏性操作"一眼可见 */
+.ucd-confirm-danger {
+  background: var(--red, #a5483d) !important;
+  border-color: var(--red, #a5483d) !important;
+  color: #fff !important;
+}
+
+.ucd-confirm-danger:hover {
+  filter: brightness(0.94);
+}
+
+/* ---------- ThemedSelect 在行内的尺寸约束 ---------- */
+
+.ucd-row .themed-select-trigger {
+  flex: 0 0 auto;
+  height: 26px;
+  font-size: 11px;
+  min-width: 84px;
+}
+
+/* ---------- 窄档：批量预设换行到独立一行 ---------- */
+
+@media (max-width: 560px) {
+  .ucd-panel { width: 100%; }
+  .ucd-foot { gap: 8px; }
+  .ucd-actions { margin-left: 0; width: 100%; justify-content: flex-end; }
+  .ucd-actions-hint { margin-right: auto; }
+}

@@ -1,8 +1,8 @@
-import { useState } from "react";
 import type { ServerSummary, ServerConnectionTestResponse } from "@server-log-console/shared";
 import type { SettingsWorkspaceView } from "./ConnectionSettingsWorkspace.js";
 import { Command as CommandIcon, ServerOff, FolderSearch } from "lucide-react";
 import { ToolIcon } from "./ToolIcon.js";
+import { formatKeyHint } from "./key-hints.js";
 import { ServerGroupsList } from "./SidepanelMobile.js";
 
 export type SidebarPanelProps = {
@@ -22,14 +22,10 @@ export type SidebarPanelProps = {
   connectionStateText: string;
   selectedServer: ServerSummary | null;
   directoryPath: string;
-  activityPanelHeight: number;
-  activityPanelVisible: boolean;
-  sidebarActivityLines: string[];
   onDeleteServer: (server: ServerSummary) => void;
   onOpenSettingsWorkspace: (view?: SettingsWorkspaceView) => void;
   onOpenPalette: () => void;
   onCloseSettingsWorkspace: () => void;
-  onActivityPanelResizeStart: (event: React.PointerEvent<HTMLDivElement>) => void;
   hasPendingUpdate?: boolean;
   isBusy?: boolean;
   onRetryConnect?: () => void;
@@ -37,7 +33,6 @@ export type SidebarPanelProps = {
 };
 
 export function SidebarPanel(props: SidebarPanelProps) {
-  const [statusExpanded, setStatusExpanded] = useState(false);
   const {
     uiTheme,
     isElectron,
@@ -55,14 +50,10 @@ export function SidebarPanel(props: SidebarPanelProps) {
     connectionStateText,
     selectedServer,
     directoryPath,
-    activityPanelHeight,
-    activityPanelVisible,
-    sidebarActivityLines,
     onDeleteServer,
     onOpenSettingsWorkspace,
     onCloseSettingsWorkspace,
     onOpenPalette,
-    onActivityPanelResizeStart,
     hasPendingUpdate,
     isBusy,
     onRetryConnect,
@@ -72,61 +63,6 @@ export function SidebarPanel(props: SidebarPanelProps) {
   /* 底部状态条五态（原型 empty-states-a-v2 第 10 屏）：
      warn 服务离线 > err 连接失败 > connecting 连接中 > ok 已连接 > idle 未连接
      （idle 文案 2026-10-06 用户确认：待命含义不清 → 未连接，并入「连接」词族） */
-  const statusState: "idle" | "connecting" | "ok" | "err" | "warn" = showServiceOfflineState
-    ? "warn"
-    : selectedServer && connectionTestStatus && !connectionTestStatus.connected && !isBusy
-      ? "err"
-      : selectedServer && !connectionTestStatus?.connected
-        ? "connecting"
-        : selectedServer && connectionTestStatus?.connected
-          ? "ok"
-          : "idle";
-  const statusWord = { idle: "未连接", connecting: "连接中", ok: "已连接", err: "连接失败", warn: "服务离线" }[statusState];
-  const statusObj = statusState === "ok" || statusState === "connecting" ? selectedServer?.name ?? "" : "";
-  const statusL2 =
-    statusState === "idle" ? (
-      "选择服务器后自动连接"
-    ) : statusState === "connecting" ? (
-      <>
-        <span className="st-mini-spin" aria-hidden="true" />
-        <span className="mono">{actionStatus || `SSH 握手中 · ${selectedServer?.name ?? ""}`}</span>
-      </>
-    ) : statusState === "ok" ? (
-      <span className="mono">{`${selectedServer?.username ?? ""}@${selectedServer?.host ?? ""}:${selectedServer?.port ?? ""} · ${directoryPath || "/"}`}</span>
-    ) : statusState === "err" ? (
-      <>
-        <span className="mono">{selectedServer ? `${selectedServer.host}:${selectedServer.port}` : ""}</span>
-        <span>{connectionTestStatus?.message || "连接失败"}</span>
-        {onRetryConnect ? (
-          <button
-            type="button"
-            className="st-inline-act"
-            onClick={(event) => {
-              event.stopPropagation();
-              onRetryConnect();
-            }}
-          >
-            重试
-          </button>
-        ) : null}
-      </>
-    ) : (
-      <>
-        <span>自动重试中</span>
-        {onCheckService ? (
-          <button
-            type="button"
-            className="st-inline-act"
-            onClick={(event) => {
-              event.stopPropagation();
-              onCheckService();
-            }}
-          >
-            检查
-          </button>
-        ) : null}
-      </>
-    );
 
   return (
     <aside className="sidebar-panel">
@@ -148,7 +84,7 @@ export function SidebarPanel(props: SidebarPanelProps) {
           <div className="sidebar-head-buttons">
             <button
               className="ghost-button icon-button"
-              title="命令面板 (Cmd+K)"
+              title={`命令面板 (${formatKeyHint("⌘K")})`}
               aria-label="命令面板"
               onClick={onOpenPalette}
             >
@@ -215,123 +151,23 @@ export function SidebarPanel(props: SidebarPanelProps) {
         )}
       </div>
 
-      <div
-        className={`status-card status-grid pane-section compact-connection-card sidebar-status st-${statusState}${statusExpanded ? " sidebar-status-open" : ""}`}
-        onClick={() => setStatusExpanded((v) => !v)}
-        title={statusExpanded ? "收起连接概览" : "展开连接概览"}
-      >
-        <span className="st-progress" aria-hidden="true" />
-        {statusExpanded ? (
-          <div className="st-open">
-            <div className="st-open-hd">
-              <span>连接概览</span>
-              <span
-                className="st-collapse"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  setStatusExpanded(false);
-                }}
-              >
-                收起
-              </span>
-            </div>
-            <div className="st-kv">
-              <span>本地服务</span>
-              <b className="sans">{localServiceStatusText}</b>
-              <span>服务器</span>
-              <b className="sans">{selectedServer ? `${selectedServer.name} · ${connectionStateText || "--"}` : "--"}</b>
-              <span>主机</span>
-              <b>{selectedServer ? `${selectedServer.username}@${selectedServer.host}:${selectedServer.port}` : "--"}</b>
-              <span>路径</span>
-              <b>{directoryPath || "/"}</b>
-            </div>
-            <div className="st-acts">
-              {statusState === "err" && onRetryConnect ? (
-                <button
-                  type="button"
-                  className="ghost-button"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onRetryConnect();
-                  }}
-                >
-                  重试
-                </button>
-              ) : null}
-              {statusState === "ok" && onRetryConnect ? (
-                <button
-                  type="button"
-                  className="ghost-button"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onRetryConnect();
-                  }}
-                >
-                  重新连接
-                </button>
-              ) : null}
-              {statusState === "warn" && onCheckService ? (
-                <button
-                  type="button"
-                  className="ghost-button"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onCheckService();
-                  }}
-                >
-                  检查服务
-                </button>
-              ) : null}
-              <button
-                type="button"
-                className="ghost-button"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onOpenSettingsWorkspace("connections");
-                }}
-              >
-                连接设置
-              </button>
-            </div>
-          </div>
-        ) : (
-          <>
-            <div className="st-l1">
-              <span className="st-dot" aria-hidden="true" />
-              <span className="st-word">{statusWord}</span>
-              {statusObj ? <span className="st-obj">{statusObj}</span> : null}
-              <span className="st-chev" aria-hidden="true">▾</span>
-            </div>
-            <div className="st-l2">{statusL2}</div>
-          </>
-        )}
-      </div>
+      {/* 左下「连接概览」状态卡已移除（2026-10-25 用户决策）。
+          原因：① 内容展示不全 —— .st-kv 是 50px+1fr 网格 + nowrap/ellipsis，
+                「本地服务/主机/路径」全被截成「连接服务已…」「root@192.16…」；
+          ② 信息重复 —— 「已连接 + 服务器名」在底部状态栏、服务器列表高亮行、
+                终端工具行已经各出现一次，这里第三次重复，还白占 6 行高度；
+          ③ 27 台服务器的列表本来就需要滚动，竖向空间应优先给列表。
+          连接状态与操作入口（重新连接 / 连接设置）统一由底部状态栏承担。 */}
 
-      {activityPanelVisible ? (
-      <section className="activity-panel pane-section compact-activity-panel" style={{ height: activityPanelHeight }}>
-          <div
-            className="activity-panel-resizer"
-            onPointerDown={onActivityPanelResizeStart}
-            role="separator"
-            aria-orientation="horizontal"
-            aria-label="调整操作记录高度"
-          />
-          <div className="browser-column-head pane-title-row">
-            <strong className="pane-title">操作记录</strong>
-            <span>{sidebarActivityLines.length} 条</span>
-          </div>
-          <div className="activity-log-list compact-activity-log-list">
-            {sidebarActivityLines.map((line, index) => {
-              const text = line.replace(/^\[[^\]]+\]\s*/, "");
-              return (
-                <div key={index} className="activity-log-line">
-                  <span className="activity-log-msg">{text}</span>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-      ) : null}
+      {/* 左下「操作记录」面板已彻底移除（2026-10-25 用户决策）。
+          原因：① 占高 ~40%（默认 132px+ 可拖拽），把 27 台服务器列表挤到只剩几行；
+                ② 内容与日志预览的调试面板（App.tsx recentActivityLines）完全重复 ——
+                   同一份 activityLines 在两处展示；
+                ③ 视觉噪音大：一组带边框/底色/圆角的列表，每条文字自动换行后
+                   挤在一起，像堆了一排小卡片，与侧栏其它区域风格割裂；
+                ④ 其中大部分是「系统已启动 / 已读取本地连接列表」这类开发期诊断信息，
+                   对日常使用没有价值。
+          操作反馈改由 toast（底部居中气泡）承担，那是既有的、非侵入的通道。 */}
     </aside>
   );
 }

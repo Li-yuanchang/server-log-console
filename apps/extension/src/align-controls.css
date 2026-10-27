@@ -69,15 +69,24 @@
 /* ---------- 4. 主按钮（强调色）统一 ----------
    全站「主操作」按钮统一为 accent 底 + --on-accent 字，全部随主题令牌。
    含此前已存在但硬编码 #fff 的 settings-primary-action / primary-action /
-   search-run-button，一并收口到 --on-accent（与 .primary-button 同源）。 */
+   search-run-button，一并收口到 --on-accent（与 .primary-button 同源）。
+   2026-10-25：边框由 --accent 改为 --accent-strong（用户反馈「检索按钮没有边框」）：
+   边框色与填充色相同时等于无边框，而同行次级按钮都有 --line 描边，主按钮因此
+   看着「没长齐」。改用深一档的 accent-strong，保留实心主按钮语义同时有轮廓。
+   同日：字重 550 → 500（用户反馈「检索字体是不是加粗了，统一不要加粗字重」）。
+   主按钮靠 accent 实心底 + --on-accent 文字区分层级即可，不需要靠加粗；
+   550 与同行 500 仅差半档，视觉上却明显更「鼓」，反而显得比其它按钮大一圈。
+   ⚠️ 这里的 `button.search-run-button`（0,2,1）低于 theme-modern.css 里
+   `.theme-modern .ghost-button.search-run-button`（0,3,0）—— 两处都必须写成 500，
+   只改一处仍会被另一处压回 550（本轮实测踩过一次）。 */
 .theme-modern .primary-button,
 .theme-modern .ghost-button.settings-primary-action,
 .theme-modern .ghost-button.primary-action,
 .theme-modern button.search-run-button {
   background: var(--accent);
-  border-color: var(--accent);
+  border: 1px solid var(--accent-strong);
   color: var(--on-accent);
-  font-weight: 550;
+  font-weight: 500;
 }
 .theme-modern .primary-button:hover:not(:disabled),
 .theme-modern .ghost-button.settings-primary-action:hover:not(:disabled),
@@ -99,7 +108,8 @@
 .theme-modern .search-run-button.search-run-busy,
 .theme-modern .search-run-button.search-run-busy:disabled {
   background: var(--accent);
-  border-color: var(--accent);
+  /* 同上：边框保持 accent-strong，避免「检索中」时又退回无边视觉 */
+  border-color: var(--accent-strong);
   color: var(--on-accent);
   opacity: 1;
   cursor: progress;

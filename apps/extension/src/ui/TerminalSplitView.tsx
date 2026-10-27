@@ -59,6 +59,15 @@ interface Props {
   onAggregateStateChanged?: (state: PaneStateSnapshot | null) => void;
   /** 窗格终端体右键（Bug②）：透传容器统一 TerminalContextMenu（容器内 preventDefault 拦原生菜单） */
   onPaneContextMenu?: (event: ReactMouseEvent) => void;
+  /** 最后一个窗格关闭时通知容器退回单屏（2026-10-25）。
+      用户反馈「分屏关到只剩最后一个后，X 按钮点不动，只有右键菜单的
+      『关闭当前窗格』能关」。根因：handleClose 原本在 countPanes<=1 时直接
+      return（不敢删空树），而 X 按钮是唯一的关闭入口，于是最后一个窗格的 X
+      成为死按钮。右键菜单走的是 applySplitLayout(tabId, undefined)（整标签退出
+      分屏），所以那条路正常 —— 两条路径语义不一致。
+      现统一：关闭最后一个窗格 = 退出分屏（回到该标签的单屏终端），
+      与右键菜单「关闭当前窗格」落到同一状态。 */
+  onExitSplit?: () => void;
 }
 
 let nodeCounter = 0;
@@ -220,6 +229,7 @@ export function TerminalSplitView({
   onFocusedPaneChanged,
   onAggregateStateChanged,
   onPaneContextMenu,
+  onExitSplit,
 }: Props) {
   const [tree, setTree] = useState<SplitNode>(() => createInitialTree(serverId, initialLayout));
 
@@ -240,6 +250,9 @@ export function TerminalSplitView({
   onFocusedPaneChangedRef.current = onFocusedPaneChanged;
   const onAggregateStateChangedRef = useRef(onAggregateStateChanged);
   onAggregateStateChangedRef.current = onAggregateStateChanged;
+  /* 退出分屏回调同样经 ref：handleClose 用空依赖数组保持引用稳定 */
+  const onExitSplitRef = useRef(onExitSplit);
+  onExitSplitRef.current = onExitSplit;
   const lastFocusedReportRef = useRef<FocusedPaneSnapshot | null>(null);
   const lastAggregateKeyRef = useRef<string>("none");
 
@@ -313,10 +326,18 @@ export function TerminalSplitView({
   }, []);
 
   const handleClose = useCallback((paneId: string) => {
-    setTree((prev) => {
-      if (countPanes(prev) <= 1) return prev;
-      return removePaneFromTree(prev, paneId);
-    });
+    /* 只剩最后一个窗格（2026-10-25 修复「最后一个窗格 X 点不动」）：
+       不能把树删空（会渲染出空容器），正确语义是退出分屏回到单屏终端。
+       原先这里在 setTree 里直接 return prev —— 等于把 X 变成死按钮，
+       用户只能靠右键菜单「关闭当前窗格」脱身，两条入口语义不一致。
+       现改为通知容器退出分屏，与右键菜单落到同一状态。
+       判断放 updater 之外（用 treeRef 读当前树）：在 setState updater 里调用
+       父级 setState 属于副作用，React 严格模式下 updater 可能被重复执行。 */
+    if (countPanes(treeRef.current) <= 1) {
+      onExitSplitRef.current?.();
+      return;
+    }
+    setTree((prev) => removePaneFromTree(prev, paneId));
   }, []);
 
   const handleSplit = useCallback((paneId: string, direction: SplitDirection) => {

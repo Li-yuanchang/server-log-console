@@ -66,12 +66,16 @@ export function FileBrowserActions(props: Props) {
 
   return (
     <>
-      {/* S6 原型 632：过滤入口常驻（150×24），不再是图标开合 */}
+      {/* S6 原型 632：过滤入口常驻（150×24），不再是图标开合。
+          占位符去掉尾部的「…」（2026-10-25 用户反馈）：省略号本意是「后面还有提示
+          文字被截断」，但这里就是完整文案，`…` 反而像是内容被截。实测原
+          「过滤当前目录…」文字宽 153.6px / 可用宽 156px，只剩 2.4px 余量，
+          换字号或缩放下极易真的被截断；去掉后余量充足。 */}
       <input
         className="fb-filter-input"
         value={props.filterValue}
         onChange={(event) => props.onFilterChange(event.target.value)}
-        placeholder="过滤当前目录…"
+        placeholder="过滤当前目录"
         disabled={!props.hasServer}
         aria-label="过滤当前目录"
       />

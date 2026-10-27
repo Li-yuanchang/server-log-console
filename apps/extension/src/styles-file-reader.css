@@ -197,8 +197,24 @@
   gap: 6px;
   min-width: 0;
   overflow-x: auto;
+  /* 2026-10-25 修复「结果页签右边出现一条竖直细条」（用户截图）：
+     根因是 overflow-x:auto 在 Chromium 下会**联动**把 overflow-y 变成 auto，
+     于是横向溢出时除了底部画横向滚动条，右侧还会多出一条 6px 宽的纵向滚动条
+     —— 截图里紧贴「结果 1」右侧那条竖线就是它（横向条的滑块右端）。
+     双重修法：
+     ① scrollbar-width:none + ::-webkit-scrollbar{display:none} 隐藏滚动条
+        （与 .toolbar-commandbar 同款手法），滚动能力保留；
+     ② overflow-y: hidden 显式切断联动，杜绝任何纵向滚动条。
+     页签条本就是单行横向列表，纵向永远不需要滚动。 */
+  overflow-y: hidden;
+  scrollbar-width: none;
   margin-top: 4px;
   padding-bottom: 2px;
+}
+.result-tab-strip::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 .result-tab-chip {
@@ -431,7 +447,7 @@
 .tree-list,
 .file-table {
   padding: 2px;
-  background: #fff;
+  background: var(--panel);
 }
 
 .file-table-head,
@@ -844,7 +860,7 @@
   height: 8px;
   border: 1.5px solid rgba(100, 160, 220, 0.9);
   border-radius: 999px;
-  background: #fff;
+  background: var(--panel);
   box-shadow: 0 0 3px rgba(0, 0, 0, 0.3);
   transform: translate(-50%, -50%);
   pointer-events: none;

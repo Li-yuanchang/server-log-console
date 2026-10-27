@@ -107,8 +107,6 @@ interface Props {
     watermarkOpacity: number;
     watermarkScope: WatermarkScope;
     errorHighlightEnabled: boolean;
-    showPathHistory: boolean;
-    showTransferHistory: boolean;
     sliceLengthMode: "auto" | "manual";
     sliceLength: number;
     serverStatusAutoRefresh: boolean;
@@ -138,8 +136,6 @@ interface Props {
     onWatermarkScopeChange: (scope: WatermarkScope) => void;
     onResetUiPreferences: () => void;
     onToggleErrorHighlight: () => void;
-    onTogglePathHistory: () => void;
-    onToggleTransferHistory: () => void;
     onSliceLengthModeChange: (mode: "auto" | "manual") => void;
     onSliceLengthChange: (bytes: number) => void;
     onToggleServerStatusAutoRefresh: () => void;
@@ -945,6 +941,21 @@ export function ConnectionSettingsWorkspace(props: Props) {
               >
                 ＋ 新增
               </button>
+              {/* 导入入口（2026-10-27 用户反馈「Finalshell 的导入入口在哪里？我看不到」）：
+                  此前只藏在「选中服务器 → ⋯ → 导入来源」里，没有任何服务器时
+                  根本点不到 —— 而这正是新用户第一次要用导入的场景。
+                  现在提到清单顶部常驻，与「＋ 新增」并列。 */}
+              <button
+                type="button"
+                className="ghost-button conn-list-import"
+                title="从 FinalShell / Xshell 导入连接"
+                onClick={() => {
+                  setDetailPane("import");
+                  setMobileShowDetail(true);
+                }}
+              >
+                导入
+              </button>
             </div>
             <div className="conn-server-list">
               {listGroups.map(([groupName, groupServers]) => (
@@ -1026,7 +1037,7 @@ export function ConnectionSettingsWorkspace(props: Props) {
                       <button
                         type="button"
                         className="ghost-button conn-more-trigger"
-                        title="更多：编辑连接 · 复制地址 · 导入来源"
+                        title="更多：编辑连接 · 复制地址 · 导入连接"
                         onClick={() => setMoreMenuOpen((current) => !current)}
                       >
                         <MoreHorizontal size={14} strokeWidth={1.8} />
@@ -1044,7 +1055,7 @@ export function ConnectionSettingsWorkspace(props: Props) {
                           <button type="button" role="menuitem" onClick={() => {
                             setMoreMenuOpen(false);
                             setDetailPane((current) => current === "import" ? "detail" : "import");
-                          }}>导入来源</button>
+                          }}>导入连接</button>
                         </div>
                       ) : null}
                     </div>
@@ -1471,7 +1482,7 @@ export function ConnectionSettingsWorkspace(props: Props) {
                       <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>
                     </div>
                     <strong>选择左侧服务器查看连接详情</strong>
-                    <span>点击清单顶部「＋ 新增」手动添加，或经 ⋯ 菜单「导入来源」从 FinalShell / Xshell 导入。</span>
+                    <span>点击清单顶部「＋ 新增」手动添加，或点「导入」从 FinalShell / Xshell 导入。</span>
                   </div>
                 )
                 ) : null}
@@ -2204,24 +2215,17 @@ export function ConnectionSettingsWorkspace(props: Props) {
                   <span className="settings-pref-label"><strong>服务器状态自动刷新</strong><span>状态面板定时采集</span></span>
                   <span className="settings-pref-value">{props.preferenceSection.serverStatusAutoRefresh ? `${Math.round(props.preferenceSection.serverStatusRefreshIntervalMs / 1000)}s` : "关闭"}</span>
                 </button>
-                <button type="button" className="settings-pref-row settings-pref-row-click" onClick={props.preferenceSection.onToggleActivityPanelVisible}>
-                  <span className="settings-pref-label"><strong>操作记录面板</strong><span>主界面底部的活动日志</span></span>
-                  <span className="settings-pref-value">{props.preferenceSection.activityPanelVisible ? "显示中" : "隐藏"}</span>
-                </button>
-                <div className="settings-pref-row">
-                  <span className="settings-pref-label"><strong>操作记录高度</strong><span>显示时可拖拽调整</span></span>
-                  <span className="settings-pref-value">{props.preferenceSection.activityPanelHeight}px</span>
-                </div>
-                {/* 2026-10-21 分区合并：原「浮层」独立分区只有 2 项，与「布局」同属
-                    「界面呈现」范畴，合并后导航由 6 项降到 5 项，减少视觉碎片。 */}
-                <button type="button" className="settings-pref-row settings-pref-row-click" onClick={props.preferenceSection.onTogglePathHistory}>
-                  <span className="settings-pref-label"><strong>路径历史浮层</strong><span>文件浏览地址栏下拉</span></span>
-                  <span className="settings-pref-value">{props.preferenceSection.showPathHistory ? "显示中" : "关闭"}</span>
-                </button>
-                <button type="button" className="settings-pref-row settings-pref-row-click" onClick={props.preferenceSection.onToggleTransferHistory}>
-                  <span className="settings-pref-label"><strong>传输记录浮层</strong><span>上传下载历史入口</span></span>
-                  <span className="settings-pref-value">{props.preferenceSection.showTransferHistory ? "显示中" : "关闭"}</span>
-                </button>
+                {/* 「操作记录面板 / 操作记录高度」两项已删除（2026-10-25 用户决策）：
+                    该面板已从侧栏彻底移除 —— 占高约 40% 挤压 27 台服务器列表、
+                    内容与日志预览的调试面板重复、且多为开发期诊断信息（"系统已启动"
+                    "已读取本地连接列表"）。面板没了，这两个开关/数值就是误导性配置
+                    （打开也看不到东西）。操作反馈统一由 toast 承担。 */}
+                {/* 2026-10-27 删除「路径历史浮层」「传输记录浮层」两项：
+                   它们控制的是浮层"此刻开没开"（App 内 showPathHistory / showTransferHistory
+                   的瞬时 state），不是持久化偏好；且二者互斥（开一个会关另一个），
+                   退出设置页即回到关闭态，表现为"点了没反应 / 状态不记录"。
+                   真正的入口在文件浏览器工具栏「更多」菜单里（最近访问的目录 / 传输记录），
+                   功能重复。偏好设置里保留的项才是真正落盘的配置。 */}
               </div>
             </section>
 

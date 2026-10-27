@@ -83,11 +83,28 @@
   align-items: center;
   flex-wrap: nowrap;
   gap: 10px;
-  padding: 6px 12px;
+  /* 统一工具条高度 34px（2026-10-27）：此前 padding 6px + 内部按钮 28px
+     实测撑到 41px，与终端标签条 31px、目录内容头 34px 不一致，
+     切视图时内容区会上下跳。改为定高 34 + 纵向 padding 3px，
+     内部控件高度由下面的子项规则压到 26px。 */
+  height: 34px;
+  min-height: 34px;
+  padding: 0 12px;
   min-width: 0;
   border-bottom: 1px solid var(--line);
   background: var(--panel);
   flex: none;
+}
+
+/* 行内控件统一压到 26px，使 34px 高的行内垂直居中且不撑高 */
+.theme-modern .pip-viewer-wrap  .viewer-toolbar-row .ghost-button,
+.theme-modern .pip-viewer-root  .viewer-toolbar-row .ghost-button,
+.theme-modern .pip-viewer-wrap  .viewer-toolbar-row .summary-nav,
+.theme-modern .pip-viewer-root  .viewer-toolbar-row .summary-nav,
+.theme-modern .pip-viewer-wrap  .viewer-toolbar-row .result-tab-strip > *,
+.theme-modern .pip-viewer-root  .viewer-toolbar-row .result-tab-strip > * {
+  height: 26px;
+  max-height: 26px;
 }
 /* 行内页签条去掉独立外边距/内边距，融入同一行 */
 .theme-modern .pip-viewer-wrap  .viewer-toolbar-row > .result-tab-strip, .theme-modern .pip-viewer-root  .viewer-toolbar-row > .result-tab-strip{

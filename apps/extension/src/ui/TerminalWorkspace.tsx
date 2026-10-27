@@ -862,15 +862,27 @@ export function TerminalPanel(props: TerminalPanelProps) {
           <div className="terminal-drop-sub">传入文件浏览器当前目录 · 不在终端内执行 scp</div>
         </div>
       ) : null}
-      {/* ① 工具行：左侧标签信息并入 TabStrip，这里只放动作（全图标 + 原生 title） */}
-      <div className={`terminal-panel-bar${isStandalone ? " terminal-panel-bar-standalone" : ""}`}>
-        {isStandalone ? (
-          <div className="terminal-panel-bar-title">
-            <strong>{terminalTitle}</strong>
-          </div>
-        ) : null}
-        <span className="terminal-panel-bar-spacer" />
-        <div className="terminal-panel-bar-actions">
+      {/* ② 终端标签条（空态时隐藏，T8） */}
+      {hasTabs ? (
+        <TerminalTabStrip
+          tabs={tabItems}
+          activeTabId={activeTabId}
+          onSelect={setActiveTab}
+          onClose={closeTab}
+          onNew={() => newTab()}
+          canNew={canNew}
+          onCloseOthers={closeOthers}
+          onCloseAll={closeAll}
+          isStandalone={isStandalone}
+        >
+          {/* 独立小窗需要标题（主窗口不需要——tab 本身已表明是什么） */}
+          {isStandalone ? (
+            <span className="terminal-tabs-standalone-title">{terminalTitle}</span>
+          ) : null}
+          {/* 工具动作并入标签条右侧（2026-10-27）：此前工具栏是独立一行，
+              左侧整片空白、又与标签条各带一条下横线，两线相叠显得割裂。
+              现在合并为一行：左 tab + 右图标，只保留一条底边。 */}
+          <div className="terminal-tabs-actions">
           {/* 注意：Windows 自绘窗口控制**不在这里渲染**（2026-10-25）。
               这里在 .terminal-panel-bar-standalone 内部，而该条是
               -webkit-app-region: drag 的拖拽区；Windows 无边框窗口下拖拽区
@@ -976,24 +988,7 @@ export function TerminalPanel(props: TerminalPanelProps) {
           >
             <Ellipsis size={13} />
           </button>
-        </div>
-      </div>
-
-      {/* ② 终端标签条（空态时隐藏，T8） */}
-      {hasTabs ? (
-        <TerminalTabStrip
-          tabs={tabItems}
-          activeTabId={activeTabId}
-          onSelect={setActiveTab}
-          onClose={closeTab}
-          onNew={() => newTab()}
-          canNew={canNew}
-          onCloseOthers={closeOthers}
-          onCloseAll={closeAll}
-        >
-          {isElectronRuntime ? (
-            <span className="terminal-tabs-hint">{formatKeyHint("⌘T 新建 · ⌘W 关闭标签")}</span>
-          ) : null}
+          </div>
         </TerminalTabStrip>
       ) : null}
 
@@ -1081,6 +1076,9 @@ export function TerminalPanel(props: TerminalPanelProps) {
                     onFocusedPaneChanged={handleFocusedPaneChanged}
                     onAggregateStateChanged={handleSplitAggregateState}
                     onPaneContextMenu={handlePaneContextMenu}
+                    /* 关闭最后一个窗格 = 退出分屏，与右键菜单「关闭当前窗格」同语义。
+                       此前该场景下窗格 X 是死按钮，只有右键菜单能关（用户反馈 2026-10-25）。 */
+                    onExitSplit={() => applySplitLayout(activeTabIdRef.current, undefined)}
                   />
                 ) : null}
                 {search.isOpen ? <TerminalFindBar search={search} /> : null}

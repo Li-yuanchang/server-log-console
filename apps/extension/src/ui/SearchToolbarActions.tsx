@@ -1,6 +1,5 @@
-import { Command as CommandIcon, Ellipsis, Pin, PinOff } from "lucide-react";
+import { Ellipsis, Pin, PinOff } from "lucide-react";
 import { ToolIcon } from "./ToolIcon.js";
-import { formatKeyHint } from "./key-hints.js";
 
 type Props = {
   uiTheme: "classic" | "modern";
@@ -20,7 +19,6 @@ type Props = {
   liveFollowEnabled: boolean;
   canToggleLive: boolean;
   onToggleLive: () => void;
-  onOpenPalette: () => void;
 };
 
 export function SearchToolbarActions(props: Props) {
@@ -70,16 +68,15 @@ export function SearchToolbarActions(props: Props) {
       >
         <Ellipsis size={14} strokeWidth={1.8} />
       </button>
-      <button
-        type="button"
-        className="ghost-button toolbar-action-button toolbar-palette-button"
-        onClick={props.onOpenPalette}
-        title={`命令面板 (${formatKeyHint("⌘K")})`}
-        aria-label="命令面板"
-      >
-        <CommandIcon size={14} strokeWidth={1.8} />
-        <span className="kbd">{formatKeyHint("⌘K")}</span>
-      </button>
+      {/* 命令面板入口已移除（2026-10-25 用户反馈「两处快捷入口重复」）。
+          保留侧栏头部那个（SidebarPanel .sidebar-head-buttons）：
+          ① 侧栏头部无条件渲染，无服务器 / 终端视图 / 文件模式下仍可见 —— 而本工具栏
+             只在 `!isFileMode && !terminalAsWorkspaceView` 时渲染，删掉侧栏那个会让
+             这些状态下失去唯一可见入口（只剩 ⌘K 快捷键）；
+          ② 命令面板主体是 `servers.map(...)` 的服务器列表，与侧栏「服务器」同域，
+             而本行其余按钮（LIVE / 置顶 / 录制 / 条件）都是当前会话的日志操作；
+          ③ 本按钮带 ⌘K 快捷键角标，比同排图标按钮宽，工具栏本就拥挤。
+          快捷键仍由 App.tsx 的 ⌘K 监听统一处理，功能无损失。 */}
     </div>
   );
 }

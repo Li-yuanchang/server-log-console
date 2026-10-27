@@ -277,7 +277,7 @@
   width: min(420px, calc(100vw - 48px));
   min-height: 48px;
   padding: 11px 13px 11px 14px;
-  border-radius: 16px;
+  border-radius: 12px;
   font-size: var(--fs-sm);
   line-height: 1.35;
   color: var(--ink, #1e293b);
@@ -300,7 +300,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 11px;
+  border-radius: 10px;
   background: rgba(100, 116, 139, 0.08);
 }
 .toast-icon-loading {
@@ -383,7 +383,7 @@
   gap: 12px;
   padding: 14px 15px 13px;
   border: 1px solid rgba(21, 27, 37, 0.12);
-  border-radius: 16px;
+  border-radius: 12px;
   background: rgba(252, 253, 255, 0.96);
   box-shadow: 0 18px 52px rgba(15, 23, 42, 0.18), 0 2px 8px rgba(15, 23, 42, 0.08);
   backdrop-filter: blur(18px);
@@ -509,7 +509,7 @@
   gap: 12px;
   width: min(300px, 100%);
   padding: 16px;
-  border-radius: 16px;
+  border-radius: 12px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(248, 250, 252, 0.86));
   border: 1px solid rgba(15, 23, 42, 0.08);
   box-shadow: 0 14px 34px rgba(15, 23, 42, 0.07), inset 0 1px 0 rgba(255, 255, 255, 0.74);
