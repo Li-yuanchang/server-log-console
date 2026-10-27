@@ -576,8 +576,10 @@ body.extension-sidepanel .f-go {
     min-height: 120px;
     max-height: 280px;
     overflow: hidden;
-    /* 2026-10-04：黑窗口直角 → 按主题轻度圆角（--r-m），与外层面板观感一致 */
-    border-radius: var(--r-m);
+    /* 2026-10-25 用户决策：终端面板四角直角（去掉 --r-m 圆角）。
+       贴边容器上的圆角只会在交界处露出缺口，与上方工具行/下方状态栏
+       连不成整块。桌面档已在 theme-modern-v2.css 同步改为 0。 */
+    border-radius: 0;
   }
 
   /* app bar：chip 占满弹性宽度（v3：chip 并入顶栏，砍独立 chip 行与标题） */

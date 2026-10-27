@@ -107,9 +107,18 @@
    放在 `.xterm` 上既符合 FitAddon 计算，也不影响基于 containerRef 的选中菜单坐标。 */
 .theme-modern .terminal-panel-body .xterm-container {
   padding: 0;
+  /* 终端背景纹理（2026-10-27）：纹理画在容器上、xterm 画布之下。
+     xterm 的 canvas 默认透明（theme.background 已设 transparent 时），
+     所以纹理能透出来。默认 none → 不注入 image，行为不变。
+     加在容器而非 .xterm：.xterm 有 padding，背景会被 padding 区裁掉。 */
+  background-image: var(--terminal-texture-image, none);
+  background-size: var(--terminal-texture-size, auto);
+  background-attachment: local;
 }
 .theme-modern .terminal-panel-body .xterm-container .xterm {
   padding: 12px 16px;
+  /* 画布透明：让下层的纹理与 --terminal-background 透出 */
+  background-color: transparent !important;
 }
 /* 底部提示行对齐终端文字左边距（同 .term 的 16px） */
 .theme-modern .terminal-hint-bar {

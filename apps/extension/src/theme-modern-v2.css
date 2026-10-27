@@ -1828,10 +1828,18 @@
   flex: 1 1 0%;
   width: 100%;
   max-height: none;
+  /* 2026-10-25 用户决策：margin 归零 + 四角圆角全部去掉。
+     演进过程（避免再绕回去）：
+       ① 原先 margin:0 + border-radius:var(--r-m) —— 圆角贴在容器左上边缘，
+          在侧栏交界处露出一块孤零零的圆弧（用户截图红圈）；
+       ② 曾改为 margin:4px 让圆角"呼吸" —— 但用户指出只有上/左有间距、
+          下/右仍是贴边的，四边不一致更怪异；
+       ③ 最终方案：**margin:0 + border-radius:0**。
+          终端面板本就应与其上方的工具行、下方的状态栏连成一整块深色区域，
+          圆角只会在贴边处露出缺口，去掉后四边严丝合缝。 */
   margin: 0;
   border: none;
-  /* 2026-10-04：黑窗口直角 → 按主题轻度圆角（--r-m token，随主题圆角体系） */
-  border-radius: var(--r-m);
+  border-radius: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;

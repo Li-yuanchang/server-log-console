@@ -6,6 +6,7 @@ import { looksLikeJumpServer } from "./terminal-utils.js";
 import { readDirectoryHistory } from "./storage.js";
 import { apiGetCredentialSecret, apiTestConnection, apiTestDraftConnection } from "./api.js";
 import { ThemedSelect } from "./ThemedSelect.js";
+import { TERMINAL_TEXTURES, buildTextureBackground } from "./semantic-tokens.js";
 import type { SlcDesktopUpdateState } from "../types/desktop-update.js";
 import { UpdateCenterPanel, type DesktopUpdateCheckLogEntry } from "./UpdateCenterPanel.js";
 import { SecuritySettingsView } from "./SecuritySettingsView.js";
@@ -123,6 +124,11 @@ interface Props {
     onUiImgBlurChange: (value: number) => void;
     onCustomBackgroundImageChange: (value: string) => void;
     onUiTerminalSchemeChange: (scheme: TerminalColorSchemeId) => void;
+    /** 终端背景纹理与强度（2026-10-27） */
+    terminalTexture: "none" | "grid" | "dots" | "double";
+    terminalTextureIntensity: number;
+    onTerminalTextureChange: (value: "none" | "grid" | "dots" | "double") => void;
+    onTerminalTextureIntensityChange: (value: number) => void;
     onUiAccentOverrideChange: (accent: string | null) => void;
     onUiFontFamilyChange: (fontFamily: UiFontFamily) => void;
     onUiFontSizeChange: (size: number) => void;
@@ -2205,6 +2211,66 @@ export function ConnectionSettingsWorkspace(props: Props) {
                     cursorBlink={props.preferenceSection.terminalCursorBlink}
                   />
                 </div>
+
+                {/* 背景纹理（2026-10-27）：默认 none。
+                    纹理是背景层最低优先级 —— 只提供空间感，不与内容争注意力。
+                    强度默认 55%，对应纹理线透明度约 3%（几乎无感）。 */}
+                <div className="settings-pref-row settings-pref-row-wide">
+                  <span className="settings-pref-label">
+                    <strong>背景纹理</strong>
+                    <span>终端背景的技术感纹理，默认关闭</span>
+                  </span>
+                  <div className="slc-tex-grid" role="radiogroup" aria-label="终端背景纹理">
+                    {TERMINAL_TEXTURES.map((tex) => {
+                      const active = props.preferenceSection.terminalTexture === tex.id;
+                      return (
+                        <button
+                          key={tex.id}
+                          type="button"
+                          role="radio"
+                          aria-checked={active}
+                          title={tex.desc}
+                          className={active ? "slc-tex-btn slc-tex-btn-active" : "slc-tex-btn"}
+                          onClick={() => props.preferenceSection.onTerminalTextureChange(tex.id)}
+                        >
+                          <span
+                            className="slc-tex-preview"
+                            style={{
+                              backgroundColor: props.preferenceSection.terminalFollowPreview.background,
+                              ...(tex.id === "none"
+                                ? {}
+                                : { backgroundImage: buildTextureBackground(tex.id, 100).image }),
+                              backgroundSize: tex.id === "none" ? "auto" : buildTextureBackground(tex.id, 100).size,
+                            }}
+                          />
+                          <span className="slc-tex-name">{tex.name}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {props.preferenceSection.terminalTexture !== "none" ? (
+                  <div className="settings-pref-row settings-pref-row-wide">
+                    <span className="settings-pref-label">
+                      <strong>纹理强度</strong>
+                      <span>越高越明显，建议不超过 70%</span>
+                    </span>
+                    <span className="settings-pref-value" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <input
+                        type="range"
+                        min={0}
+                        max={100}
+                        step={5}
+                        value={props.preferenceSection.terminalTextureIntensity}
+                        onChange={(event) => props.preferenceSection.onTerminalTextureIntensityChange(Number(event.target.value))}
+                        style={{ width: 120, accentColor: "var(--accent)" }}
+                        aria-label="纹理强度"
+                      />
+                      <span style={{ minWidth: 34, textAlign: "right" }}>{props.preferenceSection.terminalTextureIntensity}%</span>
+                    </span>
+                  </div>
+                ) : null}
               </div>
             </section>
 

@@ -27,11 +27,16 @@ const SCAN_WINDOW_LINES = 400;
 /** 装饰总数上限，超限 dispose 最旧的。 */
 const MAX_DECORATIONS = 800;
 
-/* 原型 .term 配色 token（字面 hex，注释标注对应原型 class） */
-const PROMPT_USER_HOST_COLOR = "#98c379"; // .u
-const PROMPT_PATH_COLOR = "#7ec8e3"; // .pth
-const LOG_ERROR_COLOR = "#e06c75"; // .err
-const LOG_WARN_COLOR = "#e5c07b"; // .wrn
+/* 语义色统一从 semantic-tokens.ts 取（2026-10-27）：
+   此前这里硬编码 #e06c75 / #e5c07b，而日志预览另写了一套 #fecaca / #fbbf24，
+   同一个 ERROR 在两个视图里色相都不一致。现在两端共用同一套映射：
+   深底用高明度、浅底用低明度，色相不变。 */
+import { terminalColor } from "./semantic-tokens.js";
+
+const PROMPT_USER_HOST_COLOR = terminalColor("prompt");
+const PROMPT_PATH_COLOR = terminalColor("promptPath");
+const LOG_ERROR_COLOR = terminalColor("error");
+const LOG_WARN_COLOR = terminalColor("warning");
 
 /**
  * 素色提示符行：[user@host path]# 或 [user@host path]$。

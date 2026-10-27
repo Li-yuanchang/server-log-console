@@ -947,6 +947,54 @@
 .slc-term-bar { display: block; height: 18px; border-radius: 5px; margin-bottom: 5px; }
 .slc-term-card b { font-size: var(--fs-2xs); font-weight: 600; color: var(--ink-soft); }
 
+/* 终端背景纹理选择（2026-10-27）：与 .slc-term-card 同规格，
+   缩略图直接渲染真实纹理样式，点选即生效。 */
+.slc-tex-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  width: 100%;
+  /* 父级 .settings-pref-row 是 flex + align-items:center，
+     不给网格 align-self 会让它按内容最小高度收缩 */
+  align-self: stretch;
+  align-items: stretch;
+}
+.slc-tex-btn {
+  padding: 5px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: stretch;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  /* 网格行是 auto，但父级 .settings-pref-row 的 align-items:center 会把
+     按钮压到内容最小高度（实测缩略图只剩 2px）。显式给按钮定高，
+     并禁止 flex 收缩。 */
+  flex: 0 0 auto;
+  min-height: 52px;
+}
+.slc-tex-btn:hover { border-color: var(--line-strong); }
+.slc-tex-btn-active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.slc-tex-preview {
+  display: block;
+  height: 26px;
+  /* 缩略图必须不被压缩：父级 flex 列默认 min-height:auto 会塌陷到 2px */
+  flex: 0 0 26px;
+  min-height: 26px;
+  border-radius: 5px;
+  border: 1px solid var(--line);
+}
+.slc-tex-name {
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+  color: var(--ink-soft);
+  text-align: center;
+}
+.slc-tex-btn-active .slc-tex-name { color: var(--accent); }
+
 /* 高级 · 强调色覆盖圆卡（描边环选中态） */
 .slc-accent-row { display: inline-flex; align-items: center; gap: 7px; flex-wrap: wrap; }
 .csw {

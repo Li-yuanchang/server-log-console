@@ -17,6 +17,7 @@ import { ImportPreviewDialog } from "./ImportPreviewDialog.js";
 import { UploadConflictDialog } from "./UploadConflictDialog.js";
 import { TransferPipWindow } from "./TransferPipWindow.js";
 import { useTransferPip } from "./useTransferPip.js";
+import { SEMANTIC_COLORS, buildTextureBackground } from "./semantic-tokens.js";
 import { ConnectionSettingsWorkspace, WatermarkOverlay, type GatewayTestState, type ManualServerDraft, type SettingsWorkspaceView } from "./ConnectionSettingsWorkspace.js";
 import { useDesktopUpdate } from "./UpdateCenterPanel.js";
 import { SearchQueryPanel } from "./SearchQueryPanel.js";
@@ -455,6 +456,10 @@ export function App() {
     setTerminalFontSize,
     terminalLineHeight,
     setTerminalLineHeight,
+    terminalTexture,
+    setTerminalTexture,
+    terminalTextureIntensity,
+    setTerminalTextureIntensity,
     terminalCursorStyle,
     setTerminalCursorStyle,
     terminalCursorBlink,
@@ -3456,6 +3461,13 @@ export function App() {
     ? resolvedTheme.v.shell
     : terminalScheme.theme.background;
 
+  /* 终端背景纹理（2026-10-27）：默认 none，只在用户显式选择时注入。
+     强度映射到透明度（见 semantic-tokens.buildTextureBackground）。 */
+  const terminalTextureBackground = useMemo(
+    () => buildTextureBackground(terminalTexture, terminalTextureIntensity),
+    [terminalTexture, terminalTextureIntensity]
+  );
+
   /* 「跟随主题」卡的预览色（2026-10-24）：主题 shell 底/ink 文字 + 控制台方案 ANSI，
      与 buildTerminalTheme 的 follow 语义一致。传给设置中心的配色网格与实时预览。 */
   const terminalFollowPreview = useMemo(() => {
@@ -3488,6 +3500,25 @@ export function App() {
        CSS 层与 xterm 实例必须取同一个值，否则外壳与画布撞色。 */
     "--terminal-background": terminalBackgroundColor,
     "--terminal-background-soft": terminalBackgroundColor,
+    /* 日志级别语义色（2026-10-27）：从同一套主题取，
+       保证终端与日志预览「同一个 ERROR 是同一个色相」。
+       follow 时不注入 → CSS 回退到全局 --red/--amber，保持原观感。 */
+    /* 取当前主题自带的日志语义色（logSurface）。
+       之前误用全局 SEMANTIC_COLORS，导致 6 套主题的 ERROR 色完全相同、
+       换主题日志纹丝不动（实测踩到）。现在每套主题自带一套浅底适配色，
+       回退顺序：主题 logSurface → 全局 SEMANTIC_COLORS。 */
+    ...(terminalSchemeFollow
+      ? {}
+      : {
+          "--log-error": terminalScheme.logSurface?.error ?? SEMANTIC_COLORS.error.log,
+          "--log-warning": terminalScheme.logSurface?.warning ?? SEMANTIC_COLORS.warning.log,
+          "--log-exception": terminalScheme.logSurface?.exception ?? SEMANTIC_COLORS.exception.log,
+          "--log-fatal": terminalScheme.logSurface?.fatal ?? SEMANTIC_COLORS.fatal.log,
+        }),
+    /* 终端背景纹理（2026-10-27）：纹理是背景层最低优先级，
+       默认 none；选了才注入，且强度由 texIntensity 控制。 */
+    "--terminal-texture-image": terminalTextureBackground.image,
+    "--terminal-texture-size": terminalTextureBackground.size,
     "--custom-background-image": toCssImageUrl(customBackgroundImage),
     /* 背景层图片模式：遮罩亮度 / 模糊由设置滑杆驱动（原型 T1）。
        只注入 -alpha（0..1，供 CSS calc 使用）与 blur；旧的百分比版
@@ -5085,6 +5116,10 @@ export function App() {
                 onUiImgBlurChange: setUiImgBlur,
                 onCustomBackgroundImageChange: setCustomBackgroundImage,
                 onUiTerminalSchemeChange: setUiTerminalScheme,
+                terminalTexture,
+                terminalTextureIntensity,
+                onTerminalTextureChange: setTerminalTexture,
+                onTerminalTextureIntensityChange: setTerminalTextureIntensity,
                 onUiAccentOverrideChange: setUiAccentOverride,
                 onUiFontFamilyChange: setUiFontFamily,
                 onUiFontSizeChange: setUiFontSize,

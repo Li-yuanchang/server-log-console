@@ -26,7 +26,10 @@ export type UiBackgroundLayer =
 /** 终端配色：follow = 底色/文字跟随 UI 主题（ANSI 用默认控制台色），其余为自带底色的深色方案。
     「日光」浅色方案已移除（2026-10-24）：与背景跟随主题架构冲突，深浅主题下均不可读。 */
 export type TerminalColorSchemeId =
-  | "follow" | "console" | "tokyo" | "mocha" | "dracula" | "nord" | "rose" | "solar";
+  | "follow" | "console" | "tokyo" | "mocha" | "dracula" | "nord" | "rose" | "solar"
+  /* 2026-10-27 科技感主题包：每套同时定义终端深色 + 日志浅色底，
+     切视图时两端色调一致、语义色同步（见 semantic-tokens.ts） */
+  | "sage" | "space" | "aurora" | "neon" | "charcoal" | "moss";
 /** 终端光标样式：对齐 VRC「光标样式」三档（块 / 竖线 / 下划线） */
 export type TerminalCursorStyle = "block" | "bar" | "underline";
 
@@ -115,6 +118,20 @@ export type TerminalColorScheme = {
   name: string;
   desc: string;
   grad: [string, string, string, string];
+  /** 配套的日志预览浅色底 + 语义色（2026-10-27）：与终端深色底成对给出。
+      保证切视图时两端视觉同源、语义色一致（同一个 ERROR 是同一个色相）。
+      未定义时沿用当前 UI 主题背景与全局 --red/--amber。 */
+  logSurface?: {
+    background: string;
+    foreground: string;
+    muted: string;
+    line: string;
+    /** 日志侧语义色（浅底适配，低明度） */
+    error?: string;
+    warning?: string;
+    exception?: string;
+    fatal?: string;
+  };
   theme: {
     background: string; foreground: string; cursor: string; cursorAccent: string;
     selectionBackground: string;
@@ -154,6 +171,46 @@ export const TERMINAL_SCHEMES: TerminalColorScheme[] = [
     theme: { background: "#002b36", foreground: "#93a1a1", cursor: "#93a1a1", cursorAccent: "#002b36", selectionBackground: "#073642",
       black: "#073642", red: "#dc322f", green: "#859900", yellow: "#b58900", blue: "#268bd2", magenta: "#d33682", cyan: "#2aa198", white: "#eee8d5",
       brightBlack: "#002b36", brightRed: "#cb4b16", brightGreen: "#586e75", brightYellow: "#657b83", brightBlue: "#839496", brightMagenta: "#6c71c4", brightCyan: "#93a1a1", brightWhite: "#fdf6e3" } },
+
+  /* ── 科技感主题包（2026-10-27）──
+     每套都是「终端深色 + 日志浅色」成对定义：
+     · 背景低饱和只做氛围，语义色（ERROR/WARN/FATAL）是唯一高声量的元素
+     · logSurface 保证切到日志预览时色调同源，不出现一冷一暖的割裂 */
+  { id: "sage", name: "石墨青", desc: "低饱和灰绿 · 默认 · 长时间看不累", grad: ["#0f1310", "#7fcf91", "#ffc86b", "#ff7b8a"],
+    theme: { background: "#0f1310", foreground: "#d6ddd8", cursor: "#d6ddd8", cursorAccent: "#0f1310", selectionBackground: "#2a3b32",
+      black: "#1c2420", red: "#ff7b8a", green: "#7fcf91", yellow: "#ffc86b", blue: "#7ec8e3", magenta: "#c4a7e7", cyan: "#73b59a", white: "#d6ddd8",
+      brightBlack: "#4a554e", brightRed: "#ff9aa6", brightGreen: "#9ee0ad", brightYellow: "#ffd98f", brightBlue: "#9ed8ee", brightMagenta: "#d4bfef", brightCyan: "#8fc9b0", brightWhite: "#eef3ee" },
+    logSurface: { background: "#fbfbf7", foreground: "#27302a", muted: "#92988d", line: "#d9ded0", error: "#a5483d", warning: "#b77935", exception: "#b45309", fatal: "#6d28d9" } },
+
+  { id: "space", name: "深空蓝", desc: "冷调科技感 · 排障时 ERROR 一眼抓住", grad: ["#0a1020", "#5ee4a8", "#ffc86b", "#ff7b8a"],
+    theme: { background: "#0a1020", foreground: "#c8d8ea", cursor: "#c8d8ea", cursorAccent: "#0a1020", selectionBackground: "#1e3a5f",
+      black: "#131c2e", red: "#ff7b8a", green: "#5ee4a8", yellow: "#ffc86b", blue: "#6ba6ff", magenta: "#b18aff", cyan: "#5be3d8", white: "#c8d8ea",
+      brightBlack: "#3d4d63", brightRed: "#ff9aa6", brightGreen: "#7ff0bd", brightYellow: "#ffd98f", brightBlue: "#8dbdff", brightMagenta: "#c8aaff", brightCyan: "#7dede3", brightWhite: "#e8f0fa" },
+    logSurface: { background: "#f4f7fc", foreground: "#16243a", muted: "#6b7d92", line: "#d3dde9", error: "#c0392b", warning: "#a8710f", exception: "#b45309", fatal: "#6d28d9" } },
+
+  { id: "aurora", name: "极光青", desc: "青绿主调 · 仪表盘感", grad: ["#07161a", "#4ee8d0", "#ffd166", "#ff6b81"],
+    theme: { background: "#07161a", foreground: "#bfe4e8", cursor: "#bfe4e8", cursorAccent: "#07161a", selectionBackground: "#124049",
+      black: "#0e2328", red: "#ff6b81", green: "#4ee8d0", yellow: "#ffd166", blue: "#57b8e8", magenta: "#b48ee8", cyan: "#4ee8d0", white: "#bfe4e8",
+      brightBlack: "#375a60", brightRed: "#ff8b9c", brightGreen: "#6ef2dc", brightYellow: "#ffe08f", brightBlue: "#7acbee", brightMagenta: "#c8a8f0", brightCyan: "#6ef2dc", brightWhite: "#e0f6f8" },
+    logSurface: { background: "#f2fafa", foreground: "#0d2428", muted: "#5f8085", line: "#cde5e5", error: "#c62828", warning: "#b07d00", exception: "#b45309", fatal: "#6d28d9" } },
+
+  { id: "neon", name: "暗紫霓虹", desc: "紫底霓虹粉 · 好看但长时间易累", grad: ["#140f22", "#6ee7d0", "#ffd93d", "#ff6b9d"],
+    theme: { background: "#140f22", foreground: "#d4cbe8", cursor: "#d4cbe8", cursorAccent: "#140f22", selectionBackground: "#3a2a5c",
+      black: "#1e1833", red: "#ff6b9d", green: "#6ee7d0", yellow: "#ffd93d", blue: "#7aa2f7", magenta: "#c4a7e7", cyan: "#6ee7d0", white: "#d4cbe8",
+      brightBlack: "#4a3d63", brightRed: "#ff8bb3", brightGreen: "#8ff0dd", brightYellow: "#ffe680", brightBlue: "#9bb8fa", brightMagenta: "#d4bfef", brightCyan: "#8ff0dd", brightWhite: "#eee8f8" },
+    logSurface: { background: "#f6f3fc", foreground: "#1f1633", muted: "#7a6b95", line: "#ddd4e9", error: "#b3245c", warning: "#8a6800", exception: "#b45309", fatal: "#6d28d9" } },
+
+  { id: "charcoal", name: "炭黑中性", desc: "纯灰阶 · 只让语义色出声 · 最不抢内容", grad: ["#0a0a0a", "#a3e635", "#fbbf24", "#f87171"],
+    theme: { background: "#0a0a0a", foreground: "#e0e0e0", cursor: "#e0e0e0", cursorAccent: "#0a0a0a", selectionBackground: "#2e2e2e",
+      black: "#1a1a1a", red: "#f87171", green: "#a3e635", yellow: "#fbbf24", blue: "#60a5fa", magenta: "#c084fc", cyan: "#22d3ee", white: "#e0e0e0",
+      brightBlack: "#4a4a4a", brightRed: "#fca5a5", brightGreen: "#bef264", brightYellow: "#fcd34d", brightBlue: "#93c5fd", brightMagenta: "#d8b4fe", brightCyan: "#67e8f9", brightWhite: "#f5f5f5" },
+    logSurface: { background: "#ffffff", foreground: "#171717", muted: "#8a8a8a", line: "#e5e5e5", error: "#b91c1c", warning: "#92400e", exception: "#b45309", fatal: "#7c3aed" } },
+
+  { id: "moss", name: "墨绿护眼", desc: "深墨绿底 · 夜间排障眼睛最省力", grad: ["#0d1512", "#8fe3a8", "#ffce6b", "#ff8a80"],
+    theme: { background: "#0d1512", foreground: "#cde0d4", cursor: "#cde0d4", cursorAccent: "#0d1512", selectionBackground: "#204034",
+      black: "#14201b", red: "#ff8a80", green: "#8fe3a8", yellow: "#ffce6b", blue: "#6db3d8", magenta: "#b39ddb", cyan: "#6ee7d0", white: "#cde0d4",
+      brightBlack: "#3d5048", brightRed: "#ffa89f", brightGreen: "#a8f0bc", brightYellow: "#ffdf9f", brightBlue: "#8ecbe8", brightMagenta: "#c8b6e8", brightCyan: "#8ff0dd", brightWhite: "#e8f5ec" },
+    logSurface: { background: "#f4f8f4", foreground: "#15261b", muted: "#68806f", line: "#d5e3d8", error: "#a83232", warning: "#8a6a12", exception: "#b45309", fatal: "#6d28d9" } },
 ];
 
 /** WCAG 相对亮度 → on-accent：黑/白中取对比度更高者（禁用亮度阈值法，历史 bug 见方案文档 3.3）。 */
@@ -225,7 +282,13 @@ export type UiThemeAPI = {
   setUiTerminalScheme: (scheme: TerminalColorSchemeId) => void;
   /** 终端行高倍率（1.0~2.4，xterm lineHeight）。参考 VRC「行高」步进器。 */
   terminalLineHeight: number;
+  /** 终端背景纹理（2026-10-27）：none/grid/dots/double */
+  terminalTexture: "none" | "grid" | "dots" | "double";
+  /** 纹理强度 0~100，映射到纹理线透明度 */
+  terminalTextureIntensity: number;
   setTerminalLineHeight: (value: number) => void;
+  setTerminalTexture: (value: "none" | "grid" | "dots" | "double") => void;
+  setTerminalTextureIntensity: (value: number) => void;
   /** 终端光标样式（xterm cursorStyle）。参考 VRC「光标样式」三档。 */
   terminalCursorStyle: TerminalCursorStyle;
   setTerminalCursorStyle: (style: TerminalCursorStyle) => void;
@@ -474,6 +537,16 @@ export function useUiTheme(): UiThemeAPI {
     if (!migrated && stored === 180) return DEFAULT_TERMINAL_LINE_HEIGHT;
     return stored / 100;
   });
+  /* 终端背景纹理与强度（2026-10-27）：默认 none，
+     纹理是背景层最低优先级，只提供空间感不与内容争。 */
+  const [terminalTexture, setTerminalTexture] = useState<"none" | "grid" | "dots" | "double">(() => {
+    const v = readLocalStorageValue("terminal-texture");
+    return v === "grid" || v === "dots" || v === "double" ? v : "none";
+  });
+  const [terminalTextureIntensity, setTerminalTextureIntensity] = useState(() => {
+    return readStoredNumber("terminal-texture-intensity", 55, 0, 100);
+  });
+
   /* 终端光标样式 / 闪烁：原写死 bar + true，改为可调 */
   const [terminalCursorStyle, setTerminalCursorStyle] = useState<TerminalCursorStyle>(() => {
     const value = readLocalStorageValue("terminal-cursor-style");
@@ -611,6 +684,14 @@ export function useUiTheme(): UiThemeAPI {
   }, [terminalLineHeight]);
 
   useEffect(() => {
+    persistLocalStorageValue("terminal-texture", terminalTexture);
+  }, [terminalTexture]);
+
+  useEffect(() => {
+    persistLocalStorageValue("terminal-texture-intensity", String(terminalTextureIntensity));
+  }, [terminalTextureIntensity]);
+
+  useEffect(() => {
     persistLocalStorageValue("terminal-cursor-style", terminalCursorStyle);
   }, [terminalCursorStyle]);
 
@@ -724,6 +805,10 @@ export function useUiTheme(): UiThemeAPI {
     setTerminalFontSize,
     terminalLineHeight,
     setTerminalLineHeight,
+    terminalTexture,
+    setTerminalTexture,
+    terminalTextureIntensity,
+    setTerminalTextureIntensity,
     terminalCursorStyle,
     setTerminalCursorStyle,
     terminalCursorBlink,

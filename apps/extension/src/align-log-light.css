@@ -29,24 +29,60 @@
 .theme-modern .pip-viewer-wrap  .log-line .log-line-time, .theme-modern .pip-viewer-root  .log-line .log-line-time{
   color: var(--ink-muted);
 }/* ============ 2. 级别色：原型仅着色文字，无底色 ============ */
+/* 2026-10-27：级别色改用 --log-* 独立变量。
+   原实现借用全局 --red / --amber —— 那是按钮、徽标、状态点共用的 UI 语义色，
+   为了日志着色去改它会波及整个界面。现在日志有自己的变量槽，
+   由所选终端主题注入（见 semantic-tokens.ts 的 log 列），
+   未选主题时回退到全局语义色（下面的 fallback 保持原观感）。 */
 .theme-modern .pip-viewer-wrap  .log-line-level-error, .theme-modern .pip-viewer-wrap .log-line-level-fatal, .theme-modern .pip-viewer-root .log-line-level-fatal, .theme-modern .pip-viewer-root  .log-line-level-error, .theme-modern .pip-viewer-wrap .log-line-level-fatal, .theme-modern .pip-viewer-root .log-line-level-fatal{
-  color: var(--red);
+  color: var(--log-error, var(--red));
   font-weight: 650;
   background: transparent;
   box-shadow: none;
 }.theme-modern .pip-viewer-wrap  .log-line-level-warning, .theme-modern .pip-viewer-root  .log-line-level-warning{
-  color: var(--amber);
+  color: var(--log-warning, var(--amber));
   font-weight: 600;
   background: transparent;
   box-shadow: none;
 }.theme-modern .pip-viewer-wrap  .log-line-level-exception, .theme-modern .pip-viewer-root  .log-line-level-exception{
-  color: var(--amber);
+  color: var(--log-exception, var(--amber));
   font-weight: 600;
   background: transparent;
   box-shadow: none;
+}
+/* FATAL 单独一档：此前与 ERROR 同色，无法区分「致命」与「一般错误」。
+   用紫色（红系内难再分层），与终端侧 semantic-tokens 的 fatal 保持一致。 */
+.theme-modern .pip-viewer-wrap  .log-line-level-fatal, .theme-modern .pip-viewer-root  .log-line-level-fatal{
+  color: var(--log-fatal, #6d28d9);
 }.theme-modern .pip-viewer-wrap  .log-line-clickable.log-line-level-error:hover, .theme-modern .pip-viewer-wrap .log-line-clickable.log-line-level-warning:hover, .theme-modern .pip-viewer-root .log-line-clickable.log-line-level-warning:hover, .theme-modern .pip-viewer-wrap .log-line-clickable.log-line-level-warning:hover, .theme-modern .pip-viewer-root .log-line-clickable.log-line-level-exception:hover, .theme-modern .pip-viewer-wrap .log-line-clickable.log-line-level-warning:hover, .theme-modern .pip-viewer-root .log-line-clickable.log-line-level-fatal:hover, .theme-modern .pip-viewer-root  .log-line-clickable.log-line-level-error:hover, .theme-modern .pip-viewer-wrap .log-line-clickable.log-line-level-warning:hover, .theme-modern .pip-viewer-root .log-line-clickable.log-line-level-warning:hover, .theme-modern .pip-viewer-wrap .log-line-clickable.log-line-level-warning:hover, .theme-modern .pip-viewer-root .log-line-clickable.log-line-level-exception:hover, .theme-modern .pip-viewer-wrap .log-line-clickable.log-line-level-warning:hover, .theme-modern .pip-viewer-root .log-line-clickable.log-line-level-fatal:hover{
   background: var(--accent-soft);
-}/* ============ 3. 切片条：原型浅色（transparent 底 + --line 边 + ink 文字） ============ */
+}/* 级别色兜底（2026-10-27）：上面的规则都限定在 .pip-viewer-wrap / .pip-viewer-root
+   之下（那是独立小窗的容器类），但内嵌日志视图里没有这层，
+   导致级别色在内嵌态完全不生效。这里补一条不限定父级的规则 ——
+   特异性 (0,2,0) 低于上面的 (0,3,0)，所以小窗内行为不变，
+   内嵌时由这条兜底。 */
+.theme-modern .log-line-level-error {
+  color: var(--log-error, var(--red));
+  font-weight: 650;
+}
+/* FATAL 必须单独成一条：与 error 合并写在同一个选择器组里时，
+   会被上方 (0,3,0) 的 .pip-viewer-wrap 规则里的 fatal 分支抢先命中，
+   导致 FATAL 一直显示成 ERROR 的红。这里用 (0,2,0) 单独声明，
+   靠文件加载顺序（align-log-light 在 theme-modern 之后）胜出。 */
+.theme-modern .log-line-level-fatal {
+  color: var(--log-fatal, #6d28d9);
+  font-weight: 700;
+}
+.theme-modern .log-line-level-warning {
+  color: var(--log-warning, var(--amber));
+  font-weight: 600;
+}
+.theme-modern .log-line-level-exception {
+  color: var(--log-exception, var(--amber));
+  font-weight: 600;
+}
+
+/* ============ 3. 切片条：原型浅色（transparent 底 + --line 边 + ink 文字） ============ */
 .theme-modern .pip-viewer-wrap  .slicebar, .theme-modern .pip-viewer-root  .slicebar{
   background: transparent !important;
   border-bottom: 1px solid var(--line) !important;
