@@ -1006,18 +1006,22 @@
      按钮压到内容最小高度（实测缩略图只剩 2px）。显式给按钮定高，
      并禁止 flex 收缩。 */
   flex: 0 0 auto;
-  min-height: 52px;
+  min-height: 70px;
 }
 .slc-tex-btn:hover { border-color: var(--line-strong); }
 .slc-tex-btn-active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 .slc-tex-preview {
   display: block;
-  height: 26px;
-  /* 缩略图必须不被压缩：父级 flex 列默认 min-height:auto 会塌陷到 2px */
-  flex: 0 0 26px;
-  min-height: 26px;
+  /* 2026-10-27：26px 太矮，大面积光效（极光/星云）在缩略图里只占 1-2 像素，
+     完全看不出区别。加到 44px 才能呈现氛围层次。 */
+  height: 44px;
+  flex: 0 0 44px;
+  min-height: 44px;
   border-radius: 5px;
   border: 1px solid var(--line);
+  /* 缩略图内也要能看到纹理/光效的细节，不裁切 */
+  overflow: hidden;
+  background-clip: padding-box;
 }
 .slc-tex-name {
   font-size: var(--fs-2xs);

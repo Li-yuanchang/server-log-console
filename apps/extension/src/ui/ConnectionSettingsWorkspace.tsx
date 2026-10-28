@@ -6,7 +6,7 @@ import { looksLikeJumpServer } from "./terminal-utils.js";
 import { readDirectoryHistory } from "./storage.js";
 import { apiGetCredentialSecret, apiTestConnection, apiTestDraftConnection } from "./api.js";
 import { ThemedSelect } from "./ThemedSelect.js";
-import { TERMINAL_TEXTURES, TERMINAL_BACKDROPS, buildTextureBackground, buildBackdropBackground } from "./semantic-tokens.js";
+import { TERMINAL_TEXTURES, TERMINAL_BACKDROPS, buildTextureBackground, buildBackdropBackground, buildBackdropPreview } from "./semantic-tokens.js";
 import type { SlcDesktopUpdateState } from "../types/desktop-update.js";
 import { UpdateCenterPanel, type DesktopUpdateCheckLogEntry } from "./UpdateCenterPanel.js";
 import { SecuritySettingsView } from "./SecuritySettingsView.js";
@@ -2278,7 +2278,10 @@ export function ConnectionSettingsWorkspace(props: Props) {
                             className="slc-tex-preview"
                             style={{
                               backgroundColor: props.preferenceSection.terminalFollowPreview.background,
-                              backgroundImage: bd.id === "none" ? "none" : buildBackdropBackground(bd.id, 100),
+                              /* 预览固定用 100% 强度 + 叠加当前纹理，
+                                 否则缩略图上看不出「背景图 + 纹理」的组合效果 */
+                              backgroundImage: bd.id === "none" ? "none" : buildBackdropPreview(bd.id),
+                              backgroundSize: "cover",
                             }}
                           />
                           <span className="slc-tex-name">{bd.name}</span>
@@ -2332,10 +2335,21 @@ export function ConnectionSettingsWorkspace(props: Props) {
                             className="slc-tex-preview"
                             style={{
                               backgroundColor: props.preferenceSection.terminalFollowPreview.background,
+                              /* 缩略图示意：实际间距 32px 在 44px 高的预览里只能显示 1 格，
+                                 这里按 1/2 缩放展示图案特征（方格/点阵的密度观感），
+                                 真实终端里是 32px。 */
                               ...(tex.id === "none"
                                 ? {}
-                                : { backgroundImage: buildTextureBackground(tex.id, 100).image }),
-                              backgroundSize: tex.id === "none" ? "auto" : buildTextureBackground(tex.id, 100).size,
+                                : {
+                                    backgroundImage: buildTextureBackground(tex.id, 100).image
+                                      .replace(/32px/g, "14px")
+                                      .replace(/160px/g, "42px"),
+                                  }),
+                              backgroundSize: tex.id === "none"
+                                ? "auto"
+                                : buildTextureBackground(tex.id, 100).size
+                                    .replace(/32px/g, "14px")
+                                    .replace(/160px/g, "42px"),
                             }}
                           />
                           <span className="slc-tex-name">{tex.name}</span>

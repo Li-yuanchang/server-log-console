@@ -78,9 +78,9 @@ export type TerminalTexture = "none" | "grid" | "dots" | "double";
 
 export const TERMINAL_TEXTURES: Array<{ id: TerminalTexture; name: string; desc: string }> = [
   { id: "none", name: "无", desc: "纯色背景，最不干扰" },
-  { id: "grid", name: "方格", desc: "16px 细线 · 标准技术感" },
-  { id: "dots", name: "点阵", desc: "14px 圆点 · 比线更柔和" },
-  { id: "double", name: "双层", desc: "16px + 80px 主次刻度 · 工程感" }
+  { id: "grid", name: "方格", desc: "32px 细线 · 疏朗不眼晕" },
+  { id: "dots", name: "点阵", desc: "22px 圆点 · 比线更柔和" },
+  { id: "double", name: "双层", desc: "32px + 160px 主次刻度 · 工程感" }
 ];
 
 /**
@@ -106,22 +106,37 @@ export function buildBackdropBackground(
   intensity: number
 ): string {
   const k = Math.max(0, Math.min(100, intensity)) / 100;
-  if (backdrop === "none" || k <= 0) return "none";
+  if (backdrop === "none") return "none";
+
+  /* 2026-10-27 修正「6 个预览长得一样」：
+     ① 各预设的浓度过低（0.12~0.30），在小缩略图里被压成纯黑，无法分辨。
+        统一提高到 0.35~0.55 区间，保证缩略图就能看出色彩走向。
+     ② 光斑位置彼此区分：极光在顶部、星云对角两团、波纹在底部、
+        网格光是斜带 —— 让缩略图一眼能辨别。
+     ③ intensity=0 时仍保留 30% 基线（缩略图预览用 100% 不受影响），
+        避免「选了但什么都看不到」。 */
+  const base = 0.30 + 0.70 * k;
+
   switch (backdrop) {
     case "aurora":
-      return `radial-gradient(ellipse 90% 55% at 50% -10%, rgba(78,205,196,${(0.30 * k).toFixed(3)}), transparent 70%),` +
-             `radial-gradient(ellipse 60% 40% at 85% 15%, rgba(110,231,208,${(0.16 * k).toFixed(3)}), transparent 65%)`;
+      /* 顶部大面积青绿光晕 + 右上补充光斑 */
+      return `radial-gradient(ellipse 100% 70% at 50% -15%, rgba(78,205,196,${(0.55 * base).toFixed(3)}), transparent 72%),` +
+             `radial-gradient(ellipse 55% 45% at 88% 8%, rgba(110,231,208,${(0.34 * base).toFixed(3)}), transparent 68%)`;
     case "nebula":
-      return `radial-gradient(ellipse 70% 60% at 20% 20%, rgba(122,92,214,${(0.26 * k).toFixed(3)}), transparent 70%),` +
-             `radial-gradient(ellipse 65% 55% at 80% 75%, rgba(58,95,168,${(0.22 * k).toFixed(3)}), transparent 70%)`;
+      /* 左上紫 + 右下蓝，对角分布 */
+      return `radial-gradient(ellipse 75% 80% at 12% 0%, rgba(140,100,235,${(0.50 * base).toFixed(3)}), transparent 70%),` +
+             `radial-gradient(ellipse 70% 75% at 95% 100%, rgba(50,110,200,${(0.42 * base).toFixed(3)}), transparent 72%)`;
     case "mesh":
-      return `linear-gradient(115deg, transparent 42%, rgba(110,190,230,${(0.14 * k).toFixed(3)}) 50%, transparent 58%),` +
-             `linear-gradient(65deg, transparent 40%, rgba(150,120,220,${(0.12 * k).toFixed(3)}) 50%, transparent 60%)`;
+      /* 两条 40° 斜向光带交叉 */
+      return `linear-gradient(118deg, transparent 30%, rgba(110,190,230,${(0.34 * base).toFixed(3)}) 48%, transparent 64%),` +
+             `linear-gradient(62deg, transparent 36%, rgba(160,130,225,${(0.30 * base).toFixed(3)}) 50%, transparent 66%)`;
     case "carbon":
-      return `repeating-linear-gradient(45deg, rgba(140,160,180,${(0.055 * k).toFixed(3)}) 0 2px, transparent 2px 5px),` +
-             `repeating-linear-gradient(-45deg, rgba(140,160,180,${(0.045 * k).toFixed(3)}) 0 2px, transparent 2px 5px)`;
+      /* 45° 斜纹编织，缩略图里最容易被辨认 */
+      return `repeating-linear-gradient(45deg, rgba(150,175,200,${(0.10 * base).toFixed(3)}) 0 3px, transparent 3px 7px),` +
+             `repeating-linear-gradient(-45deg, rgba(150,175,200,${(0.08 * base).toFixed(3)}) 0 3px, transparent 3px 7px)`;
     case "wave":
-      return `radial-gradient(ellipse 120% 45% at 50% 115%, rgba(90,160,200,${(0.26 * k).toFixed(3)}), transparent 65%)`;
+      /* 底部圆弧涟漪 */
+      return `radial-gradient(ellipse 130% 60% at 50% 125%, rgba(70,150,200,${(0.48 * base).toFixed(3)}), transparent 68%)`;
     default:
       return "none";
   }
@@ -139,31 +154,66 @@ export function buildTextureBackground(
   intensity: number
 ): { image: string; size: string } {
   const k = Math.max(0, Math.min(100, intensity)) / 100;
-  /* 基线 12% + 强度贡献最多 10%，即 12%~22% */
-  const alpha = (0.12 + 0.10 * k).toFixed(3);
+  /* 2026-10-27 二次调整：
+     ① 间距放疏 —— 16px 在正常字号的终端里约每 1.5 个字符一格，密集到眼晕；
+        改成 32px（约 4 字符），视线不会被连续的十字路口拉扯。
+     ② 线更细更淡 —— 1px 实线叠在 16px 间距上形成「套格子」观感，
+        改成 1px + 更低透明度，只作若隐若现的底纹。
+     ③ 强度基线 8%，上限 14%（原来 12~22% 偏亮）。 */
+  const alpha = (0.08 + 0.06 * k).toFixed(3);
   switch (texture) {
     case "grid":
       return {
         image:
           `linear-gradient(rgba(120,180,220,${alpha}) 1px,transparent 1px),` +
           `linear-gradient(90deg,rgba(120,180,220,${alpha}) 1px,transparent 1px)`,
-        size: "16px 16px"
+        size: "32px 32px"
       };
     case "dots":
       return {
-        image: `radial-gradient(circle at 1px 1px, rgba(130,200,235,${alpha}) 1px, transparent 0)`,
-        size: "14px 14px"
+        image: `radial-gradient(circle at 1px 1px, rgba(130,200,235,${(parseFloat(alpha) * 1.5).toFixed(3)}) 1px, transparent 0)`,
+        size: "22px 22px"
       };
     case "double":
+      /* 双层：32px 细线 + 160px 主刻度（5 倍关系，主次分明） */
       return {
         image:
-          `linear-gradient(rgba(120,180,220,${(parseFloat(alpha) * 0.65).toFixed(3)}) 1px,transparent 1px),` +
-          `linear-gradient(90deg,rgba(120,180,220,${(parseFloat(alpha) * 0.65).toFixed(3)}) 1px,transparent 1px),` +
+          `linear-gradient(rgba(120,180,220,${(parseFloat(alpha) * 0.5).toFixed(3)}) 1px,transparent 1px),` +
+          `linear-gradient(90deg,rgba(120,180,220,${(parseFloat(alpha) * 0.5).toFixed(3)}) 1px,transparent 1px),` +
           `linear-gradient(rgba(120,180,220,${alpha}) 1px,transparent 1px),` +
           `linear-gradient(90deg,rgba(120,180,220,${alpha}) 1px,transparent 1px)`,
-        size: "16px 16px,16px 16px,80px 80px,80px 80px"
+        size: "32px 32px,32px 32px,160px 160px,160px 160px"
       };
     default:
       return { image: "none", size: "auto" };
+  }
+}
+
+/**
+ * 缩略图专用背景光效（2026-10-27）
+ *
+ * 为什么需要单独一套：正常版按终端全屏尺寸设计（光斑在 -15% / 125% 等处），
+ * 44px 高的缩略图完全覆盖不到那些区域，看起来一片纯色 ——
+ * 用户反馈「6 个预览长得一样」就是这个原因。
+ * 这里把光斑位置压到缩略图可见范围内，并提高浓度，保证一眼可辨。
+ */
+export function buildBackdropPreview(backdrop: TerminalBackdrop): string {
+  switch (backdrop) {
+    case "aurora":
+      return "radial-gradient(ellipse 130% 90% at 50% 0%, rgba(78,205,196,0.75), transparent 72%)," +
+             "radial-gradient(ellipse 80% 70% at 85% 20%, rgba(110,231,208,0.45), transparent 70%)";
+    case "nebula":
+      return "radial-gradient(ellipse 110% 120% at 10% 10%, rgba(140,100,235,0.70), transparent 72%)," +
+             "radial-gradient(ellipse 100% 110% at 95% 95%, rgba(50,110,200,0.60), transparent 74%)";
+    case "mesh":
+      return "linear-gradient(118deg, transparent 22%, rgba(110,190,230,0.55) 46%, transparent 68%)," +
+             "linear-gradient(62deg, transparent 28%, rgba(160,130,225,0.50) 50%, transparent 70%)";
+    case "carbon":
+      return "repeating-linear-gradient(45deg, rgba(150,175,200,0.20) 0 3px, transparent 3px 8px)," +
+             "repeating-linear-gradient(-45deg, rgba(150,175,200,0.16) 0 3px, transparent 3px 8px)";
+    case "wave":
+      return "radial-gradient(ellipse 150% 95% at 50% 110%, rgba(70,150,200,0.70), transparent 70%)";
+    default:
+      return "none";
   }
 }
