@@ -39,6 +39,20 @@
   -webkit-app-region: no-drag;
 }
 
+/* 2026-10-27 兜底：侧栏头部按钮必须始终可点。
+   上面的规则里 .sidebar-head 是 drag、.sidebar-head-buttons 是 no-drag，
+   但中间的 .sidebar-head-row 计算值是 none（Electron 下 none 会继承父级 drag），
+   形成 drag → none → no-drag 的不稳定链，实测出现过「齿轮按钮看得见点不动」。
+   这里用更高特异性把整条链上的交互元素一次性钉死为 no-drag。 */
+.electron-immersive .sidebar-head .sidebar-head-buttons,
+.electron-immersive .sidebar-head .sidebar-head-buttons *,
+.electron-immersive .sidebar-head button,
+.electron-immersive .sidebar-head [role="button"],
+.electron-immersive .sidebar-head-row {
+  -webkit-app-region: no-drag;
+  pointer-events: auto;
+}
+
 .electron-immersive .toolbar-commandbar {
   -webkit-app-region: drag;
 }
