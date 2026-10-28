@@ -17,7 +17,7 @@ import { ImportPreviewDialog } from "./ImportPreviewDialog.js";
 import { UploadConflictDialog } from "./UploadConflictDialog.js";
 import { TransferPipWindow } from "./TransferPipWindow.js";
 import { useTransferPip } from "./useTransferPip.js";
-import { SEMANTIC_COLORS, buildTextureBackground } from "./semantic-tokens.js";
+import { SEMANTIC_COLORS, buildTextureBackground, buildBackdropBackground } from "./semantic-tokens.js";
 import { ConnectionSettingsWorkspace, WatermarkOverlay, type GatewayTestState, type ManualServerDraft, type SettingsWorkspaceView } from "./ConnectionSettingsWorkspace.js";
 import { useDesktopUpdate } from "./UpdateCenterPanel.js";
 import { SearchQueryPanel } from "./SearchQueryPanel.js";
@@ -460,6 +460,10 @@ export function App() {
     setTerminalTexture,
     terminalTextureIntensity,
     setTerminalTextureIntensity,
+    terminalBackdrop,
+    setTerminalBackdrop,
+    terminalBackdropIntensity,
+    setTerminalBackdropIntensity,
     terminalCursorStyle,
     setTerminalCursorStyle,
     terminalCursorBlink,
@@ -3468,6 +3472,13 @@ export function App() {
     [terminalTexture, terminalTextureIntensity]
   );
 
+  /* 背景图（2026-10-27）：与纹理叠乘 —— 先氛围光效、再纹理线，
+     两者都用背景图实现，按顺序拼成 background-image 列表。 */
+  const terminalBackdropImage = useMemo(
+    () => buildBackdropBackground(terminalBackdrop, terminalBackdropIntensity),
+    [terminalBackdrop, terminalBackdropIntensity]
+  );
+
   /* 「跟随主题」卡的预览色（2026-10-24）：主题 shell 底/ink 文字 + 控制台方案 ANSI，
      与 buildTerminalTheme 的 follow 语义一致。传给设置中心的配色网格与实时预览。 */
   const terminalFollowPreview = useMemo(() => {
@@ -3517,8 +3528,20 @@ export function App() {
         }),
     /* 终端背景纹理（2026-10-27）：纹理是背景层最低优先级，
        默认 none；选了才注入，且强度由 texIntensity 控制。 */
-    "--terminal-texture-image": terminalTextureBackground.image,
-    "--terminal-texture-size": terminalTextureBackground.size,
+    /* 背景图 + 纹理合并：background-image 支持多层，前者在下后者在上。
+       顺序：氛围光效（大范围）→ 纹理线（细节）。 */
+    "--terminal-texture-image":
+      terminalBackdropImage !== "none" && terminalTextureBackground.image !== "none"
+        ? `${terminalTextureBackground.image}, ${terminalBackdropImage}`
+        : terminalBackdropImage !== "none"
+          ? terminalBackdropImage
+          : terminalTextureBackground.image,
+    "--terminal-texture-size":
+      terminalBackdropImage !== "none" && terminalTextureBackground.image !== "none"
+        ? `${terminalTextureBackground.size}, auto`
+        : terminalBackdropImage !== "none"
+          ? "auto"
+          : terminalTextureBackground.size,
     "--custom-background-image": toCssImageUrl(customBackgroundImage),
     /* 背景层图片模式：遮罩亮度 / 模糊由设置滑杆驱动（原型 T1）。
        只注入 -alpha（0..1，供 CSS calc 使用）与 blur；旧的百分比版
@@ -5120,6 +5143,10 @@ export function App() {
                 terminalTextureIntensity,
                 onTerminalTextureChange: setTerminalTexture,
                 onTerminalTextureIntensityChange: setTerminalTextureIntensity,
+                terminalBackdrop,
+                terminalBackdropIntensity,
+                onTerminalBackdropChange: setTerminalBackdrop,
+                onTerminalBackdropIntensityChange: setTerminalBackdropIntensity,
                 onUiAccentOverrideChange: setUiAccentOverride,
                 onUiFontFamilyChange: setUiFontFamily,
                 onUiFontSizeChange: setUiFontSize,

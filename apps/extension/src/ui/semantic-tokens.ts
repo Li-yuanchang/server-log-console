@@ -83,32 +83,84 @@ export const TERMINAL_TEXTURES: Array<{ id: TerminalTexture; name: string; desc:
   { id: "double", name: "双层", desc: "16px + 80px 主次刻度 · 工程感" }
 ];
 
-/** 生成纹理的 CSS 背景（强度 0~100，映射到透明度） */
+/**
+ * 背景图预设（2026-10-27）。
+ * 全部用纯 CSS 生成（无外部图片依赖），保证离线可用、无网络请求。
+ * 目的：解决「清一色黑太单调」，同时不牺牲文字可读性 ——
+ * 每个预设都是深色低饱和，叠加在主题底色之上仅作氛围。
+ */
+export type TerminalBackdrop = "none" | "aurora" | "nebula" | "mesh" | "carbon" | "wave";
+
+export const TERMINAL_BACKDROPS: Array<{ id: TerminalBackdrop; name: string; desc: string }> = [
+  { id: "none", name: "无", desc: "只显示主题底色" },
+  { id: "aurora", name: "极光", desc: "顶部青绿光晕，像夜间极光" },
+  { id: "nebula", name: "星云", desc: "紫蓝渐层，深空感" },
+  { id: "mesh", name: "网格光", desc: "斜向光束，科技感" },
+  { id: "carbon", name: "碳纤维", desc: "斜纹编织质感，低调" },
+  { id: "wave", name: "波纹", desc: "底部柔和涟漪" }
+];
+
+/** 生成背景图 CSS（叠加在底色之上，透明度由 intensity 控制） */
+export function buildBackdropBackground(
+  backdrop: TerminalBackdrop,
+  intensity: number
+): string {
+  const k = Math.max(0, Math.min(100, intensity)) / 100;
+  if (backdrop === "none" || k <= 0) return "none";
+  switch (backdrop) {
+    case "aurora":
+      return `radial-gradient(ellipse 90% 55% at 50% -10%, rgba(78,205,196,${(0.30 * k).toFixed(3)}), transparent 70%),` +
+             `radial-gradient(ellipse 60% 40% at 85% 15%, rgba(110,231,208,${(0.16 * k).toFixed(3)}), transparent 65%)`;
+    case "nebula":
+      return `radial-gradient(ellipse 70% 60% at 20% 20%, rgba(122,92,214,${(0.26 * k).toFixed(3)}), transparent 70%),` +
+             `radial-gradient(ellipse 65% 55% at 80% 75%, rgba(58,95,168,${(0.22 * k).toFixed(3)}), transparent 70%)`;
+    case "mesh":
+      return `linear-gradient(115deg, transparent 42%, rgba(110,190,230,${(0.14 * k).toFixed(3)}) 50%, transparent 58%),` +
+             `linear-gradient(65deg, transparent 40%, rgba(150,120,220,${(0.12 * k).toFixed(3)}) 50%, transparent 60%)`;
+    case "carbon":
+      return `repeating-linear-gradient(45deg, rgba(140,160,180,${(0.055 * k).toFixed(3)}) 0 2px, transparent 2px 5px),` +
+             `repeating-linear-gradient(-45deg, rgba(140,160,180,${(0.045 * k).toFixed(3)}) 0 2px, transparent 2px 5px)`;
+    case "wave":
+      return `radial-gradient(ellipse 120% 45% at 50% 115%, rgba(90,160,200,${(0.26 * k).toFixed(3)}), transparent 65%)`;
+    default:
+      return "none";
+  }
+}
+
+/**
+ * 生成纹理的 CSS 背景（强度 0~100，映射到透明度）。
+ *
+ * 2026-10-27 提高可见度：原基线 5.5% 在深色底上几乎不可见
+ * （用户反馈「格子都不明显」）。现基线提到 12%，并随强度线性增长；
+ * 强度 100 时约 22%，肉眼清晰但不抢文字。
+ */
 export function buildTextureBackground(
   texture: TerminalTexture,
   intensity: number
 ): { image: string; size: string } {
   const k = Math.max(0, Math.min(100, intensity)) / 100;
+  /* 基线 12% + 强度贡献最多 10%，即 12%~22% */
+  const alpha = (0.12 + 0.10 * k).toFixed(3);
   switch (texture) {
     case "grid":
       return {
         image:
-          `linear-gradient(rgba(90,160,200,${(0.055 * k).toFixed(4)}) 1px,transparent 1px),` +
-          `linear-gradient(90deg,rgba(90,160,200,${(0.055 * k).toFixed(4)}) 1px,transparent 1px)`,
+          `linear-gradient(rgba(120,180,220,${alpha}) 1px,transparent 1px),` +
+          `linear-gradient(90deg,rgba(120,180,220,${alpha}) 1px,transparent 1px)`,
         size: "16px 16px"
       };
     case "dots":
       return {
-        image: `radial-gradient(circle at 1px 1px, rgba(110,190,230,${(0.13 * k).toFixed(4)}) 1px, transparent 0)`,
+        image: `radial-gradient(circle at 1px 1px, rgba(130,200,235,${alpha}) 1px, transparent 0)`,
         size: "14px 14px"
       };
     case "double":
       return {
         image:
-          `linear-gradient(rgba(90,160,200,${(0.045 * k).toFixed(4)}) 1px,transparent 1px),` +
-          `linear-gradient(90deg,rgba(90,160,200,${(0.045 * k).toFixed(4)}) 1px,transparent 1px),` +
-          `linear-gradient(rgba(90,160,200,${(0.09 * k).toFixed(4)}) 1px,transparent 1px),` +
-          `linear-gradient(90deg,rgba(90,160,200,${(0.09 * k).toFixed(4)}) 1px,transparent 1px)`,
+          `linear-gradient(rgba(120,180,220,${(parseFloat(alpha) * 0.65).toFixed(3)}) 1px,transparent 1px),` +
+          `linear-gradient(90deg,rgba(120,180,220,${(parseFloat(alpha) * 0.65).toFixed(3)}) 1px,transparent 1px),` +
+          `linear-gradient(rgba(120,180,220,${alpha}) 1px,transparent 1px),` +
+          `linear-gradient(90deg,rgba(120,180,220,${alpha}) 1px,transparent 1px)`,
         size: "16px 16px,16px 16px,80px 80px,80px 80px"
       };
     default:

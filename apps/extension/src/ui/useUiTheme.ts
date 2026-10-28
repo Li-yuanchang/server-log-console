@@ -286,9 +286,15 @@ export type UiThemeAPI = {
   terminalTexture: "none" | "grid" | "dots" | "double";
   /** 纹理强度 0~100，映射到纹理线透明度 */
   terminalTextureIntensity: number;
+  /** 背景图预设（2026-10-27）：纯 CSS 生成的氛围光效 */
+  terminalBackdrop: "none" | "aurora" | "nebula" | "mesh" | "carbon" | "wave";
+  /** 背景图强度 0~100 */
+  terminalBackdropIntensity: number;
   setTerminalLineHeight: (value: number) => void;
   setTerminalTexture: (value: "none" | "grid" | "dots" | "double") => void;
   setTerminalTextureIntensity: (value: number) => void;
+  setTerminalBackdrop: (value: "none" | "aurora" | "nebula" | "mesh" | "carbon" | "wave") => void;
+  setTerminalBackdropIntensity: (value: number) => void;
   /** 终端光标样式（xterm cursorStyle）。参考 VRC「光标样式」三档。 */
   terminalCursorStyle: TerminalCursorStyle;
   setTerminalCursorStyle: (style: TerminalCursorStyle) => void;
@@ -546,6 +552,14 @@ export function useUiTheme(): UiThemeAPI {
   const [terminalTextureIntensity, setTerminalTextureIntensity] = useState(() => {
     return readStoredNumber("terminal-texture-intensity", 55, 0, 100);
   });
+  /* 背景图预设（2026-10-27）：纯 CSS 光效，默认 none */
+  const [terminalBackdrop, setTerminalBackdrop] = useState<"none" | "aurora" | "nebula" | "mesh" | "carbon" | "wave">(() => {
+    const v = readLocalStorageValue("terminal-backdrop");
+    return (["aurora","nebula","mesh","carbon","wave"] as const).includes(v as any) ? (v as any) : "none";
+  });
+  const [terminalBackdropIntensity, setTerminalBackdropIntensity] = useState(() => {
+    return readStoredNumber("terminal-backdrop-intensity", 60, 0, 100);
+  });
 
   /* 终端光标样式 / 闪烁：原写死 bar + true，改为可调 */
   const [terminalCursorStyle, setTerminalCursorStyle] = useState<TerminalCursorStyle>(() => {
@@ -692,6 +706,14 @@ export function useUiTheme(): UiThemeAPI {
   }, [terminalTextureIntensity]);
 
   useEffect(() => {
+    persistLocalStorageValue("terminal-backdrop", terminalBackdrop);
+  }, [terminalBackdrop]);
+
+  useEffect(() => {
+    persistLocalStorageValue("terminal-backdrop-intensity", String(terminalBackdropIntensity));
+  }, [terminalBackdropIntensity]);
+
+  useEffect(() => {
     persistLocalStorageValue("terminal-cursor-style", terminalCursorStyle);
   }, [terminalCursorStyle]);
 
@@ -809,6 +831,10 @@ export function useUiTheme(): UiThemeAPI {
     setTerminalTexture,
     terminalTextureIntensity,
     setTerminalTextureIntensity,
+    terminalBackdrop,
+    setTerminalBackdrop,
+    terminalBackdropIntensity,
+    setTerminalBackdropIntensity,
     terminalCursorStyle,
     setTerminalCursorStyle,
     terminalCursorBlink,

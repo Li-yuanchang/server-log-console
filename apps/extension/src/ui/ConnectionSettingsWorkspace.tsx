@@ -6,7 +6,7 @@ import { looksLikeJumpServer } from "./terminal-utils.js";
 import { readDirectoryHistory } from "./storage.js";
 import { apiGetCredentialSecret, apiTestConnection, apiTestDraftConnection } from "./api.js";
 import { ThemedSelect } from "./ThemedSelect.js";
-import { TERMINAL_TEXTURES, buildTextureBackground } from "./semantic-tokens.js";
+import { TERMINAL_TEXTURES, TERMINAL_BACKDROPS, buildTextureBackground, buildBackdropBackground } from "./semantic-tokens.js";
 import type { SlcDesktopUpdateState } from "../types/desktop-update.js";
 import { UpdateCenterPanel, type DesktopUpdateCheckLogEntry } from "./UpdateCenterPanel.js";
 import { SecuritySettingsView } from "./SecuritySettingsView.js";
@@ -127,6 +127,10 @@ interface Props {
     /** 终端背景纹理与强度（2026-10-27） */
     terminalTexture: "none" | "grid" | "dots" | "double";
     terminalTextureIntensity: number;
+    terminalBackdrop: "none" | "aurora" | "nebula" | "mesh" | "carbon" | "wave";
+    terminalBackdropIntensity: number;
+    onTerminalBackdropChange: (value: "none" | "aurora" | "nebula" | "mesh" | "carbon" | "wave") => void;
+    onTerminalBackdropIntensityChange: (value: number) => void;
     onTerminalTextureChange: (value: "none" | "grid" | "dots" | "double") => void;
     onTerminalTextureIntensityChange: (value: number) => void;
     onUiAccentOverrideChange: (accent: string | null) => void;
@@ -2249,6 +2253,63 @@ export function ConnectionSettingsWorkspace(props: Props) {
                     纹理是背景层最低优先级 —— 只提供空间感，不与内容争注意力。
                     强度默认 55%，对应纹理线透明度约 3%（几乎无感）。 */}
                 {terminalTab === "scheme" ? (
+                <>
+                {/* 背景图（2026-10-27）：纯 CSS 氛围光效，解决「清一色黑太单调」。
+                    与纹理可叠加：光效在下、纹理线在上。默认 none 保持克制。 */}
+                <div className="settings-pref-row settings-pref-row-wide">
+                  <span className="settings-pref-label">
+                    <strong>背景图</strong>
+                    <span>纯 CSS 生成的氛围光效，与纹理可叠加</span>
+                  </span>
+                  <div className="slc-tex-grid" role="radiogroup" aria-label="终端背景图">
+                    {TERMINAL_BACKDROPS.map((bd) => {
+                      const active = props.preferenceSection.terminalBackdrop === bd.id;
+                      return (
+                        <button
+                          key={bd.id}
+                          type="button"
+                          role="radio"
+                          aria-checked={active}
+                          title={bd.desc}
+                          className={active ? "slc-tex-btn slc-tex-btn-active" : "slc-tex-btn"}
+                          onClick={() => props.preferenceSection.onTerminalBackdropChange(bd.id)}
+                        >
+                          <span
+                            className="slc-tex-preview"
+                            style={{
+                              backgroundColor: props.preferenceSection.terminalFollowPreview.background,
+                              backgroundImage: bd.id === "none" ? "none" : buildBackdropBackground(bd.id, 100),
+                            }}
+                          />
+                          <span className="slc-tex-name">{bd.name}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {props.preferenceSection.terminalBackdrop !== "none" ? (
+                  <div className="settings-pref-row settings-pref-row-wide">
+                    <span className="settings-pref-label">
+                      <strong>背景图强度</strong>
+                      <span>越高氛围越明显</span>
+                    </span>
+                    <span className="settings-pref-value" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <input
+                        type="range"
+                        min={0}
+                        max={100}
+                        step={5}
+                        value={props.preferenceSection.terminalBackdropIntensity}
+                        onChange={(event) => props.preferenceSection.onTerminalBackdropIntensityChange(Number(event.target.value))}
+                        style={{ width: 120, accentColor: "var(--accent)" }}
+                        aria-label="背景图强度"
+                      />
+                      <span style={{ minWidth: 34, textAlign: "right" }}>{props.preferenceSection.terminalBackdropIntensity}%</span>
+                    </span>
+                  </div>
+                ) : null}
+
 <div className="settings-pref-row settings-pref-row-wide">
                   <span className="settings-pref-label">
                     <strong>背景纹理</strong>
@@ -2283,7 +2344,7 @@ export function ConnectionSettingsWorkspace(props: Props) {
                     })}
                   </div>
                 </div>
-
+                </>
                 ) : null}
 
                 {props.preferenceSection.terminalTexture !== "none" ? (
