@@ -217,3 +217,78 @@ export function buildBackdropPreview(backdrop: TerminalBackdrop): string {
       return "none";
   }
 }
+
+/**
+ * 终端外观组合预设（2026-10-27）
+ *
+ * 为什么需要：用户反馈「极光+方格」这类自由组合太难看了 ——
+ * 背景图和纹理各自调色是一回事，搭配是否协调是另一回事。
+ * 这里给出经过挑选的稳定组合，一键套用，避免用户踩到冲突搭配。
+ *
+ * 设计原则：
+ * - 有背景光效时不再叠纹理（两者都是「大面积图案」，叠加会互相干扰）
+ * - 纹理只配纯色底（纹理本身就是底纹，加光效等于两层图案）
+ * - 每个组合都有明确的场景定位，不是随机拼色
+ */
+export interface TerminalLookPreset {
+  id: string;
+  name: string;
+  desc: string;
+  /** 推荐搭配的终端配色方案 id */
+  scheme: string;
+  backdrop: TerminalBackdrop;
+  backdropIntensity: number;
+  texture: TerminalTexture;
+  textureIntensity: number;
+}
+
+export const TERMINAL_LOOK_PRESETS: TerminalLookPreset[] = [
+  {
+    id: "plain",
+    name: "纯色克制",
+    desc: "无背景图无纹理，只靠配色区分。长时间排障首选",
+    scheme: "sage",
+    backdrop: "none", backdropIntensity: 60,
+    texture: "none", textureIntensity: 55
+  },
+  {
+    id: "aurora-clean",
+    name: "极光净底",
+    desc: "极光光效 + 无纹理。氛围明确且不干扰文字",
+    scheme: "aurora",
+    backdrop: "aurora", backdropIntensity: 55,
+    texture: "none", textureIntensity: 55
+  },
+  {
+    id: "nebula-deep",
+    name: "星云深空",
+    desc: "星云渐层 + 深空蓝配色。适合夜间长盯",
+    scheme: "space",
+    backdrop: "nebula", backdropIntensity: 50,
+    texture: "none", textureIntensity: 55
+  },
+  {
+    id: "grid-tech",
+    name: "方格工程",
+    desc: "方格底纹 + 炭黑配色。纯技术感，无光效干扰",
+    scheme: "charcoal",
+    backdrop: "none", backdropIntensity: 60,
+    texture: "grid", textureIntensity: 45
+  },
+  {
+    id: "carbon-dark",
+    name: "碳纤暗调",
+    desc: "碳纤维斜纹 + 石墨青。低调质感，几乎不抢注意力",
+    scheme: "sage",
+    backdrop: "carbon", backdropIntensity: 45,
+    texture: "none", textureIntensity: 55
+  },
+  {
+    id: "wave-calm",
+    name: "波纹静水",
+    desc: "底部波纹 + 墨绿护眼。最柔和的一套",
+    scheme: "moss",
+    backdrop: "wave", backdropIntensity: 45,
+    texture: "none", textureIntensity: 55
+  }
+];

@@ -6,7 +6,7 @@ import { looksLikeJumpServer } from "./terminal-utils.js";
 import { readDirectoryHistory } from "./storage.js";
 import { apiGetCredentialSecret, apiTestConnection, apiTestDraftConnection } from "./api.js";
 import { ThemedSelect } from "./ThemedSelect.js";
-import { TERMINAL_TEXTURES, TERMINAL_BACKDROPS, buildTextureBackground, buildBackdropBackground, buildBackdropPreview } from "./semantic-tokens.js";
+import { TERMINAL_TEXTURES, TERMINAL_BACKDROPS, TERMINAL_LOOK_PRESETS, buildTextureBackground, buildBackdropBackground, buildBackdropPreview } from "./semantic-tokens.js";
 import type { SlcDesktopUpdateState } from "../types/desktop-update.js";
 import { UpdateCenterPanel, type DesktopUpdateCheckLogEntry } from "./UpdateCenterPanel.js";
 import { SecuritySettingsView } from "./SecuritySettingsView.js";
@@ -131,6 +131,8 @@ interface Props {
     terminalBackdropIntensity: number;
     onTerminalBackdropChange: (value: "none" | "aurora" | "nebula" | "mesh" | "carbon" | "wave") => void;
     onTerminalBackdropIntensityChange: (value: number) => void;
+    /** 一键套用外观组合预设（同时改配色/背景图/纹理/强度） */
+    onApplyLookPreset: (presetId: string) => void;
     onTerminalTextureChange: (value: "none" | "grid" | "dots" | "double") => void;
     onTerminalTextureIntensityChange: (value: number) => void;
     onUiAccentOverrideChange: (accent: string | null) => void;
@@ -481,8 +483,11 @@ function TerminalLivePreview(props: {
   lineHeight: number;
   cursorStyle: "block" | "bar" | "underline";
   cursorBlink: boolean;
+  /** 2026-10-27：预览必须能看到纹理与背景图，否则「改了背景但预览没反应」 */
+  backgroundImage?: string;
+  backgroundSize?: string;
 }) {
-  const { theme, fontFamily, fontSize, lineHeight, cursorStyle, cursorBlink } = props;
+  const { theme, fontFamily, fontSize, lineHeight, cursorStyle, cursorBlink, backgroundImage, backgroundSize } = props;
   const cursorClass = ["lp-cursor", cursorStyle, cursorBlink ? "blink" : ""].filter(Boolean).join(" ");
   return (
     <div className="slc-term-live">
@@ -493,7 +498,12 @@ function TerminalLivePreview(props: {
       </div>
       <div
         className="slc-term-live-body"
-        style={{ background: theme.background, color: theme.foreground, fontFamily, fontSize, lineHeight }}
+        style={{
+          backgroundColor: theme.background,
+          backgroundImage: backgroundImage && backgroundImage !== "none" ? backgroundImage : undefined,
+          backgroundSize: backgroundSize || undefined,
+          color: theme.foreground, fontFamily, fontSize, lineHeight
+        }}
       >
         <span><span style={{ color: theme.brightBlack }}>Last login: Sat Oct 24 11:34:18 2026 from 192.168.19.14</span></span>
         <span><span style={{ color: theme.green }}>root@127.38</span> systemctl status eos-server</span>
@@ -2246,6 +2256,21 @@ export function ConnectionSettingsWorkspace(props: Props) {
                     lineHeight={props.preferenceSection.terminalLineHeight}
                     cursorStyle={props.preferenceSection.terminalCursorStyle}
                     cursorBlink={props.preferenceSection.terminalCursorBlink}
+                    backgroundImage={(() => {
+                      const tex = props.preferenceSection.terminalTexture;
+                      const bd = props.preferenceSection.terminalBackdrop;
+                      const texBg = tex === "none" ? "none" : buildTextureBackground(tex, props.preferenceSection.terminalTextureIntensity).image;
+                      const bdBg = bd === "none" ? "none" : buildBackdropBackground(bd, props.preferenceSection.terminalBackdropIntensity);
+                      if (texBg !== "none" && bdBg !== "none") return `${texBg}, ${bdBg}`;
+                      return texBg !== "none" ? texBg : bdBg;
+                    })()}
+                    backgroundSize={(() => {
+                      const tex = props.preferenceSection.terminalTexture;
+                      const bd = props.preferenceSection.terminalBackdrop;
+                      const texSize = tex === "none" ? "" : buildTextureBackground(tex, props.preferenceSection.terminalTextureIntensity).size;
+                      if (texSize && bd !== "none") return `${texSize}, auto`;
+                      return texSize || "auto";
+                    })()}
                   />
                 </div>
 
@@ -2254,6 +2279,45 @@ export function ConnectionSettingsWorkspace(props: Props) {
                     强度默认 55%，对应纹理线透明度约 3%（几乎无感）。 */}
                 {terminalTab === "scheme" ? (
                 <>
+                {/* 快速搭配（2026-10-27）：用户反馈自由组合（如极光+方格）容易踩坑。
+                    这里给经过搭配的 6 套组合，一键同时设定配色/背景图/纹理，
+                    下面的单项控件仍可继续微调。 */}
+                <div className="settings-pref-row settings-pref-row-wide">
+                  <span className="settings-pref-label">
+                    <strong>快速搭配</strong>
+                    <span>经过搭配的组合，避免背景图与纹理互相干扰</span>
+                  </span>
+                  <div className="slc-look-grid" role="group" aria-label="外观组合预设">
+                    {TERMINAL_LOOK_PRESETS.map((preset) => (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        title={preset.desc}
+                        className="slc-look-btn"
+                        onClick={() => props.preferenceSection.onApplyLookPreset(preset.id)}
+                      >
+                        <span
+                          className="slc-look-pv"
+                          style={{
+                            backgroundColor: props.preferenceSection.terminalFollowPreview.background,
+                            backgroundImage: (() => {
+                              const bd = preset.backdrop === "none" ? "none" : buildBackdropPreview(preset.backdrop);
+                              const tex = preset.texture === "none"
+                                ? "none"
+                                : buildTextureBackground(preset.texture, preset.textureIntensity).image
+                                    .replace(/32px/g, "14px").replace(/160px/g, "42px");
+                              if (bd !== "none" && tex !== "none") return `${tex}, ${bd}`;
+                              return bd !== "none" ? bd : tex;
+                            })(),
+                            backgroundSize: preset.texture === "none" ? "auto" : "cover, cover",
+                          }}
+                        />
+                        <span className="slc-look-name">{preset.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 {/* 背景图（2026-10-27）：纯 CSS 氛围光效，解决「清一色黑太单调」。
                     与纹理可叠加：光效在下、纹理线在上。默认 none 保持克制。 */}
                 <div className="settings-pref-row settings-pref-row-wide">

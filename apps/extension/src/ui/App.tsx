@@ -17,7 +17,7 @@ import { ImportPreviewDialog } from "./ImportPreviewDialog.js";
 import { UploadConflictDialog } from "./UploadConflictDialog.js";
 import { TransferPipWindow } from "./TransferPipWindow.js";
 import { useTransferPip } from "./useTransferPip.js";
-import { SEMANTIC_COLORS, buildTextureBackground, buildBackdropBackground } from "./semantic-tokens.js";
+import { SEMANTIC_COLORS, TERMINAL_LOOK_PRESETS, buildTextureBackground, buildBackdropBackground } from "./semantic-tokens.js";
 import { ConnectionSettingsWorkspace, WatermarkOverlay, type GatewayTestState, type ManualServerDraft, type SettingsWorkspaceView } from "./ConnectionSettingsWorkspace.js";
 import { useDesktopUpdate } from "./UpdateCenterPanel.js";
 import { SearchQueryPanel } from "./SearchQueryPanel.js";
@@ -5147,6 +5147,17 @@ export function App() {
                 terminalBackdropIntensity,
                 onTerminalBackdropChange: setTerminalBackdrop,
                 onTerminalBackdropIntensityChange: setTerminalBackdropIntensity,
+                /* 一键套用组合预设：同时改配色、背景图、纹理与各自强度 */
+                onApplyLookPreset: (presetId: string) => {
+                  const preset = TERMINAL_LOOK_PRESETS.find((p) => p.id === presetId);
+                  if (!preset) return;
+                  setUiTerminalScheme(preset.scheme as any);
+                  setTerminalBackdrop(preset.backdrop);
+                  setTerminalBackdropIntensity(preset.backdropIntensity);
+                  setTerminalTexture(preset.texture);
+                  setTerminalTextureIntensity(preset.textureIntensity);
+                  setActionStatus(`已套用外观组合：${preset.name}`);
+                },
                 onUiAccentOverrideChange: setUiAccentOverride,
                 onUiFontFamilyChange: setUiFontFamily,
                 onUiFontSizeChange: setUiFontSize,
