@@ -6,7 +6,7 @@ import { looksLikeJumpServer } from "./terminal-utils.js";
 import { readDirectoryHistory } from "./storage.js";
 import { apiGetCredentialSecret, apiTestConnection, apiTestDraftConnection } from "./api.js";
 import { ThemedSelect } from "./ThemedSelect.js";
-import { TERMINAL_TEXTURES, TERMINAL_BACKDROPS, TERMINAL_LOOK_PRESETS, buildTextureBackground, buildBackdropBackground, buildBackdropPreview, type TerminalBackdrop } from "./semantic-tokens.js";
+import { TERMINAL_TEXTURES, TERMINAL_BACKDROPS, TERMINAL_LOOK_PRESETS, buildTextureBackground, buildBackdropBackground, buildBackdropPreview, type TerminalBackdrop, type TerminalTexture } from "./semantic-tokens.js";
 import type { SlcDesktopUpdateState } from "../types/desktop-update.js";
 import { UpdateCenterPanel, type DesktopUpdateCheckLogEntry } from "./UpdateCenterPanel.js";
 import { SecuritySettingsView } from "./SecuritySettingsView.js";
@@ -2385,7 +2385,7 @@ export function ConnectionSettingsWorkspace(props: Props) {
                                  深色低饱和的预设在上面几乎不可辨。
                                  现在用固定 #171a1e（比纯黑亮 8 级）：足够衬托暗色光效，
                                  又不至于亮到失真 —— 缩略图是「辨识用」，不是「还原终端」。 */
-                              backgroundColor: "#171a1e",
+                              backgroundColor: "#2e343a",
                               backgroundImage: bd.id === "none" ? "none" : buildBackdropPreview(bd.id),
                               backgroundSize: "cover",
                             }}
@@ -2442,16 +2442,18 @@ export function ConnectionSettingsWorkspace(props: Props) {
                             style={{
                               /* 2026-10-28 同背景图：固定 #171a1e 而非近黑主题色，
                                  否则纹理线在缩略图里完全看不见（用户反馈「远看没纹路」）。 */
-                              backgroundColor: "#171a1e",
+                              backgroundColor: "#2e343a",
                               /* 缩略图示意：实际间距 32px 在 44px 高的预览里只能显示 1 格，
                                  这里按 1/2 缩放展示图案特征（方格/点阵的密度观感），
                                  真实终端里是 32px。 */
                               ...(tex.id === "none"
                                 ? {}
                                 : {
-                                    backgroundImage: buildTextureBackground(tex.id, 100).image
-                                      .replace(/32px/g, "14px")
-                                      .replace(/160px/g, "42px"),
+                                    /* 2026-10-29 缩略图专用增亮：buildTextureBackground 的 alpha 上限
+                                       0.14 是给真实终端用的（须若隐若现）。缩略图仅 44px 高，
+                                       14% 的线几乎不可见 —— 缩略图目的是「辨识」而非「还原」。
+                                       这里改成自建高浓度版本，仅作用于缩略图。 */
+                                    backgroundImage: buildTextureThumbImage(tex.id)
                                   }),
                               backgroundSize: tex.id === "none"
                                 ? "auto"
@@ -2779,4 +2781,36 @@ function FloatingPrefPreview(props: {
       ) : null}
     </>
   );
+}
+
+/* ============================================================
+   纹理缩略图专用生成（2026-10-29）
+   ------------------------------------------------------------
+   为什么需要单独一套：
+   buildTextureBackground 的 alpha 上限是 0.14 —— 那是给**真实终端**用的，
+   必须若隐若现、不能抢正文。但设置页的缩略图只有 44px 高，
+   14% 的线在里面几乎不可见（用户反馈「看不清、跟没有一样」）。
+
+   缩略图的目的是「让你一眼分辨四种纹理的差别」，不是「还原终端观感」，
+   所以这里用更高的线浓度（0.30–0.42）+ 更亮的衬底（#2e343a），
+   只作用于缩略图，真实终端不受影响。
+   ============================================================ */
+function buildTextureThumbImage(texture: TerminalTexture): string {
+  if (texture === "none") return "none";
+  const a = 0.34;   /* 缩略图固定的线浓度，比终端的 0.08–0.14 明显 */
+  const c = "rgba(150,205,240,";   /* 略偏亮的蓝，在 #2e343a 上有足够对比 */
+  switch (texture) {
+    case "grid":
+      return `linear-gradient(${c}${a}) 1px,transparent 1px),` +
+             `linear-gradient(90deg,${c}${a}) 1px,transparent 1px)`;
+    case "dots":
+      return `radial-gradient(circle at 1px 1px, ${c}${a}) 1.2px, transparent 0)`;
+    case "double":
+      return `linear-gradient(${c}${(a * 0.6).toFixed(2)}) 1px,transparent 1px),` +
+             `linear-gradient(90deg,${c}${(a * 0.6).toFixed(2)}) 1px,transparent 1px),` +
+             `linear-gradient(${c}${a}) 1px,transparent 1px),` +
+             `linear-gradient(90deg,${c}${a}) 1px,transparent 1px)`;
+    default:
+      return "none";
+  }
 }

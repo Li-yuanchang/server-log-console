@@ -94,7 +94,9 @@
   color: var(--ink-soft) !important;
 }.theme-modern .pip-viewer-wrap  .slicebar-strack, .theme-modern .pip-viewer-root  .slicebar-strack{ background: var(--panel-muted); }.theme-modern .pip-viewer-wrap  .slicebar .ghost-button.slicebar-tail, .theme-modern .pip-viewer-root  .slicebar .ghost-button.slicebar-tail{
   background: var(--panel);
-  border-color: var(--line-strong);
+  /* 描边回到 --line（2026-10-29）：原 --line-strong 比同行箭头按钮/过滤框深一档，
+     让「跳到尾部」在同一条 bar 里看着「轮廓更重、大一圈」 */
+  border-color: var(--line);
   color: var(--ink);
 }/* ============ 4. 预览标题条（viewer-actions-strip）：原型浅色 ============ */
 .theme-modern .pip-viewer-wrap  .viewer-actions-strip, .theme-modern .pip-viewer-root  .viewer-actions-strip{

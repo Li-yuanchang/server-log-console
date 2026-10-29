@@ -99,7 +99,7 @@ if (initialUrlToken) {
 async function hydrateDesktopGatewayToken(): Promise<void> {
   const bridge = (globalThis as { electronAPI?: { getGatewayToken?: () => Promise<string | null> } }).electronAPI;
   if (!bridge?.getGatewayToken) return;
-  if (gatewayToken) return;   // 已手动配置则不覆盖
+  if (gatewayToken) return;   // 已手动配置 / URL 带来 / 已注入 → 立即就绪
   try {
     const token = await bridge.getGatewayToken();
     if (typeof token === "string" && token.trim()) {
@@ -110,9 +110,11 @@ async function hydrateDesktopGatewayToken(): Promise<void> {
   }
 }
 
-/** 启动时调用一次；不阻塞渲染。URL 令牌已在模块初始化时同步取到，这里只管桌面端 IPC。 */
-export function bootstrapGatewayAuth(): void {
-  void hydrateDesktopGatewayToken();
+/** 启动时调用一次。
+ *  2026-10-28 改为返回 Promise：调用方可 await 它，确保令牌就绪后再渲染/发请求。
+ *  URL 令牌已在模块初始化时同步取到（readUrlToken），这里只处理桌面端 IPC 异步取令牌。 */
+export function bootstrapGatewayAuth(): Promise<void> {
+  return hydrateDesktopGatewayToken();
 }
 
 export function getGatewayToken(): string {

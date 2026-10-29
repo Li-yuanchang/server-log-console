@@ -87,7 +87,8 @@
   padding: 0 10px 0 28px;
   font-size: var(--fs-2xs);
   border: 1px solid var(--line);
-  border-radius: var(--v2-radius-s, 6px);
+  /* 圆角统一 4px（2026-10-25 全站收敛）：与同行箭头按钮 / 跳到尾部 同半径 */
+  border-radius: 4px;
   background: var(--panel);
   color: var(--ink);
   outline: none;
@@ -95,10 +96,10 @@
 .theme-modern .rtools .rt-filter-input::placeholder { color: var(--ink-muted); }
 
 /* 暂停 pill（原型 544）+ 断开（原型 545 .btn.sm = 高 24） */
-/* 暂停/继续 = 与同行控件统一：高度走标准控件 --ctl-h（原 24 比同行过滤框矮，用户反馈"太小气"）、圆角走主题 token。 */
+/* 暂停/继续 = 与同行控件统一：高度走标准控件 --ctl-h（原 24 比同行过滤框矮，用户反馈"太小气"）、圆角统一 4px。 */
 .theme-modern .rtools .pill {
   height: var(--ctl-h);
-  border-radius: var(--v2-radius-s, 6px);
+  border-radius: 4px;
   font-size: var(--fs-2xs);
   cursor: pointer;
 }
@@ -120,11 +121,23 @@
   gap: 12px;
   padding: 8px 14px;
 }
+/* 「跳到尾部」= 同行控件同一刻度（2026-10-29 用户反馈「看着比旁边的大一圈」）。
+   实测原状态：本规则 height 写了 --ctl-h(28px)，但 .theme-modern .slim-button
+   还带 min-height/max-height:32px —— min-height 恒压制 height，于是**实际渲染 32px**，
+   比同行的翻页箭头(28) / ERROR 过滤框(28) / 暂停 pill(28) 高 4px，边框又是
+   --line-strong（align-log-light 设的）比同行 --line 深一档 → 视觉上「大一圈」。
+   现在三处一起收口：高度锁 28（含 min/max，防止 .slim-button 再撑开）、
+   圆角与同行一致 4px、描边回归 --line。 */
 .theme-modern .slicebar .ghost-button.slim-button.slicebar-tail {
   height: var(--ctl-h);
+  /* 必须显式压 min/max-height：.slim-button 的 min-height:32px 会让 height 失效 */
+  min-height: var(--ctl-h);
+  max-height: var(--ctl-h);
   padding: 0 8px;
-  /* 圆角走主题 token（原继承 .ghost-button 的 999px 全圆角胶囊，与同行过滤框/暂停按钮不一致） */
-  border-radius: var(--v2-radius-s, 6px);
+  /* 圆角统一 4px（与全站按钮/输入框一致；原为 6px 的 --v2-radius-s） */
+  border-radius: 4px;
+  /* 描边与同行控件同档（align-log-light.css 曾把它设为 --line-strong，深一档显大） */
+  border-color: var(--line);
 }
 /* S4-11：状态 chip = 紧凑 chip；高度对齐同行控件节奏（随行高自然撑开） */
 .theme-modern .slicebar-chip {

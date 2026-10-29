@@ -93,13 +93,27 @@ class RootErrorBoundary extends React.Component<{ children: React.ReactNode }, {
 }
 
 /* 桌面端启动时先取网关访问令牌（主进程生成并注入给 gateway）。
-   浏览器 / 扩展形态下该 IPC 不存在，静默跳过。 */
-bootstrapGatewayAuth();
+   浏览器 / 扩展形态下该 IPC 不存在，静默跳过。
 
-createRoot(document.getElementById("root")!).render(
-  <React.StrictMode>
-    <RootErrorBoundary>
-      <App />
-    </RootErrorBoundary>
-  </React.StrictMode>
-);
+   2026-10-28 修复「必须先点授权、再维护服务器才行；直接维护就 401」：
+   原实现是 `bootstrapGatewayAuth()` 即发即忘（内部 void 异步），React 立刻
+   渲染，于是首个业务请求（如打开「维护服务器」）可能在 token 写入前发出 →
+   401；而先访问授权页再回来时异步恰好已完成 → 正常。表现为「操作顺序敏感」。
+   现改为 await 令牌就绪后再挂载，保证任何用户操作都发生在 token 注入之后。
+   最坏情况只是首屏多等一次 IPC 往返（通常 <10ms），远优于随机的 401。 */
+/* 先 await 令牌就绪再挂载，保证首个业务请求一定带 Authorization。
+   失败（浏览器形态无 IPC）时 catch 掉，照常渲染。 */
+void (async () => {
+  try {
+    await bootstrapGatewayAuth();
+  } catch {
+    /* IPC 不可用：保持无令牌，由 401 引导用户手动填写 */
+  }
+  createRoot(document.getElementById("root")!).render(
+    <React.StrictMode>
+      <RootErrorBoundary>
+        <App />
+      </RootErrorBoundary>
+    </React.StrictMode>
+  );
+})();

@@ -17,7 +17,10 @@ const HOST = "127.0.0.1";
    背景：gateway 以 ELECTRON_RUN_AS_NODE=1 运行，该模式下 require("electron")
    拿不到 safeStorage（实测为 undefined），所以密钥与令牌必须由主进程在这里
    派生，再通过环境变量注入给 gateway。
-   - 主密钥：safeStorage 保护后落地，用户在界面上不输入任何东西。
+   - 主密钥：以 0600 权限的明文文件落地（~/.server-log-console/master.key）。
+     ⚠️ 2026-10-28 起**不再**用 safeStorage 加密：macOS 钥匙串会在每次启动
+     重新校验并弹窗要求授权，对本地工具而言打扰大于收益。安全性说明见
+     ensureMasterKey 的注释；旧版的 master.key.enc 会被一次性迁移成明文。
    - 访问令牌：桌面端自动生成并注入，前端无需配置。
    ============================================================ */
 
@@ -31,59 +34,58 @@ function ensureDirSync(dir) {
 }
 
 /** 读取或创建主密钥（base64，32 字节）。
- *  safeStorage 可用时以密文保存；不可用（部分 Linux）则退回明文密钥文件，
- *  仍然好于把凭证本身明文落盘，并在启动日志中告警。 */
+ *
+ *  2026-10-28 用户反馈「每次启动都要授权（钥匙串弹窗）」→ 改为**明文文件存储**。
+ *
+ *  为什么放弃 safeStorage：
+ *    macOS 上 safeStorage.encryptString 会把条目写进系统钥匙串，而每次应用启动
+ *    解密时都会重新校验调用方身份 —— 用户必须再次输入登录密码/点「始终允许」。
+ *    对一个「本地开发工具」而言，这个打扰远大于收益。
+ *
+ *  为什么可接受明文：
+ *    ① 文件位于 ~/.server-log-console/，权限 0600，仅当前用户可读；
+ *    ② 它保护的是「凭证加密的密钥」，而同目录下 gateway-auth.json 等本就是
+ *       同等级的本地文件 —— 单独给密钥加一层系统钥匙串，安全性提升有限；
+ *    ③ 原实现本身也没跑通：master.key（明文）与 master.key.enc 长期并存，
+ *       说明「迁移到 safeStorage」分支从未成功完成，却在每次启动触发解密询问。
+ *
+ *  迁移：若存在 master.key.enc，尝试换算成明文写入 master.key 后删除密文，
+ *  保证换版本升级的用户密钥不丢（解不开则忽略，走生成新密钥分支）。
+ */
 function ensureMasterKey() {
   ensureDirSync(CONFIG_DIR);
   const keyPath = path.join(CONFIG_DIR, "master.key.enc");
   const plainPath = path.join(CONFIG_DIR, "master.key");
 
-  const canEncrypt = safeStorage && safeStorage.isEncryptionAvailable && safeStorage.isEncryptionAvailable();
-
-  // 1) 已有加密密钥
-  if (canEncrypt) {
-    try {
-      const buf = fs.readFileSync(keyPath);
-      const decoded = safeStorage.decryptString(buf);
-      if (decoded && Buffer.from(decoded, "base64").length === 32) {
-        return decoded;
-      }
-    } catch { /* 不存在或解不开，继续 */ }
-  }
-
-  // 2) 已有明文密钥（gateway 兜底生成的），接管过来
+  // 1) 已有明文密钥：直接使用（正常路径）
   try {
     const existing = fs.readFileSync(plainPath, "utf8").trim();
     if (Buffer.from(existing, "base64").length === 32) {
-      if (canEncrypt) {
-        try {
-          const enc = safeStorage.encryptString(existing);
-          fs.writeFileSync(keyPath, enc, { mode: 0o600 });
-          fs.chmodSync(keyPath, 0o600);
-          try { fs.unlinkSync(plainPath); } catch {}
-          probe("master key migrated to safeStorage");
-        } catch { /* 保留明文密钥文件 */ }
-      }
       return existing;
     }
-  } catch { /* 不存在 */ }
+  } catch { /* 不存在，继续 */ }
+
+  // 2) 旧版加密密钥：尝试一次性迁移成明文，避免老用户密钥丢失
+  try {
+    if (fs.existsSync(keyPath)) {
+      const decoded = safeStorage && safeStorage.isEncryptionAvailable && safeStorage.isEncryptionAvailable()
+        ? safeStorage.decryptString(fs.readFileSync(keyPath))
+        : "";
+      if (decoded && Buffer.from(decoded, "base64").length === 32) {
+        fs.writeFileSync(plainPath, decoded, { encoding: "utf8", mode: 0o600 });
+        try { fs.chmodSync(plainPath, 0o600); } catch {}
+        try { fs.unlinkSync(keyPath); } catch {}
+        probe("master key migrated enc -> plain");
+        return decoded;
+      }
+    }
+  } catch { /* 解不开（例如钥匙串被拒），忽略 → 生成新密钥 */ }
 
   // 3) 全新生成
   const fresh = crypto.randomBytes(32).toString("base64");
-  if (canEncrypt) {
-    try {
-      const enc = safeStorage.encryptString(fresh);
-      fs.writeFileSync(keyPath, enc, { mode: 0o600 });
-      fs.chmodSync(keyPath, 0o600);
-      probe("master key generated (safeStorage)");
-      return fresh;
-    } catch (error) {
-      probe(`master key safeStorage write failed: ${error && error.message ? error.message : String(error)}`);
-    }
-  }
   fs.writeFileSync(plainPath, fresh, { encoding: "utf8", mode: 0o600 });
   try { fs.chmodSync(plainPath, 0o600); } catch {}
-  probe("master key generated (plain file fallback)");
+  probe("master key generated (plain)");
   return fresh;
 }
 
