@@ -46,7 +46,7 @@ button, input, select, textarea, a,
 .toolbar-panel,
 .workspace-panel,
 .advanced-panel {
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   border-radius: 8px;
   background: var(--panel);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);

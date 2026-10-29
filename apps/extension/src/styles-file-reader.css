@@ -163,7 +163,7 @@
   width: 34px;
   height: 34px;
   padding: 0;
-  background: rgba(248, 250, 252, 0.96);
+  background: var(--panel);
   border: 1px solid rgba(148, 163, 184, 0.42);
   color: #111827;
   border-radius: 999px;
@@ -175,9 +175,9 @@
 }
 
 .live-back-to-bottom:hover {
-  background: #ffffff;
+  background: var(--panel);
   border-color: rgba(100, 116, 139, 0.56);
-  color: #0f172a;
+  color: var(--ink);
   box-shadow: 0 3px 12px rgba(15, 23, 42, 0.16);
 }
 
@@ -223,14 +223,14 @@
   min-width: 0;
   border: 1px solid #d8e1ec;
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.68);
+  background: color-mix(in srgb, var(--panel) 68%, transparent);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.86);
   transition: background 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
 }
 
 .result-tab-chip-active {
   border-color: #cfd7e1;
-  background: linear-gradient(180deg, #ffffff, #f7f9fc);
+  background: linear-gradient(180deg, var(--panel), var(--panel));
   box-shadow: 0 1px 2px rgba(28, 41, 56, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.92);
 }
 
@@ -273,7 +273,7 @@
 
 .result-tab-chip:hover:not(.result-tab-chip-active) {
   border-color: #b8c8da;
-  background: rgba(255, 255, 255, 0.9);
+  background: color-mix(in srgb, var(--panel) 90%, transparent);
   box-shadow: 0 1px 4px rgba(28, 41, 56, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.92);
 }
 
@@ -316,7 +316,7 @@
 
 .empty-box .empty-box-title,
 .viewer-empty-state .viewer-empty-state-title {
-  font-weight: 650;
+  font-weight: 600;
   font-size: var(--fs-base);
 }
 
@@ -465,8 +465,8 @@
   justify-content: space-between;
   gap: 8px;
   padding: 6px 8px;
-  border-bottom: 1px solid #d9e0e8;
-  background: linear-gradient(180deg, #fbfcfd, #f5f8fb);
+  border-bottom: 1px solid var(--line);
+  background: linear-gradient(180deg, var(--panel), var(--panel));
 }
 
 .file-batch-toolbar-inline > .file-batch-actions {
@@ -516,13 +516,13 @@
   padding: 6px 8px;
   color: #5f6b7a;
   font-size: var(--fs-2xs);
-  border-bottom: 1px solid #d9e0e8;
+  border-bottom: 1px solid var(--line);
   /* 表头已移出滚动容器（见 .file-table / .file-table-body）：不再需要 sticky。
      overflow: hidden + scrollbar-gutter: stable 让表头预留与 body 同宽的滚动条槽位，
      滚动的 body 出现/消失滚动条时列宽不跳、表头与数据列保持对齐。 */
   overflow: hidden;
   scrollbar-gutter: stable;
-  background: linear-gradient(180deg, #fafbfc, #f0f3f7);
+  background: linear-gradient(180deg, #fafbfc, var(--panel-muted));
   z-index: 1;
 }
 
@@ -580,7 +580,7 @@
   border-radius: 4px;
   border: 1px solid transparent;
   border-bottom-color: #edf1f5;
-  background: #fff;
+  background: var(--panel);
   color: #2d3745;
   min-height: 28px;
   cursor: pointer;
@@ -615,7 +615,7 @@
 /* 文件/目录图标已换为 lucide Folder / FileText（对齐原型），手绘 CSS 小方块删除 */
 
 .file-row:hover:not(:disabled) {
-  background: #f0f5fa;
+  background: var(--panel-muted);
 }
 
 .file-row-selected {
@@ -637,7 +637,7 @@
 }
 
 .file-row-active {
-  background: #f0f5fa;
+  background: var(--panel-muted);
   box-shadow: inset 3px 0 0 #4e7ea8;
 }
 
@@ -664,7 +664,7 @@
 .file-row:hover .file-row-actions,
 .file-row-active .file-row-actions,
 .file-row:focus-within .file-row-actions {
-  background: linear-gradient(90deg, transparent 0%, rgba(240, 245, 250, 0.74) 18%, rgba(240, 245, 250, 0.92) 100%);
+  background: linear-gradient(90deg, transparent 0%, color-mix(in srgb, var(--panel) 74%, transparent) 18%, color-mix(in srgb, var(--panel) 92%, transparent) 100%);
   pointer-events: auto;
 }
 
@@ -728,7 +728,7 @@
   align-items: center;
   min-height: 120px;
   border-style: dashed;
-  background: linear-gradient(180deg, #fbfcfd, #f5f8fb);
+  background: linear-gradient(180deg, var(--panel), var(--panel));
   width: 100%;
 }
 
@@ -746,7 +746,7 @@
   color: var(--ink-muted);
   border: 1px dashed var(--line);
   border-radius: 8px;
-  background: linear-gradient(180deg, rgba(251, 252, 253, 0.86), rgba(245, 248, 251, 0.72));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--panel) 86%, transparent), color-mix(in srgb, var(--panel) 72%, transparent));
 }
 
 .directory-loading-state strong {
@@ -777,7 +777,7 @@
   padding: 4px 6px;
   border: 1px solid #d5dde7;
   border-radius: 2px;
-  background: linear-gradient(180deg, #fbfcfd, #f4f7fa);
+  background: linear-gradient(180deg, var(--panel), var(--panel-muted));
 }
 
 .reader-position-head {
@@ -927,7 +927,7 @@
   padding: 5px 6px;
   border: 1px solid #d4dde7;
   border-radius: 2px;
-  background: linear-gradient(180deg, #ffffff, #f4f7fa);
+  background: linear-gradient(180deg, var(--panel), var(--panel-muted));
 }
 
 .reader-preview-head {

@@ -3530,17 +3530,30 @@ export function App() {
        默认 none；选了才注入，且强度由 texIntensity 控制。 */
     /* 背景图 + 纹理合并：background-image 支持多层，前者在下后者在上。
        顺序：氛围光效（大范围）→ 纹理线（细节）。 */
+    /* 2026-10-29 终端容器底色：**永远是主题深色**，不做条件分支。
+       走过的弯路记一下，避免再改错：
+       ① 先设成 transparent 想「让背景图透出」→ 没背景图时透出浅色页面底，终端变白；
+       ② 改成「有背景图才 transparent」→ 但碳纤维/极光这类是**半透明 CSS 条纹**，
+          不是不透明图片，透明容器照样透出浅色页面底 → 还是白底 + 稀疏灰线。
+       正确模型：深色底是**基底**，图片/纹理永远叠加在它之上（background-image 在上层）。
+       所以这里只给深色，不判断有没有背景图。 */
+    "--terminal-surface": terminalBackgroundColor,
     "--terminal-texture-image":
       terminalBackdropImage !== "none" && terminalTextureBackground.image !== "none"
         ? `${terminalTextureBackground.image}, ${terminalBackdropImage}`
         : terminalBackdropImage !== "none"
           ? terminalBackdropImage
           : terminalTextureBackground.image,
+    /* 2026-10-28 修复「选了背景图终端没变化」：
+       原来背景图那一层一律给 auto —— 1600×900 的图片按原始尺寸平铺，
+       在 355px 宽的终端里只露出左上角一小块暗部，看起来就像没生效。
+       现在：图片/CSS 光效用 cover 铺满；纹理仍按自身周期（不用 cover，
+       否则重复条纹会被拉伸成竖条）。 */
     "--terminal-texture-size":
       terminalBackdropImage !== "none" && terminalTextureBackground.image !== "none"
-        ? `${terminalTextureBackground.size}, auto`
+        ? `${terminalTextureBackground.size}, cover`
         : terminalBackdropImage !== "none"
-          ? "auto"
+          ? "cover"
           : terminalTextureBackground.size,
     "--custom-background-image": toCssImageUrl(customBackgroundImage),
     /* 背景层图片模式：遮罩亮度 / 模糊由设置滑杆驱动（原型 T1）。

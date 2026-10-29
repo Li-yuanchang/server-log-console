@@ -6,7 +6,7 @@ import { looksLikeJumpServer } from "./terminal-utils.js";
 import { readDirectoryHistory } from "./storage.js";
 import { apiGetCredentialSecret, apiTestConnection, apiTestDraftConnection } from "./api.js";
 import { ThemedSelect } from "./ThemedSelect.js";
-import { TERMINAL_TEXTURES, TERMINAL_BACKDROPS, TERMINAL_LOOK_PRESETS, buildTextureBackground, buildBackdropBackground, buildBackdropPreview } from "./semantic-tokens.js";
+import { TERMINAL_TEXTURES, TERMINAL_BACKDROPS, TERMINAL_LOOK_PRESETS, buildTextureBackground, buildBackdropBackground, buildBackdropPreview, type TerminalBackdrop } from "./semantic-tokens.js";
 import type { SlcDesktopUpdateState } from "../types/desktop-update.js";
 import { UpdateCenterPanel, type DesktopUpdateCheckLogEntry } from "./UpdateCenterPanel.js";
 import { SecuritySettingsView } from "./SecuritySettingsView.js";
@@ -127,9 +127,9 @@ interface Props {
     /** 终端背景纹理与强度（2026-10-27） */
     terminalTexture: "none" | "grid" | "dots" | "double";
     terminalTextureIntensity: number;
-    terminalBackdrop: "none" | "aurora" | "nebula" | "mesh" | "carbon" | "wave";
+    terminalBackdrop: TerminalBackdrop;
     terminalBackdropIntensity: number;
-    onTerminalBackdropChange: (value: "none" | "aurora" | "nebula" | "mesh" | "carbon" | "wave") => void;
+    onTerminalBackdropChange: (value: TerminalBackdrop) => void;
     onTerminalBackdropIntensityChange: (value: number) => void;
     /** 一键套用外观组合预设（同时改配色/背景图/纹理/强度） */
     onApplyLookPreset: (presetId: string) => void;
@@ -275,12 +275,20 @@ function motionModeLabel(value: UiMotionMode): string {
   return value === "reduced" ? "减少动效" : "标准";
 }
 
+/* 偏好设置分区（2026-10-28 重组，对齐 docs/prototypes/settings-restructure-2026-10.html）
+   原 5 区：外观(7) / 日志(4) / 终端(13) / 界面与浮层(1) / 高级(1)
+   现 4 区：外观(6) / 阅读(4) / 终端(13) / 其它(2)
+   理由：
+   · 「界面与浮层」只有 1 项（服务器状态刷新），单独占一栏让用户以为坏了 → 并入「其它」
+   · 「日志」与「界面字体字号」本质都是「看内容的排版」→ 合为「阅读」
+   · 终端 13 项占全部选项的一半，改为「预设优先 + 分组」三层结构
+   注：id 保持 pref-log / pref-layout 不变，避免老用户的锚点书签失效；
+       只改 label 与渲染归属。 */
 const PREF_ANCHORS = [
   { id: "pref-appearance", label: "外观" },
-  { id: "pref-log", label: "日志" },
+  { id: "pref-log", label: "阅读" },
   { id: "pref-terminal", label: "终端" },
-  { id: "pref-layout", label: "界面与浮层" },
-  { id: "pref-advanced", label: "高级" },
+  { id: "pref-advanced", label: "其它" },
 ];
 
 /** 高级 · 强调色覆盖预设（低饱和克制色；跟随主题之外的一组快捷覆盖） */
@@ -450,25 +458,35 @@ export interface TerminalFollowPreviewColors {
 }
 
 /** 终端配色真实预览：用 scheme.theme 上色的迷你终端（替代纯渐变条） */
+/** 终端配色缩略卡（2026-10-28 重做）。
+ *
+ * 为什么要改：旧版只画 6 行模拟文字（绿提示符 + 红 ERROR + 黄 WARN），
+ * 一套配色的 16 色里只能看到 3–4 种。13 套配色并排时人眼分辨不出差别，
+ * 用户反馈「看着都一样、显得乱」。
+ *
+ * 新做法对齐 iTerm2-Color-Schemes 的测试卡思路：
+ * 把 ANSI 16 色整排铺开（上排 0–7 标准色、下排 8–15 高亮色），
+ * 下面保留一行短模拟文字维持「这是一台终端」的语境。
+ * 信息密度从 3 色提升到 16 色，不用点开就能对比。 */
 function TerminalPreview({ scheme }: { scheme: TerminalColorScheme }) {
   const t = scheme.theme;
+  /* ANSI 0–15：normal(0-7) + bright(8-15)，与 xterm ITheme 字段一一对应 */
+  const ansi = [
+    t.black, t.red, t.green, t.yellow, t.blue, t.magenta, t.cyan, t.white,
+    t.brightBlack, t.brightRed, t.brightGreen, t.brightYellow,
+    t.brightBlue, t.brightMagenta, t.brightCyan, t.brightWhite
+  ];
   return (
     <span className="slc-term-preview" style={{ background: t.background, color: t.foreground }}>
-      <span style={{ color: t.brightBlack }}>Last login: Tue Sep 29 09:41</span>
-      <span>
-        <span style={{ color: t.green }}>root@127.38</span> systemctl status eos-server
+      <span className="slc-term-swatches" aria-hidden="true">
+        {ansi.map((c, i) => (
+          <i key={i} style={{ background: c }} />
+        ))}
       </span>
-      <span>
-        <span style={{ color: t.green }}>● </span>eos-server.service <span style={{ color: t.cyan }}>active (running)</span>
-      </span>
-      <span>
-        <span style={{ color: t.red }}>09:02:11 ERROR</span> sync failed
-      </span>
-      <span>
-        <span style={{ color: t.yellow }}>09:02:16 WARN </span> mark #4821 FAILED
-      </span>
-      <span>
-        <span style={{ color: t.green }}>root@127.38</span>&nbsp;<span className="cursor" style={{ background: t.cursor }} />
+      <span className="slc-term-line">
+        <span style={{ color: t.green }}>root@127.38</span> <span style={{ color: t.red }}>ERROR</span>
+        <span style={{ color: t.yellow }}>WARN</span>
+        <span className="cursor" style={{ background: t.cursor }} />
       </span>
     </span>
   );
@@ -569,6 +587,12 @@ export function ConnectionSettingsWorkspace(props: Props) {
      纯导航状态，非宽度分支——宽度判断只发生在 CSS 容器查询里。 */
   const [mobileShowDetail, setMobileShowDetail] = useState(false);
   const [currentAnchor, setCurrentAnchor] = useState(PREF_ANCHORS[0].id);
+  /* 2026-10-28：点击锚点后短暂锁定 currentAnchor。
+     否则 smooth 滚动过程中 onScroll 一路触发，把 currentAnchor 覆盖回
+     滚动经过的中间分区（点「阅读」时会先经过「外观」，预览就闪回界面预览）。 */
+  const anchorLockRef = useRef<string | null>(null);
+  /* 滚动锁定的定时器句柄（重复点击时先清旧的，避免旧定时器提前解锁） */
+  const scrollLockTimerRef = useRef<number | null>(null);
   /* 终端节子页（2026-10-27）：控件 20+ 单屏过载，按「配色 / 字体 / 光标」分页 */
   const [terminalTab, setTerminalTab] = useState<"scheme" | "font" | "cursor">("font");
   /* 密码 / 私钥「明文可见」开关（2026-10-23 用户需求：加可查看小眼睛）。
@@ -846,21 +870,99 @@ export function ConnectionSettingsWorkspace(props: Props) {
   const handlePrefScroll = () => {
     const container = prefScrollRef.current;
     if (!container) return;
-    let current = PREF_ANCHORS[0].id;
-    container.querySelectorAll<HTMLElement>("[data-anchor]").forEach((section) => {
-      if (section.offsetTop - container.scrollTop <= 64) {
-        current = section.id;
+    if (anchorLockRef.current) {
+      const locked = container.querySelector<HTMLElement>('#' + anchorLockRef.current);
+      if (locked) {
+        const lr = locked.getBoundingClientRect();
+        const br = container.getBoundingClientRect();
+        if (Math.abs(lr.top - br.top) > 24) return;
       }
-    });
-    setCurrentAnchor(current);
+      anchorLockRef.current = null;
+      if (scrollLockTimerRef.current !== null) {
+        window.clearTimeout(scrollLockTimerRef.current);
+        scrollLockTimerRef.current = null;
+      }
+    }
+
+    /* 2026-10-28 第三次修正（用户反馈「在终端区却显示日志预览，露一点就切」）。
+       演进过程记录，避免以后又改回去：
+       ① 旧版 "offsetTop - scrollTop <= 64" —— 只要下面分区标题露头就切，太敏感；
+       ② 上一版「交叉面积最大」—— 解决了敏感性，但「阅读」区只有 217px 高，
+          滚到它时可视区里大部分仍是终端区，按面积算会误判成终端。
+       最终方案：**顶部归属法** —— 取「视口顶部往下 1/3 处」落在哪个分区。
+       理由：用户判断「我在哪一区」看的是屏幕上方内容，不是面积占比。
+       这样短分区（阅读 217px）滚到位后也能正确归属，长分区（终端 1400px）滚动中
+       也不会被下一个分区抢走，除非它真的进入屏幕上半部分。 */
+    const box = container.getBoundingClientRect();
+    const probeY = box.top + Math.min(160, box.height * 0.33);   /* 探针：顶部往下 1/3 */
+    const sections = Array.from(container.querySelectorAll<HTMLElement>("[data-anchor]"));
+    if (sections.length === 0) return;
+
+    let hit = sections[0].id;
+    for (const section of sections) {
+      const r = section.getBoundingClientRect();
+      /* 探针落在该分区范围内 → 就是它 */
+      if (r.top <= probeY && r.bottom > probeY) { hit = section.id; break; }
+      /* 探针在分区上方（还没滚到）→ 取上一个 */
+      if (r.top > probeY) break;
+    }
+    /* 底部兜底：已经滚到最底时，最后一个分区内容不足一屏也要能选中 */
+    const atBottom = container.scrollTop + container.clientHeight >= container.scrollHeight - 4;
+    if (atBottom) hit = sections[sections.length - 1].id;
+
+    setCurrentAnchor(hit);
   };
 
   const scrollToAnchor = (anchorId: string) => {
     const container = prefScrollRef.current;
     const target = container?.querySelector<HTMLElement>(`#${anchorId}`);
     if (container && target) {
-      container.scrollTo({ top: target.offsetTop - 20, behavior: "smooth" });
+      /* 2026-10-28 修复「点 04 其它却停在终端区」：
+         原来用 target.offsetTop —— 它相对的是「最近的定位祖先」，
+         而设置页里有多层 position:relative 容器，offsetTop 会明显偏小/偏大，
+         导致滚动落点错位（点「其它」实测滚到终端中间）。
+         改用 getBoundingClientRect 差值算出相对滚动容器的真实偏移。 */
+      const cRect = container.getBoundingClientRect();
+      const tRect = target.getBoundingClientRect();
+      const top = Math.max(0, tRect.top - cRect.top + container.scrollTop - 8);
+      /* 2026-10-28 关键修复：behavior:"smooth" 在本项目的 Electron 环境里
+         实测完全无效（scrollTo 后 scrollTop 恒为 0，3.2s 内一步没动）——
+         用户系统开了「减少动效」时会走到这个分支。
+         改为直接赋值 scrollTop（同步生效、不依赖动画），
+         并用 prefers-reduced-motion 判断是否要平滑：
+         想平滑时用 requestAnimationFrame 自己做，避免依赖浏览器实现。 */
+      const prefersReduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+      if (prefersReduced) {
+        container.scrollTop = top;
+      } else {
+        const from = container.scrollTop;
+        const delta = top - from;
+        if (Math.abs(delta) < 2) {
+          container.scrollTop = top;
+        } else {
+          const DURATION = 260;
+          const t0 = performance.now();
+          const step = (now: number) => {
+            const p = Math.min(1, (now - t0) / DURATION);
+            /* easeOutCubic */
+            const e = 1 - Math.pow(1 - p, 3);
+            container.scrollTop = from + delta * e;
+            if (p < 1) requestAnimationFrame(step);
+            else container.scrollTop = top;   /* 收尾对齐，避免浮点误差 */
+          };
+          requestAnimationFrame(step);
+        }
+      }
     }
+    setCurrentAnchor(anchorId);
+    /* 锁定期：覆盖平滑滚动的整个过程。长页面滚到底需要 1s+，
+       原来 700ms 不够，松手后 onScroll 会把状态改回中间分区。 */
+    anchorLockRef.current = anchorId;
+    window.clearTimeout((scrollLockTimerRef.current ?? 0));
+    scrollLockTimerRef.current = window.setTimeout(() => {
+      anchorLockRef.current = null;
+      scrollLockTimerRef.current = null;
+    }, 1200);
   };
 
 
@@ -874,10 +976,11 @@ export function ConnectionSettingsWorkspace(props: Props) {
   };
 
   const renderCredentialCard = () => (
+    <>
+    <div className="settings-card-kicker">连接凭证</div>
     <section className="settings-card conn-credential-card">
       <div className="settings-card-head">
         <div>
-          <span className="settings-card-kicker">连接凭证</span>
           {credentialStatus?.hasUsableCredential ? (
             <span className="chip grn">已有可用凭证 · {credentialStatus.source || "本地"}</span>
           ) : (
@@ -892,6 +995,7 @@ export function ConnectionSettingsWorkspace(props: Props) {
         <span><span className="settings-info-key">私钥</span>{credentialStatus?.hasPrivateKey ? "已保存" : "未配置"}</span>
       </div>
     </section>
+    </>
   );
 
   return (
@@ -930,6 +1034,27 @@ export function ConnectionSettingsWorkspace(props: Props) {
           <svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" aria-hidden="true"><circle cx="8" cy="8" r="2" /><path d="M8 2.3v1.4M8 12.3v1.4M13.7 8h-1.4M3.7 8H2.3M11.9 4.1l-1 1M5.1 10.9l-1 1M11.9 11.9l-1-1M5.1 5.1l-1-1" /></svg>
           偏好设置
         </button>
+        {/* 2026-10-28 二级菜单（用户要求「改为编号的二级菜单，不要单独显示了，占空间」）：
+            原来偏好设置内部还有一列独立的锚点导航（.settings-pref-anchor，宽 116px），
+            等于「一级导航 + 二级锚点」两层并列，右侧内容区被挤窄。
+            现在改成：一级导航下直接展开 01–04 编号子项，锚点列删除，内容区占满宽度。 */}
+        {props.activeView === "preferences" ? (
+          <div className="settings-rail-sub" role="tablist" aria-label="偏好设置分类">
+            {PREF_ANCHORS.map((anchor, i) => (
+              <button
+                key={anchor.id}
+                type="button"
+                role="tab"
+                aria-selected={currentAnchor === anchor.id}
+                className={currentAnchor === anchor.id ? "settings-rail-subitem settings-rail-subitem-active" : "settings-rail-subitem"}
+                onClick={() => scrollToAnchor(anchor.id)}
+              >
+                <span className="settings-rail-subno">{String(i + 1).padStart(2, "0")}</span>
+                {anchor.label}
+              </button>
+            ))}
+          </div>
+        ) : null}
         <button
           type="button"
           className={props.activeView === "update" ? "settings-rail-item settings-rail-item-active" : "settings-rail-item"}
@@ -1352,12 +1477,10 @@ export function ConnectionSettingsWorkspace(props: Props) {
                   viewingCurrentServer ? (
                     <div className="conn-detail-stack">
                       {/* S10：详情默认只读——「连接信息」键值网格 + [编辑]（原型 946-957） */}
+                      <div className="settings-card-kicker">连接信息</div>
                       <section className="settings-card">
                         <div className="settings-card-head">
-                          <div>
-                            <span className="settings-card-kicker">连接信息</span>
-                            <strong>{activeListServer.name}</strong>
-                          </div>
+                          <strong>{activeListServer.name}</strong>
                           <div className="settings-inline-actions">
                             <button className="ghost-button" type="button" title={activeListServer.source === "manual" ? "编辑连接" : "编辑连接（就地修改导入记录；重新导入时默认保留你的修改）"} onClick={() => {
                               props.connectionSection.onEditManualServer(activeListServer);
@@ -1380,14 +1503,12 @@ export function ConnectionSettingsWorkspace(props: Props) {
                       {renderCredentialCard()}
 
                       {/* S10：连接入口——直连时折叠为一行摘要，展开才见配置（原型 969-976） */}
+                      <div className="settings-card-kicker">连接入口</div>
                       <section className="settings-card conn-entry-card">
                         {canConfigureRoute ? (
                           <>
                             <div className="settings-card-head">
-                              <div>
-                                <span className="settings-card-kicker">连接入口</span>
-                                <strong>入口账号与 JumpServer 规则</strong>
-                              </div>
+                              <strong>入口账号与 JumpServer 规则</strong>
                               <button className="ghost-button" type="button" onClick={props.currentServerSection.onSaveRoute} disabled={props.isBusy}>保存入口设置</button>
                             </div>
                             {canPickEntry ? (
@@ -1445,7 +1566,8 @@ export function ConnectionSettingsWorkspace(props: Props) {
                         ) : (
                           <details className="conn-entry-details">
                             <summary>
-                              <span className="settings-card-kicker">连接入口</span>
+                              {/* 2026-10-28：外层已有 .settings-card-kicker「连接入口」，
+                                  这里不再重复，只保留状态描述与展开提示。 */}
                               <span className="conn-entry-summary-text">当前服务器按直连处理</span>
                               <span className="conn-entry-summary-toggle">展开配置堡垒机 ▾</span>
                             </summary>
@@ -1459,12 +1581,10 @@ export function ConnectionSettingsWorkspace(props: Props) {
                     </div>
                   ) : (
                     <div className="conn-detail-stack">
+                      <div className="settings-card-kicker">连接信息</div>
                       <section className="settings-card">
                         <div className="settings-card-head">
-                          <div>
-                            <span className="settings-card-kicker">连接信息</span>
-                            <strong>{activeListServer.name}</strong>
-                          </div>
+                          <strong>{activeListServer.name}</strong>
                           <div className="settings-inline-actions">
                             {activeListServer.source === "manual" ? (
                               <button className="ghost-button" type="button" onClick={() => {
@@ -1477,16 +1597,16 @@ export function ConnectionSettingsWorkspace(props: Props) {
                             </button>
                           </div>
                         </div>
-                        <div className="settings-meta-grid">
-                          <span>来源：{sourceLabel(activeListServer.source)}</span>
-                          <span>类型：{connectionKindLabel(activeListServer.connectionKind)}</span>
-                          <span>主机：{activeListServer.host}</span>
-                          <span>端口：{activeListServer.port}</span>
-                          <span>用户名：{activeListServer.username}</span>
-                          <span>分组：{activeListServer.groupPath?.join(" / ") || "未分组"}</span>
-                          <span>日志目录：{activeListServer.basePath || "/"}</span>
-                          <span>认证：{activeListServer.authType === "privateKey" ? "私钥" : activeListServer.authType === "password" ? "密码" : "未配置"}</span>
-                          <span>说明：{activeListServer.connectionHint || "--"}</span>
+                        <div className="conn-kv-grid">
+                          <div className="conn-kv"><span className="k">来源</span><span className="v">{sourceLabel(activeListServer.source)}</span></div>
+                          <div className="conn-kv"><span className="k">类型</span><span className="v">{connectionKindLabel(activeListServer.connectionKind)}</span></div>
+                          <div className="conn-kv"><span className="k">主机</span><span className="v">{activeListServer.host}</span></div>
+                          <div className="conn-kv"><span className="k">端口</span><span className="v">{activeListServer.port}</span></div>
+                          <div className="conn-kv"><span className="k">用户名</span><span className="v">{activeListServer.username}</span></div>
+                          <div className="conn-kv"><span className="k">分组</span><span className="v">{activeListServer.groupPath?.join(" / ") || "未分组"}</span></div>
+                          <div className="conn-kv"><span className="k">日志目录</span><span className="v">{activeListServer.basePath || "/"}</span></div>
+                          <div className="conn-kv"><span className="k">认证</span><span className="v">{activeListServer.authType === "privateKey" ? "私钥" : activeListServer.authType === "password" ? "密码" : "未配置"}</span></div>
+                          <div className="conn-kv conn-kv-wide"><span className="k">说明</span><span className="v">{activeListServer.connectionHint || "--"}</span></div>
                         </div>
                         {activeListServer.tags.length ? (
                           <div className="settings-meta-grid">
@@ -1614,21 +1734,6 @@ export function ConnectionSettingsWorkspace(props: Props) {
             </div>
           </div>
           <div className="settings-pref-layout">
-            <aside className="settings-pref-anchor">
-            {PREF_ANCHORS.map((anchor) => (
-              <a
-                key={anchor.id}
-                href={`#${anchor.id}`}
-                className={currentAnchor === anchor.id ? "current" : ""}
-                onClick={(event) => {
-                  event.preventDefault();
-                  scrollToAnchor(anchor.id);
-                }}
-              >
-                {anchor.label}
-              </a>
-            ))}
-          </aside>
           <div className="settings-pref-scroll" ref={prefScrollRef} onScroll={handlePrefScroll}>
             <section id="pref-appearance" data-anchor className="settings-pref-section">
               <div className="settings-card-kicker">外观</div>
@@ -1650,41 +1755,7 @@ export function ConnectionSettingsWorkspace(props: Props) {
                     </span>
                   </span>
                 </div>
-                <div className="settings-pref-row settings-pref-row-wide">
-                  <span className="settings-pref-label"><strong>强调色覆盖</strong><span>默认跟随主题；on-accent 黑白按对比度自动派生</span></span>
-                  <span className="slc-accent-row">
-                    <button
-                      type="button"
-                      className={props.preferenceSection.uiAccentOverride === null ? "csw csw-on" : "csw"}
-                      title="跟随主题"
-                      onClick={() => props.preferenceSection.onUiAccentOverrideChange(null)}
-                    >
-                      <i style={{ background: "color-mix(in srgb, var(--accent) 40%, transparent)" }} />
-                    </button>
-                    {ACCENT_OVERRIDES.map((accent) => (
-                      <button
-                        key={accent}
-                        type="button"
-                        className={props.preferenceSection.uiAccentOverride?.toLowerCase() === accent ? "csw csw-on" : "csw"}
-                        style={{ color: accent }}
-                        title={accent}
-                        onClick={() => props.preferenceSection.onUiAccentOverrideChange(accent)}
-                      >
-                        <i style={{ background: accent }} />
-                      </button>
-                    ))}
-                    <label className="settings-color-field slc-accent-custom">
-                      <input
-                        type="color"
-                        value={props.preferenceSection.uiAccentOverride ?? "#0070f3"}
-                        onChange={(event) => props.preferenceSection.onUiAccentOverrideChange(event.target.value)}
-                      />
-                    </label>
-                  </span>
-                </div>
-                <div className="slc-appearance-cols">
-                <div className="slc-appearance-main">
-                <div className="slc-theme-grid" role="radiogroup" aria-label="内置主题">
+                <div className="slc-theme-pills" role="radiogroup" aria-label="内置主题">
                   {props.preferenceSection.themePresetOptions
                     .filter((preset) => props.preferenceSection.uiToneMode === "system" || preset.tone === props.preferenceSection.uiToneMode)
                     .map((preset) => {
@@ -1695,36 +1766,43 @@ export function ConnectionSettingsWorkspace(props: Props) {
                           type="button"
                           role="radio"
                           aria-checked={active}
-                          className={active ? "slc-theme-card slc-theme-card-active" : "slc-theme-card"}
+                          className={active ? "slc-theme-pill slc-theme-pill-active" : "slc-theme-pill"}
                           title={preset.desc}
                           onClick={() => props.preferenceSection.onUiThemePresetChange(preset.id)}
                         >
-                          <MiniThemeWindow preset={preset} />
-                          <span className="slc-theme-name">
-                            <b>{preset.name}</b>
-                            <span className={preset.tone === "dark" ? "slc-tone slc-tone-dark" : "slc-tone"}>{preset.tone === "light" ? "浅" : "深"}</span>
+                          {/* 胶囊：左侧三色圆点（底/面板/强调），右侧名字。
+                              2026-10-28 用户要求「改为原型里胶囊形状的选择样式」——
+                              原大卡片占 284px，胶囊约 44px，且 10 套仍一眼看全。 */}
+                          <span className="slc-theme-pill-dot" aria-hidden="true">
+                            <i style={{ background: preset.v.bg }} />
+                            <i style={{ background: preset.v.panel }} />
+                            <i style={{ background: preset.v.accent }} />
+                          </span>
+                          <span className="slc-theme-pill-name">{preset.name}</span>
+                          <span className={preset.tone === "dark" ? "slc-tone slc-tone-dark" : "slc-tone"}>
+                            {preset.tone === "light" ? "浅" : "深"}
                           </span>
                         </button>
                       );
                     })}
                 </div>
-                <div className="settings-pref-row settings-pref-row-wide">
+                <div className="settings-pref-row">
                   <span className="settings-pref-label"><strong>工作区背景</strong><span>独立于主题的一层；非纯色下面板转半透明 + 毛玻璃</span></span>
-                  <div className="slc-bg-chips" role="radiogroup" aria-label="工作区背景">
-                    {props.preferenceSection.backgroundOptions.map((layer) => (
-                      <button
-                        key={layer.id}
-                        type="button"
-                        role="radio"
-                        aria-checked={props.preferenceSection.uiBackground === layer.id}
-                        title={layer.desc}
-                        className={props.preferenceSection.uiBackground === layer.id ? "fchip fchip-on" : "fchip"}
-                        onClick={() => props.preferenceSection.onUiBackgroundChange(layer.id)}
-                      >
-                        {layer.name}
-                      </button>
-                    ))}
-                  </div>
+                  {/* 2026-10-28 重做（对齐 ZCode / WorkBuddy 的外观页）：
+                      原来是 8 个 chip 平铺，实测占 364px（整个外观分区的 40%）。
+                      它只是「选一种背景」，用一行下拉就够 —— 改成 ThemedSelect，
+                      高度从 364px 降到 46px，且不改变任何能力。 */}
+                  <span className="settings-pref-value">
+                    <ThemedSelect
+                      value={props.preferenceSection.uiBackground}
+                      onChange={(value) => props.preferenceSection.onUiBackgroundChange(value)}
+                      ariaLabel="工作区背景"
+                      options={props.preferenceSection.backgroundOptions.map((layer) => ({
+                        value: layer.id,
+                        label: layer.name
+                      }))}
+                    />
+                  </span>
                 </div>
                 {props.preferenceSection.uiBackground === "image" ? (
                   <div className="settings-pref-row settings-pref-row-wide settings-theme-customizer">
@@ -1795,27 +1873,6 @@ export function ConnectionSettingsWorkspace(props: Props) {
                     </div>
                   </div>
                 ) : null}
-                </div>
-                <aside className="slc-appearance-preview">
-                  {(() => {
-                    const resolvedPreset =
-                      props.preferenceSection.themePresetOptions.find((p) => p.id === props.preferenceSection.resolvedThemeId) ??
-                      props.preferenceSection.themePresetOptions[0];
-                    return (
-                      <>
-                        <div className="slc-pv-cap"><i />实时预览 · 主题与背景即时生效</div>
-                        <AppearanceLivePreview
-                          preset={resolvedPreset}
-                          bgLayer={props.preferenceSection.uiBackground}
-                          imgOverlay={props.preferenceSection.uiImgOverlay}
-                          imgBlur={props.preferenceSection.uiImgBlur}
-                          bgImage={props.preferenceSection.customBackgroundImage}
-                        />
-                      </>
-                    );
-                  })()}
-                </aside>
-                </div>
                 <div className="settings-pref-row">
                   <span className="settings-pref-label"><strong>界面密度</strong><span>紧凑适合小屏</span></span>
                   <span className="settings-pref-value">
@@ -1852,129 +1909,168 @@ export function ConnectionSettingsWorkspace(props: Props) {
                 </div>
                 {/* 2026-10-24 重设计：原「三处独立」矩阵拆散 —— 界面留本区，日志移入「日志」，
                     终端移入「终端」，每项设置与上下文同区（用户反馈跨分区维护体验割裂）。 */}
-                <div className="settings-pref-row settings-pref-row-wide">
+                {/* 2026-10-28 改为左右布局（用户反馈「其他设置项都是左右布局，
+                    就界面字体与字号不是」）：原来用 .font-matrix 表格把两个控件分成
+                    固定宽度的两列（190px / 150px），中间空一大截，与全站
+                    「左标签 + 右控件」的行式布局不一致。
+                    现在直接放进 .settings-pref-value（inline-flex），与「界面密度」等行同构。 */}
+                <div className="settings-pref-row">
                   <span className="settings-pref-label"><strong>界面字体与字号</strong><span>日志 / 终端的字体字号在各自分区维护</span></span>
-                  <div className="font-matrix">
-                    <table className="font-matrix-table">
-                      <tbody>
-                        <tr>
-                          <td>
-                            <ThemedSelect
-                              value={props.preferenceSection.uiFontFamily}
-                              onChange={(value) => props.preferenceSection.onUiFontFamilyChange(value as UiFontFamily)}
-                              ariaLabel="界面字体"
-                              options={[
-                                { value: "geist", label: "Geist（默认）" },
-                                { value: "pingfang", label: "苹方" },
-                                { value: "microsoft-yahei", label: "微软雅黑" },
-                                { value: "simsun", label: "宋体" },
-                                { value: "system", label: "系统字体" }
-                              ]}
-                            />
-                          </td>
-                          <td>
-                            <input
-                              type="number"
-                              min={12}
-                              max={18}
-                              value={props.preferenceSection.uiFontSize}
-                              onChange={(event) => {
-                                /* 空值保护：清空时 Number("")=0 会被钳到最小值并持久化 */
-                                const raw = event.target.value;
-                                if (raw === "") return;
-                                const next = Number(raw);
-                                if (!Number.isFinite(next)) return;
-                                props.preferenceSection.onUiFontSizeChange(next);
-                              }}
-                              aria-label="界面字号"
-                            />
-                          </td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-                {/* S14-4 必达：水印块（原型 1143-1168）——
-                    标题「水印」+ chip 新增 + pill 开启；内容模板 / 透明度 range / 作用范围 fchip；
-                    右侧预览框显示斜向平铺水印。水印渲染层见 WatermarkOverlay（默认关闭）。 */}
-                <div className="settings-pref-row settings-pref-row-wide">
-                  <div className="watermark-block">
-                    <div className="watermark-main">
-                      <div className="watermark-head">
-                        <span className="watermark-title">水印<span className="chip">新增</span></span>
-                        <label className="slc-switch">
-                          <input
-                            type="checkbox"
-                            checked={props.preferenceSection.watermarkEnabled}
-                            onChange={props.preferenceSection.onToggleWatermark}
-                            aria-label="安全水印"
-                          />
-                          <span />
-                        </label>
-                      </div>
-                      <label className="watermark-field">
-                        <span>内容模板</span>
-                        <input
-                          value={props.preferenceSection.watermarkTemplate}
-                          onChange={(event) => props.preferenceSection.onWatermarkTemplateChange(event.target.value)}
-                          placeholder={DEFAULT_WATERMARK_TEMPLATE}
-                        />
-                      </label>
-                      <label className="watermark-field watermark-field-range">
-                        <span>透明度</span>
-                        <input
-                          type="range"
-                          min={1}
-                          max={20}
-                          value={props.preferenceSection.watermarkOpacity}
-                          onChange={(event) => props.preferenceSection.onWatermarkOpacityChange(Number(event.target.value))}
-                        />
-                        <code>{props.preferenceSection.watermarkOpacity}%</code>
-                      </label>
-                      <div className="watermark-scope">
-                        作用范围
-                        <button
-                          type="button"
-                          className={props.preferenceSection.watermarkScope === "content" ? "fchip fchip-on" : "fchip"}
-                          onClick={() => props.preferenceSection.onWatermarkScopeChange("content")}
-                        >
-                          日志/预览区
-                        </button>
-                        <button
-                          type="button"
-                          className={props.preferenceSection.watermarkScope === "global" ? "fchip fchip-on" : "fchip"}
-                          onClick={() => props.preferenceSection.onWatermarkScopeChange("global")}
-                        >
-                          全局
-                        </button>
-                      </div>
-                    </div>
-                    <div className="watermark-preview" aria-hidden="true">
-                      <div className="watermark-preview-lines">
-                        <div className="ll"><span className="t">09:02:11.001</span><span><span className="lv lv-e">ERROR</span> SyncJob - sync failed…</span></div>
-                        <div className="ll"><span className="t">09:02:12.110</span><span><span className="lv lv-i">INFO </span> SyncJob - retry scheduled</span></div>
-                        <div className="ll"><span className="t">09:02:15.771</span><span><span className="lv lv-w">WARN </span> UploadController - got 413</span></div>
-                      </div>
-                      <div
-                        className="watermark-preview-tiles"
-                        style={{ "--wm-opacity": String(props.preferenceSection.watermarkOpacity / 100) } as CSSProperties}
-                      >
-                        {Array.from({ length: 4 }, (_, index) => (
-                          <span key={index}>{props.preferenceSection.watermarkTemplate || DEFAULT_WATERMARK_TEMPLATE}</span>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
+                  <span className="settings-pref-value">
+                    <ThemedSelect
+                      value={props.preferenceSection.uiFontFamily}
+                      onChange={(value) => props.preferenceSection.onUiFontFamilyChange(value as UiFontFamily)}
+                      ariaLabel="界面字体"
+                      options={[
+                        { value: "geist", label: "Geist（默认）" },
+                        { value: "pingfang", label: "苹方" },
+                        { value: "microsoft-yahei", label: "微软雅黑" },
+                        { value: "simsun", label: "宋体" },
+                        { value: "system", label: "系统字体" }
+                      ]}
+                    />
+                    <input
+                      type="number"
+                      min={12}
+                      max={18}
+                      value={props.preferenceSection.uiFontSize}
+                      onChange={(event) => {
+                        /* 空值保护：清空时 Number("")=0 会被钳到最小值并持久化 */
+                        const raw = event.target.value;
+                        if (raw === "") return;
+                        const next = Number(raw);
+                        if (!Number.isFinite(next)) return;
+                        props.preferenceSection.onUiFontSizeChange(next);
+                      }}
+                      aria-label="界面字号"
+                      className="settings-inline-number"
+                    />
+                  </span>
                 </div>
               </div>
+
+                {/* 2026-10-28 重做：低频项折叠（对齐 ZCode / WorkBuddy 的外观页）。
+                    「强调色覆盖」「水印」都是偶尔才调一次的设置，原先平铺在首屏，
+                    合计占 240px+，把真正常用的主题/背景/密度挤下去。
+                    现在收进原生 <details>，默认收起，需要时再展开 —— 不引入额外状态。 */}
+                <details className="settings-pref-advanced">
+                  <summary>
+                    <span>高级外观</span>
+                    <span className="settings-pref-advanced-hint">强调色覆盖 · 水印</span>
+                  </summary>
+                  <div className="settings-pref-row settings-pref-row-wide">
+                    <span className="settings-pref-label"><strong>强调色覆盖</strong><span>默认跟随主题；on-accent 黑白按对比度自动派生</span></span>
+                    <span className="slc-accent-row">
+                      <button
+                        type="button"
+                        className={props.preferenceSection.uiAccentOverride === null ? "csw csw-on" : "csw"}
+                        title="跟随主题"
+                        onClick={() => props.preferenceSection.onUiAccentOverrideChange(null)}
+                      >
+                        <i style={{ background: "color-mix(in srgb, var(--accent) 40%, transparent)" }} />
+                      </button>
+                      {ACCENT_OVERRIDES.map((accent) => (
+                        <button
+                          key={accent}
+                          type="button"
+                          className={props.preferenceSection.uiAccentOverride?.toLowerCase() === accent ? "csw csw-on" : "csw"}
+                          style={{ color: accent }}
+                          title={accent}
+                          onClick={() => props.preferenceSection.onUiAccentOverrideChange(accent)}
+                        >
+                          <i style={{ background: accent }} />
+                        </button>
+                      ))}
+                      <label className="settings-color-field slc-accent-custom">
+                        <input
+                          type="color"
+                          value={props.preferenceSection.uiAccentOverride ?? "#0070f3"}
+                          onChange={(event) => props.preferenceSection.onUiAccentOverrideChange(event.target.value)}
+                        />
+                      </label>
+                    </span>
+                  </div>
+                  {/* S14-4 必达：水印块（原型 1143-1168）——
+                      标题「水印」+ chip 新增 + pill 开启；内容模板 / 透明度 range / 作用范围 fchip；
+                      右侧预览框显示斜向平铺水印。水印渲染层见 WatermarkOverlay（默认关闭）。 */}
+                  <div className="settings-pref-row settings-pref-row-wide">
+                    <div className="watermark-block">
+                      <div className="watermark-main">
+                        <div className="watermark-head">
+                          <span className="watermark-title">水印<span className="chip">新增</span></span>
+                          <label className="slc-switch">
+                            <input
+                              type="checkbox"
+                              checked={props.preferenceSection.watermarkEnabled}
+                              onChange={props.preferenceSection.onToggleWatermark}
+                              aria-label="安全水印"
+                            />
+                            <span />
+                          </label>
+                        </div>
+                        <label className="watermark-field">
+                          <span>内容模板</span>
+                          <input
+                            value={props.preferenceSection.watermarkTemplate}
+                            onChange={(event) => props.preferenceSection.onWatermarkTemplateChange(event.target.value)}
+                            placeholder={DEFAULT_WATERMARK_TEMPLATE}
+                          />
+                        </label>
+                        <label className="watermark-field watermark-field-range">
+                          <span>透明度</span>
+                          <input
+                            type="range"
+                            min={1}
+                            max={20}
+                            value={props.preferenceSection.watermarkOpacity}
+                            onChange={(event) => props.preferenceSection.onWatermarkOpacityChange(Number(event.target.value))}
+                          />
+                          <code>{props.preferenceSection.watermarkOpacity}%</code>
+                        </label>
+                        <div className="watermark-scope">
+                          作用范围
+                          <button
+                            type="button"
+                            className={props.preferenceSection.watermarkScope === "content" ? "fchip fchip-on" : "fchip"}
+                            onClick={() => props.preferenceSection.onWatermarkScopeChange("content")}
+                          >
+                            日志/预览区
+                          </button>
+                          <button
+                            type="button"
+                            className={props.preferenceSection.watermarkScope === "global" ? "fchip fchip-on" : "fchip"}
+                            onClick={() => props.preferenceSection.onWatermarkScopeChange("global")}
+                          >
+                            全局
+                          </button>
+                        </div>
+                      </div>
+                      <div className="watermark-preview" aria-hidden="true">
+                        <div className="watermark-preview-lines">
+                          <div className="ll"><span className="t">09:02:11.001</span><span><span className="lv lv-e">ERROR</span> SyncJob - sync failed…</span></div>
+                          <div className="ll"><span className="t">09:02:12.110</span><span><span className="lv lv-i">INFO </span> SyncJob - retry scheduled</span></div>
+                          <div className="ll"><span className="t">09:02:15.771</span><span><span className="lv lv-w">WARN </span> UploadController - got 413</span></div>
+                        </div>
+                        <div
+                          className="watermark-preview-tiles"
+                          style={{ "--wm-opacity": String(props.preferenceSection.watermarkOpacity / 100) } as CSSProperties}
+                        >
+                          {Array.from({ length: 4 }, (_, index) => (
+                            <span key={index}>{props.preferenceSection.watermarkTemplate || DEFAULT_WATERMARK_TEMPLATE}</span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </details>
             </section>
 
             <section id="pref-log" data-anchor className="settings-pref-section">
-              <div className="settings-card-kicker">日志</div>
+              <div className="settings-card-kicker">阅读</div>
               <div className="settings-pref-card">
                 {/* 2026-10-24 重设计：日志字体 / 字号从「外观 → 字体矩阵」移入本区（随上下文维护） */}
                 <div className="settings-pref-row">
-                  <span className="settings-pref-label"><strong>日志字体</strong><span>日志预览独立等宽字体</span></span>
+                  <span className="settings-pref-label"><strong>正文字体</strong><span>日志与文件内容共用等宽字体</span></span>
                   <span className="settings-pref-value">
                     <ThemedSelect
                       value={props.preferenceSection.logFontFamily}
@@ -1991,7 +2087,7 @@ export function ConnectionSettingsWorkspace(props: Props) {
                   </span>
                 </div>
                 <div className="settings-pref-row">
-                  <span className="settings-pref-label"><strong>日志字号</strong><span>11–16px</span></span>
+                  <span className="settings-pref-label"><strong>正文字号</strong><span>11–16px</span></span>
                   <span className="settings-pref-value">
                     <input
                       type="number"
@@ -2046,29 +2142,59 @@ export function ConnectionSettingsWorkspace(props: Props) {
 
             <section id="pref-terminal" data-anchor className="settings-pref-section">
               <div className="settings-card-kicker">终端</div>
-              <div className="slc-subtabs" role="tablist" aria-label="终端设置分类">
-                {([
-                  { id: "font", label: "字体" },
-                  { id: "scheme", label: "配色与背景" },
-                  { id: "cursor", label: "光标与细节" },
-                ] as const).map((tab) => (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    role="tab"
-                    aria-selected={terminalTab === tab.id}
-                    className={terminalTab === tab.id ? "slc-subtab slc-subtab-active" : "slc-subtab"}
-                    onClick={() => setTerminalTab(tab.id)}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
               <div className="settings-pref-card">
                 {/* 2026-10-24 重设计：终端设置全部归位本区 —— 字体 / 字号从「外观 → 字体矩阵」
                     移入（与矩阵时代的去重决策相反：分散在各区更贴合上下文，原型已确认）。 */}
-                {terminalTab === "font" ? (
-                  <>
+                {/* 快速搭配（2026-10-27）：用户反馈自由组合（如极光+方格）容易踩坑。
+                    这里给经过搭配的 6 套组合，一键同时设定配色/背景图/纹理，
+                    下面的单项控件仍可继续微调。 */}
+                <div className="settings-pref-row settings-pref-row-wide">
+                  <span className="settings-pref-label">
+                    <strong>快速搭配</strong>
+                    <span>经过搭配的组合，避免背景图与纹理互相干扰</span>
+                  </span>
+                  <div className="slc-look-grid" role="group" aria-label="外观组合预设">
+                    {TERMINAL_LOOK_PRESETS.map((preset) => (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        title={preset.desc}
+                        className="slc-look-btn"
+                        onClick={() => props.preferenceSection.onApplyLookPreset(preset.id)}
+                      >
+                        <span
+                          className="slc-look-pv"
+                          style={{
+                            /* 2026-10-28 修正：底色必须取「该预设自己的配色」，
+                               不能一律用 follow 预览色 —— 否则 6 张缩略图底色全是同一个色，
+                               看不出每套组合的配色差异（用户反馈「预览都一个样」）。 */
+                            backgroundColor:
+                              props.preferenceSection.terminalSchemeOptions.find((x) => x.id === preset.scheme)
+                                ?.theme.background ?? props.preferenceSection.terminalFollowPreview.background,
+                            backgroundImage: (() => {
+                              const bd = preset.backdrop === "none" ? "none" : buildBackdropPreview(preset.backdrop);
+                              const tex = preset.texture === "none"
+                                ? "none"
+                                : buildTextureBackground(preset.texture, preset.textureIntensity).image
+                                    .replace(/32px/g, "14px").replace(/160px/g, "42px");
+                              if (bd !== "none" && tex !== "none") return `${tex}, ${bd}`;
+                              return bd !== "none" ? bd : tex;
+                            })(),
+                            /* 图片类背景必须 cover 才有意义（auto 会按原图 1600px 平铺，
+                               缩略图里只剩一小块暗角，看着像没设）。 */
+                            backgroundSize:
+                              preset.texture !== "none"
+                                ? "cover, cover"
+                                : preset.backdrop === "none"
+                                  ? "auto"
+                                  : "cover",
+                          }}
+                        />
+                        <span className="slc-look-name">{preset.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
 <div className="settings-pref-row">
                   <span className="settings-pref-label"><strong>终端字体</strong><span>等宽字体族；改动后 xterm 自动重排</span></span>
                   <span className="settings-pref-value">
@@ -2139,11 +2265,7 @@ export function ConnectionSettingsWorkspace(props: Props) {
                     </span>
                   </span>
                 </div>
-                                  </>
-                ) : null}
 
-                {terminalTab === "cursor" ? (
-                  <>
 <div className="settings-pref-row">
                   <span className="settings-pref-label"><strong>光标样式</strong><span>按终端使用习惯选择</span></span>
                   <span className="settings-pref-value">
@@ -2184,139 +2306,56 @@ export function ConnectionSettingsWorkspace(props: Props) {
                 {/* 终端配色（2026-10-24 重设计）：「跟随主题」卡 + 7 深色方案，单控件定底色。
                     原独立「背景跟随主题」开关取消（迁移见 useUiTheme）；「日光」浅色方案移除
                     （与跟随主题架构冲突，深浅主题下均不可读）。 */}
-                                  </>
-                ) : null}
 
-                {terminalTab === "scheme" ? (
-<div className="settings-pref-row settings-pref-row-wide">
+<div className="settings-pref-row">
                   <span className="settings-pref-label"><strong>终端配色</strong><span>映射 xterm ITheme（前景/背景/光标/选区 + ANSI 16 色）</span></span>
-                  <div className="slc-term-grid" role="radiogroup" aria-label="终端配色">
-                    {(() => {
-                      const consoleScheme = props.preferenceSection.terminalSchemeOptions.find((s) => s.id === "console") ?? props.preferenceSection.terminalSchemeOptions[0];
-                      const followScheme: TerminalColorScheme = {
-                        ...consoleScheme,
-                        id: "follow",
-                        name: "跟随主题",
-                        desc: "底色随 UI 主题 · 推荐",
-                        theme: {
+                  <span className="settings-pref-value">
+                    {/* 2026-10-28 用户反馈「14 张配色卡占满一屏太占地方」→ 改为下拉。
+                        下拉项内嵌 16 色小色条，既省空间又保留「一眼看出配色差异」能力。 */}
+                    <ThemedSelect
+                      value={props.preferenceSection.uiTerminalScheme}
+                      onChange={(value) => props.preferenceSection.onUiTerminalSchemeChange(value as TerminalColorSchemeId)}
+                      ariaLabel="终端配色"
+                      options={(() => {
+                        const consoleScheme = props.preferenceSection.terminalSchemeOptions.find((x) => x.id === "console") ?? props.preferenceSection.terminalSchemeOptions[0];
+                        const followTheme = {
                           ...consoleScheme.theme,
                           background: props.preferenceSection.terminalFollowPreview.background,
                           foreground: props.preferenceSection.terminalFollowPreview.foreground,
                           cursor: props.preferenceSection.terminalFollowPreview.cursor,
                           cursorAccent: props.preferenceSection.terminalFollowPreview.background,
-                        },
-                      };
-                      const cards = [followScheme, ...props.preferenceSection.terminalSchemeOptions];
-                      return cards.map((scheme) => {
-                        const active = props.preferenceSection.uiTerminalScheme === scheme.id;
-                        return (
-                          <button
-                            key={scheme.id}
-                            type="button"
-                            role="radio"
-                            aria-checked={active}
-                            title={scheme.desc}
-                            className={active ? "slc-term-card slc-term-card-active" : "slc-term-card"}
-                            onClick={() => props.preferenceSection.onUiTerminalSchemeChange(scheme.id)}
-                          >
-                            <TerminalPreview scheme={scheme} />
-                            <span className="slc-term-name">
-                              {scheme.name}
-                              {scheme.id === "follow" ? <span className="slc-term-badge">推荐</span> : null}
-                            </span>
-                          </button>
-                        );
-                      });
-                    })()}
-                  </div>
-                </div>
-                ) : null}
-
-                {/* 实时预览：配色 / 字体 / 字号 / 行高 / 光标 全部即时联动（对齐 VRC 控制台外观） */}
-                <div className="settings-pref-row settings-pref-row-wide">
-                  <span className="settings-pref-label"><strong>实时预览</strong><span>改动即时可见，无需重连会话</span></span>
-                  <TerminalLivePreview
-                    theme={(() => {
-                      const fp = props.preferenceSection.terminalFollowPreview;
-                      const scheme = props.preferenceSection.terminalSchemeOptions.find((s) => s.id === props.preferenceSection.uiTerminalScheme);
-                      if (props.preferenceSection.uiTerminalScheme === "follow" || !scheme) {
-                        return {
-                          background: fp.background, foreground: fp.foreground, cursor: fp.cursor,
-                          green: fp.green, red: fp.red, yellow: fp.yellow, cyan: fp.cyan, brightBlack: fp.brightBlack,
                         };
-                      }
-                      const t = scheme.theme;
-                      return {
-                        background: t.background, foreground: t.foreground, cursor: t.cursor,
-                        green: t.green, red: t.red, yellow: t.yellow, cyan: t.cyan, brightBlack: t.brightBlack,
-                      };
-                    })()}
-                    fontFamily={monoFontFamilyValue(props.preferenceSection.terminalFontFamily)}
-                    fontSize={props.preferenceSection.terminalFontSize}
-                    lineHeight={props.preferenceSection.terminalLineHeight}
-                    cursorStyle={props.preferenceSection.terminalCursorStyle}
-                    cursorBlink={props.preferenceSection.terminalCursorBlink}
-                    backgroundImage={(() => {
-                      const tex = props.preferenceSection.terminalTexture;
-                      const bd = props.preferenceSection.terminalBackdrop;
-                      const texBg = tex === "none" ? "none" : buildTextureBackground(tex, props.preferenceSection.terminalTextureIntensity).image;
-                      const bdBg = bd === "none" ? "none" : buildBackdropBackground(bd, props.preferenceSection.terminalBackdropIntensity);
-                      if (texBg !== "none" && bdBg !== "none") return `${texBg}, ${bdBg}`;
-                      return texBg !== "none" ? texBg : bdBg;
-                    })()}
-                    backgroundSize={(() => {
-                      const tex = props.preferenceSection.terminalTexture;
-                      const bd = props.preferenceSection.terminalBackdrop;
-                      const texSize = tex === "none" ? "" : buildTextureBackground(tex, props.preferenceSection.terminalTextureIntensity).size;
-                      if (texSize && bd !== "none") return `${texSize}, auto`;
-                      return texSize || "auto";
-                    })()}
-                  />
+                        const rows: Array<{ id: string; name: string; t: typeof consoleScheme.theme }> = [
+                          { id: "follow", name: "跟随主题（推荐）", t: followTheme },
+                          ...props.preferenceSection.terminalSchemeOptions.map((x) => ({ id: x.id, name: x.name, t: x.theme }))
+                        ];
+                        return rows.map((r) => ({
+                          value: r.id,
+                          label: (
+                            <span className="slc-scheme-opt">
+                              <span className="slc-scheme-bars" aria-hidden="true">
+                                {[r.t.black, r.t.red, r.t.green, r.t.yellow, r.t.blue, r.t.magenta, r.t.cyan, r.t.white].map((c, i2) => (
+                                  <i key={i2} style={{ background: c }} />
+                                ))}
+                              </span>
+                              <span className="slc-scheme-name">{r.name}</span>
+                            </span>
+                          )
+                        }));
+                      })()}
+                    />
+                  </span>
                 </div>
 
+                {/* 2026-10-28 移除原「实时预览」设置行：
+                    它和右侧常驻的分区预览（PrefSectionPreview）功能重复 ——
+                    设置页里同时出现两套终端预览，界面又长又乱（用户反馈）。
+                    实时预览本身没错，但它不该占一个「设置项」的位置；
+                    现在由右侧面板承担，且切换任何分区都能看到。
+                    原实现（TerminalLivePreview）保留给别的用途，只删这里的一行入口。 */}
                 {/* 背景纹理（2026-10-27）：默认 none。
                     纹理是背景层最低优先级 —— 只提供空间感，不与内容争注意力。
                     强度默认 55%，对应纹理线透明度约 3%（几乎无感）。 */}
-                {terminalTab === "scheme" ? (
-                <>
-                {/* 快速搭配（2026-10-27）：用户反馈自由组合（如极光+方格）容易踩坑。
-                    这里给经过搭配的 6 套组合，一键同时设定配色/背景图/纹理，
-                    下面的单项控件仍可继续微调。 */}
-                <div className="settings-pref-row settings-pref-row-wide">
-                  <span className="settings-pref-label">
-                    <strong>快速搭配</strong>
-                    <span>经过搭配的组合，避免背景图与纹理互相干扰</span>
-                  </span>
-                  <div className="slc-look-grid" role="group" aria-label="外观组合预设">
-                    {TERMINAL_LOOK_PRESETS.map((preset) => (
-                      <button
-                        key={preset.id}
-                        type="button"
-                        title={preset.desc}
-                        className="slc-look-btn"
-                        onClick={() => props.preferenceSection.onApplyLookPreset(preset.id)}
-                      >
-                        <span
-                          className="slc-look-pv"
-                          style={{
-                            backgroundColor: props.preferenceSection.terminalFollowPreview.background,
-                            backgroundImage: (() => {
-                              const bd = preset.backdrop === "none" ? "none" : buildBackdropPreview(preset.backdrop);
-                              const tex = preset.texture === "none"
-                                ? "none"
-                                : buildTextureBackground(preset.texture, preset.textureIntensity).image
-                                    .replace(/32px/g, "14px").replace(/160px/g, "42px");
-                              if (bd !== "none" && tex !== "none") return `${tex}, ${bd}`;
-                              return bd !== "none" ? bd : tex;
-                            })(),
-                            backgroundSize: preset.texture === "none" ? "auto" : "cover, cover",
-                          }}
-                        />
-                        <span className="slc-look-name">{preset.name}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
 
                 {/* 背景图（2026-10-27）：纯 CSS 氛围光效，解决「清一色黑太单调」。
                     与纹理可叠加：光效在下、纹理线在上。默认 none 保持克制。 */}
@@ -2341,9 +2380,12 @@ export function ConnectionSettingsWorkspace(props: Props) {
                           <span
                             className="slc-tex-preview"
                             style={{
-                              backgroundColor: props.preferenceSection.terminalFollowPreview.background,
-                              /* 预览固定用 100% 强度 + 叠加当前纹理，
-                                 否则缩略图上看不出「背景图 + 纹理」的组合效果 */
+                              /* 2026-10-28 缩略图底色修正（用户反馈「红圈内三个看不出区别」）：
+                                 原来直接用 terminalFollowPreview.background（可能是 #0a0a0a 近黑），
+                                 深色低饱和的预设在上面几乎不可辨。
+                                 现在用固定 #171a1e（比纯黑亮 8 级）：足够衬托暗色光效，
+                                 又不至于亮到失真 —— 缩略图是「辨识用」，不是「还原终端」。 */
+                              backgroundColor: "#171a1e",
                               backgroundImage: bd.id === "none" ? "none" : buildBackdropPreview(bd.id),
                               backgroundSize: "cover",
                             }}
@@ -2398,7 +2440,9 @@ export function ConnectionSettingsWorkspace(props: Props) {
                           <span
                             className="slc-tex-preview"
                             style={{
-                              backgroundColor: props.preferenceSection.terminalFollowPreview.background,
+                              /* 2026-10-28 同背景图：固定 #171a1e 而非近黑主题色，
+                                 否则纹理线在缩略图里完全看不见（用户反馈「远看没纹路」）。 */
+                              backgroundColor: "#171a1e",
                               /* 缩略图示意：实际间距 32px 在 44px 高的预览里只能显示 1 格，
                                  这里按 1/2 缩放展示图案特征（方格/点阵的密度观感），
                                  真实终端里是 32px。 */
@@ -2422,8 +2466,6 @@ export function ConnectionSettingsWorkspace(props: Props) {
                     })}
                   </div>
                 </div>
-                </>
-                ) : null}
 
                 {props.preferenceSection.terminalTexture !== "none" ? (
                   <div className="settings-pref-row settings-pref-row-wide">
@@ -2449,30 +2491,17 @@ export function ConnectionSettingsWorkspace(props: Props) {
               </div>
             </section>
 
-            <section id="pref-layout" data-anchor className="settings-pref-section">
-              <div className="settings-card-kicker">界面与浮层</div>
-              <div className="settings-pref-card">
-                <button type="button" className="settings-pref-row settings-pref-row-click" onClick={props.preferenceSection.onToggleServerStatusAutoRefresh}>
-                  <span className="settings-pref-label"><strong>服务器状态自动刷新</strong><span>状态面板定时采集</span></span>
-                  <span className="settings-pref-value">{props.preferenceSection.serverStatusAutoRefresh ? `${Math.round(props.preferenceSection.serverStatusRefreshIntervalMs / 1000)}s` : "关闭"}</span>
-                </button>
-                {/* 「操作记录面板 / 操作记录高度」两项已删除（2026-10-25 用户决策）：
-                    该面板已从侧栏彻底移除 —— 占高约 40% 挤压 27 台服务器列表、
-                    内容与日志预览的调试面板重复、且多为开发期诊断信息（"系统已启动"
-                    "已读取本地连接列表"）。面板没了，这两个开关/数值就是误导性配置
-                    （打开也看不到东西）。操作反馈统一由 toast 承担。 */}
-                {/* 2026-10-27 删除「路径历史浮层」「传输记录浮层」两项：
-                   它们控制的是浮层"此刻开没开"（App 内 showPathHistory / showTransferHistory
-                   的瞬时 state），不是持久化偏好；且二者互斥（开一个会关另一个），
-                   退出设置页即回到关闭态，表现为"点了没反应 / 状态不记录"。
-                   真正的入口在文件浏览器工具栏「更多」菜单里（最近访问的目录 / 传输记录），
-                   功能重复。偏好设置里保留的项才是真正落盘的配置。 */}
-              </div>
-            </section>
+
 
             <section id="pref-advanced" data-anchor className="settings-pref-section">
-              <div className="settings-card-kicker">高级</div>
+              <div className="settings-card-kicker">其它</div>
               <div className="settings-pref-card">
+                {/* 2026-10-28 由原「界面与浮层」分区并入 —— 该分区只有这 1 项，
+                    单独占一栏会让用户以为这一栏坏了。 */}
+                <button type="button" className="settings-pref-row settings-pref-row-click" onClick={props.preferenceSection.onToggleServerStatusAutoRefresh}>
+                  <span className="settings-pref-label"><strong>服务器状态自动刷新</strong><span>状态面板定时采集</span></span>
+                  <span className="settings-pref-value">{props.preferenceSection.serverStatusRefreshIntervalMs > 0 ? `${Math.round(props.preferenceSection.serverStatusRefreshIntervalMs / 1000)}s` : "关闭"}</span>
+                </button>
                 <button type="button" className="settings-pref-row settings-pref-row-click settings-pref-reset" onClick={props.preferenceSection.onResetUiPreferences}>
                   <span className="settings-pref-label"><strong>恢复默认显示</strong><span>重置主题、背景、字号等显示偏好</span></span>
                   <span className="settings-pref-value">重置</span>
@@ -2480,9 +2509,274 @@ export function ConnectionSettingsWorkspace(props: Props) {
               </div>
             </section>
           </div>
+          <FloatingPrefPreview
+            section={currentAnchor}
+            themeName={props.preferenceSection.resolvedThemeName}
+            logFontFamily={monoFontFamilyValue(props.preferenceSection.logFontFamily)}
+            logFontSize={props.preferenceSection.logFontSize}
+            logHighlight={props.preferenceSection.errorHighlightEnabled}
+            /* 2026-10-28 修复「选了终端配色但预览没变化」：
+               原来一律取 terminalFollowPreview（那是「跟随主题」的色），
+               选 Dracula / Nord 等具体方案时预览纹丝不动。
+               现在：follow 或找不到方案 → 用 followPreview；
+               否则取该方案自己的 theme（与真实 xterm 完全同源）。 */
+            terminalBg={(() => {
+              const id = props.preferenceSection.uiTerminalScheme;
+              if (id === "follow") return props.preferenceSection.terminalFollowPreview.background;
+              const found = props.preferenceSection.terminalSchemeOptions.find((x) => x.id === id);
+              return found ? found.theme.background : props.preferenceSection.terminalFollowPreview.background;
+            })()}
+            terminalFg={(() => {
+              const id = props.preferenceSection.uiTerminalScheme;
+              if (id === "follow") return props.preferenceSection.terminalFollowPreview.foreground;
+              const found = props.preferenceSection.terminalSchemeOptions.find((x) => x.id === id);
+              return found ? found.theme.foreground : props.preferenceSection.terminalFollowPreview.foreground;
+            })()}
+            terminalBackgroundImage={
+              props.preferenceSection.terminalBackdrop === "none"
+                ? "none"
+                : buildBackdropBackground(
+                    props.preferenceSection.terminalBackdrop,
+                    props.preferenceSection.terminalBackdropIntensity
+                  )
+            }
+            terminalBackgroundSize="cover"
+            terminalFontFamily={monoFontFamilyValue(props.preferenceSection.terminalFontFamily)}
+            terminalFontSize={props.preferenceSection.terminalFontSize}
+            terminalLineHeight={props.preferenceSection.terminalLineHeight}
+            terminalCursorStyle={props.preferenceSection.terminalCursorStyle}
+            terminalCursorBlink={props.preferenceSection.terminalCursorBlink}
+            refreshLabel={
+              props.preferenceSection.serverStatusRefreshIntervalMs > 0
+                ? Math.round(props.preferenceSection.serverStatusRefreshIntervalMs / 1000) + "s"
+                : "关闭"
+            }
+          />
           </div>
         </div>
       )}
     </section>
+  );
+}
+
+/* ============================================================
+   偏好设置 · 右侧分区预览（2026-10-28 新增，对齐原型）
+   ------------------------------------------------------------
+   为什么加：设置项分散在 4 个分区，用户改完「主题 / 字号 / 配色」后
+   要到真实终端里才能看到效果，来回切换成本高。
+   这里给每个分区配一个对应的预览：
+     · 外观 → 界面预览（侧栏 + 卡片 + 按钮，跟随当前主题色）
+     · 阅读 → 日志预览（跟随日志字体 / 字号 + ERROR/WARN 高亮）
+     · 终端 → 终端预览（配色 + 背景图 + 字体 + 光标，真实联动）
+     · 其它 → 连接状态（CPU / 内存 / 磁盘 + 刷新间隔）
+   注意：静态示意，不是真实 xterm 实例 —— 只渲染光学效果，
+   够轻、无会话依赖（与既有 TerminalLivePreview 同一思路）。
+   ============================================================ */
+function PrefSectionPreview(props: {
+  section: string;
+  themeName: string;
+  logFontFamily: string;
+  logFontSize: number;
+  logHighlight: boolean;
+  terminalBg: string;
+  terminalFg: string;
+  terminalBackgroundImage: string;
+  terminalBackgroundSize: string;
+  terminalFontFamily: string;
+  terminalFontSize: number;
+  terminalLineHeight: number;
+  terminalCursorStyle: string;
+  terminalCursorBlink: boolean;
+  refreshLabel: string;
+  /** 嵌入浮层时不再渲染外层 aside 外壳（只输出内容） */
+  embedded?: boolean;
+}) {
+  const title =
+    props.section === "pref-appearance" ? "界面预览"
+      : props.section === "pref-log" ? "日志预览"
+        : props.section === "pref-terminal" ? "终端预览"
+          : "连接状态";
+
+  const px = (n: number) => n + "px";
+
+  const body = (
+      <div className={props.embedded ? "settings-pref-preview-body settings-pref-preview-body-embedded" : "settings-pref-preview-body"}>
+        {props.section === "pref-log" ? (
+          <div
+            className="slc-pref-logpv"
+            style={{ fontSize: px(props.logFontSize), fontFamily: props.logFontFamily }}
+          >
+            <div className="slc-pref-logpv-hd">
+              <span>error.log</span>
+              <span>{props.logFontSize}px</span>
+            </div>
+            <div className="slc-pref-logpv-body">
+              <div>
+                <span className="d">09:41:22.310</span>{" "}
+                <span className={props.logHighlight ? "e" : ""}>ERROR</span> timeout calling payment-gateway
+              </div>
+              <div>
+                <span className="d">09:41:23.004</span>{" "}
+                <span className={props.logHighlight ? "w" : ""}>WARN&nbsp;</span> retry 1/3 in 500ms
+              </div>
+              <div>
+                <span className="d">09:41:26.881</span>{" "}
+                <span className={props.logHighlight ? "e" : ""}>ERROR</span> timeout calling payment-gateway
+              </div>
+              <div>
+                <span className="d">09:41:27.550</span> INFO&nbsp; connection pool exhausted
+              </div>
+            </div>
+          </div>
+        ) : props.section === "pref-terminal" ? (
+          <div
+            className="slc-pref-termpv"
+            style={{
+              background: props.terminalBg,
+              color: props.terminalFg,
+              backgroundImage: props.terminalBackgroundImage,
+              backgroundSize: props.terminalBackgroundSize,
+              backgroundRepeat: "no-repeat",
+              fontFamily: props.terminalFontFamily,
+              fontSize: px(props.terminalFontSize),
+              lineHeight: props.terminalLineHeight
+            }}
+          >
+            <div>Last login: Tue Oct 28 09:12:04 2026</div>
+            <div>
+              <span style={{ color: props.terminalFg }}>root@prod-web-01</span>:~# tail -f /var/log/app/error.log
+            </div>
+            <div>
+              <span style={{ color: "#ff7b8a" }}>ERROR</span> timeout calling payment-gateway
+            </div>
+            <div>
+              <span style={{ color: "#ffc86b" }}>WARN&nbsp;</span> retry 1/3 in 500ms
+            </div>
+            <div>
+              <span>root@prod-web-01</span>:~#{" "}
+              <span
+                className={props.terminalCursorBlink ? "slc-pref-cursor blink" : "slc-pref-cursor"}
+                style={{
+                  display: "inline-block",
+                  width: props.terminalCursorStyle === "bar" ? "1px" : "6px",
+                  height: "11px",
+                  background: props.terminalFg,
+                  verticalAlign: "-1px"
+                }}
+              />
+            </div>
+          </div>
+        ) : props.section === "pref-appearance" ? (
+          <div className="slc-pref-uipv">
+            <div className="slc-pref-uipv-top">
+              <i /><i /><i />
+              <span>{props.themeName}</span>
+            </div>
+            <div className="slc-pref-uipv-body">
+              <div className="slc-pref-uipv-rail">
+                <span className="on">终端</span>
+                <span>文件</span>
+                <span>监控</span>
+                <span>日志</span>
+              </div>
+              <div className="slc-pref-uipv-main">
+                <div className="slc-pref-uipv-card"><b>prod-web-01</b><em>已连接</em></div>
+                <div className="slc-pref-uipv-card2"><i /><i /></div>
+                <div className="slc-pref-uipv-acts"><em className="primary">连接</em><em>设置</em></div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="slc-pref-statpv">
+            <div className="slc-pref-statpv-hd">
+              <i className={props.refreshLabel === "关闭" ? "off" : ""} />
+              <strong>服务器状态</strong>
+            </div>
+            <div className="slc-pref-statpv-row"><span>CPU</span><b>{props.refreshLabel === "关闭" ? "—" : "23%"}</b></div>
+            <div className="slc-pref-statpv-row"><span>内存</span><b>{props.refreshLabel === "关闭" ? "—" : "61%"}</b></div>
+            <div className="slc-pref-statpv-row"><span>磁盘</span><b>{props.refreshLabel === "关闭" ? "—" : "44%"}</b></div>
+            <div className="slc-pref-statpv-foot">
+              {props.refreshLabel === "关闭" ? "已关闭自动刷新" : "每 " + props.refreshLabel + " 自动刷新"}
+            </div>
+          </div>
+        )}
+      </div>
+  );
+
+  /* embedded（浮层内）：不渲染 aside 外壳与标题条，只给内容本身 */
+  if (props.embedded) return body;
+
+  /* 独立使用（保留能力，当前调用方已改为悬浮球） */
+  return (
+    <aside className="settings-pref-preview" aria-label={title}>
+      <div className="settings-pref-preview-head">
+        <span className="settings-pref-preview-dot" />
+        <strong>{title}</strong>
+        <span className="settings-pref-preview-sub">{props.themeName}</span>
+      </div>
+      {body}
+    </aside>
+  );
+}
+
+/* ============================================================
+   偏好设置 · 悬浮球预览（2026-10-28，替换右侧常驻栏）
+   ------------------------------------------------------------
+   为什么要换：原右侧 300px 常驻栏有两个硬伤 ——
+     ① 窄窗口（<1180px）直接 display:none，等于没有预览；
+     ② 宽窗口下抢走设置区 300px，控件被挤窄。
+   改成悬浮球后：默认只有 42px 圆球，设置区拿到全部宽度；
+   点开浮层为 320×240，浮在内容之上、不参与布局。
+   浮层内容仍是 PrefSectionPreview（按分区切换四种预览）。
+   ============================================================ */
+function FloatingPrefPreview(props: {
+  section: string;
+  themeName: string;
+  logFontFamily: string;
+  logFontSize: number;
+  logHighlight: boolean;
+  terminalBg: string;
+  terminalFg: string;
+  terminalBackgroundImage: string;
+  terminalBackgroundSize: string;
+  terminalFontFamily: string;
+  terminalFontSize: number;
+  terminalLineHeight: number;
+  terminalCursorStyle: string;
+  terminalCursorBlink: boolean;
+  refreshLabel: string;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <>
+      <button
+        type="button"
+        className={open ? "settings-preview-fab settings-preview-fab-on" : "settings-preview-fab"}
+        onClick={() => setOpen((v) => !v)}
+        title={open ? "收起预览" : "打开预览"}
+        aria-label={open ? "收起预览" : "打开预览"}
+        aria-expanded={open}
+      >
+        {open ? "×" : "预览"}
+      </button>
+      {open ? (
+        <div className="settings-preview-pop" role="dialog" aria-label="设置预览">
+          <div className="settings-preview-pop-head">
+            <span className="settings-preview-dot" />
+            <strong>
+              {props.section === "pref-appearance" ? "界面预览"
+                : props.section === "pref-log" ? "日志预览"
+                  : props.section === "pref-terminal" ? "终端预览"
+                    : "连接状态"}
+            </strong>
+            <button type="button" className="settings-preview-pop-x" onClick={() => setOpen(false)} aria-label="关闭预览">×</button>
+          </div>
+          <div className="settings-preview-pop-body">
+            <PrefSectionPreview {...props} embedded />
+          </div>
+        </div>
+      ) : null}
+    </>
   );
 }

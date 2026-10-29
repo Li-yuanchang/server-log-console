@@ -81,7 +81,7 @@
   padding: 20px 18px;
   border: 1px dashed #ccd6e1;
   border-radius: 8px;
-  background: linear-gradient(180deg, #fbfcfd, #f3f6f9);
+  background: var(--panel);
   color: var(--ink-soft);
 }
 
@@ -213,7 +213,7 @@
   padding: 12px 14px;
   border: 1px solid #d8e0e8;
   border-radius: 8px;
-  background: linear-gradient(180deg, #fbfcfd, #f3f6f9);
+  background: var(--panel);
 }
 
 .workspace-startup-head {
@@ -320,7 +320,7 @@
   opacity: 0.76;
 }
 .toast-icon-loading svg {
-  color: #64748b;
+  color: var(--ink-muted);
   animation: toast-spin 1.4s linear infinite;
 }
 .toast-icon-success {
@@ -337,7 +337,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   color: var(--ink-soft, #475569);
-  font-weight: 520;
+  font-weight: 500;
 }
 .toast-dismiss {
   flex-shrink: 0;
@@ -459,13 +459,13 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: var(--fs-sm);
-  font-weight: 650;
+  font-weight: 600;
   color: var(--ink, #1d2733);
 }
 
 .upload-progress-percent {
   font-size: var(--fs-xl);
-  font-weight: 720;
+  font-weight: 600;
   color: var(--accent, #2369ff);
   font-variant-numeric: tabular-nums;
 }
@@ -487,7 +487,7 @@
   height: 100%;
   min-width: 0;
   border-radius: inherit;
-  background: linear-gradient(90deg, #2d72ff, #4aa3ff);
+  background: linear-gradient(90deg, #2d72ff, var(--accent));
   box-shadow: 0 0 18px rgba(45, 114, 255, 0.28);
   transform: scaleX(0);
   transform-origin: left center;
@@ -523,7 +523,7 @@
   width: min(300px, 100%);
   padding: 16px;
   border-radius: 12px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(248, 250, 252, 0.86));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--panel) 94%, transparent), color-mix(in srgb, var(--panel) 86%, transparent));
   border: 1px solid rgba(15, 23, 42, 0.08);
   box-shadow: 0 14px 34px rgba(15, 23, 42, 0.07), inset 0 1px 0 rgba(255, 255, 255, 0.74);
   backdrop-filter: blur(18px);
@@ -1045,7 +1045,12 @@
   min-width: 0;
   min-height: 0;
   height: 100vh;
-  background: var(--terminal-background, var(--shell));
+  /* 2026-10-28：background 简写会清掉 background-image（纹理），改分写。
+     这是独立终端窗的最外层容器，纹理必须从它开始就铺上，
+     否则内层即便写了 image 也会被这层的简写先重置掉。 */
+  background-color: var(--terminal-background, var(--shell));
+  background-image: var(--terminal-texture-image, none);
+  background-size: var(--terminal-texture-size, auto);
   overflow: hidden;
 }
 
@@ -1211,7 +1216,12 @@
 }
 
 .pip-terminal-standalone .terminal-panel-body {
-  background: var(--terminal-background, var(--shell));
+  /* 2026-10-28 修复「独立终端窗背景图/纹理不生效」：原先用 background 简写，
+     会把 background-image 重置为 none，清掉上层注入的纹理变量。
+     改分写：底色兜底 + 纹理图/尺寸消费变量（与主视图一致）。 */
+  background-color: var(--terminal-background, var(--shell));
+  background-image: var(--terminal-texture-image, none);
+  background-size: var(--terminal-texture-size, auto);
 }
 
 .pip-terminal-standalone .terminal-body-slot {

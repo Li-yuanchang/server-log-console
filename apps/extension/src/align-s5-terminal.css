@@ -123,9 +123,12 @@
      现在容器零 padding，留白交给 .terminal-panel-body（见下条）。 */
   padding: 0;
   box-sizing: border-box;
-  background-image: var(--terminal-texture-image, none);
-  background-size: var(--terminal-texture-size, auto);
-  background-color: var(--terminal-background, var(--shell));
+  /* 2026-10-28 关键修正（用户反馈「背景图出现层叠嵌套、右侧一条竖缝」）：
+     背景图曾同时画在 body（1080×703，含 16px padding）与 container（1048×671）上。
+     两层 background-size: cover 的盒子尺寸不同 → 同一张图被缩放两次、错位，
+     在 padding 边界处露出一条窄缝（截图里那条竖条）。
+     现在只保留 body 一层背景，container 完全透明 —— 图片连续无接缝。 */
+  background: transparent !important;
 }
 
 /* 呼吸间距 16px：加在承载 xterm-container 的父级上。
@@ -137,9 +140,14 @@
 .theme-modern .terminal-pane-body {
   padding: 16px;
   box-sizing: border-box;
+  /* 2026-10-28：背景图/纹理/底色的唯一绘制点。
+     它覆盖「内容 + 16px 留白」整块区域，容器内不再重复绘制，
+     因此图片从边缘到边缘是连续的一张，不会在 padding 处断层。 */
   background-color: var(--terminal-background, var(--shell));
   background-image: var(--terminal-texture-image, none);
   background-size: var(--terminal-texture-size, auto);
+  background-repeat: no-repeat;
+  background-position: center;
 }
 .theme-modern .terminal-panel-body .xterm-container .xterm,
 .theme-modern .terminal-pane-body .xterm-container .xterm {
@@ -184,7 +192,7 @@
    原型容器 padding 12px 14px，故卡片左右内缩 14px） */
 .theme-modern .tai-quote-card {
   margin: 4px 14px 10px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   border-radius: var(--r-m);
   padding: 9px 11px;
   font-size: var(--fs-xs);
@@ -245,7 +253,11 @@
 }
 /* xterm 内容区单独保持深色（面板变浅后，终端面自己兜底） */
 .theme-modern .terminal-main-shell {
-  background: var(--terminal-background, var(--shell));
+  /* 2026-10-28：background 简写会重置 background-image，清掉纹理变量。
+     改分写，让 main-shell 也参与「底色 + 纹理」。 */
+  background-color: var(--terminal-background, var(--shell));
+  background-image: var(--terminal-texture-image, none);
+  background-size: var(--terminal-texture-size, auto);
 }
 .theme-modern .terminal-panel-bar {
   padding: 4px 12px; /* 原 theme-modern.css 深色块存活声明，随块删除迁入此处 */
@@ -328,7 +340,7 @@
 .theme-modern .tsc-dropdown {
   background: var(--panel) !important;
   color: var(--ink) !important;
-  border: 1px solid var(--line) !important;
+  border: 1px solid var(--line-strong) !important;
   border-radius: var(--v2-radius-m);
   box-shadow: var(--v2-shadow-pop);
   backdrop-filter: none;
@@ -723,11 +735,11 @@
   flex: none;
 }
 .theme-modern .terminal-tab-dot-connected {
-  background: var(--green-dot); /* #22c55e，原型 .dot.on */
+  background: var(--green-dot); /* var(--green-dot)，原型 .dot.on */
   box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.14);
 }
 .theme-modern .terminal-tab-dot-connecting {
-  background: var(--amber); /* #b45309，原型 .dot.wait */
+  background: var(--amber); /* var(--amber)，原型 .dot.wait */
 }
 .theme-modern .terminal-tab-dot-disconnected {
   background: var(--red); /* 原型 .dot.err */
@@ -827,7 +839,7 @@
    中 = CPU/内存/磁盘迷你条（42×4px 圆角槽，<60 绿 / 60-85 橙 / >85 红，整组可点开监控）；
    右 = UTF-8 · ⌘F 查找。悬浮提示走原生 title（ImmediateTooltip 拦截渲染），无自定义样式。
    字号一律 --fs-2xs / --fs-xs token（§10 字号约束）；颜色只用现有变量（三档资源色 =
-   var(--green-dot) #22c55e / var(--amber) 橙 / var(--red) 红），状态点光晕沿用本文件 §1/§8
+   var(--green-dot) var(--green-dot) / var(--amber) 橙 / var(--red) 红），状态点光晕沿用本文件 §1/§8
    已有的同值 rgba 阴影口径。line-height:1 防继承行高把单行内容顶离垂直中心。 */
 .theme-modern .terminal-statusbar {
   display: flex;
@@ -1190,7 +1202,7 @@
   max-height: calc(100vh - 96px);
   overflow: hidden;
   background: var(--panel);
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   border-radius: var(--r-l);
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.2);
 }
@@ -1351,7 +1363,7 @@
   gap: 5px;
   height: 26px;
   padding: 0 10px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   border-radius: var(--r-s);
   background: var(--panel);
   color: var(--ink-soft);
@@ -1451,7 +1463,7 @@
 }
 .theme-modern .terminal-empty-title {
   font-size: var(--fs-sm);
-  font-weight: 650;
+  font-weight: 600;
   color: var(--ink);
 }
 .theme-modern .terminal-empty-sub {
@@ -1466,13 +1478,13 @@
   height: 28px;
   padding: 0 14px;
   font-size: var(--fs-xs);
-  color: #fff;
+  color: var(--on-accent);
   background: var(--accent);
   border: 1px solid var(--accent);
   border-radius: var(--r-m);
 }
 .theme-modern .terminal-empty-connect:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--accent) 88%, #fff);
+  background: color-mix(in srgb, var(--accent) 88%, var(--panel));
 }
 .theme-modern .terminal-empty-connect:disabled {
   opacity: 0.45;
@@ -1531,7 +1543,7 @@
   gap: 6px;
   color: var(--ink);
   font-size: var(--fs-sm);
-  font-weight: 650;
+  font-weight: 600;
 }
 .theme-modern .tai-dropdown .tai-sparkle {
   color: var(--accent);
@@ -1553,7 +1565,7 @@
   height: 24px;
   padding: 0 9px;
   gap: 5px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   border-radius: var(--r-s);
   background: var(--panel);
   color: var(--ink-soft);
@@ -1619,7 +1631,7 @@
   gap: 6px;
   max-width: 92%;
   padding: 8px 11px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   border-radius: var(--r-m);
   background: var(--panel);
   text-align: left;
@@ -1677,7 +1689,7 @@
 .theme-modern .tai-dropdown .tai-suggestion {
   height: 24px;
   padding: 0 11px !important;
-  border: 1px solid var(--line) !important;
+  border: 1px solid var(--line-strong) !important;
   border-radius: 999px !important;
   background: var(--panel) !important;
   color: var(--ink-soft) !important;
@@ -1699,7 +1711,7 @@
 }
 .theme-modern .tai-dropdown .tai-cmd-block {
   padding: 5px 8px;
-  border: 1px solid var(--line) !important;
+  border: 1px solid var(--line-strong) !important;
   border-radius: var(--r-s);
   background: var(--panel) !important;
 }
@@ -1758,7 +1770,7 @@
 .theme-modern .tai-dropdown .tai-textarea {
   min-height: 28px;
   padding: 5px 10px;
-  border: 1px solid var(--line) !important;
+  border: 1px solid var(--line-strong) !important;
   border-radius: var(--r-s);
   background: var(--panel) !important;
   color: var(--ink) !important;
@@ -1798,7 +1810,7 @@
   align-items: center;
   height: 24px;
   padding: 0 11px;
-  border: 1px solid var(--line) !important;
+  border: 1px solid var(--line-strong) !important;
   border-radius: 999px;
   background: var(--panel) !important;
   color: var(--ink-soft) !important;
@@ -1827,7 +1839,7 @@
 .theme-modern .tai-dropdown .tai-settings-title {
   color: var(--ink);
   font-size: var(--fs-sm);
-  font-weight: 650;
+  font-weight: 600;
 }
 .theme-modern .tai-dropdown .tai-settings-field {
   gap: 4px;
@@ -1839,7 +1851,7 @@
 .theme-modern .tai-dropdown .tai-settings .tai-input {
   height: 28px;
   padding: 0 10px;
-  border: 1px solid var(--line) !important;
+  border: 1px solid var(--line-strong) !important;
   border-radius: var(--r-s);
   background: var(--panel) !important;
   color: var(--ink) !important;
@@ -1862,7 +1874,7 @@
 }
 .theme-modern .tai-dropdown .tai-preset-btn {
   padding: 7px 9px !important;
-  border: 1px solid var(--line) !important;
+  border: 1px solid var(--line-strong) !important;
   border-radius: var(--r-s) !important;
   background: var(--panel) !important;
 }
@@ -1898,7 +1910,7 @@
   background: var(--accent) !important;
   color: var(--on-accent) !important;
   font-size: var(--fs-xs);
-  font-weight: 550;
+  font-weight: 500;
 }
 .theme-modern .tai-dropdown .tai-btn-save:hover:not(:disabled) {
   border-color: var(--accent-strong) !important;
@@ -1908,7 +1920,7 @@
 .theme-modern .tai-dropdown .tai-btn-cancel {
   flex: 1;
   height: 28px;
-  border: 1px solid var(--line) !important;
+  border: 1px solid var(--line-strong) !important;
   border-radius: var(--r-s);
   background: var(--panel) !important;
   color: var(--ink) !important;
@@ -2001,7 +2013,7 @@
     width: min(320px, calc(100% - 20px));
     min-width: 0;
     max-width: calc(100% - 20px);
-    border: 1px solid var(--line);
+    border: 1px solid var(--line-strong);
     border-radius: var(--r-m);
     box-shadow: var(--v2-shadow-pop);
     background: var(--panel);

@@ -1,17 +1,33 @@
+/* 主题变量初值（主题类 .theme-modern.ui-theme-* 会整体覆盖本组）。
+   2026-10-28 修正三处：
+   ① 原值是独立的一套「冷蓝灰」（#e3e7eb / #f2f4f6 / #1f2a37 / #254a6c），
+      与 sage / sand / basalt 等暖色主题完全不搭。html/body 在主题类挂载前
+      先读到这套值 → 实测 body 与一层匿名 div 是 rgb(227,231,235) 冷蓝灰，
+      在暖色界面里成为一块外来色温的底色。
+      改为取 geist 中性初值（与 theme-modern.css :root 一致），暖色主题覆盖后
+      不会有冷色残留。
+   ② `--line: var(--line)` 与 `--accent: var(--accent)` 是自引用 ——
+      CSS 自定义属性自引用属于循环依赖，声明无效，导致 :root 层这两个 token
+      缺失（任何在主题类之外使用它们的元素会拿到空值）。改为显式给值。
+   ③ `--shell-ink: var(--line)` 语义错误（终端前景色取描边色），一并修正。 */
 :root {
-  --bg: #e3e7eb;
-  --panel: #f2f4f6;
-  --panel-strong: #ffffff;
-  --panel-muted: #ebeff3;
-  --ink: #1f2a37;
-  --ink-soft: #5f6b7a;
-  --ink-muted: #6f7c8a;
-  --line: #d7dde5;
-  --line-strong: #bcc6d2;
-  --accent: #315f8d;
-  --accent-strong: #254a6c;
-  --accent-soft: rgba(49, 95, 141, 0.1);
-  --green: #2d6a4f;
+  --bg: #f7f7f4;
+  --panel: #fcfcf8;
+  --panel-strong: var(--panel);
+  --panel-muted: #f0f0ec;
+  --ink: #1c1e1a;
+  --ink-soft: #5f635c;
+  --ink-muted: #8b8f86;
+  --line: #e2e3da;
+  --line-strong: #c9cbbf;
+  /* 2026-10-28：--accent / --accent-strong 由纯蓝改成暖墨绿。
+     原值 #0070f3 / #0060df 是 Vercel 蓝，作为 :root 初值会在主题类挂载前
+     被按钮、焦点环等元素读到，形成「明明选了 sage/graphite 主题，却看到
+     一圈蓝色边框」的问题（用户截图实测 #3060d8）。此处与 geist 主题对齐。 */
+  --accent: #3b6b5a;
+  --accent-strong: #2e5748;
+  --accent-soft: rgba(59, 107, 90, 0.10);
+  --green: #22703f;
   --shell: #0a0a0a;
   --shell-soft: #111111;
   --shell-ink: #d7dde5;

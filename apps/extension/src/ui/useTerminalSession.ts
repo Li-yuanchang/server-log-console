@@ -87,7 +87,16 @@ function buildTerminalTheme(schemeId: TerminalColorSchemeId | undefined, shellBg
     foreground: follow ? (shellInk || t.foreground) : t.foreground,
     cursor: follow ? (shellInk || t.cursor) : t.cursor,
     cursorAccent: shellBg || t.background,
-    selectionBackground: t.selectionBackground,
+    /* 2026-10-28 修复「选中效果一坨」（用户反馈）：
+       原先直接用各方案自带的 selectionBackground —— 都是**不透明实色**
+       （如 sage #3f6b55、console #1e5a94）。终端底图铺上之后，选中区变成
+       一块死板的色块，把背景图完全盖住、文字也糊在里面，观感极差。
+       改为半透明高亮：底色透出来、只在字符上加一层柔和着色。
+       rgba 三元组按宿主主题取一个中性偏亮的蓝白（深色终端上最清晰，
+       又不会与红/绿/黄等日志语义色混淆）。 */
+    selectionBackground: "rgba(120, 170, 235, 0.30)",
+    /* 选中文字保持原色不变，避免「选中后字也变色」导致阅读断裂 */
+    selectionForeground: undefined,
     black: t.black, red: t.red, green: t.green, yellow: t.yellow,
     blue: t.blue, magenta: t.magenta, cyan: t.cyan, white: t.white,
     brightBlack: t.brightBlack, brightRed: t.brightRed, brightGreen: t.brightGreen,
@@ -291,6 +300,23 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
     }
 
     const { shellBg } = readTerminalTheme(containerRef.current, options.terminalBackgroundColor);
+    /* 🔍 临时诊断（保证执行：终端创建时必经此处）。
+       目的：一次看清「变量是否正确」——这是前面反复排查的盲区。 */
+    try {
+      const el = containerRef.current;
+      const cs = el ? getComputedStyle(el) : null;
+      const diagText =
+        "scheme=" + String(options.terminalScheme) +
+        " bgProp=" + String(options.terminalBackgroundColor) +
+        " cssVar=" + String(cs?.getPropertyValue("--terminal-background").trim()) +
+        " tex=" + String(cs?.getPropertyValue("--terminal-texture-image").trim()).slice(0, 60) +
+        " contBg=" + String(cs?.backgroundColor);
+      console.info("[term-diag-create] " + diagText);
+      /* 同时挂到 DOM 上，便于在浏览器里直接查看（不依赖 DevTools 日志） */
+      try {
+        if (el) el.setAttribute("data-term-diag", diagText);
+      } catch { /* ignore */ }
+    } catch { /* 诊断自身不得影响主流程 */ }
 
     const terminal = new Terminal({
       /* 光标：样式/闪烁改为可配置（默认仍 bar + 闪烁 = 原写死值，观感不变） */
@@ -344,6 +370,22 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
     }
     /* 终端配色：整套 ITheme 替换（ANSI 16 色随方案切换） */
     terminal.options.theme = buildTerminalTheme(options.terminalScheme, shellBg, shellInk);
+    /* 🔍 临时诊断（2026-10-28）：定位「终端配色不生效」。
+       输出 4 个关键值，用于判断断在哪一环：
+         scheme      —— 组件收到的方案 id（aurora = 极光青）
+         shellBg     —— 从 --terminal-background 读到的值（应为 #07161a）
+         themeBg     —— 实际塞给 xterm 的 theme.background（预期 "transparent"）
+         containerBg —— 容器 CSS 计算出的背景（应为 #07161a）
+       打开终端后在 DevTools 控制台过滤 `[term-diag]` 即可看到。 */
+    if (containerRef.current) {
+      console.info("[term-diag]", {
+        scheme: options.terminalScheme,
+        shellBg,
+        themeBg: terminal.options.theme?.background,
+        containerBg: getComputedStyle(containerRef.current).backgroundColor,
+        containerBgImage: getComputedStyle(containerRef.current).backgroundImage.slice(0, 60),
+      });
+    }
     /* 行高 / 光标：即时同步（设置中心改完立刻生效，无需重连会话）。
        行高变化会改变每行像素高度 → 必须 scheduleFit 重排。 */
     if (typeof options.terminalLineHeight === "number" && options.terminalLineHeight > 0) {

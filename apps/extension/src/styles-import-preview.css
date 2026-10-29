@@ -44,7 +44,7 @@
 .ipd-head strong {
   display: block;
   font-size: 13.5px;
-  font-weight: 650;
+  font-weight: 600;
   color: var(--ink, #27302a);
 }
 
@@ -87,7 +87,7 @@
 
 .ipd-error strong {
   font-size: 11.5px;
-  font-weight: 650;
+  font-weight: 600;
   color: #7a2f27;
 }
 
@@ -117,7 +117,7 @@
   flex: 1;
   min-width: 0;
   font-size: 10px;
-  font-weight: 650;
+  font-weight: 600;
   letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--ink-muted, #92988d);
@@ -125,15 +125,15 @@
 
 .ipd-count {
   font-size: 10px;
-  font-weight: 650;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
   border-radius: 999px;
   padding: 0 7px;
   border: 1px solid transparent;
 }
 
-.ipd-count-add { color: #477a45; background: rgba(71, 122, 69, 0.1); border-color: rgba(71, 122, 69, 0.26); }
-.ipd-count-warn { color: #b77935; background: rgba(183, 121, 53, 0.1); border-color: rgba(183, 121, 53, 0.3); }
+.ipd-count-add { color: var(--green); background: rgba(71, 122, 69, 0.1); border-color: rgba(71, 122, 69, 0.26); }
+.ipd-count-warn { color: var(--amber); background: rgba(183, 121, 53, 0.1); border-color: rgba(183, 121, 53, 0.3); }
 .ipd-count-info { color: #2f5f8f; background: rgba(47, 95, 143, 0.09); border-color: rgba(47, 95, 143, 0.26); }
 
 .ipd-row {
@@ -192,7 +192,7 @@
 
 .ipd-main strong {
   font-size: 12px;
-  font-weight: 550;
+  font-weight: 500;
   color: var(--ink, #27302a);
   white-space: nowrap;
   overflow: hidden;
@@ -211,7 +211,7 @@
 .ipd-warn {
   margin-top: 2px;
   font-size: 10px;
-  color: #b77935;
+  color: var(--amber);
   line-height: 1.5;
 }
 
@@ -225,8 +225,8 @@
   white-space: nowrap;
 }
 
-.ipd-tag-add { color: #477a45; background: rgba(71, 122, 69, 0.1); border-color: rgba(71, 122, 69, 0.26); }
-.ipd-tag-warn { color: #a5483d; background: rgba(165, 72, 61, 0.07); border-color: rgba(165, 72, 61, 0.26); }
+.ipd-tag-add { color: var(--green); background: rgba(71, 122, 69, 0.1); border-color: rgba(71, 122, 69, 0.26); }
+.ipd-tag-warn { color: var(--red); background: rgba(165, 72, 61, 0.07); border-color: rgba(165, 72, 61, 0.26); }
 .ipd-tag-info { color: #2f5f8f; background: rgba(47, 95, 143, 0.09); border-color: rgba(47, 95, 143, 0.26); }
 .ipd-tag-keep { color: var(--ink-muted, #92988d); background: var(--panel-muted, #eef1e8); border-color: var(--line, #d9ded0); }
 
@@ -255,7 +255,7 @@
 
 .ipd-field-new {
   color: var(--ink, #27302a);
-  font-weight: 550;
+  font-weight: 500;
 }
 
 .ipd-note {

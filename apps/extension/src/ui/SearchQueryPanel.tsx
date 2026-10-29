@@ -55,8 +55,25 @@ export function SearchQueryPanel(props: Props) {
   const [historyItems, setHistoryItems] = useState<string[]>([]);
   const historyShellRef = useRef<HTMLDivElement | null>(null);
 
+  /* 2026-10-25 用户决策：「先不显示搜索记录了」—— 聚焦不再自动弹出历史浮层。
+     背景：原实现 onFocus 无条件 setHistoryOpen(true)，即聚焦就弹；即使没有历史
+     记录，浮层也会先挂载成一个只有边框底色的空白框（用户截图里搜索框下方那块
+     白块），一聚焦就出现、很恼人。用户明确要求默认不显示。
+
+     现在的行为：
+       · 聚焦输入框 → 不弹任何浮层；
+       · 历史记录**仍在照常写入**（pushSearchHistory 不变），只是默认不展示 ——
+         将来若需要，可改用显式入口（如输入框右侧的历史按钮）唤出。
+       · openHistory 保留但从 onFocus 解绑，改为由 ⌥↓ 这类显式操作触发，
+         不作为默认行为打扰输入。 */
   function openHistory() {
-    setHistoryItems(readSearchHistory());
+    const items = readSearchHistory();
+    if (!items.length) {
+      setHistoryItems([]);
+      setHistoryOpen(false);
+      return;
+    }
+    setHistoryItems(items);
     setHistoryOpen(true);
   }
 
@@ -76,8 +93,18 @@ export function SearchQueryPanel(props: Props) {
               className="command-input command-input-keyword"
               value={props.settings.keywordInput}
               onChange={(event) => props.onKeywordInputChange(event.target.value)}
-              onFocus={openHistory}
+              /* 2026-10-25：移除 onFocus={openHistory}。
+                 聚焦不再自动弹历史 —— 用户反馈「有时候根本不需要，一直出现让人恼火」。
+                 历史浮层改为显式触发（见下方 onKeyDown 的 ⌥↓），默认不打扰输入。
+                 同时收起已有的浮层，避免残留。 */
+              onFocus={() => setHistoryOpen(false)}
               onKeyDown={(event) => {
+                // ⌥↓ 显式唤出历史（有记录时才有效）；其余按键照旧
+                if (event.altKey && event.key === "ArrowDown") {
+                  event.preventDefault();
+                  openHistory();
+                  return;
+                }
                 // 回车检索；输入法组合中（中文拼音待选）不触发，避免误检索
                 if (event.key === "Enter" && !event.nativeEvent.isComposing) {
                   event.preventDefault();

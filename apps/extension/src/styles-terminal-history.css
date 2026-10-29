@@ -156,7 +156,7 @@
 }
 
 .thp-item.danger .thp-cmd {
-  color: #a5483d;
+  color: var(--red);
 }
 
 .thp-star {

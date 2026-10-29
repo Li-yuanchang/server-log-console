@@ -106,7 +106,7 @@
 
 /* 卡片 */
 .smp-card {
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   border-radius: var(--r-m);
   background: var(--panel);
 }
@@ -155,7 +155,7 @@
 .smp-tile {
   min-width: 0;
   padding: 10px 12px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   border-radius: var(--r-m);
   background: var(--panel);
 }
@@ -180,7 +180,7 @@
 .smp-tile-v {
   margin-top: 4px;
   font-size: 19px;
-  font-weight: 650;
+  font-weight: 600;
   line-height: 1.1;
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
@@ -291,7 +291,7 @@
 .smp-range {
   display: inline-flex;
   flex: none;
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   border-radius: 5px;
   overflow: hidden;
 }
@@ -336,7 +336,7 @@
   cursor: pointer;
 }
 .smp-legend-item.on {
-  border-color: var(--line);
+  border-color: var(--line-strong);
   background: var(--panel-muted);
 }
 .smp-legend-item.off {
@@ -521,7 +521,7 @@
 }
 .smp-load-cell b {
   font-size: var(--fs-sm);
-  font-weight: 650;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
   color: var(--ink);
 }
@@ -594,7 +594,7 @@
   flex: none;
   height: 24px;
   padding: 0 9px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   border-radius: 5px;
   background: var(--panel);
   color: var(--ink-soft);

@@ -514,24 +514,25 @@ export function UpdateCenterPanel(props: UpdateCenterPanelProps) {
       <div className="settings-update-scroll">
         <div className="settings-update-inner">
 
-          {/* 1. 状态主卡（自动检查开关对齐 VRC 放在卡片头部） */}
+          {/* 1. 状态主卡
+              2026-10-28 规范统一（图2b）：标题提到卡片外（.u-kicker-out），
+              卡片内不再有「灰标题栏」；「自动检查」开关从标题行移到卡片内第一行，
+              遵循「一行一个设置（左标签 + 右控件）」的统一结构。 */}
+          <div className="settings-card-kicker">版本状态</div>
           <section className="settings-update-card">
-            <div className="settings-update-card-head">
-              <span className="settings-update-kicker">版本状态</span>
-              {isDesktop ? (
-                <span className="settings-update-head-switch">
-                  <span className="settings-update-head-switch-label">自动检查</span>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={autoCheckEnabled}
-                    aria-label="启动时自动检查"
-                    className={autoCheckEnabled ? "settings-update-switch on" : "settings-update-switch"}
-                    onClick={toggleAutoCheck}
-                  />
-                </span>
-              ) : null}
-            </div>
+            {isDesktop ? (
+              <div className="settings-update-toggle-row">
+                <span className="settings-update-toggle-label">自动检查更新</span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={autoCheckEnabled}
+                  aria-label="启动时自动检查"
+                  className={autoCheckEnabled ? "settings-update-switch on" : "settings-update-switch"}
+                  onClick={toggleAutoCheck}
+                />
+              </div>
+            ) : null}
             <div className="settings-update-card-body">
               <div className="settings-update-hero">
                 <div className="settings-update-app-icon" aria-hidden="true">
@@ -599,13 +600,12 @@ export function UpdateCenterPanel(props: UpdateCenterPanelProps) {
             </div>
           </section>
 
-          {/* 2. 版本说明卡（新版本说明 / 当前版本说明） */}
+          {/* 2. 版本说明卡（新版本说明 / 当前版本说明）
+              2026-10-28 规范统一：标题移到卡片外，卡片内不再有灰标题栏。 */}
           {notesVisible ? (
+            <>
+            <div className="settings-card-kicker">版本说明</div>
             <section className="settings-update-card">
-              <div className="settings-update-card-head">
-                <span className="settings-update-kicker">版本说明</span>
-                <span className="settings-update-hint">{notesHint}</span>
-              </div>
               <div className="settings-update-card-body">
                 <div className="settings-update-notes-ver">
                   <span className="settings-update-notes-v">{notesVersion}</span>
@@ -630,6 +630,7 @@ export function UpdateCenterPanel(props: UpdateCenterPanelProps) {
                 )}
               </div>
             </section>
+            </>
           ) : null}
 
           {/* 3. 低频信息折叠：更新源（仅桌面版可编辑）/ 检查记录 / 关于 */}
@@ -640,11 +641,9 @@ export function UpdateCenterPanel(props: UpdateCenterPanelProps) {
             </summary>
             <div className="settings-update-more-body">
               {isDesktop ? (
+                <>
+                <div className="settings-card-kicker">更新源</div>
                 <section className="settings-update-card">
-                  <div className="settings-update-card-head">
-                    <span className="settings-update-kicker">更新源</span>
-                    <span className="settings-update-hint">保存后立即生效；清空并保存可恢复内置地址</span>
-                  </div>
                   <div className="settings-update-card-body">
                     <div className="settings-update-src-line">
                       <input
@@ -676,13 +675,11 @@ export function UpdateCenterPanel(props: UpdateCenterPanelProps) {
                     </div>
                   </div>
                 </section>
+                </>
               ) : null}
 
+              <div className="settings-card-kicker">检查记录</div>
               <section className="settings-update-card">
-                <div className="settings-update-card-head">
-                  <span className="settings-update-kicker">检查记录</span>
-                  <span className="settings-update-hint">仅保留最近 5 条</span>
-                </div>
                 <div className="settings-update-card-body">
                   {checkLog.length ? (
                     checkLog.map((entry, index) => (
@@ -701,10 +698,8 @@ export function UpdateCenterPanel(props: UpdateCenterPanelProps) {
                 </div>
               </section>
 
+              <div className="settings-card-kicker">关于本软件</div>
               <section className="settings-update-card settings-update-card-last">
-                <div className="settings-update-card-head">
-                  <span className="settings-update-kicker">关于本软件</span>
-                </div>
                 <div className="settings-update-card-body">
                   <div className="settings-update-about-grid">
                     {aboutItems.map(([key, value]) => (

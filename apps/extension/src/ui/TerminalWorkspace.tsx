@@ -564,12 +564,15 @@ export function TerminalPanel(props: TerminalPanelProps) {
     }
   }, []);
 
-  /* --- 快捷命令行开关（localStorage 持久化，默认开） --- */
+  /* --- 快捷命令行开关（localStorage 持久化）。
+      2026-10-28 用户要求：**默认关闭**（原默认开）。
+      理由：它常驻占一行终端高度，多数场景直接敲命令即可；
+      需要时点工具行开关调出，选择会被记住。 --- */
   const [quickBarOpen, setQuickBarOpen] = useState(() => {
     try {
-      return globalThis.localStorage?.getItem(TERMINAL_QUICKBAR_OPEN_STORAGE_KEY) !== "false";
+      return globalThis.localStorage?.getItem(TERMINAL_QUICKBAR_OPEN_STORAGE_KEY) === "true";
     } catch {
-      return true;
+      return false;
     }
   });
   const toggleQuickBar = useCallback(() => {

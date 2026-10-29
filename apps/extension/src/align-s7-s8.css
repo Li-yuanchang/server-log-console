@@ -10,7 +10,7 @@
 .theme-modern .preview-dialog,
 .theme-modern .preview-dialog-archive,
 .theme-modern .preview-dialog-class {
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   border-radius: var(--r-l, 10px);
   background: var(--panel-strong);
   box-shadow: var(--v2-shadow-pop, 0 24px 70px rgba(15, 23, 42, 0.28));
@@ -51,7 +51,7 @@
 .theme-modern .preview-dialog .preview-chip-muted {
   flex: none;
   color: var(--ink-muted);
-  border-color: var(--line);
+  border-color: var(--line-strong);
   background: transparent;
 }
 .theme-modern .preview-dialog .preview-loading-badge {
@@ -92,7 +92,7 @@
   color: var(--on-accent);
   font-family: var(--app-font-family);
   font-size: var(--fs-2xs);
-  font-weight: 550;
+  font-weight: 500;
   line-height: 1.3;
   white-space: nowrap;
   cursor: pointer;
@@ -116,7 +116,7 @@
 .theme-modern .preview-dialog .seg.preview-view-seg {
   flex: none;
   background: var(--panel);
-  border-color: var(--line);
+  border-color: var(--line-strong);
   border-radius: var(--r-s, 6px);
 }
 .theme-modern .preview-dialog .seg.preview-view-seg > button {
@@ -152,7 +152,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   border-radius: var(--r-s, 6px);
   background: var(--panel);
   color: var(--ink-soft);
@@ -179,7 +179,7 @@
   z-index: 20;
   min-width: 132px;
   padding: 5px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   border-radius: var(--r-m, 8px);
   background: var(--panel-strong);
   box-shadow: var(--v2-shadow-pop, 0 12px 40px rgba(15, 23, 42, 0.2));
@@ -229,7 +229,7 @@
   padding: 0 8px 0 25px;
   font: inherit;
   font-size: var(--fs-2xs);
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   border-radius: var(--r-s, 6px);
   background: var(--panel);
   color: var(--ink);
@@ -250,7 +250,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   border-radius: var(--r-s, 6px);
   background: var(--panel);
   color: var(--ink);
@@ -294,7 +294,7 @@
 .theme-modern .preview-dialog-archive,
 .theme-modern .preview-dialog-class {
   background: var(--panel-strong);
-  border-color: var(--line);
+  border-color: var(--line-strong);
 }
 
 /* 命中高亮 */
@@ -342,7 +342,7 @@
   align-items: center;
   gap: 2px;
   padding: 0 2px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   border-radius: var(--r-s, 6px);
   background: var(--panel);
 }
@@ -413,7 +413,7 @@
 .theme-modern .xdrawer .xrow-ic-up { background: var(--accent-soft); color: var(--accent); }
 .theme-modern .xdrawer .xrow-ic-dn { background: color-mix(in srgb, var(--green) 8%, transparent); color: var(--green); }
 .theme-modern .xdrawer .xrow-ic-err { background: var(--red-soft); color: var(--red); }
-.theme-modern .xdrawer .xrow-fn { color: var(--ink); font-weight: 550; }
+.theme-modern .xdrawer .xrow-fn { color: var(--ink); font-weight: 500; }
 
 /* 页脚「清空本服务器」：原型 .btn sm（高 24） */
 .theme-modern .xdrawer-foot .ghost-button.slim-button { height: 24px; }
@@ -440,7 +440,7 @@
   gap: 10px;
   border-radius: var(--r-m);
   background: var(--panel);
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   box-shadow: var(--v2-shadow-pop);
   backdrop-filter: none;
   -webkit-backdrop-filter: none;

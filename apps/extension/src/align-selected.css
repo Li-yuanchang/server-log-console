@@ -34,7 +34,14 @@
 }
 
 /* 禁用态压过选中态：无服务器时「文件目录」等页签既 is-active 又 disabled，
-   不能残留 accent 蓝（用户反馈 2026-09-30），退为灰字。 */
+   不能残留 accent 蓝（用户反馈 2026-09-30），退为灰字。
+   2026-10-28 修正：原为 background: transparent !important —— 该选择器特异性
+   (0,4,0) 高于 theme-modern-v2.css:634 的 `.toolbar-view-switch-btn.is-active`
+   (0,3,0)，于是「选中 + 禁用」时底色被彻底清成透明，选中项与未选中项唯一的
+   区别只剩 600 字重，在浅色面板上几乎看不出来（实测 computedBackgroundColor
+   = rgba(0,0,0,0)，color 却退成 --ink-muted，比未选中还淡）。
+   改为 panel-muted 底色（仍是灰、不抢眼，但保留「已选中」的空间位置提示），
+   文字用 --ink-soft 而非 --ink-muted，避免选中项比未选中项更弱。 */
 .theme-modern .seg > button.on:disabled,
 .theme-modern .toolbar-view-switch-btn.is-active:disabled,
 .theme-modern .summary-seg button.on:disabled,
@@ -44,8 +51,22 @@
 .theme-modern .seg.lite > button.on:disabled,
 .theme-modern .summary-seg.lite > button.on:disabled,
 .theme-modern .result-tab-strip.lite > button.on:disabled {
+  background: var(--panel-muted) !important;
+  color: var(--ink-soft) !important;
+  box-shadow: none !important;
+}
+
+/* 2026-10-28 用户要求「背景不要区分」：
+   视图切换按钮（日志预览/文件目录）在**禁用态**（未连服务器）会命中上面那条
+   `background: var(--panel-muted)`，在工具栏上显出一块深一档的灰。
+   这里单独覆盖回透明 —— 选中项改由「--ink 文字 + 600 字重」表达，
+   与容器/工具栏底色完全一致，不再出现异色块。
+   ⚠️ 只针对 .toolbar-view-switch-btn，不动 seg / tool-drawer / result-tab 等
+   其它共用那条规则的分段控件（它们的底色有各自语义）。 */
+.theme-modern .toolbar-view-switch-btn.is-active:disabled {
   background: transparent !important;
-  color: var(--ink-muted) !important;
+  color: var(--ink) !important;
+  font-weight: 600 !important;
   box-shadow: none !important;
 }
 
@@ -91,7 +112,7 @@
   background: transparent !important;
   border-color: var(--accent) !important;
   color: var(--accent) !important;
-  font-weight: 550 !important;
+  font-weight: 500 !important;
   box-shadow: none !important;
 }
 

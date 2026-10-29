@@ -84,21 +84,104 @@ export const TERMINAL_TEXTURES: Array<{ id: TerminalTexture; name: string; desc:
 ];
 
 /**
- * 背景图预设（2026-10-27）。
- * 全部用纯 CSS 生成（无外部图片依赖），保证离线可用、无网络请求。
+ * 背景图预设（2026-10-27，2026-10-28 扩图）。
+ *
+ * 两类来源：
+ * ① CSS 生成（aurora/nebula/mesh/carbon/wave）—— 无外部依赖，离线可用；
+ * ② 真实图片（hero-four / hero-beam / cosmic-violet / aurora-band / deep-space / graphite-glow）
+ *    放在 public/bg/ 下，运行时相对路径引用，不占打包体积。
+ *    来源与授权：
+ *    · hero-four / hero-beam —— 仿 Windows 10 经典 Hero 风格（蓝青渐变 + 发光四格窗口
+ *      + 中心光晕），本项目用 PIL 程序生成，无第三方版权；
+ *    · cosmic-violet —— CC0 1.0 可商用
+ *      （github.com/Lampe332/flowing-light-backgrounds，"Free for anything, commercial too"）；
+ *    · aurora-band / deep-space / graphite-glow —— 程序生成。
  * 目的：解决「清一色黑太单调」，同时不牺牲文字可读性 ——
  * 每个预设都是深色低饱和，叠加在主题底色之上仅作氛围。
  */
-export type TerminalBackdrop = "none" | "aurora" | "nebula" | "mesh" | "carbon" | "wave";
+export type TerminalBackdrop =
+  | "none"
+  | "aurora" | "nebula" | "mesh" | "carbon" | "wave"
+  | "hexgrid" | "neon-ring" | "orbit" | "ridge" | "ring-glow" | "poly" | "prism"
+  | "cosmic-violet" | "aurora-band" | "graphite-glow";
 
 export const TERMINAL_BACKDROPS: Array<{ id: TerminalBackdrop; name: string; desc: string }> = [
   { id: "none", name: "无", desc: "只显示主题底色" },
+  { id: "hexgrid", name: "六边形网格", desc: "深蓝紫几何网格，规整克制" },
+  { id: "neon-ring", name: "霓虹光环", desc: "发光圆环 + 抽象几何，科技感最强" },
+  { id: "orbit", name: "轨道几何", desc: "圆环与几何体，冷调" },
+  { id: "ridge", name: "山脊", desc: "紫色天际线与山形剪影" },
+  { id: "ring-glow", name: "圆环光晕", desc: "中心光晕，层次柔和" },
+  { id: "poly", name: "多面体", desc: "低多边形结构，硬朗" },
+  { id: "prism", name: "棱镜", desc: "几何折射色块" },
+  { id: "cosmic-violet", name: "宇宙紫光", desc: "深紫蓝流光丝带（CC0 实拍素材）" },
+  { id: "aurora-band", name: "极光光带", desc: "顶部青绿到紫的光带" },
+  { id: "graphite-glow", name: "石墨微光", desc: "纯光影无图案，最安静" },
   { id: "aurora", name: "极光", desc: "顶部青绿光晕，像夜间极光" },
   { id: "nebula", name: "星云", desc: "紫蓝渐层，深空感" },
   { id: "mesh", name: "网格光", desc: "斜向光束，科技感" },
   { id: "carbon", name: "碳纤维", desc: "斜纹编织质感，低调" },
   { id: "wave", name: "波纹", desc: "底部柔和涟漪" }
 ];
+
+/** 真实图片背景 → public/bg 下的**根绝对**路径。
+ *  2026-10-28 修复「背景图永远 404、终端只有纯色」（用户长期反馈）：
+ *  原先写的是相对路径 `bg/xxx.jpg`。它虽然注入在内联 style 的 CSS 变量里，
+ *  但真正消费该变量的是 **CSS 文件**里的 `background-image: var(--terminal-texture-image)`——
+ *  按 CSS 规范，CSS 文件中的 url() 相对**样式表所在目录**解析，于是：
+ *      期望  /bg/deep-space.jpg
+ *      实际  /assets/bg/deep-space.jpg   ← 404，图片从未显示
+ *  实测（浏览器内 Image() 探测）：
+ *      /assets/bg/deep-space.jpg → FAIL
+ *      /bg/deep-space.jpg        → OK 1600x900
+ *  改为以 `/` 开头的根绝对路径。两种宿主都成立：
+ *      · Electron file://：解析为 file:///.../dist/bg/xxx.jpg（dist 为根）
+ *      · Gateway http:// ：解析为 http://host:4040/bg/xxx.jpg（static 根为 dist）
+ */
+export const BACKDROP_IMAGES: Partial<Record<TerminalBackdrop, string>> = {
+  /* 2026-10-29 按「深空星点」方向重做（用户反馈 Hero 太糊、要大颗粒星点）：
+     全部程序化生成，参数对齐现有 deep-space（暗部 rgb(4,7,19)、星点占 0.1%、
+     亮度 p50≈8 / p99≈20-45）。已叠加终端文字实测，均可读、不抢内容。 */
+  "hexgrid": "bg/hexgrid.jpg",       /* 六边形网格 */
+  "neon-ring": "bg/neon-ring.jpg",   /* 霓虹光环 */
+  "orbit": "bg/orbit.jpg",           /* 轨道几何 */
+  "ridge": "bg/ridge.jpg",           /* 山脊 */
+  "ring-glow": "bg/ring-glow.jpg",   /* 圆环光晕 */
+  "poly": "bg/poly.jpg",             /* 多面体 */
+  "prism": "bg/prism.jpg",           /* 棱镜 */
+  "cosmic-violet": "bg/cosmic-violet.jpg",
+  "aurora-band": "bg/aurora-band.jpg",
+  "graphite-glow": "bg/graphite-glow.jpg"
+};
+
+/** 把背景图的相对路径解析成**绝对 URL**（2026-10-28 修复「图片 404、终端只有纯色」）。
+ *
+ *  根因：`url("bg/xxx.jpg")` 虽然写在 JS 侧，但最终是被 **CSS 文件**里的
+ *  `background-image: var(--terminal-texture-image)` 消费的。按 CSS 规范，
+ *  CSS 文件中的相对 URL 相对**样式表目录**解析，于是变成
+ *      /assets/bg/xxx.jpg   ← 404（图片实际在 /bg/ 下）
+ *  实测：/assets/bg/deep-space.jpg → FAIL，bg/deep-space.jpg → OK 1600x900。
+ *
+ *  为什么不用写死 `/bg/xxx.jpg`：file:// 下 `/bg/` 会解析到磁盘根（file:///bg/），
+ *  实测 FAIL；而 http 下 `bg/` 又会相对 /assets/ 出错。两个宿主基准不同。
+ *  因此运行时用 document.baseURI 拼绝对 URL，一次对齐两种宿主：
+ *    · Electron file://.../dist/index.html → file://.../dist/bg/xxx.jpg ✓
+ *    · Gateway  http://host:4040/          → http://host:4040/bg/xxx.jpg ✓
+ */
+function resolveBackdropUrl(relative: string): string {
+  try {
+    const base =
+      typeof document !== "undefined" && document.baseURI
+        ? document.baseURI
+        : typeof location !== "undefined"
+          ? location.href
+          : "";
+    if (!base) return relative;
+    return new URL(relative, base).href;
+  } catch {
+    return relative;
+  }
+}
 
 /** 生成背景图 CSS（叠加在底色之上，透明度由 intensity 控制） */
 export function buildBackdropBackground(
@@ -108,6 +191,22 @@ export function buildBackdropBackground(
   const k = Math.max(0, Math.min(100, intensity)) / 100;
   if (backdrop === "none") return "none";
 
+  /* 2026-10-28：真实图片背景。返回 url(...) 由调用方负责 cover 铺满；
+     遮罩强度沿用同一套 intensity（0.30~1.0），避免图片过亮抢文字。 */
+  const imgPath = BACKDROP_IMAGES[backdrop];
+  if (imgPath) {
+    /* 2026-10-28 修复三个叠加问题：
+       ① `return` 关键字曾丢失 → 函数返回 undefined，CSS 拿到无效值，
+          背景图永远不显示（这是「选了没反应」的真正主因）；
+       ② 遮罩方向写反：原来 shade = 0.30 + 0.34*k，强度越大遮罩越厚，
+          用户把强度调高反而更看不清图 —— 与「强度」语义相反；
+       ③ 遮罩基线过高（0.30 起步），低强度时图片已被压掉三成。
+     现在：k=0 → 0.55（很淡，几乎只有底色）；k=1 → 0.18（图清晰但不过亮）。
+     反比关系让「强度滑杆」符合直觉：往右拉 = 图更明显。 */
+    const shade = (0.55 - 0.37 * k).toFixed(2);
+    return `linear-gradient(rgba(6,10,18,${shade}),rgba(6,10,18,${shade})), url("${resolveBackdropUrl(imgPath)}")`;
+  }
+
   /* 2026-10-27 修正「6 个预览长得一样」：
      ① 各预设的浓度过低（0.12~0.30），在小缩略图里被压成纯黑，无法分辨。
         统一提高到 0.35~0.55 区间，保证缩略图就能看出色彩走向。
@@ -115,6 +214,8 @@ export function buildBackdropBackground(
         网格光是斜带 —— 让缩略图一眼能辨别。
      ③ intensity=0 时仍保留 30% 基线（缩略图预览用 100% 不受影响），
         避免「选了但什么都看不到」。 */
+  /* 2026-10-29 回退（同纹理）：基线 0.55 让所有背景图/渐变整体变亮，
+     星云、碳纤维等深色方案被抬成灰白。恢复 0.30 基线。 */
   const base = 0.30 + 0.70 * k;
 
   switch (backdrop) {
@@ -160,6 +261,11 @@ export function buildTextureBackground(
      ② 线更细更淡 —— 1px 实线叠在 16px 间距上形成「套格子」观感，
         改成 1px + 更低透明度，只作若隐若现的底纹。
      ③ 强度基线 8%，上限 14%（原来 12~22% 偏亮）。 */
+  /* 2026-10-29 回退（用户反馈「碳纤维/星云都不是深色背景了，变成灰白色」）：
+     上一版把 alpha 提到 0.20–0.42，叠在 #0a0a0a 上算出 rgb(56,81,98)、
+     亮度 76.9（原 0.08 时仅 23.2）—— 等于把深色背景整体糊成了灰蓝。
+     纹理是「若隐若现的底纹」，不是背景色本身，必须保持低透明度。
+     恢复 0.08–0.14：只提供空间感，不改变背景明暗。 */
   const alpha = (0.08 + 0.06 * k).toFixed(3);
   switch (texture) {
     case "grid":
@@ -198,6 +304,11 @@ export function buildTextureBackground(
  * 这里把光斑位置压到缩略图可见范围内，并提高浓度，保证一眼可辨。
  */
 export function buildBackdropPreview(backdrop: TerminalBackdrop): string {
+  /* 真实图片：缩略图直接用图片本身（不叠遮罩，保证能看清色彩走向） */
+  const imgPath = BACKDROP_IMAGES[backdrop];
+  /* 同 buildBackdropBackground：必须用绝对 URL，否则设置页缩略图也会 404 */
+  if (imgPath) return `url("${resolveBackdropUrl(imgPath)}")`;
+
   switch (backdrop) {
     case "aurora":
       return "radial-gradient(ellipse 130% 90% at 50% 0%, rgba(78,205,196,0.75), transparent 72%)," +

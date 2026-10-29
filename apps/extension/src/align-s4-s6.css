@@ -164,7 +164,7 @@
 }
 
 /* S6-18 选中行底色 = var(--accent-soft)（原型 155：rgba(0,112,243,.08)，
-   实现误用 #3b82f6 色相）。 */
+   实现误用 var(--accent) 色相）。 */
 .theme-modern .file-table .file-row.file-row-selected,
 .theme-modern .file-table .file-row.file-row-selected:nth-child(2n) {
   background: var(--accent-soft) !important;
@@ -266,7 +266,7 @@
   padding: 0 10px;
   gap: 5px;
   font-size: var(--fs-2xs, 11px);
-  font-weight: 550;
+  font-weight: 500;
 }
 .selection-copy-menu button span { display: inline-flex; align-items: center; }
 
@@ -351,7 +351,7 @@
 }
 .theme-modern .themed-select-item-selected {
   color: var(--accent);
-  font-weight: 550;
+  font-weight: 500;
 }
 .theme-modern .themed-select-item:disabled {
   opacity: 0.45;
@@ -369,7 +369,7 @@
   gap: 5px;
   white-space: nowrap;
   font-size: var(--fs-2xs, 11px);
-  font-weight: 550;
+  font-weight: 500;
 }
 .theme-modern .selection-copy-menu button span {
   display: inline-flex;

@@ -1,4 +1,8 @@
 import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
+/** 终端配色 / 背景 / 纹理的类型与预设集中在 semantic-tokens，
+    这里只引类型，避免再做一份联合类型副本（2026-10-28 去重：原先把
+    "none" | "aurora" | ... 硬编码在 5 处，每加一张背景图都要挨个改）。 */
+import { TERMINAL_BACKDROPS, type TerminalBackdrop } from "./semantic-tokens.js";
 
 export type UiDensity = "compact" | "comfortable";
 export type UiMotionMode = "normal" | "reduced";
@@ -53,31 +57,48 @@ export type ThemePreset = {
   sem: { green: string; red: string; amber: string };
 };
 
-/** 8 套内置主题（用户在「主题选款-本系统风格」中确认的定稿）。 */
+/** 8 套内置主题（用户在「主题选款-本系统风格」中确认的定稿）。
+ *
+ * ── 2026-10-28 全站暖灰化 ──
+ * 用户反馈「灰不拉几、冷色调、没档次」。量化诊断（对截图取色统计）：
+ *   改造前 geist 的 panel 是纯白 #ffffff（饱和度 0.00 / 色相 0°）——
+ *   中性色是「死灰」，一点色温都没有；而 accent 却是 #0070f3（饱和度 1.00）。
+ *   中性 0.00 ↔ 强调 1.00 的饱和落差，视觉上既刺眼又空洞。
+ * 对照 VRC 默认主题：panel #fbfbf7（饱和 0.33 / 色相 60°）、
+ *   border #d9ded0（0.18 / 81°）、accent #426b57（0.24 / 151°）——
+ *   整套落在 60–150° 的暖灰绿家族，饱和度克制在 0.2–0.35。
+ *   这才是「有档次」的物理成因：灰里有温度，强调色不抢戏。
+ *
+ * 改造原则（所有 10 套主题统一执行，保留各自性格）：
+ *   ① 浅色 panel 由纯白 → 同族微暖白；深色底同样带同族色相，不留纯灰
+ *   ② 中性色（ink/soft/mut/line/lineS）统一带同族色相，饱和度 0.04–0.20
+ *   ③ accent 饱和度从 0.8–1.0 压到 0.30–0.50，不再刺眼
+ *   ④ 语义色（green/red/amber）同步降饱和，与新基调协调
+ */
 export const THEME_PRESETS: ThemePreset[] = [
-  { id: "geist", name: "晨白", fam: "neutral", tone: "light", desc: "Vercel 本尊 · 近白画布 + Vercel 蓝",
-    v: { bg: "#fafafa", panel: "#ffffff", muted: "#f5f5f5", ink: "#171717", soft: "#595959", mut: "#808080", line: "#e7e7e7", lineS: "#d0d0d0", accent: "#0070f3", shell: "#0a0a0a", shellInk: "#d7dde5" },
-    sem: { green: "#0a7b3e", red: "#d41313", amber: "#b45309" } },
-  { id: "carbon", name: "碳黑", fam: "neutral", tone: "dark", desc: "Vercel 深色 · 近黑画布 + 同蓝",
-    v: { bg: "#0a0a0a", panel: "#121212", muted: "#171717", ink: "#ededed", soft: "#a6a6a6", mut: "#7a7a7a", line: "#262626", lineS: "#3a3a3a", accent: "#0070f3", shell: "#050505", shellInk: "#d7dde5" },
+  { id: "geist", name: "晨白", fam: "neutral", tone: "light", desc: "近白画布 · 微暖中性灰",
+    v: { bg: "#f7f7f4", panel: "#fcfcf8", muted: "#f0f0ec", ink: "#1c1e1a", soft: "#5f635c", mut: "#8b8f86", line: "#e2e3da", lineS: "#c9cbbf", accent: "#3b6b5a", shell: "#0a0a0a", shellInk: "#d7dde5" },
+    sem: { green: "#22703f", red: "#b8433a", amber: "#96601c" } },
+  { id: "carbon", name: "碳黑", fam: "neutral", tone: "dark", desc: "深色画布 · 暖石墨",
+    v: { bg: "#121411", panel: "#191c17", muted: "#1f231d", ink: "#eceee7", soft: "#a8ac9f", mut: "#7c8172", line: "#2e332a", lineS: "#434a3c", accent: "#5fa88a", shell: "#050605", shellInk: "#d7dde5" },
     sem: { green: "#4ade80", red: "#f87171", amber: "#fbbf24" } },
-  { id: "steel", name: "钢青", fam: "cool", tone: "light", desc: "冷灰蓝 · 工程感",
-    v: { bg: "#f6f8fa", panel: "#ffffff", muted: "#eef2f6", ink: "#0f172a", soft: "#525f70", mut: "#7d8b9c", line: "#e2e8f0", lineS: "#c9d4e0", accent: "#2563eb", shell: "#0a0a0a", shellInk: "#d7dde5" },
-    sem: { green: "#0a7b3e", red: "#d41313", amber: "#b45309" } },
+  { id: "steel", name: "钢青", fam: "cool", tone: "light", desc: "冷灰蓝 · 降饱和工程感",
+    v: { bg: "#f5f7f7", panel: "#fbfcfc", muted: "#eef1f1", ink: "#1b232b", soft: "#57646d", mut: "#7f8d96", line: "#dfe5e7", lineS: "#c5ced2", accent: "#3f6c86", shell: "#0a0a0a", shellInk: "#d7dde5" },
+    sem: { green: "#22703f", red: "#b8433a", amber: "#96601c" } },
   { id: "slate", name: "深钢", fam: "cool", tone: "dark", desc: "深蓝灰 · 冷静技术流",
-    v: { bg: "#0b1220", panel: "#111827", muted: "#0e1626", ink: "#e2e8f0", soft: "#94a3b8", mut: "#6b7c92", line: "#1e293b", lineS: "#334155", accent: "#60a5fa", shell: "#060a12", shellInk: "#cbd5e1" },
+    v: { bg: "#101820", panel: "#16202a", muted: "#121b23", ink: "#e0e7ec", soft: "#8d9aa4", mut: "#6b7883", line: "#243140", lineS: "#354556", accent: "#5b93b8", shell: "#070d12", shellInk: "#cbd5e1" },
     sem: { green: "#4ade80", red: "#f87171", amber: "#fbbf24" } },
   { id: "sand", name: "暖砂", fam: "warm", tone: "light", desc: "暖灰米调 · 克制的琥珀",
-    v: { bg: "#faf9f7", panel: "#ffffff", muted: "#f3f1ec", ink: "#1c1917", soft: "#6b6259", mut: "#94897e", line: "#eae5dd", lineS: "#d7d0c4", accent: "#9a6a1a", shell: "#0a0a0a", shellInk: "#d7dde5" },
-    sem: { green: "#0a7b3e", red: "#d41313", amber: "#b45309" } },
+    v: { bg: "#f8f6f1", panel: "#fbf9f3", muted: "#f1ede5", ink: "#211d18", soft: "#665e52", mut: "#918777", line: "#e5dfd2", lineS: "#cfc5b2", accent: "#7d5a22", shell: "#0a0a0a", shellInk: "#d7dde5" },
+    sem: { green: "#41693d", red: "#9a4a3e", amber: "#96601c" } },
   { id: "espresso", name: "暖深", fam: "warm", tone: "dark", desc: "暖褐深色 · 沉稳",
-    v: { bg: "#1c1917", panel: "#26221f", muted: "#211d1a", ink: "#f5f5f4", soft: "#b8b0a8", mut: "#857a70", line: "#332e29", lineS: "#4a423a", accent: "#d97706", shell: "#120f0d", shellInk: "#e7e1da" },
+    v: { bg: "#1e1a16", panel: "#282320", muted: "#231f19", ink: "#f2efe9", soft: "#b5ada2", mut: "#847a6f", line: "#363029", lineS: "#4c443a", accent: "#c98a3f", shell: "#130f0c", shellInk: "#e7e1da" },
     sem: { green: "#4ade80", red: "#f87171", amber: "#fbbf24" } },
-  { id: "cal", name: "纯白", fam: "mono", tone: "light", desc: "Cal 式纯白极简 · 黑强调，零彩色",
-    v: { bg: "#ffffff", panel: "#ffffff", muted: "#f5f5f5", ink: "#1a1a1a", soft: "#6b6b6b", mut: "#8c8c8c", line: "#e8e8e8", lineS: "#cfcfcf", accent: "#1a1a1a", shell: "#0a0a0a", shellInk: "#d7dde5" },
-    sem: { green: "#0a7b3e", red: "#d41313", amber: "#b45309" } },
-  { id: "ink", name: "墨", fam: "mono", tone: "dark", desc: "纯黑白 · 最高对比，零彩色",
-    v: { bg: "#09090b", panel: "#18181b", muted: "#121214", ink: "#fafafa", soft: "#a1a1aa", mut: "#71717a", line: "#27272a", lineS: "#3f3f46", accent: "#fafafa", shell: "#050505", shellInk: "#d7dde5" },
+  { id: "cal", name: "纯白", fam: "mono", tone: "light", desc: "纯白极简 · 微暖黑强调",
+    v: { bg: "#fbfbf9", panel: "#fdfdfb", muted: "#f4f4f1", ink: "#1c1c1a", soft: "#616159", mut: "#8b8b82", line: "#e4e4df", lineS: "#cacac2", accent: "#2a2a26", shell: "#0a0a0a", shellInk: "#d7dde5" },
+    sem: { green: "#22703f", red: "#b8433a", amber: "#96601c" } },
+  { id: "ink", name: "墨", fam: "mono", tone: "dark", desc: "深黑白 · 最高对比",
+    v: { bg: "#0d0d0c", panel: "#1a1a18", muted: "#131312", ink: "#faf9f5", soft: "#a3a29b", mut: "#72716a", line: "#282825", lineS: "#403f3a", accent: "#f0efe9", shell: "#050505", shellInk: "#d7dde5" },
     sem: { green: "#4ade80", red: "#f87171", amber: "#fbbf24" } },
   /* ── 石墨青族（2026-10-20，取自 VRC 默认主题「石墨青」）──
      用户反馈「顶部线条加粗扎眼、按 VRC 配色来」：实测 SLC 的线条本就是 1px，
@@ -287,13 +308,13 @@ export type UiThemeAPI = {
   /** 纹理强度 0~100，映射到纹理线透明度 */
   terminalTextureIntensity: number;
   /** 背景图预设（2026-10-27）：纯 CSS 生成的氛围光效 */
-  terminalBackdrop: "none" | "aurora" | "nebula" | "mesh" | "carbon" | "wave";
+  terminalBackdrop: TerminalBackdrop;
   /** 背景图强度 0~100 */
   terminalBackdropIntensity: number;
   setTerminalLineHeight: (value: number) => void;
   setTerminalTexture: (value: "none" | "grid" | "dots" | "double") => void;
   setTerminalTextureIntensity: (value: number) => void;
-  setTerminalBackdrop: (value: "none" | "aurora" | "nebula" | "mesh" | "carbon" | "wave") => void;
+  setTerminalBackdrop: (value: TerminalBackdrop) => void;
   setTerminalBackdropIntensity: (value: number) => void;
   /** 终端光标样式（xterm cursorStyle）。参考 VRC「光标样式」三档。 */
   terminalCursorStyle: TerminalCursorStyle;
@@ -553,9 +574,31 @@ export function useUiTheme(): UiThemeAPI {
     return readStoredNumber("terminal-texture-intensity", 55, 0, 100);
   });
   /* 背景图预设（2026-10-27）：纯 CSS 光效，默认 none */
-  const [terminalBackdrop, setTerminalBackdrop] = useState<"none" | "aurora" | "nebula" | "mesh" | "carbon" | "wave">(() => {
+  const [terminalBackdrop, setTerminalBackdrop] = useState<TerminalBackdrop>(() => {
     const v = readLocalStorageValue("terminal-backdrop");
-    return (["aurora","nebula","mesh","carbon","wave"] as const).includes(v as any) ? (v as any) : "none";
+    /* 2026-10-28 修复「选了背景图不生效」的关键 bug：
+       这里原先是硬编码白名单 ["aurora","nebula","mesh","carbon","wave"]，
+       新增 6 张图片背景（hero-four / cosmic-violet / ...）后忘了同步 ——
+       用户选了 hero-four，存进 localStorage 是 "hero-four"，但读取时
+       判定为非法值，直接回退成 "none"，于是终端永远没有背景。
+       改为用 TERMINAL_BACKDROPS 动态校验，以后加预设不用再改这里。 */
+    /* 2026-10-29 迁移：旧的 hero-* / deep-space 已下架（用户反馈太糊）。
+       老用户 localStorage 里若还是这些值，静默迁到对应新方案，
+       避免「设置莫名其妙没了」。 */
+    const LEGACY: Record<string, TerminalBackdrop> = {
+      /* 已下架的旧值 → 迁到最接近的现存方案（2026-10-29） */
+      "hero-four": "neon-ring",
+      "hero-beam": "ring-glow",
+      "deep-space": "orbit",
+      "space-slc": "hexgrid",
+      "space-deep": "orbit",
+      "space-nebula": "ring-glow",
+      "space-milkyway": "ridge",
+      "space-grid": "hexgrid"
+    };
+    const migrated = LEGACY[v] ?? v;
+    const valid = TERMINAL_BACKDROPS.some((b) => b.id === migrated);
+    return valid ? (migrated as TerminalBackdrop) : "none";
   });
   const [terminalBackdropIntensity, setTerminalBackdropIntensity] = useState(() => {
     return readStoredNumber("terminal-backdrop-intensity", 60, 0, 100);

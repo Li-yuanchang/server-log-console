@@ -79,7 +79,7 @@
 .tsc-badge-unconfigured {
   font-size: var(--fs-2xs);
   font-weight: 500;
-  color: #f59e0b;
+  color: var(--amber);
   background: rgba(245,158,11,0.12);
   padding: 1px 5px;
   border-radius: 3px;
@@ -183,7 +183,7 @@
 }
 
 .tsc-row-arrow {
-  color: #fbbf24;
+  color: var(--amber);
   flex-shrink: 0;
 }
 
@@ -256,7 +256,7 @@
 }
 
 .tsc-btn-ok {
-  color: #fbbf24 !important;
+  color: var(--amber) !important;
 }
 
 .tsc-btn-del {
@@ -276,7 +276,7 @@
   margin: 10px;
   border: 1px dashed rgba(245, 158, 11, 0.28) !important;
   border-radius: 10px !important;
-  color: #fcd34d !important;
+  color: var(--amber) !important;
   background: rgba(245, 158, 11, 0.08) !important;
   font-weight: 600;
 }
@@ -458,7 +458,7 @@
 }
 
 .tsc-cmd-warn-icon {
-  color: #f59e0b;
+  color: var(--amber);
   flex-shrink: 0;
 }
 
@@ -480,12 +480,12 @@
 }
 
 .tsc-cmd-badge-backup {
-  color: #fcd34d;
+  color: var(--amber);
   background: rgba(245,158,11,0.14);
 }
 
 .tsc-cmd-badge-safe {
-  color: #86efac;
+  color: var(--green);
   background: rgba(34,197,94,0.14);
 }
 
@@ -495,7 +495,7 @@
   justify-content: center;
   width: 20px;
   height: 20px;
-  color: #34d399;
+  color: var(--green);
   flex-shrink: 0;
   border-radius: 4px;
 }
@@ -716,7 +716,7 @@
 }
 
 .tsc-toggle-active {
-  color: #f59e0b !important;
+  color: var(--amber) !important;
 }
 
 /* ---------------------------------------------------------------------------
@@ -781,13 +781,13 @@
 }
 
 .tai-sparkle {
-  color: #60a5fa;
+  color: var(--accent);
 }
 
 .tai-badge-unconfigured {
   font-size: var(--fs-2xs);
   font-weight: 500;
-  color: #f59e0b;
+  color: var(--amber);
   background: rgba(245, 158, 11, 0.12);
   padding: 1px 5px;
   border-radius: 3px;
@@ -874,7 +874,7 @@
 }
 
 .tai-welcome-icon {
-  color: #60a5fa;
+  color: var(--accent);
   opacity: 0.82;
   margin-bottom: 10px;
 }
@@ -1024,7 +1024,7 @@
 }
 
 .tai-cmd-warn-icon {
-  color: #f59e0b;
+  color: var(--amber);
   flex-shrink: 0;
 }
 
@@ -1046,12 +1046,12 @@
 }
 
 .tai-cmd-badge-backup {
-  color: #fcd34d;
+  color: var(--amber);
   background: rgba(245, 158, 11, 0.14);
 }
 
 .tai-cmd-badge-safe {
-  color: #86efac;
+  color: var(--green);
   background: rgba(34, 197, 94, 0.14);
 }
 
@@ -1061,7 +1061,7 @@
   justify-content: center;
   width: 20px;
   height: 20px;
-  color: #34d399;
+  color: var(--green);
   flex-shrink: 0;
   border-radius: 4px;
 }
@@ -1127,7 +1127,7 @@
   width: 30px;
   height: 30px;
   border-radius: 8px;
-  color: #bfdbfe;
+  color: var(--accent-soft);
   background: rgba(59, 130, 246, 0.12);
   flex-shrink: 0;
   transition: background 80ms;
@@ -1199,7 +1199,7 @@
 .tai-settings-check input[type="checkbox"] {
   width: 14px;
   height: 14px;
-  accent-color: #60a5fa;
+  accent-color: var(--accent);
 }
 
 .tai-preset-list {
@@ -1280,5 +1280,5 @@
 }
 
 .tai-toggle-active {
-  color: #60a5fa !important;
+  color: var(--accent) !important;
 }

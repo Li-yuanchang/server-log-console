@@ -1,5 +1,5 @@
 /* align-log-light.css — 内嵌日志/切片查看区改浅色，对齐原型 S1/S3/S4
-   （prototype.html：body 背景 --bg；#viewport 背景 --panel(#fff)；日志行 .ll 119-125：
+   （prototype.html：body 背景 --bg；#viewport 背景 --panel(var(--panel))；日志行 .ll 119-125：
    文字 --ink-soft、时间列 --ink-muted、ERROR --red/650、WARN --amber/600、hit 行 accent-soft+左蓝条）。
 
    背景：现实现把 `--log-viewer-background` 定为深色渐变（theme-modern.css:81），
@@ -36,7 +36,7 @@
    未选主题时回退到全局语义色（下面的 fallback 保持原观感）。 */
 .theme-modern .pip-viewer-wrap  .log-line-level-error, .theme-modern .pip-viewer-wrap .log-line-level-fatal, .theme-modern .pip-viewer-root .log-line-level-fatal, .theme-modern .pip-viewer-root  .log-line-level-error, .theme-modern .pip-viewer-wrap .log-line-level-fatal, .theme-modern .pip-viewer-root .log-line-level-fatal{
   color: var(--log-error, var(--red));
-  font-weight: 650;
+  font-weight: 600;
   background: transparent;
   box-shadow: none;
 }.theme-modern .pip-viewer-wrap  .log-line-level-warning, .theme-modern .pip-viewer-root  .log-line-level-warning{
@@ -63,7 +63,7 @@
    内嵌时由这条兜底。 */
 .theme-modern .log-line-level-error {
   color: var(--log-error, var(--red));
-  font-weight: 650;
+  font-weight: 600;
 }
 /* FATAL 必须单独成一条：与 error 合并写在同一个选择器组里时，
    会被上方 (0,3,0) 的 .pip-viewer-wrap 规则里的 fatal 分支抢先命中，
@@ -90,11 +90,11 @@
   color: var(--ink-soft);
 }.theme-modern .pip-viewer-wrap  .slicebar-range b, .theme-modern .pip-viewer-root  .slicebar-range b{ color: var(--ink); }.theme-modern .pip-viewer-wrap  .slicebar-chip, .theme-modern .pip-viewer-root  .slicebar-chip{
   background: var(--panel) !important;
-  border-color: var(--line) !important;
+  border-color: var(--line-strong) !important;
   color: var(--ink-soft) !important;
 }.theme-modern .pip-viewer-wrap  .slicebar-strack, .theme-modern .pip-viewer-root  .slicebar-strack{ background: var(--panel-muted); }.theme-modern .pip-viewer-wrap  .slicebar .ghost-button.slicebar-tail, .theme-modern .pip-viewer-root  .slicebar .ghost-button.slicebar-tail{
   background: var(--panel);
-  border-color: var(--line);
+  border-color: var(--line-strong);
   color: var(--ink);
 }/* ============ 4. 预览标题条（viewer-actions-strip）：原型浅色 ============ */
 .theme-modern .pip-viewer-wrap  .viewer-actions-strip, .theme-modern .pip-viewer-root  .viewer-actions-strip{
@@ -106,7 +106,7 @@
 }.theme-modern .pip-viewer-wrap  .workspace-actions .icon-button, .theme-modern .pip-viewer-wrap .workspace-actions .ghost-button, .theme-modern .pip-viewer-root .workspace-actions .ghost-button, .theme-modern .pip-viewer-root  .workspace-actions .icon-button, .theme-modern .pip-viewer-wrap .workspace-actions .ghost-button, .theme-modern .pip-viewer-root .workspace-actions .ghost-button{
   color: var(--ink-soft);
   background: var(--panel);
-  border-color: var(--line);
+  border-color: var(--line-strong);
 }.theme-modern .pip-viewer-wrap  .workspace-actions .icon-button:hover, .theme-modern .pip-viewer-wrap .workspace-actions .ghost-button:hover, .theme-modern .pip-viewer-root .workspace-actions .ghost-button:hover, .theme-modern .pip-viewer-root  .workspace-actions .icon-button:hover, .theme-modern .pip-viewer-wrap .workspace-actions .ghost-button:hover, .theme-modern .pip-viewer-root .workspace-actions .ghost-button:hover{
   background: var(--accent-soft);
   border-color: color-mix(in srgb, var(--accent) 26%, transparent);
@@ -171,7 +171,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   border-radius: 5px;
   background: var(--panel);
   color: var(--ink-soft);

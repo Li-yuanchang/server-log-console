@@ -110,7 +110,14 @@ export function ThemedSelect<T extends string | number>(props: Props<T>) {
             style={{
               left: `${coords.x}px`,
               top: `${coords.y}px`,
-              width: props.menuWidth === undefined || props.menuWidth === "trigger" ? `${coords.w}px` : `${props.menuWidth}px`,
+              /* 2026-10-28 修复「下拉选项被截断」（用户反馈 Tokyo Ni… / Catppucc…）：
+                 原来默认 width = 触发器宽度。配色下拉触发器只有 130px，
+                 菜单跟着变窄，较长的方案名被 ellipsis 截掉。
+                 现在默认 minWidth = 触发器宽度、width = auto（按内容撑开），
+                 仅在显式传 menuWidth 时才固定宽度。 */
+              minWidth: `${coords.w}px`,
+              width: props.menuWidth === undefined || props.menuWidth === "trigger" ? "auto" : `${props.menuWidth}px`,
+              maxWidth: "min(340px, calc(100vw - 24px))",
               zIndex: 9800,
             }}
           >

@@ -68,7 +68,7 @@
 
 /* ---------- 4. 主按钮（强调色）统一 ----------
    全站「主操作」按钮统一为 accent 底 + --on-accent 字，全部随主题令牌。
-   含此前已存在但硬编码 #fff 的 settings-primary-action / primary-action /
+   含此前已存在但硬编码 var(--panel) 的 settings-primary-action / primary-action /
    search-run-button，一并收口到 --on-accent（与 .primary-button 同源）。
    2026-10-25：边框由 --accent 改为 --accent-strong（用户反馈「检索按钮没有边框」）：
    边框色与填充色相同时等于无边框，而同行次级按钮都有 --line 描边，主按钮因此
@@ -84,7 +84,17 @@
 .theme-modern .ghost-button.primary-action,
 .theme-modern button.search-run-button {
   background: var(--accent);
-  border: 1px solid var(--accent-strong);
+  /* 2026-10-28 边框改回同色 var(--accent)（原为 --accent-strong）。
+     原因：上一版用 accent-strong 做描边，实测在两个方向上都不对 ——
+     ① 未选主题或主题类挂载前，--accent-strong 解析成 :root 的旧值
+        #0060df（纯蓝），于是 sage/graphite 主题下按钮出现一圈蓝边
+        （用户截图实测 #3060d8），完全不跟随主题；
+     ② 即使在正确主题下，深一档的描边 + 实心底色会让按钮的外轮廓比
+        同行次级按钮（--line 浅灰描边 + --panel 底）「厚」一圈，
+        用户在视觉上感知为「这个按钮比旁边的大」。
+     主按钮的层级已由 accent 实心底 + --on-accent 文字充分表达，
+     不需要再加一圈深色描边。同色描边保留 1px 占位，避免尺寸跳动。 */
+  border: 1px solid var(--accent);
   color: var(--on-accent);
   font-weight: 500;
 }
@@ -108,8 +118,8 @@
 .theme-modern .search-run-button.search-run-busy,
 .theme-modern .search-run-button.search-run-busy:disabled {
   background: var(--accent);
-  /* 同上：边框保持 accent-strong，避免「检索中」时又退回无边视觉 */
-  border-color: var(--accent-strong);
+  /* 与上方主按钮一致：同色描边，避免「检索中」时外轮廓又变厚 */
+  border-color: var(--accent);
   color: var(--on-accent);
   opacity: 1;
   cursor: progress;

@@ -72,10 +72,10 @@
 }
 
 .toolbar-tabs .tab-active {
-  background: #fff;
-  border-color: #b7c8da;
+  background: var(--panel);
+  border-color: var(--line-strong);
   border-top: 2px solid #3d6e96;
-  border-bottom-color: #fff;
+  border-bottom-color: var(--panel);
   color: #1e3148;
   font-weight: 600;
 }
@@ -268,8 +268,11 @@
   gap: 12px;
   min-width: 0;
   padding: 14px;
+  /* 2026-10-28 统一规范（连接管理 / 安全 / 偏好 / 更新四页一致）：
+     边框 --line-strong → --line（原色偏深，比其它页重一档）；
+     圆角 12px → 8px（原为全项目最大圆角，与其它页不一致）。 */
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: 8px;
   background: var(--panel-strong);
 }
 
@@ -633,7 +636,7 @@
 
 .conn-group-option-active {
   color: var(--accent);
-  font-weight: 550;
+  font-weight: 500;
 }
 
 .conn-group-empty {
@@ -707,7 +710,7 @@
   display: grid;
   gap: 10px;
   padding: 12px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   border-radius: 12px;
   background: color-mix(in srgb, var(--panel-muted) 78%, white 22%);
 }
@@ -1027,3 +1030,215 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* ==========================================================================
+   设置中心 · 小屏响应式（2026-10-28）
+   --------------------------------------------------------------------------
+   问题：设置页布局（.settings-workspace-v2 = 左侧 rail + 右侧内容）只有
+   @container 规则（styles-sidepanel.css:276，针对 <768 的侧边栏宿主），
+   没有 @media 版本。Electron 主窗口缩到 720px 时容器查询不触发，
+   rail 仍是 flex:0 0 164px 竖排，把内容区挤到只剩 554px，
+   卡片左右几乎贴边（实测 600px 窗口下卡片 554px、rail 占满布局）。
+   这里补 @media 版本，阈值 900px：窗口 ≤900 时 rail 转横向、内容满宽。
+   ========================================================================== */
+@media (max-width: 900px) {
+  .settings-workspace-v2 {
+    flex-direction: column;
+  }
+  .settings-exclusive .settings-rail,
+  .settings-rail {
+    flex: none;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 12px;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .settings-rail-item { flex: none; }
+  .settings-rail-note,
+  .settings-rail-foot { display: none; }
+
+  /* 二级菜单（01–04）在横向 rail 里变成一行 chip */
+  .settings-rail .settings-rail-sub {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin: 0 0 0 4px;
+    padding: 0;
+  }
+  .settings-rail .settings-rail-subitem {
+    padding: 5px 10px 5px 8px;
+    height: 28px;
+  }
+}
+
+/* 内容区在窄屏下收缩内边距，避免卡片贴边 */
+@media (max-width: 900px) {
+  /* 2026-10-28：styles-responsive.css 在 theme-modern.css 之前加载，
+     基础规则（padding:16px 20px 20px）后置会覆盖这里的媒体查询。
+     加 .settings-exclusive 前缀提升特异性（0,2,0 → 0,3,0）确保生效。 */
+  .settings-exclusive .settings-pref-scroll { padding: 12px 12px 16px; }
+  .settings-exclusive .settings-update-scroll { padding: 12px 12px 20px; }
+  .settings-update-inner > .settings-card-kicker,
+  .settings-update-more-body > .settings-card-kicker { padding-left: 2px; }
+}
+@media (max-width: 600px) {
+  .settings-exclusive .settings-pref-scroll { padding: 10px 10px 14px; }
+  .settings-exclusive .settings-update-scroll { padding: 10px 10px 16px; }
+  .settings-exclusive .settings-pref-row { padding: 10px 12px; gap: 10px; }
+  .settings-exclusive .settings-pref-advanced > summary { padding: 10px 12px; }
+  .settings-exclusive .settings-pref-advanced .settings-pref-row { padding-left: 12px; padding-right: 12px; }
+  .settings-exclusive .settings-card-kicker { padding-left: 2px; }
+}
+
+/* ==========================================================================
+   连接管理 · 详情卡片内容（2026-10-28 重新规划）
+   --------------------------------------------------------------------------
+   ① .conn-kv-grid：连接信息从「9 个 span 平铺」改为两列键值网格，
+      “说明”一项跨两列（.conn-kv-wide）。扫读效率明显提升。
+   ② 卡片头在标题外移后只剩名称 + 操作按钮，去掉多余内边距。
+   ========================================================================== */
+.conn-kv-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 24px;
+  padding: 12px 15px;
+}
+.conn-kv {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.conn-kv-wide { grid-column: 1 / -1; }
+.conn-kv .k {
+  font-size: 10px;
+  color: var(--ink-muted);
+  line-height: 1.4;
+}
+.conn-kv .v {
+  font-size: 11.5px;
+  font-family: var(--mono);
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.5;
+}
+.conn-kv-wide .v { white-space: normal; }
+
+/* 标题外移后的卡片头：只剩名称 + 按钮 */
+.conn-detail-body .settings-card-head {
+  padding: 11px 15px;
+  border-bottom: 1px solid var(--line);
+}
+.conn-detail-body .settings-card-head strong {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+/* 卡片内的其它内容（如 tags）补内边距 */
+.conn-detail-body .settings-card > .settings-meta-grid {
+  padding: 10px 15px;
+}
+
+/* 窄屏：键值网格从两列收成一列 */
+@media (max-width: 720px) {
+  .conn-kv-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+    padding: 10px 12px;
+  }
+}
+
+/* ==========================================================================
+   连接管理 · 标题与卡片间距对齐规范（2026-10-28）
+   --------------------------------------------------------------------------
+   实测问题（自己截图 + DOM 测量发现）：
+     · kicker 字号 11px / 字重 400 / 字距 -0.12px / 非大写 / 下距 4px
+       —— 与偏好页（10px/600/0.7px/uppercase/10px）完全不同；
+     · .conn-detail-body padding 为 0 → 卡片左右完全贴边（leftAlign 0、rightGap 0）。
+   ========================================================================== */
+.conn-detail-body {
+  /* 页面级左右呼吸，与偏好页 .settings-pref-scroll 的 20px 对齐 */
+  padding: 14px 20px 20px;
+}
+
+/* 卡片外的分组标题：与 .settings-pref-section .settings-card-kicker 完全同款 */
+.conn-detail-body > .conn-detail-stack > .settings-card-kicker,
+.conn-detail-stack > .settings-card-kicker {
+  display: block;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  padding: 0 2px;
+  /* 2026-10-28 与偏好页 .settings-pref-section .settings-card-kicker 完全一致：
+     margin 2px 0 10px（原来 0 0 8px，差 2px） */
+  margin: 2px 0 10px;
+  background: transparent;
+  border: 0;
+}
+/* 第二、三组标题上方留 14px（与卡片下距一致） */
+.conn-detail-stack > .settings-card + .settings-card-kicker {
+  margin-top: 14px;
+}
+
+/* 窄屏收缩 */
+@media (max-width: 900px) {
+  .conn-detail-body { padding: 12px 12px 16px; }
+}
+@media (max-width: 600px) {
+  .conn-detail-body { padding: 10px 10px 14px; }
+}
+
+
+
+/* ==========================================================================
+   连接凭证 · 摘要行内边距（2026-10-28）
+   实测 credential-summary-line 无 padding，卡片本体 padding:0 → 内容贴边。
+   补 12px 15px，与同卡片 .settings-card-head 对齐。
+   ========================================================================== */
+.conn-detail-body .settings-card .credential-summary-line {
+  padding: 12px 15px;
+  line-height: 1.5;
+}
+@media (max-width: 900px) {
+  .conn-detail-body .settings-card .credential-summary-line { padding: 10px 12px; }
+}
+
+/* ==========================================================================
+   界面字体与字号 · 行内数字框（2026-10-28）
+   --------------------------------------------------------------------------
+   原来的 .font-matrix 表格给字号输入框固定 150px 宽 + 表格单元格内边距，
+   与「左标签 + 右控件」的行式布局不一致（用户反馈）。
+   改为 .settings-pref-value 内联后，数字框需要一个固定且克制的宽度。
+   ========================================================================== */
+.settings-pref-value .settings-inline-number {
+  width: 64px;
+  height: var(--ctl-h, 28px);
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--ctl-radius, 6px);
+  background: var(--panel);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--fs-sm);
+  text-align: center;
+}
+.settings-pref-value .settings-inline-number:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+/* ThemedSelect 在行内时不需要撑满，给个克制的最小宽度 */
+.settings-pref-value > .themed-select,
+.settings-pref-value > .themed-select-trigger {
+  min-width: 132px;
+}
+
+/* 2026-10-28 行分隔线：改由 theme-modern.css 的 border-top 单独承担。
+   这里原来还写了 box-shadow: inset 0 1px，与 border-top 叠加成「双线」（用户反馈边框变粗），
+   已撤销，避免重复绘制。 */
+

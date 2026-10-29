@@ -251,13 +251,13 @@
 .theme-modern .server-status-icon {
   color: var(--accent);
   background: var(--panel-muted);
-  border-color: var(--line);
+  border-color: var(--line-strong);
 }
 .theme-modern .server-status-identity strong { color: var(--ink); }
 .theme-modern .server-status-identity small { color: var(--ink-muted); }
 .theme-modern .server-status-hero-card {
   padding: 10px 12px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   border-radius: var(--r-m);
   background: var(--panel);
   box-shadow: none;
@@ -265,7 +265,7 @@
 .theme-modern .server-status-hero-orb {
   color: var(--accent);
   background: var(--panel-muted);
-  border-color: var(--line);
+  border-color: var(--line-strong);
   border-radius: var(--r-s);
   box-shadow: none;
 }
@@ -273,7 +273,7 @@
 .theme-modern .server-status-hero-meta span { color: var(--ink-muted); }
 .theme-modern .server-status-hero-main strong { color: var(--ink); }
 .theme-modern .server-status-context {
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   border-radius: var(--r-m);
   background: var(--panel);
   box-shadow: none;
@@ -285,7 +285,7 @@
    仅统一卡片视觉：描边/圆角/底色与监控卡一致，内嵌行底色用 panel-muted */
 .theme-modern .server-status-card {
   padding: 10px 12px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   border-radius: var(--r-m);
   background: var(--panel);
   box-shadow: none;
@@ -297,7 +297,7 @@
 .theme-modern .server-status-card-title em { color: var(--ink-muted); }
 .theme-modern .server-status-load-grid div {
   background: var(--panel-muted);
-  border-color: var(--line);
+  border-color: var(--line-strong);
   border-radius: var(--r-s);
 }
 .theme-modern .server-status-load-grid strong { color: var(--ink); }
@@ -315,7 +315,7 @@
 .theme-modern .server-status-disk,
 .theme-modern .server-status-network-list > div {
   background: var(--panel-muted);
-  border-color: var(--line);
+  border-color: var(--line-strong);
   border-radius: var(--r-s);
 }
 .theme-modern .server-status-disk strong,
