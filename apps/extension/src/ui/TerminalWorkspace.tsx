@@ -1065,6 +1065,22 @@ export function TerminalPanel(props: TerminalPanelProps) {
                       />
                     ))}
                 </div>
+                {/* 2026-10-29 用户反馈「终端刚打开有 3 秒左右的空白，然后才出现登录，
+                    太生硬」：hasTabs 为真后立即渲染 xterm，但 SSH 握手 + 远端 shell
+                    首屏输出需要 1~3 秒，这段时间画布是全空的，没有任何反馈。
+                    这里在「已有标签但尚未连上」时叠一层轻量提示（吸附在终端底部，
+                    不遮挡将来的输出），连上后自动消失。
+                    不加全屏遮罩：SSH 有时会很快返回 banner，闪一下反而更突兀。 */}
+                {hasTabs && activePaneState && !activePaneState.connected ? (
+                  <div className="terminal-connecting-hint" role="status" aria-live="polite">
+                    <span className="terminal-connecting-spin" aria-hidden="true" />
+                    <span>
+                      {activePaneState.phase === "reconnecting"
+                        ? `连接已断开，正在重试（第 ${activePaneState.retryCount} 次）…`
+                        : "正在建立 SSH 连接…"}
+                    </span>
+                  </div>
+                ) : null}
                 {activeSplitLayout && activeTab ? (
                   <TerminalSplitView
                     key={`${activeTab.tabId}:${activeSplitLayout}`}

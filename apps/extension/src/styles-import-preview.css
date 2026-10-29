@@ -6,7 +6,14 @@
 .ipd-scrim {
   position: fixed;
   inset: 0;
-  z-index: 1200;
+  /* 2026-10-29 修复「点重新导入没反应 / 一直显示正在比对」（用户实测）：
+     本弹层从设置中心（连接管理页）触发，而 `.settings-exclusive` 的
+     z-index 是 8000，原来这里只有 1200 —— 弹窗确实渲染了，但被设置中心
+     整块盖住，用户看不到任何东西，只觉得"卡住不动"。
+     提到与全站对话框同一档（≥10000），确保永远浮在最上层。
+     参考：.confirm-backdrop 10000、.settings-modal-backdrop 10010、
+     右键菜单 backdrop 10010。 */
+  z-index: 10012;
   display: flex;
   align-items: center;
   justify-content: center;

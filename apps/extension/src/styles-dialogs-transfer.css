@@ -2576,3 +2576,64 @@ button.class-outline-row {
   color: var(--ink-muted, #92988d);
   font-variant-numeric: tabular-nums;
 }
+
+/* ============================================================
+   连接失败确认框（2026-10-29）
+   替代此前「连接失败即强制跳设置中心」的打断式行为。
+   几何沿用 .confirm-dialog（同一套 backdrop 与卡片规格），只补内部排版。
+   ============================================================ */
+.conn-issue-dialog {
+  max-width: 440px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.conn-issue-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.conn-issue-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--amber-soft, rgba(183, 121, 53, 0.12));
+  color: var(--amber, #b77935);
+}
+
+.conn-issue-head strong {
+  font-size: var(--fs-sm);
+  font-weight: 650;
+  color: var(--ink);
+}
+
+.conn-issue-msg {
+  margin: 0;
+  font-size: var(--fs-xs);
+  line-height: 1.6;
+  color: var(--ink-soft);
+  word-break: break-word;
+}
+
+.conn-issue-hint {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--panel-muted);
+  font-size: var(--fs-2xs);
+  line-height: 1.6;
+  color: var(--ink-muted);
+}
+
+.conn-issue-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 2px;
+}

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, Tray, nativeImage, ipcMain, shell, dialog, safeStorage } = require("electron");
+const { app, BrowserWindow, Menu, Tray, nativeImage, ipcMain, shell, dialog } = require("electron");
 const { spawn } = require("child_process");
 const fs = require("fs");
 const path = require("path");
@@ -14,13 +14,10 @@ const HOST = "127.0.0.1";
 /* ============================================================
    凭证加密密钥与访问令牌托管
    ------------------------------------------------------------
-   背景：gateway 以 ELECTRON_RUN_AS_NODE=1 运行，该模式下 require("electron")
-   拿不到 safeStorage（实测为 undefined），所以密钥与令牌必须由主进程在这里
-   派生，再通过环境变量注入给 gateway。
-   - 主密钥：以 0600 权限的明文文件落地（~/.server-log-console/master.key）。
-     ⚠️ 2026-10-28 起**不再**用 safeStorage 加密：macOS 钥匙串会在每次启动
-     重新校验并弹窗要求授权，对本地工具而言打扰大于收益。安全性说明见
-     ensureMasterKey 的注释；旧版的 master.key.enc 会被一次性迁移成明文。
+   背景：gateway 以 ELECTRON_RUN_AS_NODE=1 运行，该模式下拿不到 Electron 的
+   加密能力，所以密钥与令牌必须由主进程在这里派生，再通过环境变量注入给 gateway。
+   - 主密钥：0600 权限的明文文件（~/.server-log-console/master.key）。
+     ⚠️ 2026-10-29 起**不加密**（用户决策，详见下方 TODO(凭证静态加密)）。
    - 访问令牌：桌面端自动生成并注入，前端无需配置。
    ============================================================ */
 
@@ -33,61 +30,25 @@ function ensureDirSync(dir) {
   } catch { /* 已存在 */ }
 }
 
-/** 读取或创建主密钥（base64，32 字节）。
- *
- *  2026-10-28 用户反馈「每次启动都要授权（钥匙串弹窗）」→ 改为**明文文件存储**。
- *
- *  为什么放弃 safeStorage：
- *    macOS 上 safeStorage.encryptString 会把条目写进系统钥匙串，而每次应用启动
- *    解密时都会重新校验调用方身份 —— 用户必须再次输入登录密码/点「始终允许」。
- *    对一个「本地开发工具」而言，这个打扰远大于收益。
- *
- *  为什么可接受明文：
- *    ① 文件位于 ~/.server-log-console/，权限 0600，仅当前用户可读；
- *    ② 它保护的是「凭证加密的密钥」，而同目录下 gateway-auth.json 等本就是
- *       同等级的本地文件 —— 单独给密钥加一层系统钥匙串，安全性提升有限；
- *    ③ 原实现本身也没跑通：master.key（明文）与 master.key.enc 长期并存，
- *       说明「迁移到 safeStorage」分支从未成功完成，却在每次启动触发解密询问。
- *
- *  迁移：若存在 master.key.enc，尝试换算成明文写入 master.key 后删除密文，
- *  保证换版本升级的用户密钥不丢（解不开则忽略，走生成新密钥分支）。
- */
-function ensureMasterKey() {
-  ensureDirSync(CONFIG_DIR);
-  const keyPath = path.join(CONFIG_DIR, "master.key.enc");
-  const plainPath = path.join(CONFIG_DIR, "master.key");
+/* ============================================================
+   TODO(凭证静态加密) — 2026-10-29 暂时移除，后期重新设计
+   ------------------------------------------------------------
+   现状：**不加密**。SSH 密码/私钥以明文（`slc-v1` 前缀已不再产生）存放在
+   ~/.server-log-console/ 下，文件权限 0600、仅当前用户可读。
 
-  // 1) 已有明文密钥：直接使用（正常路径）
-  try {
-    const existing = fs.readFileSync(plainPath, "utf8").trim();
-    if (Buffer.from(existing, "base64").length === 32) {
-      return existing;
-    }
-  } catch { /* 不存在，继续 */ }
+   为什么先移除（用户决策）：
+     ① macOS 上 safeStorage 每次启动都弹钥匙串授权，打扰严重；
+     ② 加密链路脆弱 —— 历史遗留使 master.key（gateway 兜底生成）与
+        master.key.enc（Electron 加密）并存且内容不同；切换读取优先级会
+        直接导致全部凭证解密失败（实测「改完后 SSH 全部认证失败」）；
+     ③ 密钥一旦与凭证错配就无法恢复（钥匙串拒绝解密时密钥永久丢失）。
 
-  // 2) 旧版加密密钥：尝试一次性迁移成明文，避免老用户密钥丢失
-  try {
-    if (fs.existsSync(keyPath)) {
-      const decoded = safeStorage && safeStorage.isEncryptionAvailable && safeStorage.isEncryptionAvailable()
-        ? safeStorage.decryptString(fs.readFileSync(keyPath))
-        : "";
-      if (decoded && Buffer.from(decoded, "base64").length === 32) {
-        fs.writeFileSync(plainPath, decoded, { encoding: "utf8", mode: 0o600 });
-        try { fs.chmodSync(plainPath, 0o600); } catch {}
-        try { fs.unlinkSync(keyPath); } catch {}
-        probe("master key migrated enc -> plain");
-        return decoded;
-      }
-    }
-  } catch { /* 解不开（例如钥匙串被拒），忽略 → 生成新密钥 */ }
-
-  // 3) 全新生成
-  const fresh = crypto.randomBytes(32).toString("base64");
-  fs.writeFileSync(plainPath, fresh, { encoding: "utf8", mode: 0o600 });
-  try { fs.chmodSync(plainPath, 0o600); } catch {}
-  probe("master key generated (plain)");
-  return fresh;
-}
+   重新设计时的硬性要求：
+     · 不每次启动弹系统授权（考虑单次解锁 + 会话内缓存，或 OS 级免密白名单）；
+     · 密钥必须有版本号与完整性校验，**禁止**双密钥并存；
+     · 迁移失败要能安全回退到明文并明确告警，绝不能让用户「突然连不上」；
+     · 提供一键「重置凭证」出口，避免密钥丢失后只能手工删文件。
+   ============================================================ */
 
 /** 读取或创建访问令牌 */
 function ensureGatewayToken() {
@@ -111,11 +72,18 @@ function ensureGatewayToken() {
   return token;
 }
 
-/** 提供给 gateway 的环境变量（进程内 import 与 spawn 共用） */
+/** 提供给 gateway 的环境变量（进程内 import 与 spawn 共用）。
+ *
+ *  2026-10-29：**不再注入 SLC_MASTER_KEY**（用户决策：暂时去掉凭证加密）。
+ *  gateway 的 SecretCipher 在拿不到密钥时会退回明文读写，凭证照常可用、
+ *  也不会再去生成/读取 master.key，彻底避免「密钥错配 → 突然连不上」。
+ *  仅注入访问令牌（鉴权必需，与凭证加密无关）。
+ *
+ *  TODO(凭证静态加密) 见文件上方 §TODO(凭证静态加密) 的完整要求。
+ */
 function buildGatewaySecretEnv() {
   try {
     return {
-      SLC_MASTER_KEY: ensureMasterKey(),
       GATEWAY_TOKEN: ensureGatewayToken()
     };
   } catch (error) {
@@ -344,7 +312,7 @@ async function importGatewayInProcess(entry) {
   process.env.HOST = HOST;
   process.env.ELECTRON = "1";
   process.env.EXTENSION_DIST_DIR = getExtensionDistDir();
-  /* 凭证加密密钥与访问令牌：主进程派生后注入（gateway 侧拿不到 safeStorage） */
+  /* 主密钥与访问令牌：主进程派生后注入（gateway 侧拿不到 Electron 环境） */
   const secretEnv = buildGatewaySecretEnv();
   if (secretEnv.SLC_MASTER_KEY) process.env.SLC_MASTER_KEY = secretEnv.SLC_MASTER_KEY;
   if (secretEnv.GATEWAY_TOKEN) process.env.GATEWAY_TOKEN = secretEnv.GATEWAY_TOKEN;

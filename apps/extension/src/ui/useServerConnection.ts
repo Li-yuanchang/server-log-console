@@ -70,6 +70,11 @@ export function useServerConnection(deps: {
   fetchDirectoryListing: (path: string) => Promise<any>;
   rememberDirectoryIfUseful: (serverId: string, path: string, count: number) => void;
   openSettingsWorkspace: (view?: SettingsWorkspaceView) => void;
+  /** 连接失败且疑似需要改凭证/跳转入口时调用（2026-10-29）。
+   *  以前这里直接 openSettingsWorkspace 强制跳设置页 —— 用户反馈「连接失败
+   *  直接把我甩到设置界面」很唐突。现改为通知上层弹确认框，由用户决定
+   *  是否前往修改，不打断当前视图。 */
+  onConnectionNeedsAttention?: (info: { message: string; hint: string }) => void;
 }): ServerConnectionAPI {
   const {
     serverId,
@@ -108,6 +113,7 @@ export function useServerConnection(deps: {
     fetchDirectoryListing,
     rememberDirectoryIfUseful,
     openSettingsWorkspace,
+    onConnectionNeedsAttention,
   } = deps;
 
   const serverIdRef = deps.serverIdRef;
@@ -404,7 +410,13 @@ export function useServerConnection(deps: {
       }
 
       if (!payload.connected && ((availableBastions.length && selectedServer?.connectionKind !== "bastion") || looksLikeJumpServer(selectedServer))) {
-        openSettingsWorkspace("connections");
+        /* 2026-10-29：不再强制跳设置页，改为弹框征求用户意见 */
+        onConnectionNeedsAttention?.({
+          message: connectionMessage,
+          hint: availableBastions.length && selectedServer?.connectionKind !== "bastion"
+            ? "可在设置中心的「当前服务器」里切换跳转入口后重试。"
+            : "凭证可能已过期或需要重新录入。",
+        });
       }
 
       if (payload.connected && selectedServer?.connectionKind === "bastion" && looksLikeJumpServer(selectedServer)) {
@@ -486,13 +498,19 @@ export function useServerConnection(deps: {
       }
 
       if ((availableBastions.length && selectedServer?.connectionKind !== "bastion") || looksLikeJumpServer(selectedServer)) {
-        openSettingsWorkspace("connections");
+        /* 同上：改为弹框，不打断用户当前视图 */
+        onConnectionNeedsAttention?.({
+          message: detail,
+          hint: availableBastions.length && selectedServer?.connectionKind !== "bastion"
+            ? "可在设置中心的「当前服务器」里切换跳转入口后重试。"
+            : "凭证可能已过期或需要重新录入。",
+        });
       }
     } finally {
       setIsDirectoryLoading(false);
       setIsBusy(false);
     }
-  }, [serverId, directoryPath, selectedServer, availableBastions, setIsBusy, setIsDirectoryLoading, setActionStatus, pushActivity, setConnectionTestStatus, setDirectoryPath, setDirectoryInput, setFileEntries, fetchDirectoryListing, rememberDirectoryIfUseful, openSettingsWorkspace]);
+  }, [serverId, directoryPath, selectedServer, availableBastions, setIsBusy, setIsDirectoryLoading, setActionStatus, pushActivity, setConnectionTestStatus, setDirectoryPath, setDirectoryInput, setFileEntries, fetchDirectoryListing, rememberDirectoryIfUseful, openSettingsWorkspace, onConnectionNeedsAttention]);
 
   return {
     fetchCredentialStatus,

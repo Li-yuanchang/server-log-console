@@ -297,6 +297,9 @@ export function App() {
   const [blankContextMenu, setBlankContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [workspaceTabMenu, setWorkspaceTabMenu] = useState<WorkspaceTabMenuState | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
+  /* 连接失败提示（2026-10-29）：替代此前「失败即强制跳设置中心」的打断式行为。
+     用户在弹框里自行决定「去修改凭证 / 稍后再说」，当前视图不受影响。 */
+  const [connectionIssue, setConnectionIssue] = useState<{ message: string; hint: string } | null>(null);
   /* 导入变更预览弹层：null = 关闭；有值 = 打开并指定工具 */
   const [importPreviewTool, setImportPreviewTool] = useState<"finalshell" | "xshell" | null>(null);
   const [renameDialog, setRenameDialog] = useState<{ entry: LogFileEntry; newName: string } | null>(null);
@@ -1878,6 +1881,8 @@ export function App() {
     fetchDirectoryListing,
     rememberDirectoryIfUseful,
     openSettingsWorkspace,
+    /* 2026-10-29：连接失败时弹框征求用户意见，不再强制跳设置页 */
+    onConnectionNeedsAttention: (info) => setConnectionIssue(info),
   });
 
   const resolvedFileDirectoryPath = useMemo(
@@ -2425,7 +2430,17 @@ export function App() {
     { label: "尾", action: () => loadTailSlice({ forceRefresh: true }) }
   ];
 
-  const canOpenTerminal = Boolean(selectedServer);
+  /* 2026-10-29 用户要求：**SSH 未通过时不允许打开终端**。
+     原来只看「有没有选服务器」，于是连不上也照样能点开终端、进去后干等或报错。
+     现在额外要求连接测试已通过：
+       · connectionTestStatus === null（还没测过）→ 仍允许，
+         因为用户可能只想先连上看看，不该被“必须先测试”卡住；
+       · connectionTestStatus.connected === true → 允许；
+       · 明确测试失败 → 禁止（终端按钮置灰 + 提示原因）。
+     parse 中「连接中」状态不算失败，仍可点。 */
+  const terminalConnectionBlocked =
+    Boolean(selectedServer) && connectionTestStatus !== null && !connectionTestStatus.connected && !isBusy;
+  const canOpenTerminal = Boolean(selectedServer) && !terminalConnectionBlocked;
   const isFileMode = activeLogView === "files";
   const effectiveResults = results ?? lastSearchResultsRef.current;
   const hasSearchResults = Boolean(
@@ -3814,18 +3829,26 @@ export function App() {
                 >
                   文件目录
                 </button>
-                {canOpenTerminal ? (
-                  <button
-                    type="button"
-                    className={`toolbar-view-switch-btn${terminalPanelOpen || terminalDetached ? " is-active" : ""}`}
-                    aria-pressed={terminalPanelOpen || terminalDetached}
-                    onClick={toggleTerminalPanelToolbar}
-                    disabled={!serverId}
-                    title={terminalPanelOpen || terminalDetached ? "收起终端" : "查看终端"}
-                  >
-                    终端
-                  </button>
-                ) : null}
+                {/* 2026-10-29：终端入口**常显**（原来 SSH 不通时整颗按钮消失，
+                    用户会以为功能被删了）。改为置灰 + 说明原因，语义更清楚。 */}
+                <button
+                  type="button"
+                  className={`toolbar-view-switch-btn${terminalPanelOpen || terminalDetached ? " is-active" : ""}`}
+                  aria-pressed={terminalPanelOpen || terminalDetached}
+                  onClick={toggleTerminalPanelToolbar}
+                  disabled={!canOpenTerminal}
+                  title={
+                    !serverId
+                      ? "先选择服务器"
+                      : terminalConnectionBlocked
+                        ? "SSH 连接失败，请先在设置中修正凭证后重试"
+                        : terminalPanelOpen || terminalDetached
+                          ? "收起终端"
+                          : "查看终端"
+                  }
+                >
+                  终端
+                </button>
               </div>
               {isFileMode && !terminalAsWorkspaceView ? (
                 /* 文件模式：原型 tbar 一行式 —— seg 之后紧跟目录层级（面包屑），
@@ -5390,6 +5413,44 @@ export function App() {
         onCancel={cancelUploadConflicts}
         onConfirm={(options) => { void confirmUpload(options); }}
       />
+
+      {/* 连接失败确认框（2026-10-29 用户要求）：
+          替代此前「连接失败就直接跳到设置中心」的强制跳转 —— 那个行为太唐突，
+          会打断用户当前正在做的事。现在只弹一个确认框，说明原因 + 给两个选择：
+          「去修改凭证」或「稍后再说」。默认不跳转。 */}
+      {connectionIssue ? (
+        <div className="confirm-backdrop" role="presentation" onClick={() => setConnectionIssue(null)}>
+          <div
+            className="confirm-dialog conn-issue-dialog"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="conn-issue-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="conn-issue-head">
+              <span className="conn-issue-icon" aria-hidden="true">
+                <AlertTriangle size={16} strokeWidth={1.9} />
+              </span>
+              <strong id="conn-issue-title">连接失败</strong>
+            </div>
+            <p className="conn-issue-msg">{connectionIssue.message}</p>
+            {connectionIssue.hint ? <p className="conn-issue-hint">{connectionIssue.hint}</p> : null}
+            <div className="conn-issue-actions">
+              <button type="button" className="ghost-button" onClick={() => setConnectionIssue(null)}>
+                稍后再说
+              </button>
+              <button
+                type="button"
+                className="ghost-button confirm-btn-primary"
+                onClick={() => { setConnectionIssue(null); openSettingsWorkspace("connections"); }}
+                autoFocus
+              >
+                去修改凭证
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <ImportPreviewDialog
         visible={importPreviewTool !== null}
