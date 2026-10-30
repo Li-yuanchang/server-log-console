@@ -673,7 +673,7 @@ export function App() {
   });
   const {
     liveFollowEnabled, liveFollowConnected, liveFollowContent,
-    liveFollowRetryCount, liveFollowPaused, viewerNotAtBottom,
+    liveFollowRetryCount, liveFollowPaused, viewerNotAtBottom, viewerJumping,
     setLiveFollowPaused, setLiveFollowContent,
     startLiveFollow, stopLiveFollow,
     handleViewerNearBottomChange, scrollViewerToBottom,
@@ -4670,11 +4670,30 @@ export function App() {
                           )}
                         </div>
                       ) : null}
-                      {viewerNotAtBottom && activeViewerTabId === "file" ? (
-                        <button className="live-back-to-bottom" type="button" aria-label="回到底部" title="回到底部" onClick={() => void handleBackToBottom()}>
+                      {/* 常驻挂载 + is-visible 切换（2026-10-30 用户反馈「按钮有点击抖动」）：
+                          原实现用条件渲染，实时追加时 viewerNotAtBottom 每 100ms 就可能翻转，
+                          按钮反复卸载/挂载 —— 指针还按在上面时 DOM 被换掉，:active 丢失、
+                          transition 重头开始，观感就是抖一下。现在只切类名，视觉靠 opacity 过渡。
+                          同时补 :active 的按压反馈与「跳转中」态（spinner + 文案），
+                          让点击在 0ms 就有可见响应，而不是等滚动收敛完才动。 */}
+                      <button
+                        className={`live-back-to-bottom${viewerNotAtBottom && activeViewerTabId === "file" ? " is-visible" : ""}${viewerJumping ? " is-jumping" : ""}`}
+                        type="button"
+                        aria-label={viewerJumping ? "正在跳转到尾部" : "回到底部"}
+                        title={viewerJumping ? "正在跳转到尾部…" : "回到底部"}
+                        aria-hidden={!(viewerNotAtBottom && activeViewerTabId === "file")}
+                        tabIndex={viewerNotAtBottom && activeViewerTabId === "file" ? 0 : -1}
+                        onClick={() => void handleBackToBottom()}
+                      >
+                        {viewerJumping ? (
+                          <>
+                            <span className="live-back-to-bottom-spinner" aria-hidden="true" />
+                            <span className="live-back-to-bottom-label">跳转中</span>
+                          </>
+                        ) : (
                           <ArrowDown size={18} strokeWidth={1.9} />
-                        </button>
-                      ) : null}
+                        )}
+                      </button>
                       {showSearchResultsOverviewRail ? (
                         <aside className="reader-rail reader-rail-overview">
                           <div

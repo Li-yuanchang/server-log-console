@@ -6,6 +6,17 @@ import type { VirtualLogViewerHandle } from "./VirtualLogViewer.js";
 /** 实时内容刷新的最小间隔（ms）：攒批上限节奏，约 10 帧/秒 */
 const LIVE_FLUSH_INTERVAL = 100;
 
+/** 手动点击「回到底部」后的点击优先窗口（ms）。
+    窗口期内 nearBottom=false 一律忽略：实时追加每 100ms 一批，贴底是逐帧收敛的，
+    中途几乎必然出现一次「还没贴底」的上报；若不压住，跟随会被立刻重新暂停，
+    重钉随即被当成用户滚动让位 → 表现就是「点了没反应 / 点好几次」。
+    窗口取 1200ms（略长于 settleScrollTo 的 60 帧 ≈ 1s 上限），保证收敛跑完。 */
+const MANUAL_BOTTOM_PRIORITY_MS = 1200;
+
+/** 「跳转中」状态的最短可见时长（ms）。真贴底常 80ms 内就完成，
+    不留这个下限的话 spinner 只闪一帧，用户仍感知不到"点到了"。 */
+const JUMPING_MIN_VISIBLE_MS = 360;
+
 export interface UseLiveFollowOptions {
   serverId: string;
   sliceContent: string | undefined;
@@ -22,12 +33,14 @@ export interface UseLiveFollowReturn {
   liveFollowRetryCount: number;
   liveFollowPaused: boolean;
   viewerNotAtBottom: boolean;
+  /** 手动「回到底部」收敛窗口内为 true —— 按钮据此显示「正在跳转」反馈 */
+  viewerJumping: boolean;
   setLiveFollowPaused: React.Dispatch<React.SetStateAction<boolean>>;
   setLiveFollowContent: React.Dispatch<React.SetStateAction<string>>;
   startLiveFollow: (targetFilePath: string, targetFileName: string, options?: { isReconnect?: boolean; keyword?: string }) => void;
   stopLiveFollow: (options?: { keepContent?: boolean; preserveIntent?: boolean }) => void;
   handleViewerNearBottomChange: (nearBottom: boolean) => void;
-  scrollViewerToBottom: (options?: { optimisticHide?: boolean }) => void;
+  scrollViewerToBottom: (options?: { optimisticHide?: boolean; manual?: boolean }) => void;
   clearLiveContent: () => void;
 }
 
@@ -47,6 +60,7 @@ export function useLiveFollow(opts: UseLiveFollowOptions): UseLiveFollowReturn {
   const [liveFollowRetryCount, setLiveFollowRetryCount] = useState(0);
   const [liveFollowPaused, setLiveFollowPaused] = useState(false);
   const [viewerNotAtBottom, setViewerNotAtBottom] = useState(false);
+  const [viewerJumping, setViewerJumping] = useState(false);
 
   const sliceContentRef = useRef(sliceContent);
   sliceContentRef.current = sliceContent;
@@ -58,6 +72,8 @@ export function useLiveFollow(opts: UseLiveFollowOptions): UseLiveFollowReturn {
   const liveFollowExpectedCloseRef = useRef(false);
   const liveFollowRetryCountRef = useRef(0);
   const forceBottomUntilRef = useRef(0);
+  const jumpTimerRef = useRef<number | null>(null);
+  const jumpStartedAtRef = useRef(0);
   // 高吞吐日志下 gateway 每个 SSH data 事件推一条 WS 消息；先攒批再按固定节奏
   // 刷进 state，把渲染频率从"每消息一次"压到 ~10 次/秒，避免全量重算打满主线程。
   const pendingLiveChunkRef = useRef("");
@@ -227,9 +243,31 @@ export function useLiveFollow(opts: UseLiveFollowOptions): UseLiveFollowReturn {
     });
   }
 
+  function clearJumpTimer() {
+    if (jumpTimerRef.current !== null) {
+      window.clearTimeout(jumpTimerRef.current);
+      jumpTimerRef.current = null;
+    }
+  }
+
   function handleViewerNearBottomChange(nearBottom: boolean) {
+    /* 点击优先窗口（2026-10-30 用户反馈「点了跟没反馈一样，还有点击抖动」）：
+       窗口期内把 nearBottom=false 当噪声直接吞掉，并立刻再补一次重钉。
+       旧实现只「忽略」不「重钉」，这一批追加把视口顶开后就再没人管了，
+       按钮原地不动、内容也没贴底 —— 用户视角就是点了没反应。 */
     if (!nearBottom && Date.now() < forceBottomUntilRef.current) {
+      viewerRef.current?.scrollToBottom();
       return;
+    }
+    /* 「跳转中」最短保留：真贴底往往 80ms 内就完成，若立刻收起，spinner 只闪一帧，
+       用户依然感受不到反馈（等于没做）。这里至少保到 360ms，让状态看得见。 */
+    if (nearBottom && viewerJumping) {
+      const remain = Math.max(0, JUMPING_MIN_VISIBLE_MS - (Date.now() - jumpStartedAtRef.current));
+      clearJumpTimer();
+      jumpTimerRef.current = window.setTimeout(() => {
+        jumpTimerRef.current = null;
+        setViewerJumping(false);
+      }, remain);
     }
     setViewerNotAtBottom(!nearBottom);
     if (liveFollowEnabled) {
@@ -237,8 +275,21 @@ export function useLiveFollow(opts: UseLiveFollowOptions): UseLiveFollowReturn {
     }
   }
 
-  function scrollViewerToBottom(options?: { optimisticHide?: boolean }) {
-    forceBottomUntilRef.current = Date.now() + 900;
+  function scrollViewerToBottom(options?: { optimisticHide?: boolean; manual?: boolean }) {
+    /* 手动点击给更长的优先窗口（MANUAL_BOTTOM_PRIORITY_MS），自动跟随保持 900ms】*/
+    const windowMs = options?.manual ? MANUAL_BOTTOM_PRIORITY_MS : 900;
+    forceBottomUntilRef.current = Math.max(forceBottomUntilRef.current, Date.now() + windowMs);
+    if (options?.manual) {
+      /* 立刻进入「跳转中」：按钮当场变样（转圈 + 文案），让用户确认点击已生效。
+         即便收敛要几百毫秒，反馈是 0 延迟的。 */
+      setViewerJumping(true);
+      jumpStartedAtRef.current = Date.now();
+      clearJumpTimer();
+      jumpTimerRef.current = window.setTimeout(() => {
+        jumpTimerRef.current = null;
+        setViewerJumping(false);
+      }, windowMs);
+    }
     /* 2026-10-30 用户反馈「到底按钮有时慢 / 要点好几次 / 有时不管用得手动滚」：
        原实现无条件 viewerNotAtBottom=false —— 按钮在滚动尚未收敛时就被隐藏。
        实时模式下内容每 100ms 追加一批 + 未测量行高，一次强滚常落在半途；
@@ -267,6 +318,7 @@ export function useLiveFollow(opts: UseLiveFollowOptions): UseLiveFollowReturn {
   useEffect(() => () => {
     clearLiveFollowReconnectTimer();
     clearLiveFlushTimer();
+    clearJumpTimer();
     liveFollowExpectedCloseRef.current = true;
     liveSocketRef.current?.close();
     liveSocketRef.current = null;
@@ -297,6 +349,7 @@ export function useLiveFollow(opts: UseLiveFollowOptions): UseLiveFollowReturn {
     liveFollowRetryCount,
     liveFollowPaused,
     viewerNotAtBottom,
+    viewerJumping,
     setLiveFollowPaused,
     setLiveFollowContent,
     startLiveFollow,

@@ -189,8 +189,9 @@ function getLogBlockRange(lines: string[], lineIndex: number) {
 export interface VirtualLogViewerHandle {
   scrollToTop(): void;
   scrollToBottom(): void;
-  /** 翻页落点专用：收敛式重钉到顶/底（等测量稳定），与 LIVE 的轻量到底区分开 */
-  settleScrollTo(where: "top" | "bottom"): void;
+  /** 翻页落点专用：收敛式重钉到顶/底（等测量稳定），与 LIVE 的轻量到底区分开。
+      options.graceMs：让位给用户输入的宽限期，手动「回到底部」传更长值。 */
+  settleScrollTo(where: "top" | "bottom", options?: { graceMs?: number }): void;
   scrollToLine(index: number, behavior?: "auto" | "smooth"): void;
   scrollToHighlight(index: number): void;
   getLineRangeText(startLine: number, endLine: number): string;
@@ -663,7 +664,7 @@ const VirtualLogViewerImpl = forwardRef<VirtualLogViewerHandle, Props>(
        滚动/触摸/按键即终止重钉，把位置交还用户（否则强推会盖掉用户滚动）。
        新一次 settleScroll 会取代上一次（由 settleRunRef 持有 cancel）。 */
     const settleRunRef = useRef<(() => void) | null>(null);
-    const settleScroll = useCallback((where: "top" | "bottom") => {
+    const settleScroll = useCallback((where: "top" | "bottom", options?: { graceMs?: number }) => {
       if (!lines.length) return;
       // 取代上一次：避免两次翻页的重钉循环同帧互推
       settleRunRef.current?.();
@@ -671,10 +672,14 @@ const VirtualLogViewerImpl = forwardRef<VirtualLogViewerHandle, Props>(
       const align = where === "bottom" ? "end" : "start";
       const scroller = scrollerRef.current;
       const startedAt = performance.now();
+      /* 手动态（用户点「回到底部」）给更长的让位宽限：点完那一刻手常还搭在滚轮/
+         触控板上，残留的 wheel 事件会立刻把重钉取消掉 —— 表现就是"点了没反应"。
+         翻页路径保持 150ms（只容忍触发翻页那次滚动的惯性尾巴）。 */
+      const graceMs = options?.graceMs ?? 150;
       let cancelled = false;
       const onUserInput = () => {
         // 宽限期内忽略（多为触发翻页那次滚动的惯性尾巴）
-        if (performance.now() - startedAt < 150) {
+        if (performance.now() - startedAt < graceMs) {
           return;
         }
         cancelled = true;
@@ -748,8 +753,8 @@ const VirtualLogViewerImpl = forwardRef<VirtualLogViewerHandle, Props>(
         scrollToBottom() {
           scrollToBottomLive();
         },
-        settleScrollTo(where: "top" | "bottom") {
-          settleScroll(where);
+        settleScrollTo(where: "top" | "bottom", options?: { graceMs?: number }) {
+          settleScroll(where, options);
         },
         scrollToLine(index: number, behavior: "auto" | "smooth" = "smooth") {
           if (!lines.length) return;

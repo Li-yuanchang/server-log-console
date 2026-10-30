@@ -3049,18 +3049,24 @@ body.is-resizing-tree .theme-modern .browser-resizer::after {
 .theme-modern .workspace-placeholder span { font-size: var(--fs-xs); }
 
 /* --- 22. 返回底部 --- */
+/* ⚠️ 不要再给这里写 transform/translate（2026-10-30 用户反馈「点击抖动」）：
+   居中由 styles-file-reader.css 用独立的 `translate` 属性完成，与 transform 正交，
+   因此全局 `button:active { transform: none }` 不会打断它。
+   旧版本在这里写 `:active { transform: translateX(-50%) }` 想"守住"居中，但特异性
+   (0,4,0) 输给全局那条 (0,4,1)，实际从未生效，反而掩盖了问题。 */
 .theme-modern .live-back-to-bottom,
 .theme-modern .live-back-to-bottom.ghost-button {
-  width: 34px;
   height: 34px;
-  padding: 0;
+  min-width: 34px;
   background: rgba(255, 255, 255, 0.96);
   border: 1px solid rgba(23, 23, 23, 0.12);
   color: #171717;
   border-radius: 999px;
   box-shadow: 0 2px 10px rgba(23, 23, 23, 0.14);
   z-index: 20;
-  pointer-events: auto;
+  /* 不写 pointer-events：显隐由 styles-file-reader.css 的 is-visible 管，
+     这里写 auto 会（特异性更高）把隐藏态的点击穿透护栏顶掉，按钮会在终端
+     右下角变成一块看不见的截获区。 */
 }
 
 .theme-modern .live-back-to-bottom:hover,
@@ -3071,11 +3077,17 @@ body.is-resizing-tree .theme-modern .browser-resizer::after {
   box-shadow: 0 3px 12px rgba(23, 23, 23, 0.16);
 }
 
-.theme-modern .live-back-to-bottom:active:not(:disabled),
-.theme-modern .live-back-to-bottom.ghost-button:active:not(:disabled),
-.theme-modern .live-back-to-bottom:focus-visible,
-.theme-modern .live-back-to-bottom.ghost-button:focus-visible {
-  transform: translateX(-50%);
+/* 按压/跳转中的尺寸由 styles-file-reader.css 管，这里只补主题色 */
+.theme-modern .live-back-to-bottom:active:not(:disabled) {
+  background: #f4f4f5;
+  border-color: rgba(23, 23, 23, 0.3);
+  box-shadow: 0 1px 5px rgba(23, 23, 23, 0.22);
+}
+
+.theme-modern .live-back-to-bottom.is-jumping,
+.theme-modern .live-back-to-bottom.is-jumping:active:not(:disabled) {
+  background: #ffffff;
+  color: #171717;
 }
 
 /* --- 23. 搜索匹配列表 --- */
