@@ -51,6 +51,36 @@ export class FinalShellImportService {
     };
   }
 
+  /* ============================================================
+     识别测试（2026-10-29 用户要求「加一个识别测试」）
+     ------------------------------------------------------------
+     与 importServers 的区别：**只读、不写任何文件**。
+     返回指定目录是否有效、能读到几台服务器、几组文件夹、读不到的私钥数。
+     用于「填了自定义路径，先测一下对不对」，避免直接导入才发现路径错。
+     ============================================================ */
+  async probeRootDir(preferredRootDir?: string): Promise<{
+    resolvedPath: string | null;
+    searchedPaths: string[];
+    serverCount: number;
+    folderCount: number;
+    missingPrivateKeyServers: string[];
+  }> {
+    const { resolvedPath, searchedPaths } = await this.resolveRootDir(preferredRootDir);
+    if (!resolvedPath) {
+      return { resolvedPath: null, searchedPaths, serverCount: 0, folderCount: 0, missingPrivateKeyServers: [] };
+    }
+    const folders = await this.readFolders(resolvedPath);
+    const folderMap = new Map(folders.map((folder) => [folder.id, folder]));
+    const { servers, missingPrivateKeyServers } = await this.readServers(resolvedPath, folderMap);
+    return {
+      resolvedPath,
+      searchedPaths,
+      serverCount: servers.length,
+      folderCount: folders.length,
+      missingPrivateKeyServers
+    };
+  }
+
   private async readFolders(rootDir: string | null): Promise<FinalShellFolderConfig[]> {
     if (!rootDir) return [];
     const folderDirs = await this.safeReadDir(rootDir);
@@ -175,9 +205,30 @@ export class FinalShellImportService {
     const platformOwned = process.platform === "win32" ? winLike : macLike;
     const otherPlatforms = process.platform === "win32" ? macLike : winLike;
 
+    /* 2026-10-29 修复「用户填了 I:\software\finalshell\conn 但仍只检测 C 盘」：
+       实测原因有两个 ——
+       ① 用户在输入框写好后没点「保存目录」，这个值压根没进 candidates；
+          （前端已改为：选目录/输入后立即保存并重检）
+       ② 用户填的层级不一定是 .../conn，可能是 .../FinalShell 或 .../software，
+          而这里只把输入原样当「完整 conn 路径」比较，层级差一层就命中不了。
+       现在对用户输入做容错展开：原值 / 值+conn / 值的上一级+conn 都试一遍。 */
+    const expand = (raw?: string | null): string[] => {
+      const v = raw?.trim();
+      if (!v) return [];
+      const out = [v];
+      const base = v.replace(/[\\/]+$/, "");   /* 去掉结尾斜杠 */
+      if (!/conn$/i.test(base)) out.push(path.join(base, "conn"));
+      /* 若用户填的是 .../software，再往上一级找 FinalShell/conn */
+      const parent = path.dirname(base);
+      if (parent && parent !== base && !/conn$/i.test(parent)) {
+        out.push(path.join(parent, "conn"));
+      }
+      return out;
+    };
+
     const candidates = [
-      preferredRootDir?.trim() || null,
-      this.configuredRootDir,
+      ...expand(preferredRootDir),
+      ...expand(this.configuredRootDir),
       ...platformOwned,
       ...generic,
       ...otherPlatforms

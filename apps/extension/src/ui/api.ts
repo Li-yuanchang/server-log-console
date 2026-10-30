@@ -390,6 +390,24 @@ export async function apiSaveFinalShellPath(configuredPath: string): Promise<Fin
   return readPayload<FinalShellSettingsResponse>(response, "保存 FinalShell 目录失败");
 }
 
+/** 识别测试（2026-10-29）：只读检测，不写库 —— 验证自定义配置目录是否有效 */
+export type ImportProbeResponse = {
+  resolvedPath: string | null;
+  searchedPaths: string[];
+  serverCount: number;
+  folderCount: number;
+  missingPrivateKeyServers: string[];
+};
+
+export async function apiProbeFinalShellPath(path?: string): Promise<ImportProbeResponse> {
+  const response = await gatewayFetch(`${localServiceBase}/api/import/probe`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ toolId: "finalshell", path })
+  });
+  return readPayload<ImportProbeResponse>(response, "识别测试失败");
+}
+
 export async function apiPreviewImport(toolId: string): Promise<ImportPreviewResponse> {
   const response = await gatewayFetch(`${localServiceBase}/api/import/preview`, {
     method: "POST",

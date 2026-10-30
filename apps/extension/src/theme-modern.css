@@ -4666,7 +4666,13 @@ body.is-electron .settings-exclusive-head input {
 }
 
 .conn-detail-body .conn-detail-stack {
-  gap: 0;
+  /* 2026-10-29 修复「卡片之间没有呼吸间距」：
+     这条规则是 10-28 把卡片改成「无边框 + 只有底线」时留下的 —— 当时卡片
+     自己紧挨着、靠 border-bottom 分隔，所以 gap: 0 是对的。
+     现在卡片已是「1px 全周边框 + 8px 圆角」的独立卡片，
+     gap: 0 会让两张卡直接贴在一起（截图里边框挨着边框）。
+     与 .conn-detail-stack 的 14px 保持一致。 */
+  gap: 14px;
   max-width: none;
 }
 

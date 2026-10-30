@@ -18,6 +18,11 @@ export class FinalShellImportStrategy implements ImportStrategy {
     return this.service.inspectRootDir(preferredPath);
   }
 
+  /* 识别测试：只读，不写库（2026-10-29） */
+  async probe(preferredPath?: string) {
+    return this.service.probeRootDir(preferredPath);
+  }
+
   async importServers(preferredPath?: string): Promise<ImportResult> {
     const { response, credentials } = await this.service.importServers(preferredPath);
     return {

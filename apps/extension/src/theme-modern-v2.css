@@ -3096,3 +3096,71 @@ body:has(.theme-modern) button:disabled {
     transition: padding-right 0.15s ease;
   }
 }
+
+/* ============================================================================
+   侧栏服务器列表 · 视觉层级重做（2026-10-29）
+   ----------------------------------------------------------------------------
+   用户反馈「左侧列表看着不得劲，也说不上哪里不对」。DOM 实测出 6 个问题。
+   注意作用域：用户说的是**主侧栏**（.sidebar-panel > .server-groups），
+   不是设置中心的连接管理列表（.conn-list-pane）—— 首次改错了对象。
+   前两个是「说不出哪里不对」的真正原因：
+
+   ① 名称字重 400 —— 服务器名和下面的 IP 一样粗，整列没有任何粗细对比，
+      眼睛不知道该先看哪。实测 strong{fontWeight:400}，被全局 button 规则重置。
+   ② 分组标题字重也是 400、11px，和正文同级 —— 「堡垒机 / 测试 / 服务器」
+      这些分组名淹没在列表里，看不出是在分组。
+   ③ 行高 40px 但内容 30px，上下只余 5px，显得挤。
+   ④ 列表项 radius: 0 —— 全宽平铺，像表格不像可点列表。
+   ⑤ padding 左 14 / 右 8 不对称，文字整体偏右。
+   ⑥ 分组标题下 padding-bottom 只有 4px，紧贴第一项。
+
+   修法：加粗名称（600）、分组标题加粗+字距、行高提到 46、列表项加 7px 圆角、
+   左右内边距对称 12/12、分组标题下留 6px。
+   ============================================================================ */
+
+/* ① 名称：加粗、字号提到 12.5，与副标题形成明确层级 */
+.theme-modern .sidebar-panel .server-item .server-item-main strong,
+.theme-modern .sidebar-panel .server-item strong {
+  font-size: 12.5px !important;
+  font-weight: 600 !important;
+  color: var(--ink) !important;
+  letter-spacing: -0.01em;
+  line-height: 1.35;
+}
+
+/* ① 副标题（IP）：保持等宽、稍淡、小一号，让它退到背景 */
+.theme-modern .sidebar-panel .server-item .server-item-main span,
+.theme-modern .sidebar-panel .server-item span {
+  font-size: 10.5px !important;
+  font-weight: 400 !important;
+  color: var(--ink-muted) !important;
+  line-height: 1.3;
+}
+
+/* ③ 行高 40 → 46，给两行内容留出呼吸 */
+.theme-modern .sidebar-panel .server-item,
+.theme-modern .sidebar-panel .server-item-wrap .server-item {
+  min-height: 46px !important;
+  padding: 8px 12px !important;   /* ⑤ 左右对称，原来是 14/8 */
+  border-radius: 7px !important;  /* ④ 可点区域有圆角，不再像表格行 */
+  transition: background 120ms ease;
+}
+/* 悬停反馈（原来只有 active 态） */
+.theme-modern .sidebar-panel .server-item:hover {
+  background: var(--panel-muted);
+}
+
+/* ② 分组标题：加粗 + 字距，从正文里跳出来 */
+.theme-modern .sidebar-panel .server-group-title {
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.06em !important;
+  text-transform: uppercase;
+  color: var(--ink-muted) !important;
+  padding: 14px 12px 6px !important;  /* ⑥ 下间距 4 → 6 */
+}
+
+/* 列表容器左右补呼吸（原来是 0，分组标题和列表项各自带 padding 容易不齐） */
+.theme-modern .sidebar-panel .server-groups {
+  padding: 4px 8px 8px;
+}

@@ -474,6 +474,41 @@ app.post("/api/import/finalshell/settings", async (req, res) => {
   }
 });
 
+/* ============================================================
+   识别测试（2026-10-29）：只读检测，不写任何文件
+   ------------------------------------------------------------
+   用途：用户在设置里填了自定义配置目录后，先点「识别测试」验证路径对不对，
+   能读到多少台服务器 —— 不必真的导入一遍再回滚。
+   body: { toolId?: "finalshell", path?: string }
+   ============================================================ */
+app.post("/api/import/probe", async (req, res) => {
+  try {
+    const toolId = String(req.body?.toolId || "finalshell").trim();
+    if (toolId !== "finalshell") {
+      res.status(400).json({ message: `暂不支持 ${toolId} 的识别测试` });
+      return;
+    }
+    const strategy = importResolver.resolve("finalshell") as unknown as {
+      probe?: (p?: string) => Promise<{
+        resolvedPath: string | null;
+        searchedPaths: string[];
+        serverCount: number;
+        folderCount: number;
+        missingPrivateKeyServers: string[];
+      }>;
+    };
+    if (typeof strategy.probe !== "function") {
+      res.status(500).json({ message: "当前导入器不支持识别测试" });
+      return;
+    }
+    const explicitPath = typeof req.body?.path === "string" ? req.body.path : undefined;
+    const result = await strategy.probe(explicitPath?.trim() || undefined);
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ message: error instanceof Error ? error.message : "Unknown error" });
+  }
+});
+
 app.get("/api/import/xshell", async (_req, res) => {
   try {
     const strategy = importResolver.resolve("xshell");

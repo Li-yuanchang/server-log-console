@@ -283,7 +283,11 @@ export function App() {
   const [searchStartedAt, setSearchStartedAt] = useState<number | null>(null);
   const { searchNow } = useSearchTimer(searchStartedAt);
   const [selectedImportTool, setSelectedImportTool] = useState<"finalshell" | "xshell">("finalshell");
+  /* 2026-10-29 拆分（用户反馈「点 FinalShell 导入时 Xshell 状态也跟着变」）：
+     原来 FinalShell 与 Xshell 共用同一个 importStatus，导入任一工具都会把
+     两边的「导入状态」一起改掉。现在按工具拆成两套。 */
   const [importStatus, setImportStatus] = useState("尚未导入连接。");
+  const [xshellImportStatus, setXshellImportStatus] = useState("尚未导入连接。");
   const [importPath, setImportPath] = useState("尚未解析配置目录。");
   const [finalShellPath, setFinalShellPath] = useState("");
   const [finalShellDetectedPaths, setFinalShellDetectedPaths] = useState<string[]>([]);
@@ -1684,6 +1688,7 @@ export function App() {
   const {
     fetchFinalShellSettings,
     saveFinalShellPath,
+    probeFinalShellPath,
     previewImport,
   } = useImportSettings({
     selectedImportTool,
@@ -1694,6 +1699,7 @@ export function App() {
     setXshellLastImportedAt,
     setImportPath,
     setImportStatus,
+    setXshellImportStatus,
     setServers,
     setFilePath,
     setActionStatus,
@@ -5215,6 +5221,7 @@ export function App() {
               importSection={{
                 selectedTool: selectedImportTool,
                 importStatus,
+                xshellImportStatus,
                 importPath,
                 finalShellPath,
                 finalShellDetectedPaths,
@@ -5225,6 +5232,8 @@ export function App() {
                 onChangeFinalShellPath: setFinalShellPath,
                 onCheckService: () => { void checkLocalServiceHealth(); },
                 onSaveFinalShellPath: () => { void saveFinalShellPath(); },
+                onSaveFinalShellPathWith: (p: string) => { void saveFinalShellPath(p); },
+                onProbeFinalShellPath: () => { void probeFinalShellPath(); },
                 /* 改走变更预览：先算 diff 并在弹层里确认，再落库。
                    此前直接 importFromTool 会全量覆盖，FinalShell 里删掉一台
                    本工具跟着丢配置且无提示。 */

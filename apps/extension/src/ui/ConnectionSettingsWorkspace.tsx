@@ -166,6 +166,8 @@ interface Props {
   importSection: {
     selectedTool: "finalshell" | "xshell";
     importStatus: string;
+    /** Xshell 独立的导入状态（2026-10-29：不再与 FinalShell 共用） */
+    xshellImportStatus: string;
     importPath: string;
     finalShellPath: string;
     finalShellDetectedPaths: string[];
@@ -176,6 +178,10 @@ interface Props {
     onChangeFinalShellPath: (value: string) => void;
     onCheckService: () => void;
     onSaveFinalShellPath: () => void;
+    /** 显式指定路径并保存（「浏览」选完目录时用，省掉再点「保存目录」） */
+    onSaveFinalShellPathWith?: (path: string) => void;
+    /** 识别测试：只读检测当前目录，不写库 */
+    onProbeFinalShellPath?: () => void;
     onImport: (tool?: "finalshell" | "xshell") => void;
   };
   connectionSection: {
@@ -1226,9 +1232,51 @@ export function ConnectionSettingsWorkspace(props: Props) {
                         <button className="ghost-button" type="button" onClick={() => props.importSection.onImport("finalshell")} disabled={props.isBusy || props.localServiceState !== "online"}>立即导入</button>
                       </div>
                     </div>
+                    {/* 2026-10-29 配置目录加「浏览」按钮（用户要求「应该是打开弹框选文件呀」）。
+                        原来只能手输路径，Windows 用户不知道默认位置在哪，也不知道输完要点「保存目录」才生效。
+                        选完目录立即保存并重新检测，省掉「先输再点保存」这一步。 */}
                     <label className="settings-field">
                       <span>配置目录</span>
-                      <input value={props.importSection.finalShellPath} onChange={(event) => props.importSection.onChangeFinalShellPath(event.target.value)} placeholder="~/Library/FinalShell/conn" />
+                      <div className="settings-path-picker">
+                        <input
+                          value={props.importSection.finalShellPath}
+                          onChange={(event) => props.importSection.onChangeFinalShellPath(event.target.value)}
+                          placeholder={
+                            typeof navigator !== "undefined" && /Win/i.test(navigator.platform)
+                              ? "例：I:\\software\\finalshell\\conn"
+                              : "例：~/Library/FinalShell/conn"
+                          }
+                        />
+                        <button
+                          type="button"
+                          className="ghost-button"
+                          onClick={async () => {
+                            const api = (window as any).electronAPI;
+                            if (!api?.localPickDirectory) return;
+                            const res = await api.localPickDirectory();
+                            if (res?.ok && res.path) {
+                              props.importSection.onChangeFinalShellPath(res.path);
+                              /* 选完即保存并重新检测，用户不必再点「保存目录」 */
+                              props.importSection.onSaveFinalShellPathWith?.(res.path);
+                            }
+                          }}
+                          disabled={props.isBusy}
+                          title="选择 FinalShell 配置目录"
+                        >
+                          浏览
+                        </button>
+                        {/* 2026-10-29 用户要求「加一个识别测试」：只读检测当前路径，
+                            不写库、不导入，立刻告诉你能读到几台服务器。 */}
+                        <button
+                          type="button"
+                          className="ghost-button"
+                          onClick={() => props.importSection.onProbeFinalShellPath?.()}
+                          disabled={props.isBusy}
+                          title="检测当前配置目录是否有效，只读不导入"
+                        >
+                          识别测试
+                        </button>
+                      </div>
                     </label>
                     <div className="settings-meta-grid">
                       <span>导入状态：{props.importSection.importStatus}</span>
@@ -1247,7 +1295,7 @@ export function ConnectionSettingsWorkspace(props: Props) {
                       <button className="ghost-button" type="button" onClick={() => props.importSection.onImport("xshell")} disabled={props.isBusy || props.localServiceState !== "online"}>导入 Xshell</button>
                     </div>
                     <div className="settings-meta-grid">
-                      <span>导入状态：{props.importSection.importStatus}</span>
+                      <span>导入状态：{props.importSection.xshellImportStatus}</span>
                       <span>上次导入：{props.importSection.xshellLastImportedAt || "--"}</span>
                       <span>检测路径：{props.importSection.xshellDetectedPaths.length}</span>
                     </div>

@@ -2,12 +2,16 @@ import { useCallback } from "react";
 import {
   apiGetFinalShellSettings,
   apiSaveFinalShellPath,
+  apiProbeFinalShellPath,
   apiImportFromTool,
 } from "./api.js";
 
 export type ImportSettingsAPI = {
   fetchFinalShellSettings: () => Promise<void>;
-  saveFinalShellPath: () => Promise<void>;
+  /** 可选传入显式路径（「浏览…」选完目录时用）；不传则用输入框当前值 */
+  saveFinalShellPath: (explicitPath?: string) => Promise<void>;
+  /** 识别测试：只读检测当前目录，不写库 */
+  probeFinalShellPath: () => Promise<void>;
   previewImport: (toolId?: string) => Promise<void>;
   importFromTool: (toolId?: string) => Promise<void>;
   importFromFinalShell: () => Promise<void>;
@@ -22,6 +26,7 @@ export function useImportSettings(deps: {
   setXshellLastImportedAt: (v: string) => void;
   setImportPath: (v: string) => void;
   setImportStatus: (v: string) => void;
+  setXshellImportStatus: (v: string) => void;
   setServers: (v: any[]) => void;
   setFilePath: (v: string) => void;
   setActionStatus: (v: string) => void;
@@ -39,6 +44,7 @@ export function useImportSettings(deps: {
     setXshellLastImportedAt,
     setImportPath,
     setImportStatus,
+    setXshellImportStatus,
     setServers,
     setFilePath,
     setActionStatus,
@@ -66,9 +72,12 @@ export function useImportSettings(deps: {
     }
   }, [setFinalShellPath, setFinalShellDetectedPaths, setFinalShellLastImportedAt, setImportPath, pushActivity, checkLocalServiceHealth]);
 
-  const saveFinalShellPath = useCallback(async () => {
+  /* 2026-10-29：支持显式传入路径（「浏览…」选完目录时立即保存并检测，
+     不必让用户再点一次「保存目录」）。不传则用输入框当前值。 */
+  const saveFinalShellPath = useCallback(async (explicitPath?: string) => {
+    const target = (typeof explicitPath === "string" ? explicitPath : finalShellPath).trim();
     await withBusy("正在保存 FinalShell 目录...", async () => {
-      const payload = await apiSaveFinalShellPath(finalShellPath.trim());
+      const payload = await apiSaveFinalShellPath(target);
       setFinalShellPath(payload.configuredPath || "");
       setFinalShellDetectedPaths(payload.searchedPaths || []);
       setFinalShellLastImportedAt(payload.lastImportedAt || "");
@@ -82,6 +91,24 @@ export function useImportSettings(deps: {
     });
   }, [finalShellPath, withBusy, setFinalShellPath, setFinalShellDetectedPaths, setFinalShellLastImportedAt, setImportPath, setActionStatus, pushActivity]);
 
+  /* 识别测试（2026-10-29）：只读检测当前填的目录，不写库、不导入。
+     结果写进 importPath，「识别结果」那行立刻能看到能读到几台。 */
+  const probeFinalShellPath = useCallback(async () => {
+    const target = finalShellPath.trim();
+    await withBusy("正在识别 FinalShell 配置…", async () => {
+      const r = await apiProbeFinalShellPath(target || undefined);
+      setFinalShellDetectedPaths(r.searchedPaths || []);
+      if (r.resolvedPath) {
+        setImportPath(
+          `识别成功：${r.resolvedPath} · 服务器 ${r.serverCount} 台 · 分组 ${r.folderCount} 组` +
+          (r.missingPrivateKeyServers.length ? ` · ${r.missingPrivateKeyServers.length} 台私钥未读到` : "")
+        );
+      } else {
+        setImportPath(`识别失败：已检测 ${r.searchedPaths.length} 个位置均未找到`);
+      }
+    });
+  }, [finalShellPath, withBusy, setFinalShellDetectedPaths, setImportPath]);
+
   /** 打开变更预览（不写库）。真正的落库由弹层确认后调用 apply。 */
   const previewImport = useCallback(async (toolId: string = selectedImportTool) => {
     const toolLabel = toolId === "finalshell" ? "FinalShell" : toolId === "xshell" ? "Xshell" : toolId;
@@ -89,8 +116,9 @@ export function useImportSettings(deps: {
       setImportStatus("连接服务不可用，无法读取导入变更。");
       return;
     }
-    setImportStatus(`正在比对 ${toolLabel} 配置变更…`);
-  }, [selectedImportTool, checkLocalServiceHealth, setImportStatus]);
+    if (toolId === "xshell") setXshellImportStatus(`正在比对 ${toolLabel} 配置变更…`);
+    else setImportStatus(`正在比对 ${toolLabel} 配置变更…`);
+  }, [selectedImportTool, checkLocalServiceHealth, setImportStatus, setXshellImportStatus]);
 
   const importFromTool = useCallback(async (toolId: string = selectedImportTool) => {
     const toolLabel = toolId === "finalshell" ? "FinalShell" : toolId === "xshell" ? "Xshell" : toolId;
@@ -129,7 +157,12 @@ export function useImportSettings(deps: {
       }
       selectServerById(payload.servers[0]?.id ?? "");
       setFilePath("");
-      setImportStatus(`已导入 ${payload.servers.length} 台服务器，时间 ${payload.importedAt}`);
+      /* 2026-10-29：按工具写入各自的状态，避免 Xshell 跟着 FinalShell 一起变 */
+      if (toolId === "xshell") {
+        setXshellImportStatus(`已导入 ${payload.servers.length} 台服务器，时间 ${payload.importedAt}`);
+      } else {
+        setImportStatus(`已导入 ${payload.servers.length} 台服务器，时间 ${payload.importedAt}`);
+      }
       if (toolId === "finalshell") setFinalShellLastImportedAt(payload.importedAt);
       if (toolId === "xshell") setXshellLastImportedAt(payload.importedAt);
       setImportPath(
@@ -140,7 +173,7 @@ export function useImportSettings(deps: {
       setActionStatus(`${toolLabel} 连接导入完成。`);
       pushActivity(`${toolLabel} 配置已导入，共 ${payload.servers.length} 台，选择服务器后会自动连接。`);
     }, `已导入 ${toolLabel} ${toolId === "finalshell" || toolId === "xshell" ? "连接" : ""}`);
-  }, [selectedImportTool, withBusy, setServers, selectServerById, setFilePath, setImportStatus, setFinalShellLastImportedAt, setXshellLastImportedAt, setImportPath, setActionStatus, pushActivity]);
+  }, [selectedImportTool, withBusy, setServers, selectServerById, setFilePath, setImportStatus, setXshellImportStatus, setFinalShellLastImportedAt, setXshellLastImportedAt, setImportPath, setActionStatus, pushActivity]);
 
   const importFromFinalShell = useCallback(async () => {
     return importFromTool("finalshell");
@@ -149,6 +182,7 @@ export function useImportSettings(deps: {
   return {
     fetchFinalShellSettings,
     saveFinalShellPath,
+    probeFinalShellPath,
     previewImport,
     importFromTool,
     importFromFinalShell,
