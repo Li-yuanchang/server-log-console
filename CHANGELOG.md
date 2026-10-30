@@ -6,6 +6,14 @@
 - **`docs/版本修复归档-2026-04-14.md`** — 记录问题背景、根因、修改点、经验教训和防复发清单。
 - **维护约定** — 详细代码链、安装版资源命中、排查过程与复盘结论统一写入归档，不在 `CHANGELOG.md` 重复展开。
 
+## [0.3.318] — 2026-10-30
+
+Windows 自绘窗口按钮可点击修复版本。
+
+### 修复
+
+- **Windows 窗口按钮「点了没反应」** — `-webkit-app-region: drag` 会捕获鼠标事件，落在 drag 区内的元素收不到 click；虽然按钮容器已声明 `no-drag`，但它是 `position: fixed`、视觉上落在顶带（`.workspace-session-strip`）的 drag 区内，实测 click 不触发。与之前「设置齿轮看得见点不动」同源。现对容器、按钮、按钮内 svg 全部显式声明 `no-drag` + `pointer-events: auto`，z-index 提到 9999（高于所有 drag 层与浮层），并给按钮加 `min-height: 40px` 兜底防止缩放下高度塌成 0。
+
 ## [0.3.317] — 2026-10-29
 
 FinalShell 导入识别测试版本。

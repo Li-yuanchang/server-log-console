@@ -1022,3 +1022,34 @@ body.is-win32 .theme-modern.pip-standalone .terminal-panel-bar-standalone {
 .pip-standalone .terminal-panel-bar-standalone .terminal-panel-bar-actions {
   transform: none;
 }
+
+/* ============================================================================
+   Windows 自绘窗口按钮 · 修复「点了没反应」（2026-10-29 用户反馈）
+   ----------------------------------------------------------------------------
+   症状：Windows 安装包顶部的最小化 / 最大化 / 关闭三枚按钮点不动。
+   根因与之前「设置齿轮看得见点不动」同源：
+     -webkit-app-region: drag 会捕获鼠标事件，落在 drag 区内的元素收不到 click。
+   虽然容器 .win-window-controls 已声明 no-drag，但它是 position:fixed，
+   在 Windows 无边框窗口下，fixed 元素相对的是 viewport，
+   而它视觉上落在顶带（.workspace-session-strip）的 drag 区内 ——
+   实测 click 不触发。
+   修法（照搬已生效的 .sidebar-head 方案）：
+     对容器、按钮、按钮内 svg 全部显式声明 no-drag + pointer-events:auto，
+     并把 z-index 提到高于任何 drag 层。
+   ============================================================================ */
+.has-win-controls .win-window-controls,
+.has-win-controls .win-window-controls *,
+.has-win-controls .win-window-controls .win-ctl-btn,
+.has-win-controls .win-window-controls .win-ctl-btn svg {
+  -webkit-app-region: no-drag;
+  pointer-events: auto;
+}
+.has-win-controls .win-window-controls {
+  z-index: 9999;   /* 高于所有 drag 层与浮层 */
+}
+/* 按钮在窗口顶部全高可点（原来 height:100%，父级 40px 固定，正常；
+   这里再兜一层 min-height，避免某些缩放下高度塌成 0） */
+.has-win-controls .win-window-controls .win-ctl-btn {
+  min-height: 40px;
+  cursor: pointer;
+}
