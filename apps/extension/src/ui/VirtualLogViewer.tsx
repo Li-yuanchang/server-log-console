@@ -696,6 +696,7 @@ const VirtualLogViewerImpl = forwardRef<VirtualLogViewerHandle, Props>(
       let lastHeight = -1;
       let stableFrames = 0;
       let frames = 0;
+      const maxFrames = where === "bottom" ? 60 : 30;
       const pin = () => {
         if (cancelled) {
           cleanupInput();
@@ -706,11 +707,24 @@ const VirtualLogViewerImpl = forwardRef<VirtualLogViewerHandle, Props>(
           scroller.scrollTop = scroller.scrollHeight;
         }
         const node = scrollerRef.current;
-        const height = node ? node.scrollHeight : -1;
-        stableFrames = height > 0 && height === lastHeight ? stableFrames + 1 : 0;
-        lastHeight = height;
+        /* 收敛判据（2026-10-30 随「到底按钮不好用」重做）：bottom 锚点改按
+           「是否已贴底」判定 —— LIVE 模式内容每 100ms 追加一批，scrollHeight
+           持续增长，旧的「高度 3 帧不变」判据在实时下永远无法满足，只能耗尽
+           帧数上限；且高度稳定 ≠ 已贴底（上方未测量行补测会把视口顶离目标）。
+           贴底判定让重钉到达后立刻让位给 followOutput，没到就继续钉（上限
+           放宽到 60 帧 ≈ 1s，仍有时限兜底）。top 锚点（尾部追加模式下上方
+           高度不受影响）保持高度稳定判据。 */
+        let settled: boolean;
+        if (where === "bottom") {
+          settled = node ? node.scrollTop + node.clientHeight >= node.scrollHeight - 2 : true;
+        } else {
+          const height = node ? node.scrollHeight : -1;
+          settled = height > 0 && height === lastHeight;
+          lastHeight = height;
+        }
+        stableFrames = settled ? stableFrames + 1 : 0;
         frames += 1;
-        if (stableFrames < 3 && frames < 30) {
+        if (stableFrames < 3 && frames < maxFrames) {
           window.requestAnimationFrame(pin);
         } else {
           cleanupInput();

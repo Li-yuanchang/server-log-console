@@ -3562,7 +3562,11 @@ body.is-resizing-tree .theme-modern .browser-resizer::after {
 }
 
 .theme-modern .viewer-content-shell {
-  border: 1px solid var(--line);
+  /* 2026-10-30 用户反馈「边框去掉，看着不是一个整体」：工作区面板与日志区同为
+     --panel 底色，这圈 1px 边框是唯一把日志区画成"另一个盒子"的元素；
+     去掉后正文与上方命令栏/切片条融为同一块面板。与控制行的分隔由
+     .slicebar/.rtools 自带的 border-bottom 承担（PiP 独立窗本就 border:none）。 */
+  border: none;
   border-radius: 0;
   grid-template-rows: minmax(0, 1fr);
 }

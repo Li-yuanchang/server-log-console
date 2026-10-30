@@ -27,7 +27,7 @@ export interface UseLiveFollowReturn {
   startLiveFollow: (targetFilePath: string, targetFileName: string, options?: { isReconnect?: boolean; keyword?: string }) => void;
   stopLiveFollow: (options?: { keepContent?: boolean; preserveIntent?: boolean }) => void;
   handleViewerNearBottomChange: (nearBottom: boolean) => void;
-  scrollViewerToBottom: () => void;
+  scrollViewerToBottom: (options?: { optimisticHide?: boolean }) => void;
   clearLiveContent: () => void;
 }
 
@@ -237,9 +237,18 @@ export function useLiveFollow(opts: UseLiveFollowOptions): UseLiveFollowReturn {
     }
   }
 
-  function scrollViewerToBottom() {
+  function scrollViewerToBottom(options?: { optimisticHide?: boolean }) {
     forceBottomUntilRef.current = Date.now() + 900;
-    setViewerNotAtBottom(false);
+    /* 2026-10-30 用户反馈「到底按钮有时慢 / 要点好几次 / 有时不管用得手动滚」：
+       原实现无条件 viewerNotAtBottom=false —— 按钮在滚动尚未收敛时就被隐藏。
+       实时模式下内容每 100ms 追加一批 + 未测量行高，一次强滚常落在半途；
+       按钮没了用户只能手动滚一下（触发 atBottomStateChange(false)）才能再点。
+       现在手动点按路径传 optimisticHide:false：按钮保持可见，直到 Virtuoso
+       真正上报 atBottom 才隐藏；没到底就还能继续点（每次点击都是新一轮收敛）。
+       自动跟随路径（开文件/换切片）保持原行为。 */
+    if (options?.optimisticHide !== false) {
+      setViewerNotAtBottom(false);
+    }
     if (liveFollowEnabled) {
       setLiveFollowPaused(false);
     }

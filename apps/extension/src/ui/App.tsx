@@ -1639,6 +1639,7 @@ export function App() {
     selectServerById,
     activateWorkspaceSession,
     closeWorkspaceSession,
+    closeOtherWorkspaceSessions,
     startCreateManualServer,
     startEditManualServer,
     editManualServerDraft,
@@ -5403,6 +5404,7 @@ export function App() {
         }}
         onCreateServer={startCreateManualServer}
         onCloseSession={closeWorkspaceSession}
+        onCloseOtherSessions={closeOtherWorkspaceSessions}
       />
 
       <UploadConflictDialog

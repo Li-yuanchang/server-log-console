@@ -186,3 +186,82 @@
 }
 .theme-modern .keyword-input-clear:disabled { opacity: 0.5; cursor: not-allowed; }
 .theme-modern .keyword-input-clear svg { width: 12px; height: 12px; }
+
+/* ---------- 6. 检索行 = 一体式输入组（2026-10-30 用户反馈「检索按钮看着别扭」） ----------
+   现象：输入框与「检索」是两个独立盒子（各自 1px 边框 + 6px 间隙），深色实心按钮
+   像"贴"在输入框旁边，读起来不是一个控件。
+
+   方案：整行收成一个输入组（input group）——
+     · .toolbar-search-row 自身变 1px --line 描边 + --panel 底 + 4px 圆角的容器，
+       内衬 padding 2px；总高仍 32px（输入框 26 + 2×3），与 LIVE/置顶/录制同刻度；
+     · 输入框退为组的"底"：去边框、透明底、高度 32 → 26，聚焦态上移到组
+       （:focus-within 描 accent 边 + accent-soft 外圈），输入框自己的 focus ring 关掉；
+     · 「检索」嵌入组内右侧：高 26、圆角 2（同心圆角 ≈ 外 4 − 内缩 3）、
+       hover 外阴影关闭（阴影溢出组边会"破框"）。
+   DOM 不动：组仍是 flex 行（keyword-shell + 按钮），历史浮层/清除 ✕ 都基于
+   keyword-shell 绝对定位，不受影响。仅作用 .toolbar-commandbar（该行只在此渲染，
+   PiP 独立窗内本就 display:none），特异性按 (0,4,0) 起写以压过
+   theme-modern.css 1008/1014 的 !important 同类与 v2 §1 的按钮基础规则。 */
+.theme-modern .toolbar-commandbar .toolbar-search-row {
+  gap: 2px;
+  padding: 2px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+.theme-modern .toolbar-commandbar .toolbar-search-row:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+/* 输入框退为组的底（border/background 需 !important 压 theme-modern.css:1008 同款） */
+.theme-modern .toolbar-commandbar .toolbar-search-row .command-input-keyword,
+.theme-modern .toolbar-commandbar .toolbar-search-row .command-input-keyword:focus {
+  height: 26px;
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none;
+}
+/* 「检索」嵌进组内：26px 高、2px 同心圆角（!important 压 v2 §1 的 4px 基础规则） */
+.theme-modern .toolbar-commandbar .toolbar-search-row .slim-button {
+  height: 26px;
+  min-height: 26px;
+  max-height: 26px;
+}
+.theme-modern .toolbar-commandbar .toolbar-search-row button.ghost-button.search-run-button {
+  border-radius: 2px !important;
+}
+.theme-modern .toolbar-commandbar .toolbar-search-row button.search-run-button:hover:not(:disabled) {
+  box-shadow: none;
+}
+
+/* ---------- 7. 结果页签内部按钮（2026-10-30 用户反馈「hover 页签边框就没了」） ----------
+   现象：hover 结果页签 chip（激活与否都一样）时，chip 的上下边框消失，只剩左右
+   两段圆角弧，并多出一块 panel-muted 实底 —— 像边框「缺了上下两条边」。
+
+   根因（两条通用按钮规则在 chip 内层按钮上叠加）：
+   1) `:where(.theme-modern) button { height: var(--ctl-h) }`（特异性 0,0,1）让内层
+      .result-tab-main 变 28px 高；外层 chip 只有 26px（border-box，含上下 1px 边框）
+      —— 按钮上下各溢出 1px，正好盖在 chip 的上下边框上；
+   2) `:where(.theme-modern) button:hover:not(:disabled) { background:var(--panel-muted) }`
+      —— :hover+:not 计 (0,2,1)，恰好高于既有
+      `.theme-modern .result-tab-main { background:transparent }`（0,2,0）。
+      于是 hover 一到（鼠标悬在 chip 上必然悬在内层按钮上），28px 的按钮就铺上
+      panel-muted 实底，把上下边框盖掉；左右边框因按钮 8px 圆角向内收进而幸存。
+
+   修复：内部标签按钮回归「纯文字」—— 高度交还内容（padding 撑开，回到 chip
+   内容盒内），背景恒透明（hover/active 反馈由 chip 自身的边框/底色承担，
+   即 theme-modern.css 的 chip:hover 与 align-selected.css 的 chip-active 规则）；
+   chip 加 overflow:hidden 兜底，任何内层溢出都不再压边框。 */
+.theme-modern .result-tab-main {
+  height: auto;
+  min-height: 0;
+  max-height: none;
+}
+.theme-modern .result-tab-chip .result-tab-main,
+.theme-modern .result-tab-chip .result-tab-main:hover:not(:disabled),
+.theme-modern .result-tab-chip .result-tab-main:active:not(:disabled) {
+  background: transparent;
+}
+.theme-modern .result-tab-chip {
+  overflow: hidden;
+}

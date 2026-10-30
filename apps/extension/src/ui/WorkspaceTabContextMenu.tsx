@@ -15,10 +15,11 @@ export type WorkspaceTabContextMenuProps = {
   onCopyServerHost: (session: WorkspaceSession) => void;
   onCreateServer: () => void;
   onCloseSession: (sessionId: string) => void;
+  onCloseOtherSessions: (keepSessionId: string) => void;
 };
 
 export function WorkspaceTabContextMenu(props: WorkspaceTabContextMenuProps) {
-  const { menu, menuRef, onClose, onCopyServerName, onCopyServerHost, onCreateServer, onCloseSession } = props;
+  const { menu, menuRef, onClose, onCopyServerName, onCopyServerHost, onCreateServer, onCloseSession, onCloseOtherSessions } = props;
 
   if (!menu) return null;
 
@@ -46,6 +47,12 @@ export function WorkspaceTabContextMenu(props: WorkspaceTabContextMenuProps) {
           onCreateServer();
         }}>
           新增服务器
+        </div>
+        <div role="button" className="context-menu-item" onClick={() => {
+          onClose();
+          onCloseOtherSessions(menu.session.id);
+        }}>
+          关闭其他工作区
         </div>
         <div role="button" className="context-menu-item context-menu-danger" onClick={() => {
           onClose();

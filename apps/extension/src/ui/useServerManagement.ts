@@ -11,6 +11,7 @@ export type ServerManagementAPI = {
   selectServerById: (nextServerId: string) => boolean;
   activateWorkspaceSession: (session: WorkspaceSession) => void;
   closeWorkspaceSession: (sessionId: string) => void;
+  closeOtherWorkspaceSessions: (keepSessionId: string) => void;
   startCreateManualServer: () => void;
   startEditManualServer: (server: ServerSummary) => void;
   editManualServerDraft: (server: ServerSummary) => void;
@@ -151,6 +152,39 @@ export function useServerManagement(deps: {
     startWorkspaceActivation(fallbackSession, { skipSaveCurrent: true });
   }, [isWorkspaceSwitchLocked, workspaceSessions, activeWorkspaceSessionId, workspaceSessionStatesRef, setWorkspaceSessions, setActionStatus, setPendingLiveFollowRestore, setPreserveTerminalOnInactive, setActiveWorkspaceSessionId, setServerId, startWorkspaceActivation]);
 
+  /* 关闭除指定会话外的全部工作区（用户反馈 2026-10-30：右键菜单加「关闭其他」）。
+     与 closeWorkspaceSession 同锁：检索/连接进行中不允许批量关闭。
+     若保留的会话不是当前激活会话（右键的是非激活页签），关闭后切到它 ——
+     对齐浏览器「关闭其他标签页」的直觉；skipSaveCurrent 因为被关闭的激活
+     会话状态要一并丢弃，不该回写。 */
+  const closeOtherWorkspaceSessions = useCallback((keepSessionId: string) => {
+    if (isWorkspaceSwitchLocked) {
+      setActionStatus("当前检索或连接操作尚未完成，请稍后再关闭工作区。");
+      return;
+    }
+
+    const keepIndex = workspaceSessions.findIndex((session) => session.id === keepSessionId);
+    if (keepIndex === -1) {
+      return;
+    }
+
+    const others = workspaceSessions.filter((session) => session.id !== keepSessionId);
+    if (!others.length) {
+      setActionStatus("没有其他工作区可关闭。");
+      return;
+    }
+
+    setWorkspaceSessions(workspaceSessions.filter((session) => session.id === keepSessionId));
+    for (const session of others) {
+      delete workspaceSessionStatesRef.current[session.id];
+    }
+
+    if (activeWorkspaceSessionId !== keepSessionId) {
+      startWorkspaceActivation(workspaceSessions[keepIndex], { skipSaveCurrent: true });
+    }
+    setActionStatus(`已关闭其他 ${others.length} 个工作区。`);
+  }, [isWorkspaceSwitchLocked, workspaceSessions, activeWorkspaceSessionId, workspaceSessionStatesRef, setWorkspaceSessions, setActionStatus, startWorkspaceActivation]);
+
   const startCreateManualServer = useCallback(() => {
     setManualServerDraft(createManualServerDraft());
     openSettingsWorkspace("connections");
@@ -249,6 +283,7 @@ export function useServerManagement(deps: {
     selectServerById,
     activateWorkspaceSession,
     closeWorkspaceSession,
+    closeOtherWorkspaceSessions,
     startCreateManualServer,
     startEditManualServer,
     editManualServerDraft,

@@ -108,7 +108,7 @@ export type LogViewerCallbacks = {
   setIsBusy: (b: boolean) => void;
   stopLiveFollow: (options?: { keepContent?: boolean }) => void;
   startLiveFollow: (filePath: string, fileName: string, options?: { isReconnect?: boolean }) => void;
-  scrollViewerToBottom: () => void;
+  scrollViewerToBottom: (options?: { optimisticHide?: boolean }) => void;
   resetFileReaderState: () => void;
   cacheSlicePayload: (payload: LogSliceResponse, offset: number, length: number) => void;
   getCachedSlice: (filePath: string, offset: number, length: number) => LogSliceResponse | null;
@@ -801,7 +801,7 @@ export function useLogViewer(params: LogViewerParams): LogViewerAPI {
     void navigateSlice(direction, "wheel");
   }
 
-  async function loadTailSlice(options?: { forceRefresh?: boolean }) {
+  async function loadTailSlice(options?: { forceRefresh?: boolean; optimisticHide?: boolean }) {
     const targetFilePath = state.filePath;
     if (!targetFilePath.trim()) return;
     refs.sliceScrollAnchorRef.current = "bottom";
@@ -812,9 +812,9 @@ export function useLogViewer(params: LogViewerParams): LogViewerAPI {
       if (cachedPayload) {
         applySlicePayload(cachedPayload, { status: `已跳转到文件尾部，当前偏移 ${formatNumber(cachedPayload.actualOffset)}。`, activity: `已跳转文件尾部：${targetFilePath}。` });
         warmNeighborSlices(targetFilePath, cachedPayload, state.sliceLength);
-        callbacks.scrollViewerToBottom();
-        window.setTimeout(callbacks.scrollViewerToBottom, 80);
-        window.setTimeout(callbacks.scrollViewerToBottom, 180);
+        callbacks.scrollViewerToBottom({ optimisticHide: options?.optimisticHide });
+        window.setTimeout(() => callbacks.scrollViewerToBottom({ optimisticHide: options?.optimisticHide }), 80);
+        window.setTimeout(() => callbacks.scrollViewerToBottom({ optimisticHide: options?.optimisticHide }), 180);
         return;
       }
     }
@@ -829,36 +829,37 @@ export function useLogViewer(params: LogViewerParams): LogViewerAPI {
       callbacks.cacheSlicePayload(payload, nextOffset, state.sliceLength);
       warmNeighborSlices(targetFilePath, payload, state.sliceLength);
       applySlicePayload(payload, { status: `已跳转到文件尾部，当前偏移 ${formatNumber(payload.actualOffset)}。`, activity: `已跳转文件尾部：${targetFilePath}。` });
-      callbacks.scrollViewerToBottom();
-      window.setTimeout(callbacks.scrollViewerToBottom, 80);
-      window.setTimeout(callbacks.scrollViewerToBottom, 180);
+      callbacks.scrollViewerToBottom({ optimisticHide: options?.optimisticHide });
+      window.setTimeout(() => callbacks.scrollViewerToBottom({ optimisticHide: options?.optimisticHide }), 80);
+      window.setTimeout(() => callbacks.scrollViewerToBottom({ optimisticHide: options?.optimisticHide }), 180);
     });
   }
 
   async function handleBackToBottom() {
     const shouldResumeLiveFollow = state.liveFollowEnabled && state.liveFollowPaused;
     if (state.activeViewerTabId === "file") {
-      const scrollToTail = () => {
-        callbacks.scrollViewerToBottom();
-        window.setTimeout(callbacks.scrollViewerToBottom, 40);
-        window.setTimeout(callbacks.scrollViewerToBottom, 120);
-      };
       const tailOffset = activeFileMeta ? Math.max(0, activeFileMeta.size - state.sliceLength) : null;
       const alreadyTailSlice = Boolean(activeSliceData?.isEnd || (tailOffset !== null && state.sliceOffset >= Math.max(0, tailOffset - 8)));
       refs.sliceScrollAnchorRef.current = "bottom";
       if (alreadyTailSlice) {
-        scrollToTail();
         callbacks.setActionStatus("已回到底部。");
       } else {
-        await loadTailSlice({ forceRefresh: true });
-        scrollToTail();
+        await loadTailSlice({ forceRefresh: true, optimisticHide: false });
       }
     }
     if (shouldResumeLiveFollow) {
       setters.setLiveFollowPaused(false);
     }
+    /* 手动到底重做（2026-10-30 用户反馈「有时慢 / 要点好几次 / 有时不管用」）：
+       1) 弱三连滚（0/40/120ms 强滚，总窗口 ~150ms）换成收敛式重钉 settleScrollTo("bottom")
+          —— 与翻页落点同一实现：逐帧钉底直到真正贴底（或帧数上限），期间用户滚动立即让位。
+          旧窗口扛不住实时模式（每 100ms 追加一批 + 未测量行高，落点常在半途），
+          900ms 抑制窗一过 nearBottom 回调还会把跟随重新暂停 —— 表现即「慢 / 点几次 / 没反应」。
+       2) optimisticHide:false —— 按钮保持可见直到真正贴底；没到底就能继续点，
+          每次点击都是新一轮收敛（旧实现点了按钮就消失，落空后只能手动滚动找回按钮）。 */
     refs.sliceScrollAnchorRef.current = "bottom";
-    callbacks.scrollViewerToBottom();
+    callbacks.scrollViewerToBottom({ optimisticHide: false });
+    refs.virtualViewerRef.current?.settleScrollTo("bottom");
   }
 
   async function loadHeadSlice() {
