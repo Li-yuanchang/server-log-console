@@ -1027,11 +1027,13 @@ ipcMain.handle("open-pip-window", (_event, config = {}) => {
     alwaysOnTop: isUtilityMode || isTransferMode ? false : true,
     /* 标题栏按平台分三套（2026-10-24，与主窗口方案 B 一致）：
        - macOS：hiddenInset，红绿灯浮在内容上（头部用 padding-left 88px 让位）。
-       - Windows：hidden 无边框 —— hiddenInset 在 Windows 不受支持会退回原生
-         标题栏，多出一条与 UI 无关的系统条（用户反馈「大量空白、标题分离」）。
+       - Windows：frame:false 真正无边框 —— titleBarStyle:"hidden" 在 Windows
+         会保留 WS_CAPTION，非最大化时顶部 caption 区由系统 DWM 命中测试，
+         网页按钮收不到 click（同主窗口 0.3.320 修复，详见 createWindow 注释）。
          无边框后窗口按钮由网页自绘（WindowControls，slc:win:* IPC），
          头部直接顶到窗口最上沿，与 mac 结构一致。
        - Linux / 工具小窗：保持系统默认边框。 */
+    ...(!isUtilityMode && process.platform === "win32" ? { frame: false } : {}),
     titleBarStyle: isUtilityMode
       ? "default"
       : process.platform === "darwin"
@@ -1321,15 +1323,28 @@ function createWindow() {
     backgroundColor: "#fafafa",
     /* 标题栏（2026-10-24 方案 B：Windows 自绘）：
        - macOS：hiddenInset + 红绿灯位置，内容延伸到标题栏下方（不变）。
-       - Windows：titleBarStyle:"hidden"（无边框但保留系统缩放边/阴影），
-         最小化/最大化/关闭按钮由网页自绘（App.tsx 的 WindowControls，
-         经 slc:win:* IPC 控制窗口），拖拽复用 electron-immersive 的
-         -webkit-app-region 拖拽区体系。顶栏因此是普通 DOM，颜色/渐变/
-         过渡全部随主题 CSS 自动生效 —— 0.3.296 的 titleBarOverlay 方案
-         覆盖层由系统绘制、只能纯色瞬间切换且与网页让位带难对齐，本方案没有这些问题。
+       - Windows：frame:false（真正无边框）+ 网页自绘三枚按钮
+         （App.tsx 的 WindowControls，经 slc:win:* IPC 控制窗口），
+         拖拽复用 electron-immersive 的 -webkit-app-region 拖拽区体系。
+         顶栏因此是普通 DOM，颜色/渐变/过渡全部随主题 CSS 自动生效 ——
+         0.3.296 的 titleBarOverlay 方案覆盖层由系统绘制、只能纯色瞬间切换
+         且与网页让位带难对齐，本方案没有这些问题。
          系统标题文字随之消失，属预期（应用不需要窗口标题文字）。
        - Linux：保持默认边框（自绘标题栏暂不覆盖 Linux）。
-       另：不再需要 titleBarOverlay / slc:set-titlebar-overlay / 让位带。 */
+       另：不再需要 titleBarOverlay / slc:set-titlebar-overlay / 让位带。
+
+       ⚠️ Windows 必须 frame:false，不能用 titleBarStyle:"hidden"（0.3.320 修复）：
+       用户反馈「三按钮点不了，只有最大化时能点」——完全没反应、连 hover 都没有，
+       说明事件根本没进网页。根因是 titleBarStyle:"hidden" 在 Windows 上并**不是**
+       真正无边框：它保留 WS_CAPTION 风格，非最大化时顶部那条 caption 区仍由系统
+       DWM 做 hit-test（用于拖拽/双击最大化/Snap Layouts），网页的
+       -webkit-app-region:no-drag 管不到系统层，所以按钮收不到 click。
+       最大化时系统移除 caption 边框 → 才恢复可点，这正好对上"只有最大化能点"。
+       之前几轮加 no-drag / pointer-events:auto / z-index:9999 全无效，正是因为
+       它们只能管网页层。frame:false 直接不创建 caption，问题根除。 */
+    ...(process.platform === "win32" ? { frame: false } : {}),
+    /* Windows 走 frame:false，titleBarStyle 在此为冗余（frame:false 优先），
+       保留 "hidden" 只为不改变 mac/Linux 分支语义。 */
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : process.platform === "win32" ? "hidden" : "default",
     /* Windows 隐藏系统菜单栏（2026-10-23 用户反馈「wind 版顶部工具条隐藏」）：
        Windows 下 BrowserWindow 默认会渲染「文件/编辑/视图/窗口」菜单栏，
