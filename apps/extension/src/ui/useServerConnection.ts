@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 import type { ServerSummary, ServerCredentialStatus, ServerRouteConfig, ServerConnectionTestResponse, JumpServerAssetOption } from "@server-log-console/shared";
 import type { SettingsWorkspaceView } from "./ConnectionSettingsWorkspace.js";
 import {
@@ -118,6 +118,11 @@ export function useServerConnection(deps: {
 
   const serverIdRef = deps.serverIdRef;
 
+  /* 转发到下方 testServerConnectionLocal（2026-10-30）：
+     saveCredentialForServer 定义在前，直接引用会撞 TDZ（const 尚未初始化）。
+     用 ref 持有最新实现 → 保存凭证后调它重连，断开声明顺序依赖。 */
+  const testServerConnectionLocalRef = useRef<((dir?: string, opts?: { auto?: boolean }) => Promise<void>) | null>(null);
+
   const fetchCredentialStatus = useCallback(async (targetServerId: string) => {
     try {
       const payload = await apiGetCredentialStatus(targetServerId);
@@ -199,8 +204,16 @@ export function useServerConnection(deps: {
         pushActivity(`凭证测试失败：${payload.serverName}，${payload.message}`);
       }
       setActionStatus(`凭证测试${payload.connected ? "通过" : "失败"}：${payload.serverName}`);
+      /* 同步主界面连接态（2026-10-30 用户反馈「设置里测通了，回主界面还卡在
+         正在连接」）：原来这里只弹 toast / 写状态栏，不动 connectionTestStatus。
+         被测试的若是当前服务器，主界面 isConnectingWorkspace 仍读着上次失败的
+         {connected:false}，于是一直停在连接中空态。测试通过就写回真实结果，
+         主界面立刻脱离连接态；失败也写回，让空态文案能反映最新原因。 */
+      if (serverIdRef.current === targetServerId) {
+        setConnectionTestStatus(payload);
+      }
     });
-  }, [withBusy, showToast, pushActivity, setActionStatus]);
+  }, [withBusy, showToast, pushActivity, setActionStatus, setConnectionTestStatus]);
 
   const saveCredentialToServer = useCallback(async (targetServerId: string) => {
     if (!targetServerId) {
@@ -223,6 +236,9 @@ export function useServerConnection(deps: {
       setActionStatus(`连接凭证已保存：${payload.serverName}（${detail}）`);
       pushActivity(`已保存连接凭证：${payload.serverName}，${detail}。`);
       await fetchServers();
+      /* 同 saveCredentialForServer：保存后立即用新凭证重连，避免旧失败态残留
+         让主界面卡在「正在连接」。 */
+      await testServerConnectionLocalRef.current?.(undefined, { auto: true });
     }, "连接凭证已保存");
   }, [credentialUsername, credentialPassword, credentialPrivateKey, withBusy, applyCredentialStatus, setActionStatus, pushActivity, fetchServers]);
 
@@ -279,6 +295,14 @@ export function useServerConnection(deps: {
       setActionStatus(`连接凭证已保存：${payload.serverName}（${detail}）`);
       pushActivity(`已保存连接凭证：${payload.serverName}，${detail}。`);
       await fetchServers();
+      /* 保存凭证后立刻用新凭证重连（2026-10-30 用户反馈「改完密码回到主界面还卡在
+         连接中，终端都能登进去」）：原实现只 fetchServers() 刷新服务器列表，完全不动
+         connectionTestStatus —— 上一次失败留下的 {connected:false} 一直挂着，
+         isConnectingWorkspace 据此恒为 true，主界面永远停在「正在连接 xxx」空态，
+         只有手动切服务器才恢复。这里保存成功后重新探一次目录：成功即写入
+         connected:true 并带出文件列表，主界面自然脱离连接态；失败则走
+         testServerConnectionLocal 原有的错误提示路径，用户能看到新的失败原因。 */
+      await testServerConnectionLocalRef.current?.(undefined, { auto: true });
     }, "连接凭证已保存");
   }, [serverId, credentialUsername, credentialPassword, credentialPrivateKey, withBusy, setCredentialStatus, setCredentialPassword, setCredentialPrivateKey, setActionStatus, pushActivity, fetchServers]);
 
@@ -511,6 +535,9 @@ export function useServerConnection(deps: {
       setIsBusy(false);
     }
   }, [serverId, directoryPath, selectedServer, availableBastions, setIsBusy, setIsDirectoryLoading, setActionStatus, pushActivity, setConnectionTestStatus, setDirectoryPath, setDirectoryInput, setFileEntries, fetchDirectoryListing, rememberDirectoryIfUseful, openSettingsWorkspace, onConnectionNeedsAttention]);
+
+  /* 把最新实现挂到 ref（供前面定义的 saveCredentialForServer 保存后重连调用） */
+  testServerConnectionLocalRef.current = testServerConnectionLocal;
 
   return {
     fetchCredentialStatus,
