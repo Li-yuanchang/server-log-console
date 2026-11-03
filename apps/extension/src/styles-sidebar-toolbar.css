@@ -1024,18 +1024,16 @@ body.is-win32 .theme-modern.pip-standalone .terminal-panel-bar-standalone {
 }
 
 /* ============================================================================
-   Windows 自绘窗口按钮 · 修复「点了没反应」（2026-10-29 用户反馈）
+   Windows 自绘窗口按钮 · 修复「点了没反应」（2026-10-30 定位到真正根因）
    ----------------------------------------------------------------------------
-   症状：Windows 安装包顶部的最小化 / 最大化 / 关闭三枚按钮点不动。
-   根因与之前「设置齿轮看得见点不动」同源：
-     -webkit-app-region: drag 会捕获鼠标事件，落在 drag 区内的元素收不到 click。
-   虽然容器 .win-window-controls 已声明 no-drag，但它是 position:fixed，
-   在 Windows 无边框窗口下，fixed 元素相对的是 viewport，
-   而它视觉上落在顶带（.workspace-session-strip）的 drag 区内 ——
-   实测 click 不触发。
-   修法（照搬已生效的 .sidebar-head 方案）：
-     对容器、按钮、按钮内 svg 全部显式声明 no-drag + pointer-events:auto，
-     并把 z-index 提到高于任何 drag 层。
+   症状：Windows 安装包顶部三枚按钮点不动（连 hover 都没有），双击能最大化/还原。
+   根因：Electron 的拖拽区按 DOM 顺序叠加（drag 并集、no-drag 差集）。按钮容器
+   虽是 no-drag，但此前渲染在 <main> 的**第一个**子节点 —— 做差集时拖拽区还是空的，
+   随后 .workspace-session-strip 的 drag 矩形（含右侧 148px 让位）把按钮区重新
+   并回拖拽区，浏览器侧命中测试直接返回 HTCAPTION，click 进不了网页。
+   修法：WindowControls 改渲染到 <main> 末尾（App.tsx），保证差集最后执行；
+   下面的 no-drag / pointer-events / z-index 保留作双保险（它们只能管网页层，
+   管不到 app-region 的并集顺序，单独加这些正是此前多轮修复无效的原因）。
    ============================================================================ */
 .has-win-controls .win-window-controls,
 .has-win-controls .win-window-controls *,

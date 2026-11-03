@@ -1,6 +1,6 @@
 import type { ServerSummary, ServerConnectionTestResponse } from "@server-log-console/shared";
 import type { SettingsWorkspaceView } from "./ConnectionSettingsWorkspace.js";
-import { Command as CommandIcon, ServerOff, FolderSearch } from "lucide-react";
+import { Command as CommandIcon, Search, ServerOff, FolderSearch } from "lucide-react";
 import { ToolIcon } from "./ToolIcon.js";
 import { formatKeyHint } from "./key-hints.js";
 import { ServerGroupsList } from "./SidepanelMobile.js";
@@ -69,14 +69,10 @@ export function SidebarPanel(props: SidebarPanelProps) {
       <div className="sidebar-head">
         <div className="sidebar-head-row">
           <div className="sidebar-head-title">
-            <p className="eyebrow">日志控制台</p>
+            {/* head 单行（chrome v1 定稿 2026-11-02）：eyebrow 删除 ——
+                Electron 下窗口标题已含应用名，再写「日志控制台」是纯冗余；
+                浏览器宿主标题本身就是「日志控制台」，此前 eyebrow 与标题重复。 */}
             <h1 className="topbar-title">
-              {/* 标题文案按宿主区分（2026-10-23 用户反馈「Windows 标题栏已自带标题，
-                  内部还要保留吗」）：
-                  - Electron：窗口标题栏 / macOS 系统菜单栏 已经显示「日志控制台」，
-                    侧栏再写一遍是纯冗余、还白占一行高度 → 改为「服务器」，
-                    右侧原有的台数计数升为主体信息，既消除重复又有实际信息量。
-                  - 浏览器（扩展侧栏 / 普通标签页）：应用内标题是唯一身份标识，保留原名。 */}
               {isElectron ? "服务器" : "日志控制台"}
               {servers.length > 0 ? <span className="sidebar-head-count">{servers.length} 台</span> : null}
             </h1>
@@ -106,17 +102,21 @@ export function SidebarPanel(props: SidebarPanelProps) {
             </button>
           </div>
         </div>
-        <p className="status-inline">{actionStatus}</p>
       </div>
 
       <section className="pane-section">
-        {/* 2026-10-21 用户要求：去掉搜索框上方的「服务器」标签行 ——
-            标题已在顶部「日志控制台」承担，此行使搜索框上方多出一段空白与层级噪音。 */}
-        <input
-          value={serverFilter}
-          onChange={(event) => onServerFilterChange(event.target.value)}
-          placeholder="输入名称、分组或地址"
-        />
+        {/* 2026-11-02 chrome v1 定稿：搜索框四边框保留、背景透明与树同底，
+            内嵌细描边 🔍 前缀（过滤本就是输入即过滤，无按钮）；样式见 theme-modern.css 搜索框节。 */}
+        <div className="search-wrap">
+          <span className="search-wrap-icon" aria-hidden="true">
+            <Search size={15} strokeWidth={1.5} />
+          </span>
+          <input
+            value={serverFilter}
+            onChange={(event) => onServerFilterChange(event.target.value)}
+            placeholder="输入名称、分组或地址"
+          />
+        </div>
       </section>
 
       <div className="server-groups pane-section">

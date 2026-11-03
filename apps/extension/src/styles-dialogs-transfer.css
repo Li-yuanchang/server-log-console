@@ -2583,24 +2583,24 @@ button.class-outline-row {
    几何沿用 .confirm-dialog（同一套 backdrop 与卡片规格），只补内部排版。
    ============================================================ */
 .conn-issue-dialog {
-  max-width: 440px;
+  max-width: 420px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
 }
 
 .conn-issue-head {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
 }
 
 .conn-issue-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
   flex: none;
   border-radius: 50%;
   background: var(--amber-soft, rgba(183, 121, 53, 0.12));
@@ -2608,17 +2608,20 @@ button.class-outline-row {
 }
 
 .conn-issue-head strong {
-  font-size: var(--fs-sm);
+  font-size: var(--fs-base);
   font-weight: 650;
   color: var(--ink);
+  letter-spacing: -0.01em;
 }
 
 .conn-issue-msg {
   margin: 0;
   font-size: var(--fs-xs);
-  line-height: 1.6;
+  line-height: 1.7;
   color: var(--ink-soft);
   word-break: break-word;
+  max-height: 38vh;
+  overflow: auto;
 }
 
 .conn-issue-hint {
@@ -2636,4 +2639,85 @@ button.class-outline-row {
   justify-content: flex-end;
   gap: 8px;
   margin-top: 2px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+/* 候选结构化行（chrome v1 2026-11-02）：#id + 资产名 + 地址，整行可点 = 落库跳转资产并重连 */
+.conn-issue-candidates {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.conn-issue-candidate {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 11px;
+  border: none;
+  background: transparent;
+  color: var(--ink-soft);
+  text-align: left;
+  cursor: pointer;
+  font-size: var(--fs-xs);
+  transition: background 150ms ease;
+}
+
+.conn-issue-candidate + .conn-issue-candidate {
+  border-top: 1px solid var(--line);
+}
+
+.conn-issue-candidate:hover:not(:disabled) {
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+
+.conn-issue-candidate:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.conn-issue-candidate-id {
+  flex: none;
+  min-width: 20px;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.conn-issue-candidate-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.conn-issue-candidate-main b {
+  font-weight: 500;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.conn-issue-candidate-main span {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--ink-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.conn-issue-candidate-use {
+  flex: none;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--accent-strong);
 }

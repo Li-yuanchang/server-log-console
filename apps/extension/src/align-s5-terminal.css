@@ -166,6 +166,22 @@
 .theme-modern .terminal-pane-body .xterm-container .xterm-viewport {
   background-color: transparent !important;
 }
+/* 选区透明（2026-10-30）：xterm 6 的 DOM 渲染器把选区色预混合成**不透明**色再画 ——
+   ThemeService 里 selectionBackgroundOpaque = blend(背景, 选区)，blend 会丢弃 alpha
+   （common/Color.ts blend 恒输出 #RRGGBB）；背景透明时 rgba(120,170,235,.3) 被混成
+   死块 #243347，把壁纸完全盖住（0.3.313 的半透明方案即被此静默打回）。
+   选区由两层共同绘制，都要覆盖：
+   ① .xterm-selection div —— 容器层（z-index:1），负责行尾空白格的选区底色；
+   ② 行内选中 span（.xterm-decoration-top，z-index:2 抬到容器之上）—— 内联
+      background-color:#243347，不置透明会与 ① 叠加成 0.51 双层变深。
+   应用自有 decoration 全部 layer:"bottom"（terminal-decorations.ts），span 上该类
+   只在选中时出现，覆盖不影响着色/搜索高亮。 */
+.xterm .xterm-selection div {
+  background-color: rgba(120, 170, 235, 0.3) !important;
+}
+.xterm .xterm-rows span.xterm-decoration-top {
+  background-color: transparent !important;
+}
 /* 底部提示行对齐终端文字左边距（同 .term 的 16px） */
 .theme-modern .terminal-hint-bar {
   flex: none;
@@ -1088,6 +1104,48 @@
 }
 .theme-modern .terminal-qbar-chips::-webkit-scrollbar {
   display: none;
+}
+/* chips 外壳：上浮翻页箭头的定位基准（2026-10-30 小屏优化：命令多一屏放不下时，
+   被裁 chip 上浮圆箭头点按翻页；显隐由 TerminalQuickBar 按 scroll 位置驱动） */
+.theme-modern .terminal-qbar-chips-wrap {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.theme-modern .terminal-qbar-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--ink-soft);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.14);
+  cursor: pointer;
+  z-index: 2;
+}
+.theme-modern .terminal-qbar-arrow:hover {
+  background: var(--panel-muted);
+  color: var(--ink);
+}
+.theme-modern .terminal-qbar-arrow-left {
+  left: 0;
+}
+.theme-modern .terminal-qbar-arrow-right {
+  right: 0;
+}
+/* 窄窗口减员：右侧交互提示是纯说明文案（功能右键菜单里都有），让位给命令 chip */
+@media (max-width: 1199px) {
+  .theme-modern .terminal-qbar-hint {
+    display: none;
+  }
 }
 /* chip = 原型 .fchip 胶囊，mono 字号 --fs-2xs */
 .theme-modern .terminal-qbar-chip {

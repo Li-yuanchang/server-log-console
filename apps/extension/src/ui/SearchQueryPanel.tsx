@@ -1,5 +1,5 @@
 import { useRef, useState, type RefObject } from "react";
-import { Download, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import { Drawer } from "./Drawer.js";
 import type { SearchSettingsState } from "./utils.js";
 import { readSearchHistory } from "./storage.js";
@@ -17,9 +17,6 @@ type Props = {
   keywordInputRef: RefObject<HTMLInputElement | null>;
   onKeywordInputChange: (value: string) => void;
   onRunSearch: () => void;
-  showSummary: boolean;
-  toolbarSummaryLabel: string;
-  toolbarMetaLabel: string;
   settings: SearchSettingsState;
   onKeywordModeChange: (value: SearchSettingsState["keywordMode"]) => void;
   onExcludeInputChange: (value: string) => void;
@@ -37,17 +34,9 @@ type Props = {
   filePattern: string;
   onFilePatternChange: (value: string) => void;
   searching: boolean;
-  /** 检索进行中显示在按钮上的进度标签（原型 S13：进度内联在按钮上，如 `340MB/1.2GB`）。
+  /** 检索进行中显示在输入组右端的进度标签（原型 S13：如 `340MB/1.2GB`）。
       为空时回落为「检索中」。 */
   searchProgressLabel?: string;
-  highlightSummary: string;
-  onHighlightPrev: () => void;
-  onHighlightNext: () => void;
-  resultContextMode: boolean;
-  canToggleResultContext: boolean;
-  onToggleResultContext: () => void;
-  canDownloadResults: boolean;
-  onDownloadResults: () => void;
 };
 
 export function SearchQueryPanel(props: Props) {
@@ -154,68 +143,17 @@ export function SearchQueryPanel(props: Props) {
               </div>
             ) : null}
           </div>
-          <button
-            type="button"
-            className={`ghost-button slim-button search-run-button${props.searching ? " search-run-busy" : ""}`}
-            onClick={props.onRunSearch}
-            disabled={!props.hasServer || props.searching}
-          >
-            {props.searching ? <span className="btn-spinner" aria-hidden="true" /> : null}
-            {/* 原型 S13 第 02 段：进度内联在按钮上（如 `340MB/1.2GB`），不锁界面 */}
-            {props.searching ? (
-              props.searchProgressLabel ? (
-                <span className="search-run-progress">{props.searchProgressLabel}</span>
-              ) : (
-                "检索中"
-              )
-            ) : (
-              "检索"
-            )}
-          </button>
+          {/* chrome v1 定稿（2026-11-02）：检索钮删除 —— 回车检索为现有逻辑
+              （onKeyDown Enter），按钮与回车功能重复；检索中字节进度（S13）
+              改显在输入组右端，不再占用独立按钮宽度。 */}
+          {props.searching ? (
+            <span className="search-run-progress">{props.searchProgressLabel || "检索中"}</span>
+          ) : null}
         </div>
       ) : null}
 
-      {props.showSummary ? (
-        <div className="toolbar-inline toolbar-hint toolbar-summary">
-          <span>{props.toolbarSummaryLabel}</span>
-          <span>{props.toolbarMetaLabel}</span>
-          <span style={{ flex: 1 }} />
-          {props.highlightSummary ? (
-            <span className="summary-nav">
-              {/* 原型 S1/S3 rtools 命中导航 = ◀ 3 / 128 ▶（prototype.html 第 417 行：
-                  左 `m12 19-7-7 7-7`+`M19 12H5`、右 `m9 18 6-6-6-6`，均 12px、sw1.6）。
-                  原实现误用纵向三角 ▲▼，方向与原型不符。 */}
-              <button type="button" className="ghost-button icon-button" title="上一处命中" aria-label="上一处命中" onClick={props.onHighlightPrev}>
-                <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="m12 19-7-7 7-7" />
-                  <path d="M19 12H5" />
-                </svg>
-              </button>
-              <span className="mono summary-nav-count">{props.highlightSummary}</span>
-              <button type="button" className="ghost-button icon-button" title="下一处命中" aria-label="下一处命中" onClick={props.onHighlightNext}>
-                <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="m9 18 6-6-6-6" />
-                </svg>
-              </button>
-            </span>
-          ) : null}
-          {props.canToggleResultContext ? (
-            <span className="summary-seg">
-              <button type="button" className={!props.resultContextMode ? "on" : ""} onClick={props.onToggleResultContext}>仅命中</button>
-              <button type="button" className={props.resultContextMode ? "on" : ""} onClick={props.onToggleResultContext}>含上下文</button>
-            </span>
-          ) : null}
-          <button
-            type="button"
-            className="ghost-button slim-button"
-            onClick={props.onDownloadResults}
-            disabled={!props.canDownloadResults}
-            title="下载结果"
-          >
-            <Download size={12} strokeWidth={1.8} /> 下载
-          </button>
-        </div>
-      ) : null}
+      {/* chrome v1 定稿（2026-11-02）：toolbar-summary 行删除 —— 命中导航 / 仅命中 seg
+          由 viewer-strip（App.tsx）唯一承载，此前双份重复。高级条件走 Drawer。 */}
 
       <Drawer
         open={props.showQueryAdvanced}

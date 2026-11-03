@@ -1,9 +1,10 @@
-import { PlugZap, MousePointerClick, Lightbulb, ShieldCheck } from "lucide-react";
+import { PlugZap, MousePointerClick } from "lucide-react";
 import type { SettingsWorkspaceView } from "./ConnectionSettingsWorkspace.js";
 import { localServiceBase } from "./api.js";
-import { EmptyWorkbench } from "./EmptyWorkbench.js";
+import { LogEmptyState } from "./LogEmptyState.js";
 
 export type WorkspaceStartupCardsProps = {
+  showServiceCheckingState: boolean;
   showServiceOfflineState: boolean;
   showNoServerState: boolean;
   isElectron: boolean;
@@ -13,93 +14,63 @@ export type WorkspaceStartupCardsProps = {
   onRefreshServers: () => void;
 };
 
-/* 启动期空态（服务离线 / 无服务器）→ 方案 A 引导式工作台
-   （原型 empty-states-a-v2 06/07 屏；实施方案 2026-10-04 批②）。 */
+/* 启动期空态（服务就绪中 / 服务离线 / 无服务器）→ LogEmptyState 统一 halo 骨架
+   （v4.1 06 页 + L1.1：EmptyWorkbench 退役，服务诊断面板收进 chip，时间线收成步骤行） */
 export function WorkspaceStartupCards(props: WorkspaceStartupCardsProps) {
   const {
+    showServiceCheckingState,
     showServiceOfflineState,
     showNoServerState,
     isElectron,
     onCheckService,
     onOpenSettings,
     onImportFinalShell,
-    onRefreshServers,
   } = props;
+
+  if (showServiceCheckingState) {
+    /* L1.1（2026-11-02）：splash 超时放行后的兜底态 —— checking 期间主区不再抢跑教学位 */
+    return (
+      <LogEmptyState
+        icon={<PlugZap />}
+        live
+        title="正在连接本地服务"
+        sub="启动页结束后服务仍在就绪中；就绪后自动刷新服务器与目录状态，无需手动操作。"
+        steps={[{ t: "探测服务", cur: true }, { t: "加载服务器" }]}
+        chip={<>自动重试<i className="lp3-ellip" aria-hidden="true" /></>}
+      />
+    );
+  }
 
   if (showServiceOfflineState) {
     return (
-      <EmptyWorkbench
-        icon={<PlugZap size={13} strokeWidth={1.8} />}
-        tipIcon={<Lightbulb size={12} strokeWidth={1.8} />}
-        eyebrow="连接服务 · 离线"
-        title={isElectron ? "正在等待内置连接服务启动" : "连接服务不可达"}
-        sub={
-          isElectron
-            ? "安装版会自动拉起内置连接服务；恢复后页面会自动刷新服务器与目录状态。"
-            : `连接服务未在 ${localServiceBase} 运行；启动后导入 FinalShell 或手动添加服务器。远程部署可在设置中心 → 连接服务 修改地址。`
-        }
-        steps={[
-          { title: "等待服务就绪", desc: "自动重试，无需手动刷新", state: "wait" },
-          {
-            title: "检查服务",
-            desc: "立即探测一次服务状态",
-            actions: [{ label: "检查服务", kind: "pri", onClick: onCheckService }],
-          },
-          {
-            title: "打开服务设置",
-            desc: "修改服务地址或端口",
-            actions: [{ label: "连接服务设置", kind: "ghost", onClick: () => onOpenSettings("gateway") }],
-          },
+      <LogEmptyState
+        icon={<PlugZap />}
+        live
+        title="连接服务离线"
+        sub={isElectron
+          ? "内置连接服务未响应，恢复后会自动刷新服务器与目录状态，无需手动重试。"
+          : `连接服务未在 ${localServiceBase} 运行；启动后导入 FinalShell 或手动添加服务器。远程部署可在设置中心 → 连接服务 修改地址。`}
+        acts={[
+          { label: "连接服务设置", onClick: () => onOpenSettings("gateway") },
+          { label: "检查服务", kind: "pri", onClick: onCheckService },
         ]}
-        panel={{
-          title: "服务诊断",
-          rows: [
-            { title: "服务地址", meta: localServiceBase },
-            { dot: "red", title: "状态", meta: "未响应 · 自动重试中" },
-          ],
-        }}
-        tip={
-          isElectron
-            ? "长时间未恢复？检查安装目录是否完整，或是否有防火墙拦截本地端口。"
-            : "可在终端执行 npm run dev:gateway 启动本地连接服务，然后点击「检查服务」。"
-        }
+        chip={<>{localServiceBase}<span className="lp3-sep">·</span>未响应 · 自动重试中<i className="lp3-ellip" aria-hidden="true" /></>}
       />
     );
   }
 
   if (showNoServerState) {
     return (
-      <EmptyWorkbench
-        icon={<MousePointerClick size={13} strokeWidth={1.8} />}
-        tipIcon={<ShieldCheck size={12} strokeWidth={1.8} />}
-        eyebrow="首次配置"
+      <LogEmptyState
+        icon={<MousePointerClick />}
         title="还没有服务器"
         sub="从 FinalShell 一键导入连接，或手动新增；导入后左侧自动生成分组列表。"
-        steps={[
-          {
-            title: "导入连接",
-            desc: "识别 FinalShell 配置并生成分组",
-            state: "cur",
-            actions: [
-              { label: "刷新列表", kind: "ghost", onClick: onRefreshServers },
-              { label: "立即导入", kind: "pri", onClick: onImportFinalShell },
-            ],
-          },
-          {
-            title: "手动新增",
-            desc: "逐台填写主机与凭证",
-            actions: [{ label: "连接设置", kind: "ghost", onClick: () => onOpenSettings("connections") }],
-          },
-          { title: "选择服务器开始使用", desc: "连接后即可浏览目录与查看日志" },
+        acts={[
+          { label: "手动新增", onClick: () => onOpenSettings("connections") },
+          { label: "导入 FinalShell", kind: "pri", onClick: onImportFinalShell },
         ]}
-        panel={{
-          title: "支持的导入来源",
-          rows: [
-            { dot: "ok", title: "FinalShell", meta: "自动识别连接与分组", action: "导入", onAction: onImportFinalShell },
-            { dot: "idle", title: "手动新增", meta: "逐台填写主机与凭证", action: "新增", onAction: () => onOpenSettings("connections") },
-          ],
-        }}
-        tip="导入只读取配置文件，不会改动或上传原始数据。"
+        steps={[{ t: "导入连接", cur: true }, { t: "浏览目录" }, { t: "查看日志" }]}
+        chip={<>导入只读配置<span className="lp3-sep">·</span>不改动原始数据</>}
       />
     );
   }

@@ -56,17 +56,28 @@
       .splash{display:flex;flex-direction:column;align-items:center;text-align:center;animation:splash-in .45s cubic-bezier(.2,.7,.3,1)}
       @keyframes splash-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
       @media (prefers-reduced-motion:reduce){.splash{animation:none}}
-      .splash-logo{width:56px;height:56px;margin-bottom:14px;border-radius:14px;overflow:hidden;
-        box-shadow:0 1px 2px rgba(0,0,0,.08),0 8px 24px rgba(15,32,51,.14)}
-      .splash-logo img{width:100%;height:100%;display:block}
-      html[data-slc-pip="1"] .splash-logo{box-shadow:0 0 0 1px rgba(126,200,227,.18),0 8px 24px rgba(0,0,0,.5)}
+      /* 统一 logo 加载语言：icon.svg 的「severity 点 + 消息条」三行日志行徽标 + 波纹双环
+         （定稿 docs/prototypes/log-preview-empty-v4-2026-11.html L1.0；无 spinner，徽标即唯一动效源） */
+      .lg-rip{position:relative;display:block}
+      .lg-mark{position:relative;width:56px;height:56px;border-radius:22.5%;
+        background:linear-gradient(160deg,var(--sk-panel) 0%,var(--sk-bg) 100%);
+        border:1px solid var(--sk-line);box-shadow:0 6px 18px rgba(15,32,51,.12);
+        display:flex;flex-direction:column;justify-content:center;gap:6px;padding:0 13px}
+      .lg-row{display:flex;align-items:center;gap:4px;height:5px;animation:lg-row 1.8s ease-in-out infinite}
+      .lg-row:nth-child(2){animation-delay:.25s}
+      .lg-row:nth-child(3){animation-delay:.5s}
+      @keyframes lg-row{0%,100%{opacity:.4}50%{opacity:1}}
+      .lg-dot{width:5px;height:5px;border-radius:999px;flex:none}
+      .lg-dot-g{background:#2fb87b}.lg-dot-a{background:#e0a020}.lg-dot-r{background:#e05f5f}
+      .lg-bar{display:block;height:5px;border-radius:999px;background:color-mix(in srgb,var(--sk-ink) 24%,transparent)}
+      .lg-ring{position:absolute;inset:-2px;border-radius:22.5%;border:1.5px solid color-mix(in srgb,var(--sk-accent) 32%,transparent);animation:lg-ripple 2.6s ease-out infinite;pointer-events:none}
+      .lg-ring-2{animation-delay:1.3s}
+      @keyframes lg-ripple{0%{transform:scale(1);opacity:.5}100%{transform:scale(1.42);opacity:0}}
+      @media (prefers-reduced-motion:reduce){.lg-row,.lg-ring{animation:none}}
+      .splash .lg-rip{margin-bottom:14px}
       .splash-word{font-size:15px;font-weight:650;letter-spacing:-.01em;color:var(--sk-ink)}
       .splash-sub{margin-top:2px;font-size:10.5px;font-family:'Geist Mono',ui-monospace,monospace;letter-spacing:.08em;color:var(--sk-ink-muted)}
-      .splash-row{display:flex;align-items:center;gap:8px;margin-top:18px}
-      .splash-spin{width:13px;height:13px;border:2px solid var(--sk-muted);border-top-color:var(--sk-accent);border-radius:50%;animation:sk-spin .8s linear infinite}
-      @keyframes sk-spin{to{transform:rotate(360deg)}}
-      @media (prefers-reduced-motion:reduce){.splash-spin{animation:none;border-top-color:var(--sk-ink-muted)}}
-      .splash-status{font-size:12px;color:var(--sk-ink-muted)}
+      .splash-status{margin-top:18px;font-size:12px;color:var(--sk-ink-muted)}
       html[data-slc-electron="1"] .splash{transform:translateY(14px)}
       html[data-slc-pip="1"] #app-loading{--sk-bg:#0a0a0a;--sk-panel:#111111;--sk-muted:rgba(126,200,227,.14);--sk-line:rgba(126,200,227,.08);--sk-ink:rgba(255,255,255,.92);--sk-ink-soft:rgba(195,208,224,.72);--sk-ink-muted:rgba(195,208,224,.6);--sk-accent:#7ec8e3}
     </style>
@@ -75,13 +86,18 @@
   <body>
     <div id="app-loading">
       <div class="splash">
-        <div class="splash-logo"><img src="/icon.svg" alt="" /></div>
+        <span class="lg-rip" aria-hidden="true">
+          <span class="lg-mark">
+            <span class="lg-row"><i class="lg-dot lg-dot-g"></i><i class="lg-bar" style="width:64%"></i></span>
+            <span class="lg-row"><i class="lg-dot lg-dot-a"></i><i class="lg-bar" style="width:46%"></i></span>
+            <span class="lg-row"><i class="lg-dot lg-dot-r"></i><i class="lg-bar" style="width:55%"></i></span>
+          </span>
+          <i class="lg-ring"></i>
+          <i class="lg-ring lg-ring-2"></i>
+        </span>
         <div class="splash-word">日志控制台</div>
         <div class="splash-sub">SERVER LOG CONSOLE</div>
-        <div class="splash-row">
-          <span class="splash-spin" aria-hidden="true"></span>
-          <span class="splash-status">正在连接服务…</span>
-        </div>
+        <div class="splash-status">正在连接服务…</div>
       </div>
     </div>
     <div id="root"></div>

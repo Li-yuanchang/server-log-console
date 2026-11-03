@@ -211,7 +211,12 @@
 .theme-modern .pip-viewer-wrap  .log-view-bar, .theme-modern .pip-viewer-root  .log-view-bar{
   display: flex;
   align-items: center;
+  /* 允许换行兜底（2026-10-31）：切片条与实时带都带最小内容宽度，中等窗口下
+     单行放不下时，此前是切片条内容溢出、压到「tail -F · 自动重连」上；
+     改成放不下就把实时带落到第二行，宁可行高 +8 也不要文字叠字。 */
+  flex-wrap: wrap;
   gap: 12px;
+  row-gap: 8px;
   padding: 6px 12px;
   border-bottom: 1px solid var(--line);
   background: var(--panel);

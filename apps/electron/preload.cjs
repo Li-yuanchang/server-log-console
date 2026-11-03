@@ -50,6 +50,15 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on("slc:win:maximize-changed", handler);
     return () => ipcRenderer.removeListener("slc:win:maximize-changed", handler);
   },
+  /* 关闭二次确认（2026-10-30）：主进程拦截 close 后转告渲染层弹框，
+     渲染层确认/取消后回传决定（见 main.cjs slc:win:confirm-close 注释）。 */
+  onCloseRequest: (callback) => {
+    const handler = () => callback();
+    ipcRenderer.on("slc:close-request", handler);
+    return () => ipcRenderer.removeListener("slc:close-request", handler);
+  },
+  confirmCloseWindow: () => ipcRenderer.invoke("slc:win:confirm-close"),
+  cancelCloseWindow: () => ipcRenderer.invoke("slc:win:cancel-close"),
   togglePin: () => ipcRenderer.invoke("toggle-pin"),
   getPin: () => ipcRenderer.invoke("get-pin"),
   onPinChanged: (callback) => {

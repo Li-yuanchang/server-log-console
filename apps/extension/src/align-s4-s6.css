@@ -144,6 +144,25 @@
   height: 22px;
 }
 
+/* 切片条尾按钮窄档图标化（2026-10-31 用户反馈「预览窗口按钮和文字重叠」）：
+   菜单栏宽 900 上下、侧栏仍占 200px 时，单行 log-view-bar 的切片条内容会溢出，
+   「回到头部」正好压住实时带的「tail -F · 自动重连」。此时文字退成图标
+   （结构 = <svg> + <span class="slicebar-tail-label">，与检索工具栏的图标化同一做法），
+   省下约 30px 并留出余量；更窄时由 log-view-bar 的 flex-wrap 兜底换行。
+   用 slc-viewer（视图列自身宽度）判定，避免按窗口宽度误判侧栏/内边距的差异。 */
+@container slc-viewer (max-width: 900px) {
+  .theme-modern .slicebar .ghost-button.slim-button.slicebar-tail {
+    width: var(--ctl-h);
+    min-width: var(--ctl-h);
+    padding: 0;
+    gap: 0;
+    justify-content: center;
+  }
+  .theme-modern .slicebar .slicebar-tail-label {
+    display: none;
+  }
+}
+
 /* ================= S6：文件浏览（原型 s6() 613-692） ============ */
 
 /* S6-20/21：工具行 = 常驻过滤输入框（原型 632：150×24）+ 上传/刷新/更多（原型 633-635）

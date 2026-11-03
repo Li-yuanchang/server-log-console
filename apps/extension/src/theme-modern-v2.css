@@ -518,16 +518,6 @@
   font-weight: 600;
 }
 .theme-modern .workspace-session-tab-index { display: none; }
-.theme-modern .workspace-session-hint {
-  margin-left: auto;
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: var(--fs-2xs);
-  color: var(--ink-muted);
-  white-space: nowrap;
-}
 
 /* ---------- 4. 工具栏（原型 .tbar 一行流式） ---------- */
 .theme-modern .toolbar-panel {
@@ -2570,43 +2560,10 @@ body:has(.theme-modern) button:disabled {
   cursor: not-allowed;
 }
 
-/* ---------- 26. S12 连接错误横幅（原型 .banner） ----------
-   原型决策：连接错误从占位块改为内容区顶部横幅，不挡内容，
-   含图标 + 中文原因 + 主机上下文 + [重连][连接设置]，红底红字表意。 */
-.theme-modern .connection-error-banner {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex: none;
-  padding: 9px 16px;
-  background: var(--red-soft);
-  border-bottom: 1px solid color-mix(in srgb, var(--red) 25%, transparent);
-  font-size: var(--fs-xs);
-  color: var(--red);
-}
-.theme-modern .connection-error-banner-icon {
-  display: flex;
-  flex: none;
-}
-.theme-modern .connection-error-banner-msg {
-  flex: 1;
-  min-width: 0;
-  line-height: 1.55;
-}
-.theme-modern .connection-error-banner-msg b {
-  font-weight: 600;
-}
-.theme-modern .connection-error-banner-hint {
-  display: block;
-  color: var(--ink-soft);
-  font-size: var(--fs-xs);
-}
-.theme-modern .connection-error-banner .ghost-button {
-  flex: none;
-  height: 28px;
-  padding: 0 11px;
-  font-size: var(--fs-xs);
-}
+/* ---------- 26. S12 连接错误横幅 —— 已删除（2026-11-02） ----------
+   常驻横幅与连接失败弹窗（conn-issue-dialog）信息重复，横幅退役；
+   失败提示统一走弹窗（重连/稍后再说/去修改凭证），关掉弹窗后由
+   文件目录的失败 halo 空占位（LogEmptyState）承接。 */
 
 /* S13：检索按钮内联进度（`340MB/1.2GB`）——不换行 + 等宽数字防抖动 */
 .theme-modern .search-run-button {

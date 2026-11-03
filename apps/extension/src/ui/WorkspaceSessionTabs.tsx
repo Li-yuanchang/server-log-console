@@ -8,6 +8,7 @@ export type WorkspaceSessionTabsProps = {
   workspaceSessions: WorkspaceSession[];
   activeWorkspaceSessionId: string | null;
   isWorkspaceSwitchLocked: boolean;
+  isSessionCloseLocked: boolean;
   workspaceTabDragState: WorkspaceTabDragState;
   workspaceTabDragJustMovedRef: React.MutableRefObject<boolean>;
   onActivateSession: (session: WorkspaceSession) => void;
@@ -22,6 +23,7 @@ export function WorkspaceSessionTabs(props: WorkspaceSessionTabsProps) {
     workspaceSessions,
     activeWorkspaceSessionId,
     isWorkspaceSwitchLocked,
+    isSessionCloseLocked,
     workspaceTabDragState,
     workspaceTabDragJustMovedRef,
     onActivateSession,
@@ -84,7 +86,7 @@ export function WorkspaceSessionTabs(props: WorkspaceSessionTabsProps) {
                   className="ghost-button icon-button workspace-session-tab-close"
                   type="button"
                   aria-label={`关闭 ${session.serverName}`}
-                  disabled={isWorkspaceSwitchLocked}
+                  disabled={isSessionCloseLocked}
                   draggable={false}
                   onClick={() => onCloseSession(session.id)}
                 >
@@ -103,7 +105,6 @@ export function WorkspaceSessionTabs(props: WorkspaceSessionTabsProps) {
         >
           ＋
         </button>
-        <span className="workspace-session-hint"><span className="kbd">{formatKeyHint("⌘1-9")}</span> 切换会话</span>
       </div>
     </div>
   );

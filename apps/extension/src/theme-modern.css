@@ -566,10 +566,6 @@
   color: var(--ink);
 }
 
-.theme-modern .sidebar-head .status-inline {
-  display: none;
-}
-
 .theme-modern .pane-section {
   padding: 10px 16px;
   gap: 8px;
@@ -592,21 +588,14 @@
   color: var(--ink-muted);
 }
 
-/* 2026-10-28 用户反馈「搜索框有粗边框 + 阴影、不像无边框淡底」：
-   本文件的通用输入框规则
-     `.theme-modern input:where(:not(...)) { border: 1px solid var(--line); background: var(--panel) }`
-   位于下方（第 924 行起）、且选择器链更长，**在产物里排在本条之后**，
-   于是把这里的 `border: 0` / `--panel-muted` 全盖掉了 —— 侧栏搜索框最终呈
-   白底 + 1px 描边，与「干净透亮」的设计意图相反（用户截图即此现象）。
-   修法：把选择器提到 (0,3,0) 并显式 !important 钉住 border/background/shadow，
-   与通用规则彻底解耦，不再依赖书写顺序。 */
+/* 搜索框（chrome v1 定稿 2026-11-02）：四边框保留、背景透明与服务器树同底，
+   内嵌细描边 🔍 前缀（.search-wrap，结构见 SidebarPanel.tsx）；过滤本就是输入即过滤，无按钮。
+   演变史：2026-10-28 曾定「浅灰底标识可输入区」→ 2026-11-02 用户裁决「只不要背景色」
+   （灰底与树白底异色才是原不满意点）；!important 仍需钉住（下方通用规则特异性更高）。 */
 .theme-modern .sidebar-panel .pane-section input,
 .theme-modern .pane-section input {
   font-size: var(--fs-xs);
-  /* 2026-10-28 用户澄清：要的是「去掉明显的粗边框 + 阴影」，
-     **不是**把底色也抹平。故恢复浅灰底（--panel-muted）以标识可输入区域，
-     边框改为极细且与色调融合的 --line（1px），无阴影。 */
-  background: var(--panel-muted) !important;
+  background: transparent !important;
   border: 1px solid var(--line) !important;
   box-shadow: none !important;
   color: var(--ink);
@@ -623,6 +612,50 @@
   min-width: 0;
   box-sizing: border-box;
 }
+/* 内嵌图标 wrapper：边框在 wrapper 上（放大镜在框内），input 退为框内透明底
+   （2026-11-02 实测反馈：边框留在 input 上时放大镜会被排到框外） */
+.theme-modern .sidebar-panel .pane-section .search-wrap,
+.theme-modern .pane-section .search-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--line) !important;
+  border-radius: 7px;
+  background: transparent !important;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.theme-modern .sidebar-panel .pane-section .search-wrap:focus-within,
+.theme-modern .pane-section .search-wrap:focus-within {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 2px var(--accent-soft) !important;
+}
+.theme-modern .sidebar-panel .pane-section .search-wrap .search-wrap-icon,
+.theme-modern .pane-section .search-wrap .search-wrap-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  color: var(--ink-muted);
+}
+.theme-modern .sidebar-panel .pane-section .search-wrap input,
+.theme-modern .pane-section .search-wrap input {
+  width: auto;
+  flex: 1 1 0%;
+  min-width: 0;
+  height: 26px;
+  padding: 0;
+  border: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+.theme-modern .sidebar-panel .pane-section .search-wrap input:focus,
+.theme-modern .pane-section .search-wrap input:focus {
+  border: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
 
 .theme-modern .pane-section input::placeholder {
   color: var(--ink-muted);
@@ -635,7 +668,7 @@
 .theme-modern .pane-section input:focus {
   border-color: var(--accent) !important;
   box-shadow: 0 0 0 2px var(--accent-soft) !important;
-  background: var(--panel) !important;
+  background: transparent !important;
   outline: none;
 }
 
@@ -666,6 +699,16 @@
   border-bottom: none;
   letter-spacing: 0;
   text-transform: none;
+  /* chrome v1 定稿 2026-11-02：组头右侧组内计数 */
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+.theme-modern .server-group-title .server-group-count {
+  font-family: var(--mono);
+  font-size: 10px;
+  opacity: 0.75;
+  font-variant-numeric: tabular-nums;
 }
 
 .theme-modern .server-list { gap: 1px; }
@@ -756,7 +799,8 @@
 }
 
 .theme-modern .server-item-active strong {
-  color: var(--ink);
+  /* chrome v1 定稿 2026-11-02：选中行名字 accent（随主题），底色 accent-soft 不变 */
+  color: var(--accent);
   font-weight: 600;
 }
 
@@ -4218,7 +4262,9 @@ body.is-resizing-tree .theme-modern .browser-resizer::after {
 }
 
 @media (max-width: 1439.9px) {
-  .theme-modern .sidebar-panel { flex: 0 0 200px; }
+  /* chrome v1 定稿 2026-11-02：host 行改为 username@host（mono 11px 最长 ~22ch ≈ 145px），
+     窄档 200px 下会顶到省略号 → 补偿到 220px；≥1440 基准档 240px 不变 */
+  .theme-modern .sidebar-panel { flex: 0 0 220px; }
   /* 2026-10-15 修复「目录树拖不动」（上一轮漏修的真凶）：此处原是写死
      `flex: 0 0 180px`，特异性 (0,4,0) 高于树列变量规则
      `.browser-grid > .browser-tree-column`（0,3,0）→ 窄档下拖拽设的
@@ -5822,7 +5868,9 @@ button.settings-pref-row + button.settings-pref-row,
   align-items: center;
   gap: 6px;
   flex: none;
-  margin-left: auto;
+  /* margin-left:auto 已删（2026-11-02 chrome v1）：auto margin 先于 flex-grow
+     吸收空隙，会把检索行缩回 basis、在检索钮原位留空腔；检索行自身
+     flex-grow 吃满后动作组自然贴右 */
 }
 .theme-modern .toolbar-action-button {
   white-space: nowrap;
@@ -5830,18 +5878,8 @@ button.settings-pref-row + button.settings-pref-row,
 }
 
 /* 摘要行 = rtools（完整占一行） */
-.theme-modern .toolbar-commandbar .toolbar-summary {
-  order: 3;
-  flex-basis: 100%;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: nowrap;
-  min-width: 0;
-  padding: 6px 2px 0;
-  font-size: var(--fs-xs);
-  color: var(--ink-soft);
-}
+/* .toolbar-commandbar .toolbar-summary 已删除（2026-11-02 chrome v1）：
+   summary 行退役，命中导航 / 仅命中 seg 由 viewer-actions-strip 唯一承载 */
 .theme-modern .toolbar-summary > span:first-child {
   color: var(--ink-soft);
 }
@@ -5866,7 +5904,8 @@ button.settings-pref-row + button.settings-pref-row,
 .theme-modern .toolbar-commandbar .toolbar-search-actions {
   flex: 0 0 auto !important;
   flex-wrap: nowrap;
-  margin-left: auto;
+  /* margin-left:auto 已删（2026-11-02）：auto margin 抢占空隙导致检索钮原位空腔，
+     右对齐改由检索行 flex-grow 吃满承担（见 align-controls.css 检索行规则） */
 }
 
 /* 窄屏（2026-10-25 改）：原策略是「动作组换行到第二行右对齐」，
@@ -6009,17 +6048,6 @@ button.settings-pref-row + button.settings-pref-row,
 /* .toolbar-palette-button 样式已删除（2026-10-25）：该按钮随「命令面板入口重复」
    一并移除，入口保留在侧栏头部（.sidebar-head-buttons），此规则已无对应 DOM。 */
 
-.workspace-session-hint {
-  margin-left: auto;
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: var(--fs-2xs);
-  color: var(--ink-muted);
-  padding-right: 6px;
-  white-space: nowrap;
-}
 
 /* 命令面板（原型 .palette） */
 .palette-overlay {
@@ -6743,20 +6771,9 @@ button.settings-pref-row + button.settings-pref-row,
   .restart-splash { animation: none; }
 }
 
-.restart-splash-logo {
-  width: 56px;
-  height: 56px;
-  margin-bottom: 14px;
-  border-radius: 14px;
-  overflow: hidden;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08), 0 8px 24px rgba(15, 32, 51, 0.14);
-}
-.restart-splash-logo img {
-  width: 100%;
-  height: 100%;
-  display: block;
-}
-
+/* .restart-splash-logo / -row / -spin 已删除（2026-11-02）：
+   重启遮罩换统一 logo 加载语言（LogoLoader，styles-empty-state.css），
+   spinner 退役、徽标即唯一动效源。 */
 .restart-splash-word {
   font-size: 14.5px;
   font-weight: 650;
@@ -6770,28 +6787,6 @@ button.settings-pref-row + button.settings-pref-row,
   font-family: var(--mono-font-family, var(--mono, monospace));
   color: var(--accent);
   font-weight: 600;
-}
-
-.restart-splash-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 16px;
-}
-
-.restart-splash-spin {
-  width: 13px;
-  height: 13px;
-  border: 2px solid var(--line);
-  border-top-color: var(--accent);
-  border-radius: 50%;
-  animation: settings-update-spin 0.8s linear infinite;
-}
-@keyframes settings-update-spin {
-  to { transform: rotate(360deg); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .restart-splash-spin { animation: none; border-top-color: var(--ink-muted); }
 }
 
 .restart-splash-status {

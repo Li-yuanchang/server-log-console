@@ -17,109 +17,52 @@
       html,body,#root{margin:0;width:100%;height:100%;min-height:100%;overflow:hidden;background:#fafafa}
       #app-loading{
         --sk-bg:#fafafa;--sk-panel:#ffffff;--sk-muted:#f2f2f2;--sk-line:#eaeaea;
-        --sk-ink:#171717;--sk-ink-muted:#8f8f8f;--sk-ink-soft:#666666;--sk-accent:#0070f3;
-        position:fixed;inset:0;z-index:9999;display:flex;
-        container:sk-sp / inline-size;
+        --sk-ink:#171717;--sk-ink-muted:#8f8f8f;--sk-ink-soft:#666666;--sk-accent:#3b6b5a;
+        position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;
         background:var(--sk-bg);color:var(--sk-ink-muted);
         font-family:-apple-system,BlinkMacSystemFont,'Geist Sans','PingFang SC',sans-serif;
         transition:opacity .25s ease;
       }
-      #sk-side{flex:0 0 172px;background:var(--sk-panel);border-right:1px solid var(--sk-line);display:flex;flex-direction:column}
-      #sk-side-head{flex:none;height:45px;display:flex;align-items:center;gap:6px;padding:0 12px;border-bottom:1px solid var(--sk-line)}
-      #sk-side-head .sk-block{width:26px;height:26px;border-radius:6px}
-      #sk-side-head .sk-block+ .sk-block{width:52px;height:12px}
-      #sk-side-list{flex:1;padding:8px;display:flex;flex-direction:column;gap:2px;overflow:hidden}
-      .sk-server-row{display:flex;align-items:center;gap:8px;height:40px;padding:0 8px;border-radius:6px}
-      .sk-server-row .sk-dot{flex:none;width:6px;height:6px;border-radius:50%;background:var(--sk-muted)}
-      .sk-server-row .sk-lines{flex:1;display:flex;flex-direction:column;gap:5px}
-      .sk-server-row .sk-line{height:9px;border-radius:3px;background:var(--sk-muted)}
-      .sk-server-row .sk-line.w1{width:62%}.sk-server-row .sk-line.w2{width:38%;opacity:.7}
-      #sk-main{flex:1;min-width:0;display:flex;flex-direction:column;background:var(--sk-bg)}
-      #sk-toolbar{flex:none;height:45px;background:var(--sk-panel);border-bottom:1px solid var(--sk-line);display:flex;align-items:center;gap:8px;padding:0 12px}
-      .sk-tab{width:64px;height:28px;border-radius:8px;background:var(--sk-muted)}
-      #sk-content{flex:1;display:flex;align-items:center;justify-content:center}
-      .sk-startup{display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;margin-top:-40px;padding:0 24px}
-      .sk-startup-icon{width:44px;height:44px;display:flex;align-items:center;justify-content:center;border:1px solid var(--sk-line);border-radius:12px;color:var(--sk-ink-soft);margin-bottom:6px}
-      .sk-startup strong{font-size:15px;font-weight:650;color:var(--sk-ink);letter-spacing:-.01em}
-      .sk-startup span{font-size:12px;line-height:1.7;color:var(--sk-ink-muted)}
-      .sk-spin{width:14px;height:14px;margin-top:10px;border:2px solid var(--sk-muted);border-top-color:var(--sk-accent);border-radius:50%;animation:sk-spin .8s linear infinite}
-      @keyframes sk-spin{to{transform:rotate(360deg)}}
-      .sk-block{border-radius:6px;background:var(--sk-muted)}
-      /* 移动档骨架（默认隐藏，@container sk-sp <560px 反转）：app bar 44px +
-         内容占位 + 底部 tab 条，几何对齐 styles-sidepanel.css §12 移动档 */
-      #sk-mobile{display:none;flex:1;min-width:0;flex-direction:column;background:var(--sk-bg)}
-      #sk-appbar{flex:none;height:44px;display:flex;align-items:center;gap:6px;padding:0 10px;background:var(--sk-panel);border-bottom:1px solid var(--sk-line)}
-      #sk-appbar .sk-appbar-title{width:72px;height:13px}
-      #sk-appbar .sk-sp{flex:1}
-      #sk-appbar .sk-appbar-ico{width:26px;height:26px}
-      #sk-appbar .sk-appbar-chip{flex:1 1 auto;min-width:0;height:30px;border:1px solid var(--sk-line);border-radius:6px;background:var(--sk-panel)}
-      #sk-mobile-content{flex:1;display:flex;align-items:center;justify-content:center}
-      #sk-status{flex:none;height:28px;display:flex;align-items:center;padding:0 10px;background:var(--sk-bg);border-top:1px solid var(--sk-line)}
-      #sk-status .sk-block{width:58%;height:8px}
-      #sk-tabbar{flex:none;display:flex;align-items:stretch;gap:2px;padding:4px 8px 6px;background:var(--sk-panel);border-top:1px solid var(--sk-line)}
-      #sk-tabbar .sk-block{flex:1;height:34px;border-radius:8px}
-      @container sk-sp (max-width:559.9px){
-        #sk-side,#sk-main{display:none}
-        #sk-mobile{display:flex}
-      }
+      /* 2026-11-02 chrome v1 统一：启动画面 = logo 三行日志行徽标 + 波纹双环（同 index.html），
+         骨架屏退役；徽标即唯一动效源，accent 对齐真实基础主题（暖墨绿）。 */
+      .splash{display:flex;flex-direction:column;align-items:center;text-align:center}
+      .splash .lg-rip{margin-bottom:14px}
+      .lg-rip{position:relative;display:block}
+      .lg-mark{position:relative;width:56px;height:56px;border-radius:22.5%;
+        background:linear-gradient(160deg,var(--sk-panel) 0%,var(--sk-bg) 100%);
+        border:1px solid var(--sk-line);box-shadow:0 6px 18px rgba(15,32,51,.12);
+        display:flex;flex-direction:column;justify-content:center;gap:6px;padding:0 13px}
+      .lg-row{display:flex;align-items:center;gap:4px;height:5px;animation:lg-row 1.8s ease-in-out infinite}
+      .lg-row:nth-child(2){animation-delay:.25s}
+      .lg-row:nth-child(3){animation-delay:.5s}
+      @keyframes lg-row{0%,100%{opacity:.4}50%{opacity:1}}
+      .lg-dot{width:5px;height:5px;border-radius:999px;flex:none}
+      .lg-dot-g{background:#2fb87b}.lg-dot-a{background:#e0a020}.lg-dot-r{background:#e05f5f}
+      .lg-bar{display:block;height:5px;border-radius:999px;background:color-mix(in srgb,var(--sk-ink) 24%,transparent)}
+      .lg-ring{position:absolute;inset:-2px;border-radius:22.5%;border:1.5px solid color-mix(in srgb,var(--sk-accent) 32%,transparent);animation:lg-ripple 2.6s ease-out infinite;pointer-events:none}
+      .lg-ring-2{animation-delay:1.3s}
+      @keyframes lg-ripple{0%{transform:scale(1);opacity:.5}100%{transform:scale(1.42);opacity:0}}
+      @media (prefers-reduced-motion:reduce){.lg-row,.lg-ring{animation:none}}
+      .splash-word{font-size:15px;font-weight:650;letter-spacing:-.01em;color:var(--sk-ink)}
+      .splash-sub{margin-top:2px;font-size:10.5px;font-family:'Geist Mono',ui-monospace,monospace;letter-spacing:.08em;color:var(--sk-ink-muted)}
+      .splash-status{margin-top:18px;font-size:12px;color:var(--sk-ink-muted)}
     </style>
   </head>
   <body class="extension-sidepanel">
     <div id="app-loading">
-      <!-- Skeleton: 侧栏（宽档 ≥560px；几何对齐 extension-sidepanel 的 172px 侧栏 + sidebar-head 45px） -->
-      <div id="sk-side">
-        <div id="sk-side-head">
-          <div class="sk-block"></div>
-          <div class="sk-block"></div>
-        </div>
-        <div id="sk-side-list">
-          <div class="sk-server-row"><span class="sk-dot"></span><span class="sk-lines"><i class="sk-line w1"></i><i class="sk-line w2"></i></span></div>
-          <div class="sk-server-row"><span class="sk-dot"></span><span class="sk-lines"><i class="sk-line w1"></i><i class="sk-line w2"></i></span></div>
-          <div class="sk-server-row"><span class="sk-dot"></span><span class="sk-lines"><i class="sk-line w1"></i><i class="sk-line w2"></i></span></div>
-          <div class="sk-server-row"><span class="sk-dot"></span><span class="sk-lines"><i class="sk-line w1"></i><i class="sk-line w2"></i></span></div>
-        </div>
-      </div>
-      <!-- Skeleton: 主区（工具栏 + 启动卡，与真实 extension-sidepanel 启动态同构） -->
-      <div id="sk-main">
-        <div id="sk-toolbar">
-          <div class="sk-tab"></div>
-        </div>
-        <div id="sk-content">
-          <div class="sk-startup">
-            <div class="sk-startup-icon">
-              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>
-            </div>
-            <strong>正在连接服务…</strong>
-            <span>正在等待本地连接服务就绪</span>
-            <div class="sk-spin"></div>
-          </div>
-        </div>
-      </div>
-      <!-- Skeleton: 移动档（<560px；app bar + 内容占位 + 底部 tab 条，
-           与 styles-sidepanel.css §12 移动档同构，宽档 display:none） -->
-      <div id="sk-mobile">
-        <div id="sk-appbar">
-          <span class="sk-block sk-appbar-chip"></span>
-          <span class="sk-sp"></span>
-          <span class="sk-block sk-appbar-ico"></span>
-          <span class="sk-block sk-appbar-ico"></span>
-        </div>
-        <div id="sk-mobile-content">
-          <div class="sk-startup">
-            <div class="sk-startup-icon">
-              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>
-            </div>
-            <strong>正在连接服务…</strong>
-            <span>正在等待本地连接服务就绪</span>
-            <div class="sk-spin"></div>
-          </div>
-        </div>
-        <div id="sk-status"><span class="sk-block"></span></div>
-        <div id="sk-tabbar">
-          <span class="sk-block"></span>
-          <span class="sk-block"></span>
-          <span class="sk-block"></span>
-        </div>
+      <div class="splash">
+        <span class="lg-rip" aria-hidden="true">
+          <span class="lg-mark">
+            <span class="lg-row"><i class="lg-dot lg-dot-g"></i><i class="lg-bar" style="width:64%"></i></span>
+            <span class="lg-row"><i class="lg-dot lg-dot-a"></i><i class="lg-bar" style="width:46%"></i></span>
+            <span class="lg-row"><i class="lg-dot lg-dot-r"></i><i class="lg-bar" style="width:55%"></i></span>
+          </span>
+          <i class="lg-ring"></i>
+          <i class="lg-ring lg-ring-2"></i>
+        </span>
+        <div class="splash-word">日志控制台</div>
+        <div class="splash-sub">SERVER LOG CONSOLE</div>
+        <div class="splash-status">正在连接服务…</div>
       </div>
     </div>
     <div id="root"></div>

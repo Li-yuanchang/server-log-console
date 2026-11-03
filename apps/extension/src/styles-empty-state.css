@@ -1,0 +1,125 @@
+/* ============================================================
+   styles-empty-state.css — 日志预览空态（A3 无卡光晕）+ 统一 logo 加载语言
+   定稿：docs/prototypes/log-preview-empty-v4-2026-11.html（v4.1）
+   · token 全 var(--*)（theme-modern.css 8 套主题自动跟随），组件内不写死主题色值
+   · lp3- / lg- 独立前缀，避开既有特异性对抗（布局梳理 P3 教训）
+   · loading 与空占位互斥；幽灵行仅「未选文件·未检索」；live 动效仅进行中语义
+   ============================================================ */
+
+/* ---------- 空态 · A3 无卡光晕 ---------- */
+.lp3{flex:1 1 0%;min-height:0;display:flex;align-items:center;justify-content:center;background:var(--bg);overflow:hidden}
+.lp3-inner{display:flex;flex-direction:column;align-items:center;text-align:center;width:400px;max-width:88%;padding:0 24px;transform:translateY(-6%);animation:lp3-softin .5s cubic-bezier(.2,.7,.3,1) both}
+@keyframes lp3-softin{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.lp3-icwrap{position:relative;width:62px;height:62px;margin-bottom:18px;flex:none}
+.lp3-icwrap::before{content:"";position:absolute;inset:-54px;border-radius:50%;pointer-events:none;
+  background:
+    radial-gradient(circle,color-mix(in srgb,var(--accent) 11%,transparent) 0%,transparent 52%),
+    radial-gradient(circle,color-mix(in srgb,var(--accent) 4%,transparent) 34%,transparent 74%)}
+.lp3-ic{position:absolute;inset:0;border-radius:999px;display:grid;place-items:center;color:var(--accent);
+  background:var(--panel);border:1px solid var(--line);
+  box-shadow:0 1px 2px rgba(0,0,0,.03),0 14px 30px color-mix(in srgb,var(--accent) 8%,transparent)}
+.lp3-ic svg{width:21px;height:21px}
+.lp3-ic-live{animation:lp3-icglow 2.6s ease-in-out infinite}
+@keyframes lp3-icglow{0%,100%{box-shadow:0 1px 2px rgba(0,0,0,.03),0 14px 30px color-mix(in srgb,var(--accent) 8%,transparent)}50%{box-shadow:0 1px 2px rgba(0,0,0,.03),0 14px 34px color-mix(in srgb,var(--accent) 15%,transparent)}}
+.lp3-ring{position:absolute;inset:-2px;border-radius:999px;border:1.5px solid color-mix(in srgb,var(--accent) 32%,transparent);animation:lp3-ripple 2.6s ease-out infinite;pointer-events:none}
+@keyframes lp3-ripple{0%{transform:scale(1);opacity:.5}100%{transform:scale(1.42);opacity:0}}
+.lp3-title{font-size:15px;font-weight:600;letter-spacing:-.012em;color:var(--ink)}
+.lp3-sub{font-size:11.5px;color:var(--ink-muted);line-height:1.75;margin-top:6px;max-width:28em}
+.lp3-acts{display:flex;gap:9px;margin-top:19px;flex-wrap:wrap;justify-content:center}
+.btn2{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:30px;padding:0 16px;font-size:11.5px;font-weight:550;
+  border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer;white-space:nowrap;
+  transition:background .16s ease,border-color .16s ease,box-shadow .16s ease}
+.btn2:hover:not(:disabled){background:var(--accent-soft);border-color:color-mix(in srgb,var(--accent) 28%,transparent);color:var(--ink)}
+.btn2:disabled{opacity:.45;cursor:default}
+.btn2-pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent);box-shadow:0 4px 14px color-mix(in srgb,var(--accent) 22%,transparent)}
+/* hover 补 color：.btn2:hover 的 ink 会压过 pri 基础色（深底配深字不可读，2026-11-02 实测） */
+.btn2-pri:hover:not(:disabled){background:var(--accent-strong);border-color:var(--accent-strong);color:var(--on-accent)}
+/* 流程性空态扩展：内联步骤行 + 情境列表（EmptyWorkbench 退役形态，06 页） */
+.lp3-steps{display:flex;gap:16px;margin-top:18px;flex-wrap:wrap;justify-content:center}
+.lp3-step{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--ink-muted)}
+.lp3-step i{font-style:normal;font-family:var(--mono);font-size:9.5px;width:16px;height:16px;border-radius:999px;border:1px solid var(--line);display:grid;place-items:center;background:var(--panel);color:var(--ink-soft);flex:none}
+.lp3-step-cur{color:var(--ink);font-weight:550}
+.lp3-step-cur i{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+/* 情境列表（快速连接）：结构化行 —— 点 + 名称 + mono 地址 + 动作，细线分隔、整行可点 */
+.lp3-qlist{margin-top:14px;width:380px;max-width:100%}
+.lp3-qrow{display:flex;align-items:center;gap:10px;width:100%;height:31px;padding:0 12px;font-size:11.5px;color:var(--ink-soft);cursor:pointer;border-radius:6px;border:none;background:transparent;text-align:left}
+.lp3-qrow + .lp3-qrow{border-top:1px solid var(--line)}
+.lp3-qrow:hover{background:var(--accent-soft);color:var(--ink)}
+.lp3-qrow b{font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lp3-qrow .qmeta{margin-left:auto;flex:0 1 auto;min-width:0;font-family:var(--mono);font-size:9.5px;color:var(--ink-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lp3-qrow .qact{flex:none;margin-left:12px;font-size:11px;font-weight:600;color:var(--accent-strong);white-space:nowrap}
+.lp3-qrow:hover .qact{text-decoration:underline;text-underline-offset:2px}
+.lp3-qdot{width:5px;height:5px;border-radius:999px;background:var(--dot-idle);flex:none}
+/* 终端容器内：绝对定位铺满（沿用旧 .in-terminal 约定） */
+.lp3.in-terminal{position:absolute;inset:0;height:auto}
+/* ⑦ PiP / 独立小窗（720×420 起，chrome 定稿 2026-11-02）：halo 复用窄档形态，
+   压缩光晕半径与上移量，避免小窗内光晕溢出裁切 */
+.pip-viewer-root .lp3-icwrap::before{inset:-40px}
+.pip-viewer-root .lp3-inner{transform:none;width:auto;max-width:92%}
+/* 幽灵行：定宽 300px 长短相间，纯装饰（仅 ①），不做 loading 歧义 */
+.lp3-fade{margin-top:22px;display:flex;flex-direction:column;align-items:center;gap:7px;width:300px;max-width:72%}
+.lp3-fade i{display:block;height:5px;border-radius:999px;background:color-mix(in srgb,var(--ink) 5.5%,transparent)}
+/* chip：fit-content 定形；截断省略由内层承担（flex 容器上 text-overflow 不生效） */
+.lp3-chip{display:inline-flex;align-items:center;margin-top:16px;height:27px;padding:0 13px;border-radius:999px;
+  background:var(--panel-muted);border:1px solid var(--line);
+  font-family:var(--mono);font-size:10px;color:var(--ink-muted);white-space:nowrap;max-width:100%}
+.lp3-chip-t{display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lp3-sep{margin:0 2px;opacity:.4}
+/* live chip 前缀脉冲点 + 打点省略 */
+.lp3-dot{display:inline-block;width:6px;height:6px;border-radius:999px;background:var(--accent);margin-right:2px;flex:none;animation:lp3-pulse 1.6s ease-in-out infinite}
+@keyframes lp3-pulse{0%,100%{opacity:1}50%{opacity:.35}}
+/* 打点位固定预留宽度（mono 3 中点 ≈ 1.8em）：动画只换内容不换宽度，
+   避免 chip 随帧抖动（用户 2026-11-02 实测） */
+.lp3-ellip{display:inline-block;width:1.8em;text-align:left}
+.lp3-ellip::after{content:"";animation:lp3-dots 1.2s steps(1) infinite}
+@keyframes lp3-dots{0%{content:""}25%{content:"·"}50%{content:"··"}75%{content:"···"}}
+/* 窄档：判据挂区域容器 slc-viewer（布局梳理 §6：一条行只看自己区域） */
+@container slc-viewer (max-width: 640px){
+  .lp3-inner{width:auto;max-width:92%}
+  .lp3-acts{flex-direction:column;align-items:stretch;width:220px}
+  .lp3-acts .btn2{width:100%}
+}
+
+/* ---------- 统一 logo 加载语言（L1.0 启动页 / L3.0 文件加载 / L4.2 重启遮罩） ---------- */
+.lg-rip{position:relative;display:block}
+.lg-mark{position:relative;width:56px;height:56px;border-radius:22.5%;
+  background:linear-gradient(160deg,var(--panel) 0%,var(--panel-muted) 100%);
+  border:1px solid var(--line);box-shadow:0 6px 18px rgba(15,32,51,.10);
+  display:flex;flex-direction:column;justify-content:center;gap:6px;padding:0 13px}
+.lg-mark-sm{width:44px;height:44px;padding:0 10px;gap:5px}
+.lg-row{display:flex;align-items:center;gap:4px;height:5px;animation:lg-row 1.8s ease-in-out infinite}
+.lg-row:nth-child(2){animation-delay:.25s}
+.lg-row:nth-child(3){animation-delay:.5s}
+@keyframes lg-row{0%,100%{opacity:.4}50%{opacity:1}}
+.lg-dot{width:5px;height:5px;border-radius:999px;flex:none}
+.lg-dot-g{background:#2fb87b}.lg-dot-a{background:#e0a020}.lg-dot-r{background:#e05f5f}
+.lg-bar{display:block;height:5px;border-radius:999px;background:color-mix(in srgb,var(--ink) 24%,transparent)}
+.lg-ring{position:absolute;inset:-2px;border-radius:22.5%;border:1.5px solid color-mix(in srgb,var(--accent) 32%,transparent);animation:lg-ripple 2.6s ease-out infinite;pointer-events:none}
+.lg-ring-2{animation-delay:1.3s}
+@keyframes lg-ripple{0%{transform:scale(1);opacity:.5}100%{transform:scale(1.42);opacity:0}}
+.lg-unit{display:flex;flex-direction:column;align-items:center;text-align:center;animation:lp3-softin .5s cubic-bezier(.2,.7,.3,1) both}
+.lg-file{margin-top:14px;display:flex;align-items:baseline;gap:8px;font-size:12.5px;max-width:300px}
+.lg-file b{font-weight:650;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lg-file span{font-size:10.5px;color:var(--ink-muted);white-space:nowrap;flex:none}
+/* 进度条 = 幽灵行同形（5px 圆头），accent 扫动（不定态） */
+.lg-progress{margin-top:10px;width:300px;max-width:72%;height:5px;border-radius:999px;background:color-mix(in srgb,var(--ink) 5.5%,transparent);overflow:hidden;position:relative}
+.lg-progress i{position:absolute;top:0;bottom:0;left:0;width:42%;display:block;border-radius:999px;background:var(--accent);animation:lg-slide 1.4s ease-in-out infinite}
+@keyframes lg-slide{0%{transform:translateX(-100%)}100%{transform:translateX(340%)}}
+.lg-note{margin-top:8px;display:flex;justify-content:space-between;align-items:baseline;gap:12px;width:300px;max-width:72%;font-size:10.5px;color:var(--ink-muted)}
+.lg-note b{color:var(--ink-soft);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lg-note span{white-space:nowrap;flex:none}
+
+/* ---------- L3.0 打开文件加载：无卡浮层 ----------
+   loading 与空占位互斥：本浮层仅在内容为空的加载期渲染（App.tsx 分支互斥）
+   定位沿用 .file-loading-overlay 既有规则（styles-pip-toast.css 512），此处只覆盖底色 */
+.file-loading-overlay.lpload{
+  background:var(--bg);
+}
+
+@media (prefers-reduced-motion:reduce){
+  .lp3-inner,.lp3-ic-live,.lp3-ring,.lp3-dot,.lg-row,.lg-ring,.lg-unit,.lg-progress i{animation:none !important}
+}
+
+/* L4.2 重启遮罩：LogoLoader 与既有 .restart-splash 结构的间距衔接 */
+.restart-splash .lg-rip{margin-bottom:14px}
+.restart-splash .restart-splash-status{margin-top:16px}

@@ -46,18 +46,23 @@ export function SearchToolbarActions(props: Props) {
         <button
           className={`ghost-button toolbar-action-button${props.isPinned ? " tab-active" : ""}`}
           title={props.isPinned ? "取消置顶 (Cmd+Shift+T)" : "窗口置顶 (Cmd+Shift+T)"}
+          aria-label={props.isPinned ? "取消置顶" : "窗口置顶"}
           onClick={() => { void props.onTogglePin(); }}
         >
           {props.isPinned ? <PinOff size={14} /> : <Pin size={14} />}
-          <span>{props.isPinned ? "已置顶" : "置顶"}</span>
         </button>
       ) : null}
-      <button className={`ghost-button toolbar-action-button${props.isRecording ? " btn-recording-active" : ""}`} onClick={props.onToggleRecording} disabled={!props.canToggleRecording}>
+      <button
+        className={`ghost-button toolbar-action-button${props.isRecording ? " btn-recording-active" : ""}`}
+        onClick={props.onToggleRecording}
+        disabled={!props.canToggleRecording}
+        title={props.isRecording ? "结束录制" : "录制"}
+        aria-label={props.isRecording ? "结束录制" : "录制"}
+      >
         <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
           <circle cx="12" cy="12" r="10" />
           <circle cx="12" cy="12" r="4" fill="currentColor" stroke="none" />
         </svg>
-        <span>{props.isRecording ? "结束录制" : "录制"}</span>
       </button>
       <button
         className={`ghost-button icon-button toolbar-action-button${props.showQueryAdvanced ? " tab-active" : ""}`}

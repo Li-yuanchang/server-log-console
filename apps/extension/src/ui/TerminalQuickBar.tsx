@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
-import { Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { formatKeyHint } from "./key-hints.js";
 import {
   SHORTCUT_COMMANDS_STORAGE_KEY,
@@ -15,6 +15,8 @@ import {
    chip 交互：单击 = 发送执行（补 "\n"）；⌘+单击 = 仅填入不执行（不补 "\n"）；
    右键 = 就地小菜单（发送并执行 / 仅填入不执行 / —sep— / 编辑… / 删除）。
    「管理」chip 触发 onManage 打开 ShortcutsManagerDialog。
+   命令多放不下时：chips 区横向滚动，两端按需上浮翻页箭头（点按翻一屏、滚轮直接横滚），
+   「管理」chip 固定在滚动区外始终可点。
    命令列表读写 localStorage（键与结构见 ShortcutsManagerDialog.tsx），
    组件内 useState 持列表并监听 storage 事件与管理对话框同步。 */
 
@@ -37,8 +39,11 @@ export function TerminalQuickBar(props: TerminalQuickBarProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");
   const barRef = useRef<HTMLDivElement | null>(null);
+  const chipsRef = useRef<HTMLDivElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const editInputRef = useRef<HTMLInputElement | null>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
 
   const refresh = useCallback(() => {
     setCommands(readShortcutCommands());
@@ -55,6 +60,47 @@ export function TerminalQuickBar(props: TerminalQuickBarProps) {
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
   }, [refresh]);
+
+  /* 上浮翻页箭头显隐：按 scroll 位置驱动；命令增删（内容宽变化）与窗口/面板
+     缩放（容器宽变化）都要重算，滚动本身走 chips 上的 onScroll。 */
+  const updateArrows = useCallback(() => {
+    const el = chipsRef.current;
+    if (!el) return;
+    const maxScroll = el.scrollWidth - el.clientWidth;
+    setCanScrollLeft(el.scrollLeft > 1);
+    setCanScrollRight(maxScroll > 1 && el.scrollLeft < maxScroll - 1);
+  }, []);
+
+  useEffect(() => {
+    const el = chipsRef.current;
+    if (!el) return;
+    updateArrows();
+    const observer = new ResizeObserver(updateArrows);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [updateArrows, open, commands]);
+
+  /* 鼠标滚轮默认只发 deltaY，Chromium 不会把它折算到纯横向滚动容器上（须 Shift+滚轮），
+     Windows 鼠标用户等于滚不动；这里非 passive 监听并手动折算成 scrollLeft。 */
+  useEffect(() => {
+    const el = chipsRef.current;
+    if (!el) return;
+    const onWheel = (event: WheelEvent) => {
+      if (el.scrollWidth <= el.clientWidth) return;
+      const delta = Math.abs(event.deltaY) >= Math.abs(event.deltaX) ? event.deltaY : event.deltaX;
+      if (!delta) return;
+      event.preventDefault();
+      el.scrollLeft += delta;
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [open]);
+
+  const pageChips = (direction: -1 | 1) => {
+    const el = chipsRef.current;
+    if (!el) return;
+    el.scrollBy({ left: direction * Math.max(el.clientWidth * 0.8, 160), behavior: "smooth" });
+  };
 
   /* 右键菜单：点外面 / Esc 关闭（菜单内部点击不关，交给菜单项自身处理） */
   useEffect(() => {
@@ -92,8 +138,14 @@ export function TerminalQuickBar(props: TerminalQuickBarProps) {
     event.preventDefault();
     const bar = barRef.current;
     const chip = event.currentTarget;
-    // 菜单贴着 chip 弹出；太靠右时往里收，避免出屏（菜单最小宽约 148px）
-    const left = bar ? Math.min(chip.offsetLeft, Math.max(bar.clientWidth - 148, 0)) : chip.offsetLeft;
+    // 菜单贴着 chip 弹出；太靠右时往里收，避免出屏（菜单最小宽约 148px）。
+    // chip 现在嵌在定位过的 chips-wrap 里，offsetLeft 不再相对 bar，改用视口差值。
+    let left = chip.offsetLeft;
+    if (bar) {
+      const barRect = bar.getBoundingClientRect();
+      const chipRect = chip.getBoundingClientRect();
+      left = Math.min(chipRect.left - barRect.left, Math.max(bar.clientWidth - 148, 0));
+    }
     setMenu({ chipId, left });
   };
 
@@ -113,45 +165,67 @@ export function TerminalQuickBar(props: TerminalQuickBarProps) {
   return (
     <div ref={barRef} className="terminal-qbar" onMouseDown={(event) => event.stopPropagation()}>
       <span className="terminal-qbar-label">快捷命令</span>
-      <div className="terminal-qbar-chips">
-        {commands.map((cmd) =>
-          editingId === cmd.id ? (
-            <input
-              key={cmd.id}
-              ref={editInputRef}
-              className="terminal-qbar-edit-input"
-              value={editDraft}
-              placeholder="编辑命令"
-              title="Enter 确认 · Esc 取消"
-              onChange={(event) => setEditDraft(event.target.value)}
-              onBlur={commitChipEdit}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  commitChipEdit();
-                } else if (event.key === "Escape") {
-                  setEditingId(null);
-                  setEditDraft("");
-                }
-              }}
-            />
-          ) : (
-            <button
-              key={cmd.id}
-              type="button"
-              className="terminal-qbar-chip"
-              title={expandShortcutCwd(cmd.command, cwd)}
-              onClick={(event) => run(cmd.command, !event.metaKey)}
-              onContextMenu={(event) => openMenuFor(event, cmd.id)}
-            >
-              {cmd.label}
-            </button>
-          ),
-        )}
-        <button type="button" className="terminal-qbar-chip terminal-qbar-chip-add" title="管理快捷命令" onClick={onManage}>
-          <Plus size={11} />
-          管理
-        </button>
+      <div className="terminal-qbar-chips-wrap">
+        <div ref={chipsRef} className="terminal-qbar-chips" onScroll={updateArrows}>
+          {commands.map((cmd) =>
+            editingId === cmd.id ? (
+              <input
+                key={cmd.id}
+                ref={editInputRef}
+                className="terminal-qbar-edit-input"
+                value={editDraft}
+                placeholder="编辑命令"
+                title="Enter 确认 · Esc 取消"
+                onChange={(event) => setEditDraft(event.target.value)}
+                onBlur={commitChipEdit}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    commitChipEdit();
+                  } else if (event.key === "Escape") {
+                    setEditingId(null);
+                    setEditDraft("");
+                  }
+                }}
+              />
+            ) : (
+              <button
+                key={cmd.id}
+                type="button"
+                className="terminal-qbar-chip"
+                title={expandShortcutCwd(cmd.command, cwd)}
+                onClick={(event) => run(cmd.command, !event.metaKey)}
+                onContextMenu={(event) => openMenuFor(event, cmd.id)}
+              >
+                {cmd.label}
+              </button>
+            ),
+          )}
+        </div>
+        {canScrollLeft ? (
+          <button
+            type="button"
+            className="terminal-qbar-arrow terminal-qbar-arrow-left"
+            title="向左翻一屏"
+            onClick={() => pageChips(-1)}
+          >
+            <ChevronLeft size={13} />
+          </button>
+        ) : null}
+        {canScrollRight ? (
+          <button
+            type="button"
+            className="terminal-qbar-arrow terminal-qbar-arrow-right"
+            title="向右翻一屏"
+            onClick={() => pageChips(1)}
+          >
+            <ChevronRight size={13} />
+          </button>
+        ) : null}
       </div>
+      <button type="button" className="terminal-qbar-chip terminal-qbar-chip-add" title="管理快捷命令" onClick={onManage}>
+        <Plus size={11} />
+        管理
+      </button>
       <span className="terminal-qbar-hint">单击发送 · {formatKeyHint("⌘")}点仅填入 · 右键编辑</span>
       {menu && menuCommand ? (
         <div

@@ -22,7 +22,7 @@ import { TerminalSplitView, type FocusedPaneSnapshot, type PaneStateSnapshot } f
 import { useBrowserTerminalPip } from "./useBrowserTerminalPip.js";
 import { TerminalAI } from "./TerminalAI.js";
 import { PipExpandIcon } from "./PipExpandIcon.js";
-import { EmptyWorkbench } from "./EmptyWorkbench.js";
+import { LogEmptyState } from "./LogEmptyState.js";
 import { formatKeyHint } from "./key-hints.js";
 import type { TerminalTabState } from "./types.js";
 
@@ -1000,32 +1000,17 @@ export function TerminalPanel(props: TerminalPanelProps) {
         <div className="terminal-body-layout">
           <div ref={shellRef} className="terminal-main-shell">
             {!hasTabs ? (
-              /* T8 空态 → 方案 A 引导式工作台（原型 empty-states-a-v2 04 屏）：
-                 三步时间线 + 键位；主按钮 = 新建会话（未选服时禁用）。 */
-              <EmptyWorkbench
+              /* T8 空态（v4.1 06 页）：halo 统一骨架 —— 键位收进 chip（平台转换），
+                 主按钮 = 连接当前主机（未选服禁用）。 */
+              <LogEmptyState
                 className="in-terminal"
-                icon={<TerminalIcon size={13} strokeWidth={1.8} />}
-                eyebrow="终端 · 空会话"
+                icon={<TerminalIcon />}
                 title="未建立终端会话"
                 sub="连接服务器后在这里建立 SSH 会话；断线时网关保活 90 秒并自动重连。"
-                steps={[
-                  { title: "选择服务器", desc: "左侧列表点击，或 ⌘K 检索", state: "cur" },
-                  {
-                    title: "新建会话",
-                    desc: "⌘T 多标签并行，⌘W 关闭当前",
-                    actions: [{ label: `连接 ${terminalTitle}`, kind: "pri", onClick: () => newTab(), disabled: !props.serverId }],
-                  },
-                  { title: "AI 辅助", desc: "右上 ⚙ 配置后可在终端内唤起 AI 命令建议" },
-                ]}
-                keys={
-                  isElectronRuntime
-                    ? [
-                        { kbd: "⌘T", label: "新建" },
-                        { kbd: "⌘W", label: "关闭" },
-                        { kbd: "⌘F", label: "终端内查找" },
-                      ]
-                    : undefined
-                }
+                acts={[{ label: `连接 ${terminalTitle}`, kind: "pri", onClick: () => newTab(), disabled: !props.serverId }]}
+                chip={isElectronRuntime
+                  ? <>{formatKeyHint("⌘T")} 新建<span className="lp3-sep">·</span>{formatKeyHint("⌘W")} 关闭<span className="lp3-sep">·</span>{formatKeyHint("⌘F")} 终端内查找</>
+                  : undefined}
               />
             ) : (
               <>

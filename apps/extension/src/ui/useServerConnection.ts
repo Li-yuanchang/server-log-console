@@ -27,6 +27,7 @@ export type ServerConnectionAPI = {
   clearCredentialOfServer: (targetServerId: string) => Promise<void>;
   testServerCredentialById: (targetServerId: string) => Promise<void>;
   saveServerRouteForServer: () => Promise<void>;
+  applyJumpAssetCandidate: (assetId: string) => Promise<void>;
   searchJumpServerAssets: () => Promise<void>;
   testServerConnection: (targetDirectoryPath?: string, options?: { auto?: boolean }) => Promise<void>;
 };
@@ -366,6 +367,33 @@ export function useServerConnection(deps: {
     });
   }, [serverId, preferredBastionId, jumpMode, jumpSearchKeyword, jumpAssetId, withBusy, setServerRouteConfig, setBastionId, setJumpMode, setJumpSearchKeyword, setJumpAssetId, setJumpAssetOptions, jumpAssetAutoSearchKeyRef, fetchServers, setActionStatus, pushActivity, selectedServer, directoryPath]);
 
+  /* 候选结构化（chrome v1 2026-11-02）：弹窗里点选 JumpServer 候选 → 落库跳转资产并重连。
+     复用 saveServerRouteForServer 的落库 + 重连链路，jumpAssetId 由候选行指定。 */
+  const applyJumpAssetCandidate = useCallback(async (assetId: string) => {
+    if (!serverId) {
+      return;
+    }
+
+    await withBusy("正在应用跳转资产…", async () => {
+      const payload = await apiSaveServerRoute(serverId, {
+        preferredBastionId: preferredBastionId || undefined,
+        jumpMode,
+        jumpSearchKeyword: jumpSearchKeyword.trim() || undefined,
+        jumpAssetId: assetId
+      });
+      setServerRouteConfig(payload);
+      setBastionId(payload.preferredBastionId || "");
+      setJumpMode(payload.jumpMode || "auto");
+      setJumpSearchKeyword(payload.jumpSearchKeyword || "");
+      setJumpAssetId(payload.jumpAssetId || assetId);
+      setJumpAssetOptions([]);
+      jumpAssetAutoSearchKeyRef.current = "";
+      await fetchServers();
+      setActionStatus(`已选定跳转资产 ${assetId}，正在重连…`);
+      await testServerConnectionLocal(directoryPath.trim() || selectedServer?.basePath?.trim() || "/");
+    });
+  }, [serverId, preferredBastionId, jumpMode, jumpSearchKeyword, withBusy, setServerRouteConfig, setBastionId, setJumpMode, setJumpSearchKeyword, setJumpAssetId, setJumpAssetOptions, jumpAssetAutoSearchKeyRef, fetchServers, setActionStatus, pushActivity, selectedServer, directoryPath]);
+
   const searchJumpServerAssets = useCallback(async () => {
     if (!serverId) {
       return;
@@ -551,6 +579,7 @@ export function useServerConnection(deps: {
     clearCredentialOfServer,
     testServerCredentialById,
     saveServerRouteForServer,
+    applyJumpAssetCandidate,
     searchJumpServerAssets,
     testServerConnection: testServerConnectionLocal,
   };

@@ -43,7 +43,11 @@ export function ServerGroupsList(props: ServerGroupsListProps) {
     <>
       {filteredGroupedServers.map(([groupName, groupServers]) => (
         <section key={groupName} className="server-group">
-          <div className="server-group-title">{groupName}</div>
+          <div className="server-group-title">
+            {groupName}
+            {/* chrome v1 定稿 2026-11-02：组头右侧组内计数 */}
+            <span className="server-group-count">{groupServers.length}</span>
+          </div>
           <div className="server-list">
             {groupServers
               .map((server) => (
@@ -58,7 +62,8 @@ export function ServerGroupsList(props: ServerGroupsListProps) {
                     <span className={`server-status-dot ${server.id === serverId ? (connectionTestStatus?.connected ? "dot-connected" : "dot-pending") : "dot-idle"}`} />
                     <span className="server-item-main">
                       <strong>{server.name}</strong>
-                      <span>{server.host}</span>
+                      {/* chrome v1 定稿 2026-11-02：host 行带用户名（数据已有） */}
+                      <span>{server.username ? `${server.username}@` : ""}{server.host}</span>
                     </span>
                     <span className="server-item-meta">{server.port}</span>
                   </button>

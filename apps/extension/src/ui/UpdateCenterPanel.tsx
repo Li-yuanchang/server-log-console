@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { SlcDesktopUpdateState, SlcDesktopUpdateStatus } from "../types/desktop-update.js";
 import type { ToastState } from "./FeedbackOverlays.js";
+import { LogoLoader } from "./LogEmptyState.js";
 
 /* ============================================================
    软件更新面板（设置中心第三视图）
@@ -718,18 +719,15 @@ export function UpdateCenterPanel(props: UpdateCenterPanelProps) {
       </div>
 
       {/* 重启遮罩：点击「重启并安装」后先展示，稍候触发 install()。
-          2026-10-05 重设计（原型 restart-preview.html 方案 A）：品牌实底，
-          不再透出背后内容，与启动页（index.html #app-loading）同一套品牌语言。 */}
+          v4.1（2026-11-02）：换统一 logo 加载语言 —— 徽标 = icon.svg 三行日志行 + 波纹双环，
+          spinner 移除（徽标即唯一动效源）；亮底不变（styles-empty-state.css）。 */}
       {restartPending ? (
         <div className="settings-update-restart-overlay" role="alertdialog" aria-label="正在应用更新">
           <div className="restart-splash">
-            <div className="restart-splash-logo"><img src="./icon.svg" alt="" /></div>
+            <LogoLoader />
             <div className="restart-splash-word">日志控制台</div>
             <div className="restart-splash-ver">正在应用更新 {nextVersion || ""}</div>
-            <div className="restart-splash-row">
-              <span className="restart-splash-spin" aria-hidden="true" />
-              <span className="restart-splash-status">{restartStalled ? "重启被阻塞，可手动完成" : "即将自动重启"}</span>
-            </div>
+            <div className="restart-splash-status">{restartStalled ? "重启被阻塞，可手动完成" : "即将自动重启"}</div>
             {/* 正常重启时无需说明（状态行已表达）；仅在重启被阻塞时给出人工操作指引 */}
             {restartStalled ? (
               <div className="restart-splash-restore">请从托盘菜单退出客户端，重新打开即可完成安装</div>

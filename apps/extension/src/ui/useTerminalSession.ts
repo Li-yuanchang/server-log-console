@@ -87,13 +87,12 @@ function buildTerminalTheme(schemeId: TerminalColorSchemeId | undefined, shellBg
     foreground: follow ? (shellInk || t.foreground) : t.foreground,
     cursor: follow ? (shellInk || t.cursor) : t.cursor,
     cursorAccent: shellBg || t.background,
-    /* 2026-10-28 修复「选中效果一坨」（用户反馈）：
-       原先直接用各方案自带的 selectionBackground —— 都是**不透明实色**
-       （如 sage #3f6b55、console #1e5a94）。终端底图铺上之后，选中区变成
-       一块死板的色块，把背景图完全盖住、文字也糊在里面，观感极差。
-       改为半透明高亮：底色透出来、只在字符上加一层柔和着色。
-       rgba 三元组按宿主主题取一个中性偏亮的蓝白（深色终端上最清晰，
-       又不会与红/绿/黄等日志语义色混淆）。 */
+    /* 选区色：xterm 6 的 DOM 渲染器会把该值预混合成不透明色再画
+       （selectionBackgroundOpaque = blend(背景, 选区)，blend 丢弃 alpha），
+       单改这里的 rgba 并不能真的透出底图 —— 真正的透明化靠 align-s5-terminal.css
+       里对 .xterm-selection div 与选中 span 的 !important 覆盖。
+       这里保留半透明值作为语义声明（方案色相：中性偏亮的蓝白，深色终端上清晰，
+       不与红/绿/黄日志语义色混淆；若 xterm 未来尊重 alpha 则自动生效）。 */
     selectionBackground: "rgba(120, 170, 235, 0.30)",
     /* 选中文字保持原色不变，避免「选中后字也变色」导致阅读断裂 */
     selectionForeground: undefined,

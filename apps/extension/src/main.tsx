@@ -24,6 +24,7 @@ import "./align-controls.css";
 // 空状态工作台 + 侧栏底部五态状态条（方案 A 定稿 2026-10-04，
 // 原型 empty-states-a-v2.html；须在 theme-modern-v2 之后、styles-sidepanel 之前）
 import "./styles-empty-workbench.css";
+import "./styles-empty-state.css";
 // 环境覆盖层：Chrome 扩展侧栏（body.extension-sidepanel）窄容器适配，
 // 双主题生效 + grid 语义；必须最后加载（2026-10-02 自 theme-modern.css 迁出）
 import "./styles-sidepanel.css";

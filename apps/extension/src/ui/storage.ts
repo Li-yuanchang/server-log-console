@@ -199,6 +199,37 @@ export function writeLastServerId(serverId: string) {
   }
 }
 
+const recentServersStorageKey = "server-log-console:recent-servers";
+
+export type RecentServerMap = Record<string, number>;
+
+/** 每台服务器的最近选用时间（chrome v1 2026-11-03：快速连接列表「最近使用优先」）。
+    会话切换服务器时与 writeLastServerId 同点记录；上限 20 台，防 map 无限膨胀。 */
+export function readRecentServerMap(): RecentServerMap {
+  try {
+    const raw = globalThis.localStorage?.getItem(recentServersStorageKey);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as RecentServerMap;
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+export function touchRecentServer(serverId: string) {
+  try {
+    if (!serverId) return;
+    const map = readRecentServerMap();
+    map[serverId] = Date.now();
+    const entries = Object.entries(map)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 20);
+    globalThis.localStorage?.setItem(recentServersStorageKey, JSON.stringify(Object.fromEntries(entries)));
+  } catch {
+    return;
+  }
+}
+
 function normalizeTransferHistoryEntry(value: unknown): TransferHistoryEntry | null {
   if (!value || typeof value !== "object") {
     return null;

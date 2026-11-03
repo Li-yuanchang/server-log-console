@@ -3,7 +3,7 @@ import type { LogFileEntry, LogSearchTaskResponse } from "@server-log-console/sh
 import type { WorkspaceSession, WorkspaceSessionState } from "./types.js";
 import type { ViewerResultTab } from "./utils.js";
 import { createDefaultWorkspaceSessionState } from "./app-utils.js";
-import { readLastDirectoryMap, writeLastServerId } from "./storage.js";
+import { readLastDirectoryMap, touchRecentServer, writeLastServerId } from "./storage.js";
 
 /**
  * Grouped setter functions for workspace session state.
@@ -350,6 +350,7 @@ export function useWorkspaceSessionManager(params: WorkspaceSessionManagerParams
     setters.setPendingLiveFollowRestore(nextState.liveFollowEnabled ? nextState : null);
     setters.setActiveWorkspaceSessionId(session.id);
     writeLastServerId(session.serverId);
+    touchRecentServer(session.serverId);
     setters.setServerId(session.serverId);
     setters.setKeywordInput(nextState.keywordInput);
     setters.setKeywordMode(nextState.keywordMode);

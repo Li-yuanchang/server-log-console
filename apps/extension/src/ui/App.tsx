@@ -12,7 +12,7 @@ import { FileBrowserTableRows } from "./FileBrowserTableRows.js";
 import { FileBrowserTreeColumn } from "./FileBrowserTreeColumn.js";
 import { looksLikeJumpServer } from "./terminal-utils.js";
 import type { PreviewDialogState } from "./FilePreviewDialog.js";
-import type { ConfirmDialogState } from "./ModalDialogs.js";
+import { ConfirmDialog, type ConfirmDialogState } from "./ModalDialogs.js";
 import { ImportPreviewDialog } from "./ImportPreviewDialog.js";
 import { UploadConflictDialog } from "./UploadConflictDialog.js";
 import { TransferPipWindow } from "./TransferPipWindow.js";
@@ -43,7 +43,7 @@ import type {
   ServerSystemProfileResponse,
   ServerSummary
 } from "@server-log-console/shared";
-import { ArrowDown, ArrowLeft, Settings, Download, Copy, Bug, Bookmark, X, AlertTriangle, Search, Folder, ServerOff, FolderSearch, Lightbulb, ShieldCheck } from "lucide-react";
+import { ArrowDown, ArrowLeft, Settings, Download, Copy, Bug, Bookmark, X, AlertTriangle, Search, Folder, ServerOff, FolderSearch, FileText, Activity, ArrowDownToLine, ArrowUpToLine } from "lucide-react";
 import { TerminalPanel, type TerminalPaneSessionState } from "./TerminalWorkspace.js";
 import { ToolIcon } from "./ToolIcon.js";
 import { PipExpandIcon } from "./PipExpandIcon.js";
@@ -93,7 +93,7 @@ import { WorkspaceTabContextMenu, type WorkspaceTabMenuState } from "./Workspace
 import { WorkspaceSessionTabs } from "./WorkspaceSessionTabs.js";
 import { SettingsModalOverlay } from "./SettingsModalOverlay.js";
 import { WorkspaceStartupCards } from "./WorkspaceStartupCards.js";
-import { EmptyWorkbench } from "./EmptyWorkbench.js";
+import { LogEmptyState, LogoLoader } from "./LogEmptyState.js";
 import { CommandPalette } from "./CommandPalette.js";
 import { ImmediateTooltip } from "./ImmediateTooltip.js";
 import { DialogOverlays } from "./DialogOverlays.js";
@@ -123,6 +123,7 @@ import {
   formatPercent,
   formatPreviewSnippet,
   formatSliceProgressLabel,
+  parseJumpServerAssetCandidates,
   getParentDirectoryPath,
   getPreviewCacheKey,
   normalizeSearchInput,
@@ -136,6 +137,7 @@ import {
   readActivityPanelHeight,
   readBrowserTreeWidth,
   readDirectoryHistory,
+  readRecentServerMap,
   readGatewayConfig,
   readLastDirectoryMap,
   readLastSettingsView,
@@ -301,6 +303,13 @@ export function App() {
   const [blankContextMenu, setBlankContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [workspaceTabMenu, setWorkspaceTabMenu] = useState<WorkspaceTabMenuState | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
+  /* 关闭二次确认（2026-10-30 用户反馈「wind 点关闭直接 kill，没有反应时间」）：
+     主进程拦截 close 转告渲染层（自绘 ✕ / Alt+F4 统一），这里弹框。
+     独立于 confirmDialog：通用确认框的 onClose 被各流程共用，本流程取消时
+     需要专门回传主进程清挂起标记（cancelCloseWindow），故单独一套状态。 */
+  const [closeConfirmDialog, setCloseConfirmDialog] = useState<ConfirmDialogState | null>(null);
+  const closeConfirmOpenRef = useRef(false);
+  const closeConfirmDecidedRef = useRef(false);
   /* 连接失败提示（2026-10-29）：替代此前「失败即强制跳设置中心」的打断式行为。
      用户在弹框里自行决定「去修改凭证 / 稍后再说」，当前视图不受影响。 */
   const [connectionIssue, setConnectionIssue] = useState<{ message: string; hint: string } | null>(null);
@@ -423,6 +432,10 @@ export function App() {
   const [preserveTerminalOnInactive, setPreserveTerminalOnInactive] = useState(false);
   const [pendingLiveFollowRestore, setPendingLiveFollowRestore] = useState<WorkspaceSessionState | null>(null);
   const isWorkspaceSwitchLocked = isBusy || searchTask?.status === "queued" || searchTask?.status === "running";
+  /* 关闭会话只认检索锁：自动连接/存凭证这类 isBusy 动作有 serverIdRef 守卫，
+     中途关 tab 会被安全打断；而直连一次 5 秒起、连不上 30 秒+，用 isBusy 锁关闭
+     就是「点 × 没反应，要点好几下」（2026-11-03 用户反馈）。 */
+  const isSessionCloseLocked = searchTask?.status === "queued" || searchTask?.status === "running";
   const [fileLoadingName, setFileLoadingName] = useState("");
   const [isDragOver, setIsDragOver] = useState(false);
   /* 拖拽覆盖层摘要：dragover 阶段浏览器允许读 items.length（不能读内容），
@@ -1012,25 +1025,36 @@ export function App() {
 
     initializedRef.current = true;
     void initializeWorkbench();
-
-    // Fade out and remove the inline loading overlay from index.html
-    const splash = document.getElementById("app-loading");
-    if (splash) {
-      if ((window as any).__SLC_HOLD_SPLASH__) {
-        /* ?splash 预览模式：保持启动页可见（供设计走查），不影响正常入口 */
-      } else {
-        /* 最短展示 700ms（大屏/小屏同一策略）：本地服务就绪过快时启动页
-           不至于只闪一下；超出部分立即淡出，不人为拖慢启动 */
-        const MIN_SPLASH_MS = 700;
-        const shownAt = Number((window as any).__SLC_SPLASH_SHOWN_AT__) || 0;
-        const remaining = Math.max(0, MIN_SPLASH_MS - (Date.now() - shownAt));
-        setTimeout(() => {
-          splash.style.opacity = "0";
-          setTimeout(() => splash.remove(), 350);
-        }, remaining);
-      }
-    }
   }, []);
+
+  /* L1.1（2026-11-02 拍板）：启动页停留到本地服务就绪（localServiceState 离开 checking），
+     消除「splash 淡出后教学位 + 空侧栏抢跑」；超时 3s 兜底放行（落「服务就绪中」halo）。
+     最短展示 700ms 策略保留；?splash 预览模式仍常驻。 */
+  const splashStateRef = useRef({ removed: false, timeout: 0 });
+  useEffect(() => {
+    if ((window as any).__SLC_HOLD_SPLASH__ || splashStateRef.current.removed) return;
+    const splash = document.getElementById("app-loading");
+    if (!splash) return;
+    const removeSplash = () => {
+      if (splashStateRef.current.removed) return;
+      splashStateRef.current.removed = true;
+      window.clearTimeout(splashStateRef.current.timeout);
+      /* 最短展示 700ms（大屏/小屏同一策略）：本地服务就绪过快时启动页不至于只闪一下 */
+      const shownAt = Number((window as any).__SLC_SPLASH_SHOWN_AT__) || 0;
+      const remaining = Math.max(0, 700 - (Date.now() - shownAt));
+      window.setTimeout(() => {
+        splash.style.opacity = "0";
+        window.setTimeout(() => splash.remove(), 350);
+      }, remaining);
+    };
+    if (localServiceState === "checking") {
+      if (!splashStateRef.current.timeout) {
+        splashStateRef.current.timeout = window.setTimeout(removeSplash, 3000);
+      }
+      return;
+    }
+    removeSplash();
+  }, [localServiceState]);
 
   useEffect(() => {
     const serverIdChanged = serverId !== prevServerIdForResetRef.current;
@@ -1135,7 +1159,15 @@ export function App() {
       return;
     }
 
-    if (!serverId || autoConnectServerRef.current === serverId) {
+    if (!serverId) {
+      /* 关闭全部会话时清掉自动连接记忆：ref 不清的话，重开同一台服务器会被
+         「已连接过这台」判断跳过，主界面永远停在「正在连接」空态
+         （2026-11-03 用户反馈「关闭后再次打开就一直卡住」）。 */
+      autoConnectServerRef.current = "";
+      return;
+    }
+
+    if (autoConnectServerRef.current === serverId) {
       return;
     }
 
@@ -1655,6 +1687,7 @@ export function App() {
     workspaceSessions,
     activeWorkspaceSessionId,
     isWorkspaceSwitchLocked,
+    isSessionCloseLocked,
     manualServerDraft,
     workspaceSessionStatesRef,
     setServers,
@@ -1847,6 +1880,7 @@ export function App() {
     clearCredentialOfServer,
     testServerCredentialById,
     saveServerRouteForServer,
+    applyJumpAssetCandidate,
     searchJumpServerAssets,
     testServerConnection,
   } = useServerConnection({
@@ -2681,13 +2715,8 @@ export function App() {
   }
 
   const hasDirectoryConnectionError = isFileMode && connectionTestStatus !== null && !connectionTestStatus.connected;
-  /* S12-3：横幅粗体标题对齐原型 1032 行「连接失败 · 认证被拒绝」。
-     service 返回的 message 若含认证失败特征则补「认证被拒绝」，否则用通用「连接失败」。 */
-  const connectionErrorReason = (() => {
-    const raw = connectionTestStatus?.message || "";
-    if (/permission denied|publickey|password|auth|认证|拒绝|denied/i.test(raw)) return "认证被拒绝";
-    return "";
-  })();
+  /* connectionErrorReason 已随常驻横幅移除（2026-11-02）：横幅与连接失败弹窗重复，
+     失败提示统一走弹窗（conn-issue-dialog，含 重连/稍后再说/去修改凭证）。 */
   /* S14-4：水印 {时间} 占位符——分钟级，避免每帧变化 */
   const watermarkTimeLabel = (() => {
     const date = new Date();
@@ -2696,16 +2725,42 @@ export function App() {
   })();
   const isConnectingWorkspace =
     isFileMode && !hasDirectoryConnectionError && (!selectedServer || (!connectionTestStatus?.connected && !fileEntries.length));
+  /* 连接中 chip 的文案：真实 actionStatus 常自带「...」字面省略号，
+     与 lp3-ellip 的动画打点叠加会长短不一（用户 2026-11-02 实测）——
+     接 chip 前剥掉尾部字面省略号，动画打点统一由组件承担。 */
+  const connectingStatusText = (isBusy ? (actionStatus || "握手中") : "等待建立 SSH 连接")
+    .replace(/(?:\.{3}|…)+\s*$/u, "")
+    .trimEnd();
   const hasFileWorkspaceEntries = fileEntries.length > 0;
   const isDirectoryContentLoading =
     isFileMode
     && isDirectoryLoading;
   const showServiceOfflineState = localServiceState === "offline";
   const showNoServerState = localServiceState === "online" && !servers.length && !isBusy;
+  /* L1.1（2026-11-02）：checking 期间由「服务就绪中」halo 兜底（splash 超时放行后可见） */
+  const showServiceCheckingState = localServiceState === "checking";
+  /* chrome v1 2026-11-03：快速连接「最近使用优先」——会话切换服务器时记录时间戳（storage），
+     未使用过的按登记序兜底。此态本身低频，localStorage 每渲染读一次可接受。 */
+  const recentServerMap = readRecentServerMap();
   // 空态兜底：文件已选中但内容尚未加载（sliceData 为空 / HMR 状态残留 / live ws 断开）时，
   // 不再渲染空 console 黑洞，显示空态提示。
   const showViewerEmptyState = activeLogView === "search" && !hasSearchContent && !resultTabs.length && !fileLoadingName
     && (!filePath.trim() || !currentLogContent);
+  /* 0 字节文件单独成态（2026-10-31 用户反馈「0B 的文件打开咋这样」）：
+     文件已选、meta 已回但 size 为 0 时，既没有内容也没有检索语境 ——
+     走检索空态会教用户「输入关键字」，切片条还会显示「0 B / 0 B」。
+     meta 由 useLogViewer 按 filePath 匹配，这里再校验一次避免串到上一个文件。 */
+  const isEmptyFile = activeLogView === "search"
+    && activeViewerTabId === "file"
+    && Boolean(filePath.trim())
+    && activeFileMeta?.filePath === filePath
+    && activeFileMeta.size === 0;
+  /* ⑥ 结果页签 0 命中成态（v4.1）：现状 0 命中只是 viewer 里一行字面文本
+     （utils.ts formatSearchViewerContent），matchCount===0 时换静默光晕空态。
+     页签内 viewer 卸载/重挂丢滚动/高亮 —— 页签切换时内容本就整体替换，可接受。 */
+  const activeResultZeroHit = activeLogView === "search"
+    && activeViewerTabId !== "file"
+    && Boolean(activeResultTab && activeResultTab.matchCount === 0);
   const showCompactViewerChrome = pip.isPip || isStandaloneViewerWindow;
   // 浏览器 Document PiP：窗口框/关闭/返回由 Chrome 提供，自带按钮会重复 → 需隐藏
   const isBrowserDocumentPip = pip.isPip && Boolean(pip.pipWindow);
@@ -2757,6 +2812,32 @@ export function App() {
     });
     return () => { if (typeof unsubscribe === "function") unsubscribe(); };
   }, [filePath, selectedFileName, liveFollowEnabled, pip.isPip]);
+
+  /* 关闭二次确认（2026-10-30）：主进程拦截 close 后转告渲染层（自绘 ✕ / Alt+F4 统一）。
+     会话数取本窗口 pane 状态 —— 主窗口统计全部工作区终端，终端小窗统计自己的会话。
+     工具小窗（utility）主进程不拦截（系统边框），无须监听。 */
+  useEffect(() => {
+    const api = (window as any).electronAPI;
+    if (!api?.onCloseRequest || isStandaloneUtilityWindow) return;
+    return api.onCloseRequest(() => {
+      if (closeConfirmOpenRef.current) return;
+      closeConfirmOpenRef.current = true;
+      closeConfirmDecidedRef.current = false;
+      const connectedCount = Object.values(terminalPaneStatesRef.current).filter((state) => state?.connected).length;
+      setCloseConfirmDialog({
+        title: "关闭确认",
+        message: connectedCount > 0
+          ? `有 ${connectedCount} 个终端会话正在连接，关闭将断开全部连接。`
+          : "确定要关闭当前窗口吗？",
+        confirmText: "关闭",
+        danger: connectedCount > 0,
+        onConfirm: () => {
+          closeConfirmDecidedRef.current = true;
+          (window as any).electronAPI?.confirmCloseWindow?.();
+        },
+      });
+    });
+  }, []);
 
   useEffect(() => {
     if (terminalPanelOpen && !canOpenTerminal && !isStandaloneTerminalWindow) {
@@ -2972,15 +3053,6 @@ export function App() {
   const viewerOverviewLabel = viewerOverviewTotalLines
     ? `${formatNumber(viewerOverviewCurrentLine)}/${formatNumber(viewerOverviewTotalLines)}`
     : "--";
-  /* S12 空态文案对齐原型 1037 行：检索「还没有检索结果」+「输入关键字回车，或用 /关键字 语法」+「查看检索示例」。
-     2026-10-25 精简：去掉「在右下角使用回到底部」这类把操作路径写死的句子 ——
-     按钮位置随视图/窄档变化，写死反而引导失败；改为只说"能做什么"。 */
-  const viewerEmptyTitle = "还没有检索结果";
-  const viewerEmptyHint = liveFollowEnabled && filePath.trim()
-    ? "实时跟随已开启，等新日志写入…"
-    : !filePath
-      ? "输入关键字回车，或试试 /关键字 语法"
-      : "输入关键字后回车，或打开文件再看";
   const searchElapsedLabel = searchStartedAt ? formatDurationLabel(searchStartedAt, searchNow) : "";
   const isSearchView = activeLogView === "search";
   const activeSearchResultCount = activeViewerTabId === "file" ? (results?.matches.length ?? 0) : activeViewerMatchCount;
@@ -3608,9 +3680,6 @@ export function App() {
   if (isStandaloneTerminalWindow) {
     return (
       <main className={`${appShellClassName} pip-standalone pip-terminal-standalone`} style={appShellStyle}>
-        {/* Windows 自绘窗口控制：必须渲染在 <main> 直属层级（拖拽区之外）。
-            详见下方主窗口同名渲染处注释 —— 嵌在 drag 区里会被系统当标题栏吞掉点击。 */}
-        {hasWinControls ? <WindowControls /> : null}
         <section className="main-panel-terminal-standalone">
           {/* T7 独立终端窗：由 URL 的 terminalSessionId 构造单标签；分屏/弹出按钮在 standalone 隐藏 */}
           <TerminalPanel
@@ -3645,6 +3714,8 @@ export function App() {
             resources={terminalResources}
           />
         </section>
+        {/* Windows 自绘窗口控制：必须排在所有 drag 元素之后，与主窗口同理。 */}
+        {hasWinControls ? <WindowControls /> : null}
       </main>
     );
   }
@@ -3733,7 +3804,6 @@ export function App() {
 
   return (
     <main className={`${appShellClassName}${isStandalonePipWindow ? " pip-standalone" : ""}${showTransferHistory || showQueryAdvanced || (showUtilityWorkspace && canShowEmbeddedUtilityWorkspace) ? " v2-drawer-push" : ""}`} style={appShellStyle}>
-      {hasWinControls ? <WindowControls /> : null}
       <section className="shell-layout">
         <SidebarPanel
           uiTheme={uiTheme}
@@ -3768,6 +3838,7 @@ export function App() {
               workspaceSessions={workspaceSessions}
               activeWorkspaceSessionId={activeWorkspaceSessionId}
               isWorkspaceSwitchLocked={isWorkspaceSwitchLocked}
+              isSessionCloseLocked={isSessionCloseLocked}
               workspaceTabDragState={workspaceTabDragState}
               workspaceTabDragJustMovedRef={workspaceTabDragJustMovedRef}
               onActivateSession={activateWorkspaceSession}
@@ -3919,6 +3990,62 @@ export function App() {
                   ) : null}
                 </div>
               ) : !terminalAsWorkspaceView ? (
+              <>
+              {/* chrome v1 定稿（2026-11-02）：检索组上移进命令栏单行 —— 行序 =
+                  视图切换 → 检索组 → 动作组；检索钮删除（回车检索），summary 行并入
+                  viewer-actions-strip（由 viewer-strip 唯一承载）。 */}
+              <SearchQueryPanel
+                showKeywordBar={showKeywordBar}
+                showQueryAdvanced={showQueryAdvanced}
+                onToggleQueryAdvanced={() => {
+                  setShowQueryAdvanced((current) => !current);
+                }}
+                hasServer={!!serverId}
+                keywordInputRef={keywordInputRef}
+                onKeywordInputChange={setKeywordInput}
+                onRunSearch={() => { void runSearch(); }}
+                settings={{
+                  keywordInput,
+                  keywordMode,
+                  excludeInput,
+                  contextLines,
+                  useRegex,
+                  selectedPreset,
+                  startDate,
+                  endDate,
+                  startTime,
+                  endTime,
+                }}
+                onKeywordModeChange={setKeywordMode}
+                onExcludeInputChange={setExcludeInput}
+                onContextLinesChange={setContextLines}
+                onToggleRegex={() => {
+                  setUseRegex(!useRegex);
+                  setSelectedPreset(!useRegex ? "正则" : "自定义");
+                }}
+                onStartDateChange={setStartDate}
+                onEndDateChange={setEndDate}
+                onStartTimeChange={setStartTime}
+                onEndTimeChange={setEndTime}
+                searchPresets={searchPresets}
+                onResetAdvanced={() => {
+                  setKeywordInput("");
+                  setStartDate("");
+                  setEndDate("");
+                  setStartTime("");
+                  setEndTime("");
+                  setSelectedPreset("自定义");
+                }}
+                multiFileMode={multiFileMode}
+                onToggleMultiFileMode={() => setMultiFileMode(!multiFileMode)}
+                filePattern={filePattern}
+                onFilePatternChange={setFilePattern}
+                searching={Boolean(searchStartedAt)}
+                /* 原型 S13：检索进度内联在输入组右端（如 340MB/1.2GB），不锁界面 */
+                searchProgressLabel={searchTask && searchTask.totalBytes > 0
+                  ? `${formatBytes(searchTask.scannedBytes)}/${formatBytes(searchTask.totalBytes)}`
+                  : ""}
+              />
               <SearchToolbarActions
                 uiTheme={uiTheme}
                 isElectron={isElectron}
@@ -3945,75 +4072,8 @@ export function App() {
                   setShowQueryAdvanced((current) => !current);
                 }}
               />
+              </>
               ) : null}
-            {/* 检索面板仅日志预览显示（原型 s1）；终端/文件模式各自的工具区在其视图内 */}
-            {!isFileMode && !terminalAsWorkspaceView ? (
-            <SearchQueryPanel
-              showKeywordBar={showKeywordBar}
-              showQueryAdvanced={showQueryAdvanced}
-              onToggleQueryAdvanced={() => {
-                setShowQueryAdvanced((current) => !current);
-              }}
-              hasServer={!!serverId}
-              keywordInputRef={keywordInputRef}
-              onKeywordInputChange={setKeywordInput}
-              onRunSearch={() => { void runSearch(); }}
-              /* 1+2 合并：结果摘要行并入 viewer-actions-strip（避免与「文件预览 · xxx」标题行重复） */
-              showSummary={false}
-              toolbarSummaryLabel={toolbarSummaryLabel}
-              toolbarMetaLabel={toolbarMetaLabel}
-              settings={{
-                keywordInput,
-                keywordMode,
-                excludeInput,
-                contextLines,
-                useRegex,
-                selectedPreset,
-                startDate,
-                endDate,
-                startTime,
-                endTime,
-              }}
-              onKeywordModeChange={setKeywordMode}
-              onExcludeInputChange={setExcludeInput}
-              onContextLinesChange={setContextLines}
-              onToggleRegex={() => {
-                setUseRegex(!useRegex);
-                setSelectedPreset(!useRegex ? "正则" : "自定义");
-              }}
-              onStartDateChange={setStartDate}
-              onEndDateChange={setEndDate}
-              onStartTimeChange={setStartTime}
-              onEndTimeChange={setEndTime}
-              searchPresets={searchPresets}
-              onResetAdvanced={() => {
-                setKeywordInput("");
-                setStartDate("");
-                setEndDate("");
-                setStartTime("");
-                setEndTime("");
-                setSelectedPreset("自定义");
-              }}
-              multiFileMode={multiFileMode}
-              onToggleMultiFileMode={() => setMultiFileMode(!multiFileMode)}
-              filePattern={filePattern}
-              onFilePatternChange={setFilePattern}
-              searching={Boolean(searchStartedAt)}
-              /* 原型 S13 第 02 段：检索进度内联在按钮上（如 340MB/1.2GB），不锁界面。
-                 字节数据来自 LogSearchTaskResponse 的 scannedBytes / totalBytes。 */
-              searchProgressLabel={searchTask && searchTask.totalBytes > 0
-                ? `${formatBytes(searchTask.scannedBytes)}/${formatBytes(searchTask.totalBytes)}`
-                : ""}
-              highlightSummary={activeHighlightSummary}
-              onHighlightPrev={() => focusHighlight("prev")}
-              onHighlightNext={() => focusHighlight("next")}
-              resultContextMode={resultContextMode}
-              canToggleResultContext={canToggleResultContext}
-              onToggleResultContext={() => setResultContextMode((current) => !current)}
-              canDownloadResults={Boolean(activeResultTab || results)}
-              onDownloadResults={exportCurrentResults}
-            />
-            ) : null}
             </div>
 
             {/* connection info in sidebar */}
@@ -4021,6 +4081,7 @@ export function App() {
 
           <section className={`workspace-panel ${isFileMode ? "workspace-panel-files" : ""}${terminalAsWorkspaceView ? " workspace-panel-terminal" : ""}`}>
             <WorkspaceStartupCards
+              showServiceCheckingState={showServiceCheckingState}
               showServiceOfflineState={showServiceOfflineState}
               showNoServerState={showNoServerState}
               isElectron={isElectron}
@@ -4103,7 +4164,7 @@ export function App() {
                 time={watermarkTimeLabel}
               />
               </>
-            ) : !showServiceOfflineState && !showNoServerState && !terminalDetached && (
+            ) : !showServiceOfflineState && !showNoServerState && !showServiceCheckingState && !terminalDetached && (
               <>
                 {(!isFileMode || pip.isPip) ? (
                 <>
@@ -4379,7 +4440,7 @@ export function App() {
                 {/* 3+4 合并：切片条与实时状态带并成一行（原型此二处本就相邻） */}
                 {!showCompactViewerChrome && (showReaderRail || (activeLogView === "search" && Boolean(filePath || liveFollowEnabled))) ? (
                   <div className="log-view-bar" aria-label="日志视图状态">
-                  {showReaderRail ? (
+                  {showReaderRail && !isEmptyFile ? (
                   <div className="slicebar" aria-label="大文件切片定位">
                     <button
                       type="button"
@@ -4423,8 +4484,14 @@ export function App() {
                       onClick={() => { if (atFileTail) void loadHeadSlice(); else void loadTailSlice(); }}
                       disabled={isBusy || !filePath.trim()}
                       title={atFileTail ? "回到文件开头" : "跳到文件末尾"}
+                      aria-label={atFileTail ? "回到文件开头" : "跳到文件末尾"}
                     >
-                      {atFileTail ? "回到头部" : "跳到尾部"}
+                      {/* 窄档只留图标（styles/align-s4-s6.css 按 viewer 容器宽度隐藏文字）：
+                          文字版在中等宽度下会把整条 log-view-bar 撑溢出。 */}
+                      {atFileTail
+                        ? <ArrowUpToLine size={13} strokeWidth={1.8} aria-hidden="true" />
+                        : <ArrowDownToLine size={13} strokeWidth={1.8} aria-hidden="true" />}
+                      <span className="slicebar-tail-label">{atFileTail ? "回到头部" : "跳到尾部"}</span>
                     </button>
                   </div>
                   ) : null}
@@ -4434,9 +4501,9 @@ export function App() {
                   <div className="rtools" aria-label="实时状态">
                     {/* LIVE 徽标已移除：与顶部工具栏的 LIVE 按钮重复（用户反馈）。
                         实时状态由顶部 LIVE 按钮承载，此处只保留文件说明 + 过滤 + 暂停。 */}
-                    <span className="rt-note">
-                      {selectedFileName || "eos-server.log"} · tail -F · 自动重连
-                    </span>
+                    {/* 文件名不再重复展示：上方「文件预览 · 文件名」标题行已有；
+                        长文件名会把整行撑溢出，「回到头部」按钮会叠到文字上（用户反馈 2026-10-30） */}
+                    <span className="rt-note">tail -F · 自动重连</span>
                     <span className="rt-spacer" />
                     <span className="rt-filter">
                       <ToolIcon theme={uiTheme} kind="filter" />
@@ -4526,7 +4593,18 @@ export function App() {
                   </div>
                 ) : null}
 
-                {!showViewerEmptyState ? (
+                {activeResultZeroHit ? (
+                  /* ⑥ 结果页签 0 命中（v4.1 定稿）：chip 只显示「命中 0 · 范围」（F2，
+                     扫描量/耗时不随页签存，不展示）；单按钮「重新检索」（F3 已裁决删除
+                     「清除时间限定」）。回车检索聚焦 = handleViewerEmptyPrimary 现有行为。 */
+                  <LogEmptyState
+                    icon={<Search />}
+                    title="没有匹配的日志"
+                    sub={`「${keywordInput.trim() || activeResultTab?.label || "关键字"}」在 ${activeResultTab?.sourceLabel ?? "当前范围"} 中 0 命中。试试更短的关键字，或缩小检索范围。`}
+                    acts={[{ label: "重新检索", kind: "pri", onClick: () => { void runSearch(); } }]}
+                    chip={<>命中 0<span className="lp3-sep">·</span>{activeResultTab?.sourceLabel ?? "当前范围"}</>}
+                  />
+                ) : !showViewerEmptyState ? (
                   <>
                     {lineContextState?.jumpSource && activeLogView === "search" && activeViewerTabId === "file" && !showCompactViewerChrome ? (
                       <div className="viewer-jump-context-bar">
@@ -4568,17 +4646,15 @@ export function App() {
                       </div>
                     ) : null}
                     {fileLoadingName && !currentLogContent ? (
-                      <div className="file-loading-overlay">
-                        <div className="file-loading-card">
-                          <div className="file-loading-head">
-                            <strong>{fileLoadingName}</strong>
-                            <span>{selectedServer?.name || selectedServer?.host || "当前连接"}</span>
-                          </div>
-                          <div className="file-loading-bar"><div className="file-loading-bar-fill" /></div>
-                          <div className="file-loading-label">
-                            <strong>{actionStatus}</strong>
-                            <span>{activeViewerTabId === "file" ? formatSliceProgressLabel(sliceProgress) : compactReaderHint}</span>
-                          </div>
+                      /* L3.0 打开文件加载（v4.1）：无卡浮层 —— logo 徽标波纹 + 文件行 +
+                         log-bar 进度（幽灵行同形，不定态扫动）+ 状态行；
+                         loading 与空占位互斥：本分支仅在内容为空的加载期渲染。 */
+                      <div className="file-loading-overlay lpload" role="status">
+                        <div className="lg-unit">
+                          <LogoLoader small />
+                          <div className="lg-file"><b>{fileLoadingName}</b><span>{selectedServer?.name || selectedServer?.host || "当前连接"}</span></div>
+                          <div className="lg-progress"><i /></div>
+                          <div className="lg-note"><b>{actionStatus || "正在读取"}</b><span>{activeViewerTabId === "file" ? formatSliceProgressLabel(sliceProgress) : compactReaderHint}</span></div>
                         </div>
                       </div>
                     ) : null}
@@ -4728,36 +4804,67 @@ export function App() {
                       ) : null}
                     </div>
                   </>
+                ) : isEmptyFile ? (
+                  /* ④ 0 字节文件（v4.1 定稿）：文件确实为空 ≠ 没有检索结果；
+                     主行动按实时跟随开关切换，次行动退到文件目录。 */
+                  <LogEmptyState
+                    icon={<FileText />}
+                    title="文件当前为空"
+                    sub={liveFollowEnabled
+                      ? "实时跟随已连接，程序写入后会自动显示在这里。"
+                      : "0 字节的空文件。开启实时跟随后，程序写入会自动显示在这里。"}
+                    acts={[
+                      { label: "返回文件目录", onClick: () => setActiveLogView("files") },
+                      { label: "开启实时跟随", kind: "pri", onClick: toggleToolbarLive, disabled: !canToolbarLive },
+                    ]}
+                    chip={<>tail -F {selectedFileName || filePath.trim()}<span className="lp3-sep">·</span>程序启动后才写日志</>}
+                  />
+                ) : searchStartedAt ? (
+                  /* ⑤ 检索进行中（v4.1 拍板 2026-11-02）：loading 语义接管空态画面，
+                     与顶部「检索中 · 耗时」同源（searchStartedAt / searchTask）。 */
+                  <LogEmptyState
+                    icon={<Search />}
+                    live
+                    title="检索中"
+                    sub="正在按关键字扫描，完成后自动打开结果页签，期间可继续浏览当前文件。"
+                    chip={<>{searchTask && searchTask.totalBytes > 0 ? `${formatBytes(searchTask.scannedBytes)}/${formatBytes(searchTask.totalBytes)}` : "正在扫描"}<span className="lp3-sep">·</span>已用时 {searchElapsedLabel || "0 秒"}<i className="lp3-ellip" aria-hidden="true" /></>}
+                  />
+                ) : liveFollowEnabled && filePath.trim() ? (
+                  /* ③ 实时等待（v4.1）：相位映射真实字段（F7）——已连接 / 连接中 / 重连中 N；
+                     无动作按钮：暂停 / 过滤由 rtools 状态带承载（F8），空态不重复。 */
+                  <LogEmptyState
+                    icon={<Activity />}
+                    live
+                    title="等待新日志写入"
+                    sub="实时跟随已开启，程序写入后会自动滚动到这里，无需手动刷新。"
+                    chip={<><span className="lp3-dot" aria-hidden="true" />tail -F {selectedFileName || filePath.trim()}<span className="lp3-sep">·</span>{liveFollowConnected ? "已连接 · 自动重连" : liveFollowRetryCount > 0 ? `重连中 ${liveFollowRetryCount}` : "连接中"}<i className="lp3-ellip" aria-hidden="true" /></>}
+                  />
+                ) : filePath.trim() ? (
+                  /* ② 已选文件 · 内容空兜底（v4.1 新增）：读取失败 / HMR 残留 / live ws 断开残留；
+                     不教「输入关键字」，给重新加载 + 退路。 */
+                  <LogEmptyState
+                    icon={<FileText />}
+                    title="文件内容暂未加载"
+                    sub={`${selectedFileName || "文件"} 实际大小 ${activeFileMeta?.filePath === filePath ? formatBytes(activeFileMeta.size) : "--"}，但当前没有读到内容，多为读取失败或上次会话残留。重新加载即可恢复。`}
+                    acts={[
+                      { label: "打开文件目录", onClick: () => setActiveLogView("files") },
+                      { label: "重新加载", kind: "pri", onClick: () => { void loadTailSlice({ forceRefresh: true }); } },
+                    ]}
+                    chip={<>{selectedFileName || filePath.trim()}<span className="lp3-sep">·</span>{activeFileMeta?.filePath === filePath ? formatBytes(activeFileMeta.size) : "--"}<span className="lp3-sep">·</span>已读 0 行</>}
+                  />
                 ) : (
-                  /* 方案 A 空态工作台（原型 empty-states-a-v2 03 屏）：
-                     eyebrow + 标题 + 副文案 + 三步时间线 + 键位 + 提示卡。
-                     「最近检索」无真实数据源，右栏只放实时跟随提示（偏差③）。 */
-                  <EmptyWorkbench
-                    className="viewer-empty-host"
-                    icon={<Search size={13} strokeWidth={1.8} />}
-                    tipIcon={<Lightbulb size={12} strokeWidth={1.8} />}
-                    eyebrow="日志检索"
-                    title={viewerEmptyTitle}
-                    sub={viewerEmptyHint}
-                    steps={[
-                      {
-                        title: "输入关键字",
-                        desc: "回车执行；也可以先打开文件",
-                        state: "cur",
-                        actions: [
-                          { label: "打开文件目录", kind: "ghost", onClick: () => setActiveLogView("files") },
-                          { label: "查看示例", kind: "pri", onClick: () => { handleViewerEmptyPrimary(); } },
-                        ],
-                      },
-                      { title: "语法限定", desc: "/ERROR 精确匹配 · /time 10:00 限定时间" },
-                      { title: "实时跟随", desc: "⌥L 开启后自动滚到最新" },
+                  /* ① 未选文件 · 未检索（v4.1 定稿主态）：幽灵行是全族唯一装饰位；
+                     「聚焦检索框」= handleViewerEmptyPrimary（F5：原「查看示例」名不副实已裁）。 */
+                  <LogEmptyState
+                    icon={<Search />}
+                    title="暂无日志内容"
+                    sub="输入关键字回车开始检索，或打开文件目录选择一份日志文件。"
+                    acts={[
+                      { label: "打开文件目录", onClick: () => setActiveLogView("files") },
+                      { label: "聚焦检索框", kind: "pri", onClick: () => { handleViewerEmptyPrimary(); } },
                     ]}
-                    keys={[
-                      { kbd: "⌘F", label: "检索" },
-                      { kbd: "⌥L", label: "实时跟随" },
-                      { kbd: "⌘E", label: "检索示例" },
-                    ]}
-                    tip="实时跟随已开启时，新日志写入会自动出现在结果里，无需手动刷新。"
+                    chip={<>/ERROR 精确匹配<span className="lp3-sep">·</span>/time 10:00 限定时间段</>}
+                    bars
                   />
                 )}
                 </div>
@@ -4775,86 +4882,57 @@ export function App() {
 
                 {isConnectingWorkspace ? (
                   selectedServer ? (
-                    /* 方案 A 连接中进度态（原型 02 屏）：spinner 节点 + mono 实时行；
-                       进度文案取真实 actionStatus，不造假进度。 */
-                    <EmptyWorkbench
-                      icon={<Folder size={13} strokeWidth={1.8} />}
-                      tipIcon={<ShieldCheck size={12} strokeWidth={1.8} />}
-                      eyebrow="文件目录 · 连接中"
+                    /* L2.1b 连接中（v4.1 06 页）：live 徽章 = 唯一 loading（步骤① spinner 退役）；
+                       actionStatus 实时并入 chip 打点。 */
+                    <LogEmptyState
+                      icon={<Folder />}
+                      live
                       title={`正在连接 ${selectedServer.name}`}
                       sub="通常 2 秒内完成，连上后自动打开目录。"
-                      /* loading 单一化（用户反馈 2026-10-06：live 行与步骤① spinner 重复）：
-                         不再渲染独立 live 行，实时 actionStatus 并入步骤①描述，
-                         步骤① spinner = 唯一加载指示 */
-                      steps={[
-                        { title: "建立连接", desc: isBusy ? (actionStatus || "握手中") : "等待建立 SSH 连接", state: "wait" },
-                        { title: "读取目录", desc: "连上后自动加载" },
-                        { title: "记住位置", desc: "下次直达最近目录" },
-                      ]}
-                      keys={[{ kbd: "⌘,", label: "连接设置" }]}
-                      tip="连不上？多半是网络或密码问题，可在设置中心改。"
+                      chip={<>{connectingStatusText}<i className="lp3-ellip" aria-hidden="true" /></>}
                     />
                   ) : (
-                    /* 方案 A 未选服务器（原型 01 屏）：右栏「快速连接」= 真实服务器列表前 4 台；
-                       窄档降级 chips + 全宽「选择服务器」按钮（打开选服层）。 */
-                    <EmptyWorkbench
-                      icon={<Folder size={13} strokeWidth={1.8} />}
-                      eyebrow="文件目录"
+                    /* L2.1a 未选服务器（v4.1 06 页）：快速连接面板 → 结构化行列表（真实前 4 台）；
+                       ⌘K 收进 chip。 */
+                    <LogEmptyState
+                      icon={<Folder />}
                       title="先选一台服务器"
                       sub="选好后就能浏览远程目录、上传文件、打开日志。"
-                      steps={[
-                        { title: "选择服务器", desc: "点左边任一台，或用下方按钮", state: "cur" },
-                        { title: "浏览目录", desc: "双击文件夹进入下一级" },
-                        { title: "查看日志", desc: "点 .log / .txt 直接打开" },
-                      ]}
-                      keys={[
-                        { kbd: "⌘K", label: "服务器检索" },
-                        { kbd: "⌘T", label: "新建终端" },
-                        { kbd: "⌘/", label: "全部快捷键" },
-                      ]}
-                      panel={{
-                        title: "快速连接",
-                        rows: servers.slice(0, 4).map((server) => ({
-                          dot: "idle" as const,
-                          title: server.name,
-                          meta: `${server.username}@${server.host}:${server.port}`,
-                          action: "连接",
-                          onAction: () => selectServerById(server.id),
-                          onClick: () => selectServerById(server.id),
-                        })),
-                      }}
-                      footerNarrow={
-                        <button type="button" className="ghost-button ewb-cta-full" onClick={() => setServerPickerOpen(true)}>
-                          选择服务器
-                        </button>
+                      acts={[{ label: "打开检索", kind: "pri", onClick: () => setPaletteOpen(true) }]}
+                      steps={[{ t: "选择服务器", cur: true }, { t: "浏览目录" }, { t: "查看日志" }]}
+                      extra={
+                        <div className="lp3-qlist">
+                          {/* chrome v1 2026-11-03：最近使用优先（未用过的按登记序兜底），
+                              原为 servers.slice(0,4) 纯登记序，与使用习惯无关（用户质疑） */}
+                          {[...servers]
+                            .sort((a, b) => (recentServerMap[b.id] ?? 0) - (recentServerMap[a.id] ?? 0))
+                            .slice(0, 4)
+                            .map((server) => (
+                              <button key={server.id} type="button" className="lp3-qrow" onClick={() => selectServerById(server.id)}>
+                                <span className="lp3-qdot" aria-hidden="true" />
+                                <b>{server.name}</b>
+                                <span className="qmeta">{server.username}@{server.host}:{server.port}</span>
+                                <span className="qact">连接</span>
+                              </button>
+                            ))}
+                        </div>
                       }
+                      chip={<>⌘K 检索全部 {servers.length} 台</>}
                     />
                   )
                 ) : hasDirectoryConnectionError ? (
-                  /* S12 原型：连接错误用内容区顶部横幅（不挡内容），
-                     含图标 + 中文原因 + 主机上下文 + [重连][连接设置] */
-                  <div className="connection-error-banner" role="alert">
-                    <span className="connection-error-banner-icon" aria-hidden="true">
-                      <AlertTriangle size={15} strokeWidth={1.9} />
-                    </span>
-                    <span className="connection-error-banner-msg">
-                      <b>连接失败{connectionErrorReason ? ` · ${connectionErrorReason}` : ""}</b>
-                      <span>
-                        {" — "}
-                        {connectionTestStatus?.message || "无法连接到服务器，请检查网络、凭证或服务器状态。"}
-                        {selectedServer ? ` · ${selectedServer.username}@${selectedServer.host}:${selectedServer.port}` : ""}
-                      </span>
-                      <span className="connection-error-banner-hint">
-                        凭证可能已过期；导入的密码可在设置中心重新获取。
-                      </span>
-                    </span>
-                    <button className="ghost-button" onClick={() => testServerConnection(selectedServer?.basePath?.trim() || "/")} disabled={isBusy}>
-                      重连
-                    </button>
-                    <button className="ghost-button confirm-btn-primary" onClick={() => openSettingsWorkspace("connections")}>
-                      连接设置
-                    </button>
-                  </div>
+                  /* 连接失败 = 空占位（用户 2026-11-02：关掉弹窗后应见失败态，而非「目录为空」）。
+                     常驻横幅已删（与弹窗重复）；此处 halo 承载失败态，动作 = 重连 / 连接设置。 */
+                  <LogEmptyState
+                    icon={<ServerOff />}
+                    title="连接失败"
+                    sub={connectionTestStatus?.message || "无法连接到服务器，请检查网络、凭证或服务器状态。"}
+                    acts={[
+                      { label: "重连", kind: "pri", onClick: () => { void testServerConnection(selectedServer?.basePath?.trim() || "/"); }, disabled: isBusy },
+                      { label: "连接设置", onClick: () => openSettingsWorkspace("connections") },
+                    ]}
+                    chip={selectedServer ? <>{selectedServer.username}@{selectedServer.host}<span className="lp3-sep">·</span>{selectedServer.port}</> : undefined}
+                  />
                 ) : hasFileWorkspaceEntries ? (
                   <FileBrowserGrid
                     browserGridRef={browserGridRef}
@@ -5464,8 +5542,46 @@ export function App() {
               <strong id="conn-issue-title">连接失败</strong>
             </div>
             <p className="conn-issue-msg">{connectionIssue.message}</p>
+            {/* 候选结构化（chrome v1 2026-11-02）：gateway 的「候选：1:…，2:…」解析成行列表，
+                点选 = 落库跳转资产并自动重连（applyJumpAssetCandidate）；解析失败回落纯文本。 */}
+            {(() => {
+              const candidates = parseJumpServerAssetCandidates(connectionIssue.message);
+              if (!candidates.length) return null;
+              return (
+                <div className="conn-issue-candidates" role="listbox" aria-label="跳转资产候选">
+                  {candidates.map((candidate) => (
+                    <button
+                      key={candidate.id}
+                      type="button"
+                      className="conn-issue-candidate"
+                      onClick={() => { setConnectionIssue(null); void applyJumpAssetCandidate(candidate.id); }}
+                      disabled={isBusy}
+                    >
+                      <span className="conn-issue-candidate-id mono">{candidate.id}</span>
+                      <span className="conn-issue-candidate-main">
+                        <b>{candidate.name}</b>
+                        <span>{candidate.address}</span>
+                      </span>
+                      <span className="conn-issue-candidate-use">使用</span>
+                    </button>
+                  ))}
+                </div>
+              );
+            })()}
             {connectionIssue.hint ? <p className="conn-issue-hint">{connectionIssue.hint}</p> : null}
             <div className="conn-issue-actions">
+              {/* 重连：功能对齐被移除的常驻横幅（2026-11-02），失败后免进设置中心即可重试 */}
+              <button
+                type="button"
+                className="ghost-button"
+                onClick={() => {
+                  setConnectionIssue(null);
+                  void testServerConnection(selectedServer?.basePath?.trim() || "/");
+                }}
+                disabled={isBusy}
+              >
+                重连
+              </button>
               <button type="button" className="ghost-button" onClick={() => setConnectionIssue(null)}>
                 稍后再说
               </button>
@@ -5655,6 +5771,25 @@ export function App() {
         user={credentialUsername || selectedServer?.username || "用户"}
         host={selectedServer?.name || selectedServer?.host || "主机"}
         time={watermarkTimeLabel}
+      />
+      {/* Windows 自绘窗口控制：必须排在所有 -webkit-app-region:drag 元素**之后**。
+          Electron 按 DOM 顺序叠加拖拽区（drag 并集、no-drag 差集），按钮若先出现，
+          后面顶栏的 drag 矩形会把按钮区重新并回标题栏 → 浏览器侧命中测试返回
+          HTCAPTION，click 根本进不了网页（表现为无 hover、点不动、双击才最大化）。
+          视觉位置不受影响：.win-window-controls 是 position:fixed。 */}
+      {hasWinControls ? <WindowControls /> : null}
+      {/* 关闭二次确认弹窗（Windows 自绘 ✕ / Alt+F4 统一）：onClose 覆盖取消/Esc/点遮罩，
+          未确认时回传主进程清挂起标记，下次关闭会重新询问。无 app-region 样式，
+          不影响上方 WindowControls 的拖拽区顺序要求。 */}
+      <ConfirmDialog
+        dialog={closeConfirmDialog}
+        onClose={() => {
+          setCloseConfirmDialog(null);
+          closeConfirmOpenRef.current = false;
+          if (!closeConfirmDecidedRef.current) {
+            (window as any).electronAPI?.cancelCloseWindow?.();
+          }
+        }}
       />
     </main>
   );

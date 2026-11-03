@@ -516,74 +516,9 @@
   padding: 48px 24px;
   animation: file-loading-fade-in 0.24s cubic-bezier(0.22, 0.61, 0.36, 1) both;
 }
-.file-loading-card {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  width: min(300px, 100%);
-  padding: 16px;
-  border-radius: 12px;
-  background: linear-gradient(180deg, color-mix(in srgb, var(--panel) 94%, transparent), color-mix(in srgb, var(--panel) 86%, transparent));
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.07), inset 0 1px 0 rgba(255, 255, 255, 0.74);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
-}
-.file-loading-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
-.file-loading-head strong {
-  min-width: 0;
-  font-size: var(--fs-sm);
-  font-weight: 600;
-  color: var(--ink, #1f2a37);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.file-loading-head span {
-  flex: none;
-  font-size: var(--fs-2xs);
-  color: var(--ink-soft, #5f6b7a);
-  white-space: nowrap;
-}
-.file-loading-bar {
-  height: 3px;
-  border-radius: 3px;
-  background: rgba(15, 23, 42, 0.055);
-  overflow: hidden;
-}
-.file-loading-bar-fill {
-  width: 34%;
-  height: 100%;
-  border-radius: 3px;
-  background: linear-gradient(90deg, transparent, rgba(100, 116, 139, 0.18), rgba(100, 116, 139, 0.42), rgba(100, 116, 139, 0.18), transparent);
-  animation: file-loading-sweep 2.4s ease-in-out infinite, file-loading-pulse 2.4s ease-in-out infinite;
-}
-.file-loading-label {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.file-loading-label strong {
-  font-size: var(--fs-sm);
-  font-weight: 600;
-  color: var(--ink, #1e293b);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  letter-spacing: -0.01em;
-}
-.file-loading-label span {
-  font-size: var(--fs-2xs);
-  color: rgba(100, 116, 139, 0.78);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
+/* .file-loading-card/-head/-bar/-label 已删除（2026-11-02）：
+   打开文件加载换统一 logo 加载语言（LogoLoader 无卡浮层，styles-empty-state.css），
+   定位仍沿用上方 .file-loading-overlay；卡片盒退役。 */
 .viewer-content-loading {
   opacity: 0;
   height: 0;

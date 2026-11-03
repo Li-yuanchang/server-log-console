@@ -516,3 +516,26 @@ export function searchWithinMatches(baseMatches: LogSearchResponse["matches"], k
     scopeLabel: `继承上一次结果 · ${formatNumber(baseMatches.length)} 条`
   } satisfies LogSearchResponse;
 }
+
+export interface JumpServerAssetCandidate {
+  id: string;
+  name: string;
+  address: string;
+}
+
+/* 连接失败弹窗的候选结构化（chrome v1 2026-11-02）：gateway 的 pickJumpServerAssetId
+   把候选拼进 message（「候选：1:name@addr，2:name@addr」），此处解析成行列表；
+   解析失败返回空数组 → 弹窗回落纯文本段落。点击候选 = applyJumpAssetCandidate 落库重连。 */
+export function parseJumpServerAssetCandidates(message: string): JumpServerAssetCandidate[] {
+  const marker = message.indexOf("候选：");
+  if (marker < 0) return [];
+  return message
+    .slice(marker + "候选：".length)
+    .split("，")
+    .map((part) => part.trim())
+    .map((part) => {
+      const match = /^(\d+):(.*)@(.+)$/.exec(part);
+      return match ? { id: match[1], name: match[2], address: match[3] } : null;
+    })
+    .filter((item): item is JumpServerAssetCandidate => item !== null);
+}

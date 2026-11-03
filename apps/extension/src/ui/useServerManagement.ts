@@ -26,6 +26,7 @@ export function useServerManagement(deps: {
   workspaceSessions: WorkspaceSession[];
   activeWorkspaceSessionId: string | null;
   isWorkspaceSwitchLocked: boolean;
+  isSessionCloseLocked: boolean;
   manualServerDraft: ManualServerDraft;
   workspaceSessionStatesRef: React.MutableRefObject<Record<string, WorkspaceSessionState>>;
   setServers: (v: ServerSummary[]) => void;
@@ -51,6 +52,7 @@ export function useServerManagement(deps: {
     workspaceSessions,
     activeWorkspaceSessionId,
     isWorkspaceSwitchLocked,
+    isSessionCloseLocked,
     manualServerDraft,
     workspaceSessionStatesRef,
     setServers,
@@ -122,8 +124,8 @@ export function useServerManagement(deps: {
   }, [startWorkspaceActivation]);
 
   const closeWorkspaceSession = useCallback((sessionId: string) => {
-    if (isWorkspaceSwitchLocked) {
-      setActionStatus("当前检索或连接操作尚未完成，请稍后再关闭工作区。");
+    if (isSessionCloseLocked) {
+      setActionStatus("检索进行中，请先停止检索再关闭工作区。");
       return;
     }
 
@@ -150,16 +152,16 @@ export function useServerManagement(deps: {
     }
 
     startWorkspaceActivation(fallbackSession, { skipSaveCurrent: true });
-  }, [isWorkspaceSwitchLocked, workspaceSessions, activeWorkspaceSessionId, workspaceSessionStatesRef, setWorkspaceSessions, setActionStatus, setPendingLiveFollowRestore, setPreserveTerminalOnInactive, setActiveWorkspaceSessionId, setServerId, startWorkspaceActivation]);
+  }, [isSessionCloseLocked, workspaceSessions, activeWorkspaceSessionId, workspaceSessionStatesRef, setWorkspaceSessions, setActionStatus, setPendingLiveFollowRestore, setPreserveTerminalOnInactive, setActiveWorkspaceSessionId, setServerId, startWorkspaceActivation]);
 
   /* 关闭除指定会话外的全部工作区（用户反馈 2026-10-30：右键菜单加「关闭其他」）。
-     与 closeWorkspaceSession 同锁：检索/连接进行中不允许批量关闭。
+     与 closeWorkspaceSession 同锁（只锁检索，连接类 isBusy 不拦关闭）。
      若保留的会话不是当前激活会话（右键的是非激活页签），关闭后切到它 ——
      对齐浏览器「关闭其他标签页」的直觉；skipSaveCurrent 因为被关闭的激活
      会话状态要一并丢弃，不该回写。 */
   const closeOtherWorkspaceSessions = useCallback((keepSessionId: string) => {
-    if (isWorkspaceSwitchLocked) {
-      setActionStatus("当前检索或连接操作尚未完成，请稍后再关闭工作区。");
+    if (isSessionCloseLocked) {
+      setActionStatus("检索进行中，请先停止检索再关闭工作区。");
       return;
     }
 
@@ -183,7 +185,7 @@ export function useServerManagement(deps: {
       startWorkspaceActivation(workspaceSessions[keepIndex], { skipSaveCurrent: true });
     }
     setActionStatus(`已关闭其他 ${others.length} 个工作区。`);
-  }, [isWorkspaceSwitchLocked, workspaceSessions, activeWorkspaceSessionId, workspaceSessionStatesRef, setWorkspaceSessions, setActionStatus, startWorkspaceActivation]);
+  }, [isSessionCloseLocked, workspaceSessions, activeWorkspaceSessionId, workspaceSessionStatesRef, setWorkspaceSessions, setActionStatus, startWorkspaceActivation]);
 
   const startCreateManualServer = useCallback(() => {
     setManualServerDraft(createManualServerDraft());

@@ -203,6 +203,11 @@
    PiP 独立窗内本就 display:none），特异性按 (0,4,0) 起写以压过
    theme-modern.css 1008/1014 的 !important 同类与 v2 §1 的按钮基础规则。 */
 .theme-modern .toolbar-commandbar .toolbar-search-row {
+  /* chrome v1 定稿（2026-11-02）：检索组上移进命令栏单行 —— 行 flex-grow 吃满自由空间，
+     检索钮删除后不得残留空腔。⚠️ 动作组的 margin-left:auto 已删（theme-modern.css 同步）：
+     CSS 中 auto margin 先于 flex-grow 吸收空隙，留着它会让行缩回 basis、按钮位留洞 */
+  flex: 1 1 auto !important;
+  min-width: 200px !important;
   gap: 2px;
   padding: 2px;
   background: var(--panel);

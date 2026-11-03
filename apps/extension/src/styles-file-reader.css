@@ -7,6 +7,10 @@
   height: 100%;
   flex: 1 1 0%;
   min-width: 0;
+  /* 视图列自身宽度容器（2026-10-31）：切片条 + 实时状态带合并行在「窗口不太窄
+     但侧栏吃掉宽度」时会互相压字。窗口宽度无法反映这一列的真实可用宽度，
+     因此在这里建容器，供 align-s4-s6.css 的窄档规则（slc-viewer）判定。 */
+  container: slc-viewer / inline-size;
 }
 
 .viewer-workbench {

@@ -2,7 +2,7 @@
  * 打包前准备：从根 CHANGELOG.md 顶部条目生成用户可读的 release-notes.md。
  * 该文件经 build.releaseInfo.releaseNotesFile 写入 latest-mac.yml 的 releaseNotes，
  * 并随 asar 分发（主进程在「已是最新」状态兜底展示）。
- * 转换规则：仅保留 新增/修复 小节（验证等内部信息不对外）；"- **标题** — 描述" 转 "- 标题：描述"。
+ * 转换规则：仅保留 新增/修复/变更 小节（验证等内部信息不对外）；"- **标题** — 描述" 转 "- 标题：描述"。
  */
 const fs = require("fs");
 const path = require("path");
@@ -30,7 +30,7 @@ for (let i = headIndex + 1; i < endIndex; i++) {
   const section = line.match(/^###\s*(.+)$/);
   if (section) {
     const name = section[1].trim();
-    currentSection = name === "新增" || name === "修复" ? name : null;
+    currentSection = name === "新增" || name === "修复" || name === "变更" ? name : null;
     if (currentSection) out.push("", `${currentSection}:`);
     continue;
   }
