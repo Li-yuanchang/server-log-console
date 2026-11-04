@@ -120,12 +120,18 @@ export function useServerManagement(deps: {
   }, [serverId, isWorkspaceSwitchLocked, workspaceSessions, servers, setActionStatus, setActiveWorkspaceSessionId, setServerId, setWorkspaceSessions, startWorkspaceActivation]);
 
   const activateWorkspaceSession = useCallback((session: WorkspaceSession) => {
+    if (session.id !== activeWorkspaceSessionId && isWorkspaceSwitchLocked) {
+      setActionStatus("检索进行中，请先停止检索再切换工作区。");
+      showToast("error", "检索进行中，请先停止检索再切换工作区。");
+      return;
+    }
     startWorkspaceActivation(session);
-  }, [startWorkspaceActivation]);
+  }, [activeWorkspaceSessionId, isWorkspaceSwitchLocked, setActionStatus, showToast, startWorkspaceActivation]);
 
   const closeWorkspaceSession = useCallback((sessionId: string) => {
     if (isSessionCloseLocked) {
       setActionStatus("检索进行中，请先停止检索再关闭工作区。");
+      showToast("error", "检索进行中，请先停止检索再关闭工作区。");
       return;
     }
 
@@ -152,7 +158,7 @@ export function useServerManagement(deps: {
     }
 
     startWorkspaceActivation(fallbackSession, { skipSaveCurrent: true });
-  }, [isSessionCloseLocked, workspaceSessions, activeWorkspaceSessionId, workspaceSessionStatesRef, setWorkspaceSessions, setActionStatus, setPendingLiveFollowRestore, setPreserveTerminalOnInactive, setActiveWorkspaceSessionId, setServerId, startWorkspaceActivation]);
+  }, [isSessionCloseLocked, workspaceSessions, activeWorkspaceSessionId, workspaceSessionStatesRef, setWorkspaceSessions, setActionStatus, showToast, setPendingLiveFollowRestore, setPreserveTerminalOnInactive, setActiveWorkspaceSessionId, setServerId, startWorkspaceActivation]);
 
   /* 关闭除指定会话外的全部工作区（用户反馈 2026-10-30：右键菜单加「关闭其他」）。
      与 closeWorkspaceSession 同锁（只锁检索，连接类 isBusy 不拦关闭）。
@@ -162,6 +168,7 @@ export function useServerManagement(deps: {
   const closeOtherWorkspaceSessions = useCallback((keepSessionId: string) => {
     if (isSessionCloseLocked) {
       setActionStatus("检索进行中，请先停止检索再关闭工作区。");
+      showToast("error", "检索进行中，请先停止检索再关闭工作区。");
       return;
     }
 
@@ -185,7 +192,7 @@ export function useServerManagement(deps: {
       startWorkspaceActivation(workspaceSessions[keepIndex], { skipSaveCurrent: true });
     }
     setActionStatus(`已关闭其他 ${others.length} 个工作区。`);
-  }, [isSessionCloseLocked, workspaceSessions, activeWorkspaceSessionId, workspaceSessionStatesRef, setWorkspaceSessions, setActionStatus, startWorkspaceActivation]);
+  }, [isSessionCloseLocked, workspaceSessions, activeWorkspaceSessionId, workspaceSessionStatesRef, setWorkspaceSessions, setActionStatus, showToast, startWorkspaceActivation]);
 
   const startCreateManualServer = useCallback(() => {
     setManualServerDraft(createManualServerDraft());

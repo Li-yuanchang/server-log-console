@@ -142,7 +142,9 @@ export class FileTransferService {
 
     if (isBastionSftpStrategy(strategy)) {
       const stream = await strategy.createReadStream(request.filePath);
-      return { stream, fileName, filePath: request.filePath, size: stat.size };
+      /* cleanup 必须有：客户端取消时 res "close" 触发 cleanup 销毁 SFTP 流，
+         否则流悬空持续占用连接，池的在途流计数也永远不会归零 */
+      return { stream, fileName, filePath: request.filePath, size: stat.size, cleanup: () => { try { stream.destroy(); } catch {} } };
     }
 
     if (isDirectStrategy(strategy)) {
@@ -152,7 +154,8 @@ export class FileTransferService {
 
     // Fallback: buffer download
     const buffer = await strategy.downloadFile(request.filePath);
-    return { stream: Readable.from(buffer), fileName, filePath: request.filePath, size: buffer.length };
+    const memoryStream = Readable.from(buffer);
+    return { stream: memoryStream, fileName, filePath: request.filePath, size: buffer.length, cleanup: () => { try { memoryStream.destroy(); } catch {} } };
   }
 
   async delete(rawRequest: unknown): Promise<{ filePath: string }> {

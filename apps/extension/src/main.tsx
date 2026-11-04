@@ -28,6 +28,8 @@ import "./styles-empty-state.css";
 // 环境覆盖层：Chrome 扩展侧栏（body.extension-sidepanel）窄容器适配，
 // 双主题生效 + grid 语义；必须最后加载（2026-10-02 自 theme-modern.css 迁出）
 import "./styles-sidepanel.css";
+// 批量日志（多节点）：批量录制面板 / 多窗格实时视墙 / 结果条（2026-11-04）
+import "./styles-multi-node.css";
 
 /** 最小 ErrorBoundary：渲染期未捕获错误（含 PiP 搬迁等 DOM 失配引发的 reconcile 崩溃）
     时显示可见降级页（错误摘要 + 刷新按钮），而不是整页白屏。 */

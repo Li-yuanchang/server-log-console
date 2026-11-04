@@ -23,7 +23,6 @@ export function WorkspaceSessionTabs(props: WorkspaceSessionTabsProps) {
     workspaceSessions,
     activeWorkspaceSessionId,
     isWorkspaceSwitchLocked,
-    isSessionCloseLocked,
     workspaceTabDragState,
     workspaceTabDragJustMovedRef,
     onActivateSession,
@@ -69,7 +68,6 @@ export function WorkspaceSessionTabs(props: WorkspaceSessionTabsProps) {
                   className="workspace-session-tab-trigger"
                   type="button"
                   title={session.serverHost ? `${session.serverName} · ${session.serverHost}` : session.serverName}
-                  disabled={isWorkspaceSwitchLocked && !isActiveSession}
                   draggable={false}
                   onClick={() => {
                     if (workspaceTabDragJustMovedRef.current) {
@@ -86,7 +84,6 @@ export function WorkspaceSessionTabs(props: WorkspaceSessionTabsProps) {
                   className="ghost-button icon-button workspace-session-tab-close"
                   type="button"
                   aria-label={`关闭 ${session.serverName}`}
-                  disabled={isSessionCloseLocked}
                   draggable={false}
                   onClick={() => onCloseSession(session.id)}
                 >

@@ -195,17 +195,40 @@ export class DirectStrategy implements DirectConnectionStrategy {
           return;
         }
 
+        /* 无数据看门狗：扫描命令会持续吐 __PROGRESS__ 行（每 256KB 一条），
+           静默超过 timeoutMs 说明通道已死（sshd 半开 / 链路假活）。
+           不强杀的话流永远不 close，搜索任务永远停在 running，
+           前端工作区切换锁随之死锁（用户反馈 2026-11-04）。 */
+        let watchdog: ReturnType<typeof setTimeout> | null = null;
+        let finished = false;
+        const finish = (code: number | undefined) => {
+          if (finished) return;
+          finished = true;
+          if (watchdog) clearTimeout(watchdog);
+          emitClose(code);
+          connection.cleanup();
+        };
+        const armWatchdog = () => {
+          if (watchdog) clearTimeout(watchdog);
+          watchdog = setTimeout(() => {
+            stream.destroy();
+            finish(-1);
+          }, timeoutMs);
+        };
+        armWatchdog();
+
         stream.on("data", (chunk: Buffer | string) => {
+          armWatchdog();
           emitStdout(chunk.toString());
         });
 
         stream.stderr.on("data", (chunk: Buffer | string) => {
+          armWatchdog();
           emitStderr(chunk.toString());
         });
 
         stream.on("close", (code: number | undefined) => {
-          emitClose(code);
-          connection.cleanup();
+          finish(code);
         });
       });
     }

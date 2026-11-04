@@ -425,6 +425,18 @@
   gap: 10px;
 }
 
+/* 下载卡取消按钮（抽屉 v2 配套）：与百分比同一列，行内排布 */
+.upload-progress-percent-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.upload-progress-percent-wrap .transfer-cancel {
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+}
+
 .upload-progress-icon {
   display: inline-flex;
   align-items: center;

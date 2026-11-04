@@ -614,12 +614,14 @@ export async function apiStopLogRecording(sessionId: string): Promise<LogRecordi
 export async function apiDownloadFile(
   serverId: string,
   filePath: string,
-  onProgress?: (downloaded: number, total: number, speed: number) => void
+  onProgress?: (downloaded: number, total: number, speed: number) => void,
+  signal?: AbortSignal
 ): Promise<Blob> {
   const response = await gatewayFetch(`${localServiceBase}/api/files/download`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ serverId, filePath })
+    body: JSON.stringify({ serverId, filePath }),
+    signal
   });
   if (!response.ok) {
     const err = await response.json().catch(() => ({ message: "下载失败" })) as { message?: string };

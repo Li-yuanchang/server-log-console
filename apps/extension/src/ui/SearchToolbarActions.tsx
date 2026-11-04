@@ -1,4 +1,4 @@
-import { Ellipsis, Pin, PinOff } from "lucide-react";
+import { Ellipsis, LayoutGrid, Pin, PinOff } from "lucide-react";
 import { ToolIcon } from "./ToolIcon.js";
 
 type Props = {
@@ -12,8 +12,12 @@ type Props = {
   onToggleTerminal: () => void;
   hasServer: boolean;
   isRecording: boolean;
+  recordingCount: number;
   canToggleRecording: boolean;
   onToggleRecording: () => void;
+  multiLiveCount: number;
+  canOpenMultiLive: boolean;
+  onOpenMultiLive: () => void;
   showQueryAdvanced: boolean;
   onToggleQueryAdvanced: () => void;
   liveFollowEnabled: boolean;
@@ -42,6 +46,29 @@ export function SearchToolbarActions(props: Props) {
         </svg>
         <span>LIVE</span>
       </button>
+      <button
+        className={`ghost-button toolbar-action-button${props.multiLiveCount > 0 ? " btn-wall-on" : ""}`}
+        onClick={props.onOpenMultiLive}
+        disabled={!props.canOpenMultiLive}
+        title={props.multiLiveCount > 0 ? `多窗格实时运行中（${props.multiLiveCount} 窗格）` : "多窗格实时（视墙）"}
+        aria-label="多窗格实时"
+      >
+        <LayoutGrid size={14} strokeWidth={1.8} />
+        {props.multiLiveCount > 0 ? <span className="btn-recording-count">{props.multiLiveCount}</span> : null}
+      </button>
+      <button
+        className={`ghost-button toolbar-action-button${props.isRecording ? " btn-recording-active" : ""}`}
+        onClick={props.onToggleRecording}
+        disabled={!props.canToggleRecording}
+        title={props.isRecording ? `停止全部录制${props.recordingCount > 1 ? `（${props.recordingCount} 台）` : ""}` : "录制（批量：已打开的会话）"}
+        aria-label={props.isRecording ? "停止全部录制" : "录制"}
+      >
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+          <circle cx="12" cy="12" r="10" />
+          <circle cx="12" cy="12" r="4" fill="currentColor" stroke="none" />
+        </svg>
+        {props.recordingCount > 0 ? <span className="btn-recording-count">{props.recordingCount}</span> : null}
+      </button>
       {props.isElectron ? (
         <button
           className={`ghost-button toolbar-action-button${props.isPinned ? " tab-active" : ""}`}
@@ -52,18 +79,6 @@ export function SearchToolbarActions(props: Props) {
           {props.isPinned ? <PinOff size={14} /> : <Pin size={14} />}
         </button>
       ) : null}
-      <button
-        className={`ghost-button toolbar-action-button${props.isRecording ? " btn-recording-active" : ""}`}
-        onClick={props.onToggleRecording}
-        disabled={!props.canToggleRecording}
-        title={props.isRecording ? "结束录制" : "录制"}
-        aria-label={props.isRecording ? "结束录制" : "录制"}
-      >
-        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-          <circle cx="12" cy="12" r="10" />
-          <circle cx="12" cy="12" r="4" fill="currentColor" stroke="none" />
-        </svg>
-      </button>
       <button
         className={`ghost-button icon-button toolbar-action-button${props.showQueryAdvanced ? " tab-active" : ""}`}
         onClick={props.onToggleQueryAdvanced}

@@ -9,15 +9,13 @@ import {
   Pause,
   Play,
   Search,
-  Trash2,
   Upload,
   X,
 } from "lucide-react";
 import type { TransferHistoryEntry, TransferHistoryStatus } from "./storage.js";
 import type { DownloadProgressState, UploadProgressState } from "./FeedbackOverlays.js";
 import { Drawer } from "./Drawer.js";
-import { OverflowText } from "./OverflowText.js";
-import { getParentDirectoryPath } from "./utils.js";
+import { fileKindIcon, getParentDirectoryPath } from "./utils.js";
 
 type Props = {
   open: boolean;
@@ -32,6 +30,8 @@ type Props = {
   onRevealLocalPath: (path: string) => void;
   onClear: () => void;
   onClose: () => void;
+  /** 取消当前下载（进行中下载行的常显 ×）；未提供则不显示按钮 */
+  onCancelDownload?: () => void;
   /* 上传流程控制（进行中上传行的 暂停 / 继续 / 取消） */
   uploadPaused: boolean;
   onPauseUpload: () => void;
@@ -111,30 +111,17 @@ export function TransferHistoryDrawer(props: Props) {
 
   const headSample = props.entries[0];
   const headContextLabel = headSample
-    ? `${headSample.serverLabel} · ${getParentDirectoryPath(headSample.filePath)}`
+    ? getParentDirectoryPath(headSample.filePath)
     : undefined;
 
+  /* 抽屉 v2 头部两行制：标题行只放 标题+关闭（flex:none 恒在最右，不再被长路径挤出）；
+     服务器/路径上下文独立成行；chips 与搜索合并一行 */
   return (
     <Drawer
       open={props.open}
       onClose={props.onClose}
       title="传输记录"
       width={420}
-      headExtra={
-        <>
-          {headContextLabel ? <span className="chip" title={headContextLabel}>{headContextLabel}</span> : null}
-          <button
-            type="button"
-            className="ghost-button icon-button"
-            title="清空当前服务器记录"
-            aria-label="清空当前服务器记录"
-            onClick={props.onClear}
-            disabled={!props.entries.length}
-          >
-            <Trash2 size={13} strokeWidth={1.85} />
-          </button>
-        </>
-      }
       footer={
         <>
           <span className="mut" style={{ fontSize: 10.5, flex: 1 }}>
@@ -151,6 +138,13 @@ export function TransferHistoryDrawer(props: Props) {
         </>
       }
     >
+      {headSample && headContextLabel ? (
+        <div className="xdrawer-ctx" title={`${headSample.serverLabel} · ${headContextLabel}`}>
+          <span className="xdrawer-ctx-sv">{headSample.serverLabel}</span>
+          <span className="xdrawer-ctx-sep">·</span>
+          <span className="xdrawer-ctx-pa">{headContextLabel}</span>
+        </div>
+      ) : null}
       <div className="xdrawer-section xdrawer-chip-row">
         {chips
           .filter((chip) => chip.key === "all" || chip.count > 0)
@@ -164,9 +158,7 @@ export function TransferHistoryDrawer(props: Props) {
               {chip.label} <b className="fchip-count">{chip.count}</b>
             </button>
           ))}
-      </div>
-      <div className="xdrawer-section xdrawer-search-row">
-        <span className="xdrawer-search-shell">
+        <span className="xdrawer-search-shell xdrawer-search-inline">
           <Search size={13} strokeWidth={1.9} />
           <input
             value={keyword}
@@ -212,7 +204,15 @@ export function TransferHistoryDrawer(props: Props) {
               <div className="xrow">
                 <span className="xrow-ic xrow-ic-up"><Upload size={13} strokeWidth={1.9} /></span>
                 <span className="xrow-meta">
-                  <OverflowText className="xrow-fn" text={props.uploadProgress.fileName} />
+                  {(() => {
+                    const UpIcon = fileKindIcon(props.uploadProgress?.fileName || "");
+                    return (
+                      <span className="xrow-fn">
+                        <UpIcon size={13} strokeWidth={1.9} className="xrow-fn-ic" />
+                        <span className="xrow-fn-text" title={props.uploadProgress?.fileName}>{props.uploadProgress?.fileName}</span>
+                      </span>
+                    );
+                  })()}
                   <div className="xprog"><i style={{ width: `${Math.max(2, props.uploadProgress.current)}%` }} /></div>
                   <span className="xrow-sub">
                     <span>
@@ -265,7 +265,15 @@ export function TransferHistoryDrawer(props: Props) {
               <div className="xrow">
                 <span className="xrow-ic xrow-ic-dn"><Download size={13} strokeWidth={1.9} /></span>
                 <span className="xrow-meta">
-                  <OverflowText className="xrow-fn" text={props.downloadProgress.fileName} />
+                  {(() => {
+                    const DnIcon = fileKindIcon(props.downloadProgress?.fileName || "");
+                    return (
+                      <span className="xrow-fn">
+                        <DnIcon size={13} strokeWidth={1.9} className="xrow-fn-ic" />
+                        <span className="xrow-fn-text" title={props.downloadProgress?.fileName}>{props.downloadProgress?.fileName}</span>
+                      </span>
+                    );
+                  })()}
                   <div className="xprog"><i style={{ width: `${Math.max(2, props.downloadProgress.percent)}%` }} /></div>
                   <span className="xrow-sub">
                     <span>
@@ -275,6 +283,19 @@ export function TransferHistoryDrawer(props: Props) {
                     </span>
                     {props.downloadProgress.speed ? <span>{props.formatBytes(props.downloadProgress.speed)}/s</span> : null}
                   </span>
+                </span>
+                <span className="xrow-ops" onClick={(event) => event.stopPropagation()}>
+                  {props.onCancelDownload ? (
+                    <button
+                      type="button"
+                      className="ghost-button icon-button xrow-cancel"
+                      title="取消下载"
+                      aria-label="取消下载"
+                      onClick={props.onCancelDownload}
+                    >
+                      <X size={13} strokeWidth={1.85} />
+                    </button>
+                  ) : null}
                 </span>
               </div>
             ) : null}
@@ -303,6 +324,7 @@ export function TransferHistoryDrawer(props: Props) {
           filteredEntries.map((entry) => {
             const canReveal = Boolean(entry.localPath && props.isElectron && isAbsoluteLocalPath(entry.localPath));
             const isError = entry.status === "error";
+            const KindIcon = fileKindIcon(entry.fileName);
             return (
               <div
                 key={entry.id}
@@ -316,13 +338,19 @@ export function TransferHistoryDrawer(props: Props) {
                     : entry.direction === "upload" ? <Upload size={13} strokeWidth={1.9} /> : <Download size={13} strokeWidth={1.9} />}
                 </span>
                 <span className="xrow-meta">
-                  <OverflowText className="xrow-fn" text={entry.fileName} />
+                  <span className="xrow-fn">
+                    <KindIcon size={13} strokeWidth={1.9} className="xrow-fn-ic" />
+                    <span className="xrow-fn-text" title={entry.fileName}>{entry.fileName}</span>
+                  </span>
                   <span className="xrow-sub">
                     <span className={isError ? "xrow-err-text" : ""}>{statusLabel(entry.status)}</span>
                     <span>{props.formatBytes(entry.size)}</span>
                     <span>{props.formatDateTime(entry.createdAt)}</span>
-                    {entry.message ? <OverflowText className="xrow-msg" text={entry.message} /> : null}
                   </span>
+                  {isError && entry.message ? (
+                    /* 失败原因独立第三行（抽屉 v2）：错误一族只此一处，hover 看全文 */
+                    <span className="xrow-msgline" title={entry.message}>{entry.message}</span>
+                  ) : null}
                 </span>
                 <span className="xrow-ops" onClick={(event) => event.stopPropagation()}>
                   <button

@@ -4,6 +4,7 @@ import type {
   ServerConnectionTestResponse,
   ServerSummary
 } from "@server-log-console/shared";
+import { File, FileArchive, FileBraces, FileCode, FileSpreadsheet, FileText } from "lucide-react";
 
 export const previewSliceLength = 12 * 1024;
 export const previewBucketSize = 256 * 1024;
@@ -538,4 +539,16 @@ export function parseJumpServerAssetCandidates(message: string): JumpServerAsset
       return match ? { id: match[1], name: match[2], address: match[3] } : null;
     })
     .filter((item): item is JumpServerAssetCandidate => item !== null);
+}
+
+/* 传输记录文件类型图标（抽屉 v2）：按扩展名映射到 lucide file-* 族，
+   与应用既有图标族一致，不引入第二套图标体系 */
+export function fileKindIcon(fileName: string): typeof File {
+  const lower = (fileName || "").toLowerCase();
+  if (/\.(zip|jar|war|ear|tar\.gz|tgz|gz|bz2|xz|7z|rar)$/.test(lower)) return FileArchive;
+  if (/\.(log|out|txt)$/.test(lower)) return FileText;
+  if (/\.(json)$/.test(lower)) return FileBraces;
+  if (/\.(csv|xlsx|xls)$/.test(lower)) return FileSpreadsheet;
+  if (/\.(java|class|js|jsx|ts|tsx|sql|xml|sh|py|yml|yaml|properties|conf|ini)$/.test(lower)) return FileCode;
+  return File;
 }

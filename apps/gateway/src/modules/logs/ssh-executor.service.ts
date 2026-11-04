@@ -272,6 +272,9 @@ export class SshExecutorService {
 
   private sftpCache = new Map<string, { client: Client; sftp: SFTPWrapper; idleTimer: ReturnType<typeof setTimeout>; maxTimer: ReturnType<typeof setTimeout> }>();
   private execCache = new Map<string, { connection: ManagedSshConnection; idleTimer: ReturnType<typeof setTimeout>; maxTimer: ReturnType<typeof setTimeout>; busy: number; evictPending?: boolean }>();
+  /* 在途 SFTP 下载流计数（serverId → 条数）：evict 定时器到点时若有在途流则顺延，
+     否则 IDLE_TTL=120s/MAX_LIFETIME=600s 会强拆超过 2 分钟/10 分钟的长传输 */
+  private sftpStreams = new Map<string, number>();
 
   constructor(
     private readonly serverRegistry: ServerRegistryService,
@@ -350,6 +353,18 @@ export class SshExecutorService {
   }
 
   private evictSftp(serverId: string): void {
+    /* 在途下载流保护：定时器到点但仍有流在读 → 顺延两个定时器，等流结束后再回收 */
+    if ((this.sftpStreams.get(serverId) || 0) > 0) {
+      const entry = this.sftpCache.get(serverId);
+      if (entry) {
+        clearTimeout(entry.idleTimer);
+        clearTimeout(entry.maxTimer);
+        entry.idleTimer = setTimeout(() => this.evictSftp(serverId), SshExecutorService.IDLE_TTL);
+        entry.maxTimer = setTimeout(() => this.evictSftp(serverId), SshExecutorService.MAX_LIFETIME);
+        sshLog(`sftp 池跳过回收 server=${serverId}（在途下载流 ${this.sftpStreams.get(serverId)} 条）`);
+      }
+      return;
+    }
     const entry = this.sftpCache.get(serverId);
     if (entry) {
       clearTimeout(entry.idleTimer);
@@ -498,7 +513,10 @@ export class SshExecutorService {
       if (!isChannelOpenFailureError(error)) throw error;
       // 远端拒绝打开新通道：当前连接的会话已耗尽或半死。
       // 踢掉该服务器的全部连接池（含 SFTP），用全新连接重试一次。
-      this.evictExec(serverId);
+      // 必须 force：LIVE tail 常驻占着 busy=1，普通 evict 会永远 defer，
+      // 重试会落回同一条僵尸连接（2026-11-04 用户反馈的检索秒败）。
+      // tail 的流会被连带断开，由既有自动重连在全新连接上恢复。
+      this.evictExec(serverId, true);
       this.evictSftp(serverId);
       return await this.execOnce(serverId, command, timeoutMs);
     }
@@ -883,7 +901,33 @@ export class SshExecutorService {
    */
   async sftpCreateReadStream(serverId: string, filePath: string): Promise<import("ssh2").ReadStream> {
     const sftp = await this.acquireSftp(serverId);
-    return sftp.createReadStream(filePath);
+    const stream = sftp.createReadStream(filePath);
+    this.trackSftpStream(serverId, stream);
+    return stream;
+  }
+
+  /* 下载流计数：evict 定时器见到在途流会顺延；close 与 error 可能先后触发，settled 防双扣 */
+  private trackSftpStream(serverId: string, stream: import("ssh2").ReadStream): void {
+    this.sftpStreams.set(serverId, (this.sftpStreams.get(serverId) || 0) + 1);
+    let settled = false;
+    const done = () => {
+      if (settled) return;
+      settled = true;
+      const remaining = (this.sftpStreams.get(serverId) || 1) - 1;
+      if (remaining > 0) {
+        this.sftpStreams.set(serverId, remaining);
+        return;
+      }
+      this.sftpStreams.delete(serverId);
+      /* 流结束后重置空闲基准，回收计时从传输结束起算 */
+      const entry = this.sftpCache.get(serverId);
+      if (entry) {
+        clearTimeout(entry.idleTimer);
+        entry.idleTimer = setTimeout(() => this.evictSftp(serverId), SshExecutorService.IDLE_TTL);
+      }
+    };
+    stream.on("close", done);
+    stream.on("error", done);
   }
 
   async sftpOpenSession(serverId: string): Promise<SftpSession> {

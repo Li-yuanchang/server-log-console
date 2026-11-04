@@ -3,6 +3,7 @@ import type {
   LogFileEntry,
   LogFileMetaResponse,
   LogSearchResponse,
+  LogSearchTaskResponse,
   LogSliceResponse,
   ServerSummary,
 } from "@server-log-console/shared";
@@ -157,6 +158,7 @@ export type LogViewerAPI = {
   handleCopyViewerSelection: () => Promise<void>;
   openContextMenu: (entry: LogFileEntry, x: number, y: number) => void;
   runSearch: () => Promise<void>;
+  stopSearch: () => void;
   browseLogFiles: (path?: string, options?: { manual?: boolean; silent?: boolean }) => Promise<string | null>;
   commitDirectoryPath: (path?: string) => Promise<void>;
   openDirectoryFromInput: () => Promise<void>;
@@ -187,6 +189,10 @@ export type LogViewerAPI = {
 
 export function useLogViewer(params: LogViewerParams): LogViewerAPI {
   const { state, setters, refs, callbacks, selectedServer } = params;
+
+  /* 当前检索的停止令牌：stopSearch 置 stopped 后，轮询循环下一拍退出。
+     每次新检索换新令牌 —— 并发发起检索时旧循环自动让位，不会误清新任务。 */
+  const searchStopTokenRef = useRef<{ stopped: boolean } | null>(null);
 
   // Derived values — computed here to avoid declaration-order issues in App.tsx
   const selectedFileName = state.filePath ? state.filePath.split("/").pop() ?? state.filePath : "";
@@ -567,6 +573,7 @@ export function useLogViewer(params: LogViewerParams): LogViewerAPI {
       } catch (error) {
         const detail = error instanceof Error ? error.message : "未知错误";
         callbacks.setActionStatus(`多文件搜索失败：${detail}`);
+        callbacks.showToast("error", `多文件搜索失败：${detail}`);
         callbacks.pushActivity(`多文件搜索失败：${detail}`);
       } finally { setters.setIsBusy(false); setters.setSearchStartedAt(null); }
       return;
@@ -577,17 +584,21 @@ export function useLogViewer(params: LogViewerParams): LogViewerAPI {
     callbacks.setActionStatus("正在检索远程日志...");
     setters.setSearchTask(null);
     setters.setResults(null);
+    const stopToken = { stopped: false };
+    searchStopTokenRef.current = stopToken;
+    let currentTask: LogSearchTaskResponse | null = null;
     try {
       const primaryKeyword = normalizedTerms[0] || "";
-      const taskPayload = await apiCreateSearchTask({ serverId: state.serverId, filePath: state.filePath, keyword: primaryKeyword, keywordTerms: normalizedTerms, keywordMode: state.keywordMode, excludeTerms: excludeTerms.length ? excludeTerms : undefined, startDate: state.startDate, endDate: state.endDate, startTime: state.startTime, endTime: state.endTime, contextLines: state.contextLines, useRegex: state.useRegex });
-      setters.setSearchTask(taskPayload);
+      currentTask = await apiCreateSearchTask({ serverId: state.serverId, filePath: state.filePath, keyword: primaryKeyword, keywordTerms: normalizedTerms, keywordMode: state.keywordMode, excludeTerms: excludeTerms.length ? excludeTerms : undefined, startDate: state.startDate, endDate: state.endDate, startTime: state.startTime, endTime: state.endTime, contextLines: state.contextLines, useRegex: state.useRegex });
+      setters.setSearchTask(currentTask);
       setters.setActiveLogView("search");
-      callbacks.pushActivity(`搜索任务已启动：${taskPayload.strategyLabel || "分片扫描"} / ${taskPayload.scopeLabel || state.filePath}`);
-      let currentTask = taskPayload;
+      callbacks.pushActivity(`搜索任务已启动：${currentTask.strategyLabel || "分片扫描"} / ${currentTask.scopeLabel || state.filePath}`);
       let quickResultShown = false;
       let quickResultMatchCount = -1;
       while (currentTask.status === "queued" || currentTask.status === "running") {
+        if (searchStopTokenRef.current !== stopToken || stopToken.stopped) break;
         await new Promise((resolve) => window.setTimeout(resolve, 450));
+        if (searchStopTokenRef.current !== stopToken || stopToken.stopped) break;
         currentTask = await apiPollSearchTask(currentTask.taskId);
         setters.setSearchTask(currentTask);
         if (currentTask.quickResult && currentTask.quickResult.matches.length !== quickResultMatchCount) {
@@ -603,6 +614,15 @@ export function useLogViewer(params: LogViewerParams): LogViewerAPI {
           callbacks.pushActivity(`搜索首批结果：命中 ${currentTask.quickResult.matches.length} 行，全文扫描继续中...`);
         }
       }
+      /* 被更新的检索取代：什么都不写，避免覆盖新检索的任务态 */
+      if (searchStopTokenRef.current !== stopToken) return;
+      if (stopToken.stopped) {
+        setters.setSearchTask(null);
+        callbacks.setActionStatus("已停止检索。");
+        callbacks.pushActivity("检索已手动停止，已返回的快搜结果保留在页签中。");
+        return;
+      }
+      if (!currentTask) return;
       if (currentTask.status === "failed") throw new Error(currentTask.errorMessage || "搜索任务失败");
       const finalResult = currentTask.result || null;
       setters.setResults(finalResult);
@@ -612,9 +632,28 @@ export function useLogViewer(params: LogViewerParams): LogViewerAPI {
       callbacks.pushActivity(`检索完成：${selectedServer?.name || state.serverId} / ${state.filePath} / 命中 ${finalResult?.matches.length ?? 0} 行。`);
     } catch (error) {
       const detail = error instanceof Error ? error.message : "未知错误";
-      callbacks.setActionStatus(`操作失败：${detail}`);
-      callbacks.pushActivity(`操作失败：${detail}`);
+      /* 轮询中途死掉（网关重启后任务 404 / 网络闪断）时任务停在最后一张
+         queued/running 快照，isWorkspaceSwitchLocked 会据此永锁工作区切换 ——
+         就地落 failed 释放锁；已返回的快搜结果页签保留。 */
+      if (currentTask && (currentTask.status === "queued" || currentTask.status === "running")) {
+        setters.setSearchTask({ ...currentTask, status: "failed", errorMessage: detail });
+      }
+      callbacks.setActionStatus(`检索失败：${detail}`);
+      callbacks.showToast("error", `检索失败：${detail}`);
+      callbacks.pushActivity(`检索失败：${detail}`);
     } finally { setters.setIsBusy(false); setters.setSearchStartedAt(null); }
+  }
+
+  /* 手动停止检索：立即释放 isBusy/searchStartedAt 并清掉任务态（解除工作区切换锁），
+     轮询循环下一拍检测到令牌后退出；已返回的快搜结果页签保留。 */
+  function stopSearch() {
+    const token = searchStopTokenRef.current;
+    if (token) token.stopped = true;
+    setters.setSearchStartedAt(null);
+    setters.setIsBusy(false);
+    setters.setSearchTask(null);
+    callbacks.setActionStatus("已停止检索。");
+    callbacks.pushActivity("检索已手动停止。");
   }
 
   async function browseLogFiles(nextDirectoryPath?: string, options?: { manual?: boolean; silent?: boolean }): Promise<string | null> {
@@ -966,7 +1005,7 @@ export function useLogViewer(params: LogViewerParams): LogViewerAPI {
     resolveViewerJumpTarget, appendResultTab, replaceLastResultTab, closeResultTab, focusHighlight, applySlicePayload,
     jumpToSearchMatch, toggleLiveFollow, enterPathbarEditMode, exitPathbarEditMode, clearViewerSelection,
     handleViewerSelectionMouseDown, handleViewerSelectionMouseUp, handleCopyViewerSelection, openContextMenu,
-    runSearch, browseLogFiles, commitDirectoryPath, openDirectoryFromInput, browseParentDirectory,
+    runSearch, stopSearch, browseLogFiles, commitDirectoryPath, openDirectoryFromInput, browseParentDirectory,
     openEntry, loadFileMeta, loadSlice, navigateSlice, handleViewerWheel, loadTailSlice,
     handleBackToBottom, loadHeadSlice, jumpToSliceRatio, commitReaderPosition, startReaderRailDrag,
     startViewerOverviewDrag, exportCurrentResults,

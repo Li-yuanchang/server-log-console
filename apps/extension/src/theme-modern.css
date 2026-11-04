@@ -5227,13 +5227,38 @@ button.settings-pref-row + button.settings-pref-row,
   border-top: 1px solid var(--line);
 }
 .xdrawer-section { flex: none; }
+/* 抽屉 v2：chips 与搜索合并一行（搜索占满剩余宽度） */
 .xdrawer-chip-row {
   display: flex;
+  align-items: center;
   gap: 6px;
   flex-wrap: wrap;
-  padding: 10px 16px 4px;
+  padding: 10px 16px;
 }
-.xdrawer-search-row { padding: 8px 16px 10px; border-bottom: 1px solid var(--line); }
+.xdrawer-chip-row .xdrawer-search-shell { flex: 1; min-width: 140px; }
+.xdrawer-chip-row .xdrawer-search-shell input { height: 24px; font-size: var(--fs-xs); }
+
+/* 抽屉 v2：服务器/路径上下文独立成行（单行截断 + title 全文），不再挤标题行 */
+.xdrawer-ctx {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 16px;
+  border-bottom: 1px solid var(--line);
+  font-size: var(--fs-2xs);
+  color: var(--ink-muted);
+  min-width: 0;
+}
+.xdrawer-ctx-sv { color: var(--ink-soft); font-weight: 600; flex: none; }
+.xdrawer-ctx-sep { flex: none; opacity: 0.6; }
+.xdrawer-ctx-pa {
+  font-family: var(--mono);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
 .xdrawer-search-shell {
   position: relative;
   display: flex;
@@ -5293,12 +5318,19 @@ button.settings-pref-row + button.settings-pref-row,
 .xrow-ic-err { background: var(--red-soft); color: var(--red); }
 .xrow-meta { flex: 1; min-width: 0; }
 .xrow-fn {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+.xrow-fn-ic { flex: none; color: var(--ink-muted); }
+.xrow-fn-text {
   font-weight: 550;
   font-size: var(--fs-sm);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  min-width: 0;
 }
 .xrow-sub {
   display: flex;
@@ -5312,17 +5344,24 @@ button.settings-pref-row + button.settings-pref-row,
   white-space: nowrap;
 }
 .xrow-err-text { color: var(--red); font-weight: 600; }
-.xrow-msg {
-  flex: 0 1 auto;
-  min-width: 0;
+/* 抽屉 v2：失败原因独立第三行（错误一族只此一处，hover 看全文） */
+.xrow-msgline {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--fs-2xs);
+  color: var(--red);
+  opacity: 0.85;
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  cursor: default;
 }
 .xprog { height: 4px; border-radius: 2px; background: var(--panel-muted); overflow: hidden; margin: 5px 0 3px; }
 .xprog i { display: block; height: 100%; background: var(--accent); border-radius: 2px; }
 .xrow-ops { display: none; gap: 2px; flex: none; }
 .xrow:hover .xrow-ops { display: flex; }
-.xrow:hover .xrow-sub .xrow-msg { visibility: hidden; }
+/* 抽屉 v2：进行中行的操作键（上传 暂停/取消、下载 取消）常显 */
+.xdrawer-live-block .xrow-ops { display: flex; }
 
 /* ================= 检索行：主按钮 / 历史 / 摘要工具组 ================= */
 .keyword-shell {

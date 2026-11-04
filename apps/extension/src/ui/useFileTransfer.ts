@@ -135,7 +135,9 @@ async function collectFilesFromEntries(entries: FileSystemEntry[]): Promise<File
 }
 
 export type FileTransferAPI = {
-  downloadFile: (targetFilePath: string) => Promise<void>;
+  downloadFile: (targetFilePath: string, options?: { serverId?: string }) => Promise<void>;
+  /** 取消当前下载（AbortController；网关检测到连接断开会自动销毁 SFTP 流） */
+  cancelDownload: () => void;
   uploadFiles: () => Promise<void>;
   /** 直传 File 列表（终端工具行「上传」用：容器选好文件后走同一上传通道，目标 = 应用层联动目录） */
   uploadFileList: (files: File[]) => Promise<void>;
@@ -197,6 +199,17 @@ export function useFileTransfer(deps: {
      同一时刻只有一条上传在跑，用 ref 持有当前闸门即可（新上传会替换旧闸门）。 */
   const uploadGateRef = useRef<TransferGate | null>(null);
   const [uploadPaused, setUploadPaused] = useState(false);
+
+  /* 下载取消载体：每次 downloadFile 新建 AbortController，取消按钮 abort 掉 fetch，
+     网关 res.on("close") → cleanup 会顺带销毁 SFTP 流 */
+  const downloadAbortRef = useRef<AbortController | null>(null);
+
+  const cancelDownload = useCallback(() => {
+    const controller = downloadAbortRef.current;
+    if (!controller) return;
+    controller.abort();
+    setActionStatus("正在取消下载...");
+  }, [setActionStatus]);
 
   /** 开启一轮新的上传：新建闸门并接管 ref（旧闸门作废，其挂起的 checkpoint 随流程自然结束） */
   const beginUploadGate = useCallback((): TransferGate => {
@@ -317,16 +330,19 @@ export function useFileTransfer(deps: {
     await apiUploadFinish(uploadId);
   }, [serverId, setUploadProgress]);
 
-  const downloadFile = useCallback(async (targetFilePath: string) => {
-    if (!serverId) return;
+  const downloadFile = useCallback(async (targetFilePath: string, options?: { serverId?: string }) => {
+    const effectiveServerId = options?.serverId || serverId;
+    if (!effectiveServerId) return;
     const fileName = targetFilePath.split("/").pop() || "download";
     let downloadedBytes = 0;
+    const controller = new AbortController();
+    downloadAbortRef.current = controller;
     setDownloadProgress({ fileName, fileSize: 0, bytesDownloaded: 0, speed: 0, percent: 0 });
     try {
-      const blob = await apiDownloadFile(serverId, targetFilePath, (downloaded, total, speed) => {
+      const blob = await apiDownloadFile(effectiveServerId, targetFilePath, (downloaded, total, speed) => {
         downloadedBytes = downloaded;
         setDownloadProgress({ fileName, fileSize: total, bytesDownloaded: downloaded, speed, percent: total > 0 ? Math.round((downloaded / total) * 100) : 0 });
-      });
+      }, controller.signal);
       setDownloadProgress(null);
       const api = (window as any).electronAPI;
       if (api?.saveFile) {
@@ -413,6 +429,22 @@ export function useFileTransfer(deps: {
       }
       return;
     } catch (error) {
+      /* 用户取消：fetch/流读取以 AbortError 中断，记「取消」而非失败 */
+      if (controller.signal.aborted || (error instanceof Error && error.name === "AbortError")) {
+        const message = "用户取消下载";
+        setActionStatus("已取消下载");
+        pushActivity(`已取消下载：${targetFilePath}`);
+        appendTransferHistory({
+          direction: "download",
+          status: "canceled",
+          fileName,
+          filePath: targetFilePath,
+          size: downloadedBytes,
+          message
+        });
+        showToast("success", "已取消下载");
+        return;
+      }
       const detail = error instanceof Error ? error.message : "未知错误";
       setActionStatus(`下载失败：${detail}`);
       pushActivity(`下载失败：${detail}`);
@@ -426,6 +458,9 @@ export function useFileTransfer(deps: {
       });
       showToast("error", `下载失败：${detail}`);
     } finally {
+      if (downloadAbortRef.current === controller) {
+        downloadAbortRef.current = null;
+      }
       setDownloadProgress(null);
     }
   }, [serverId, setDownloadProgress, setActionStatus, pushActivity, showToast, appendTransferHistory]);
@@ -936,6 +971,7 @@ export function useFileTransfer(deps: {
 
   return {
     downloadFile,
+    cancelDownload,
     uploadFiles,
     uploadFileList,
     uploadDirectory,

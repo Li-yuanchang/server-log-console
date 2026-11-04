@@ -36,6 +36,8 @@ interface FeedbackOverlaysProps {
   downloadProgress: DownloadProgressState | null;
   toasts: ToastState[];
   onDismissToast: (id: string) => void;
+  /** 取消当前下载（悬浮下载卡 ×）；未提供则不显示按钮 */
+  onCancelDownload?: () => void;
 }
 
 function formatTransferSize(bytes: number): string {
@@ -76,9 +78,22 @@ export function FeedbackOverlays(props: FeedbackOverlaysProps) {
               <span className="upload-progress-kicker">正在下载</span>
               <span className="upload-progress-text" title={downloadProgress.fileName}>{downloadProgress.fileName}</span>
             </div>
-            <strong className="upload-progress-percent download-progress-percent">
-              {downloadHasKnownProgress ? `${downloadPercent}%` : "准备中"}
-            </strong>
+            <span className="upload-progress-percent-wrap">
+              <strong className="upload-progress-percent download-progress-percent">
+                {downloadHasKnownProgress ? `${downloadPercent}%` : "准备中"}
+              </strong>
+              {props.onCancelDownload ? (
+                <button
+                  type="button"
+                  className="ghost-button icon-button transfer-cancel"
+                  title="取消下载"
+                  aria-label="取消下载"
+                  onClick={props.onCancelDownload}
+                >
+                  <X size={14} strokeWidth={2} />
+                </button>
+              ) : null}
+            </span>
           </div>
           <div className="upload-progress-track">
             <div

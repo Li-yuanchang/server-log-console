@@ -87,6 +87,11 @@ import { useFileTransfer } from "./useFileTransfer.js";
 import { isSpecialPreviewFile, useFileOperations } from "./useFileOperations.js";
 import { useServerManagement } from "./useServerManagement.js";
 import { useLogRecording } from "./useLogRecording.js";
+import { MultiNodePanel, type MultiNodeSessionRow } from "./MultiNodePanel.js";
+import { MultiLivePanel } from "./MultiLivePanel.js";
+import { MultiNodeLiveWall } from "./MultiNodeLiveWall.js";
+import { useMultiNodeRecording, type MultiRecordTarget } from "./useMultiNodeRecording.js";
+import { useMultiNodeLive } from "./useMultiNodeLive.js";
 import { SidebarPanel } from "./SidebarPanel.js";
 import { ServerPickerOverlay, SidepanelMobileTop, SidepanelMobileTabBar, DirectorySheet } from "./SidepanelMobile.js";
 import { WorkspaceTabContextMenu, type WorkspaceTabMenuState } from "./WorkspaceTabContextMenu.js";
@@ -108,6 +113,8 @@ import {
   apiGetLogSlice,
   apiGetServerSystemProfile,
   apiProbeGateway,
+  apiTestConnection,
+  apiPreviewFile,
   applyGatewayConfig,
   normalizeGatewayBase,
 } from "./api.js";
@@ -335,6 +342,25 @@ export function App() {
     && (isStandaloneViewerWindow || isStandaloneTerminalWindow || !isStandalonePipWindow);
   const { toasts, showToast, updateToast, dismissToast } = useToasts();
   const { isBusy, actionStatus, activityLines, setIsBusy, setActionStatus, pushActivity, withBusy } = useAsyncStatus({ showToast, updateToast, dismissToast });
+  /* ---- 批量日志（多节点）：批量对象 = 已打开的工作区会话。
+     录制走现有 /api/logs/recordings 接口并发调用；实时为每会话一条 /ws/live。
+     连接守卫：未连接的开始时自动 apiTestConnection，未选文件的会话不可勾选。 ---- */
+  const [multiPanelOpen, setMultiPanelOpen] = useState(false);
+  const [multiLivePanelOpen, setMultiLivePanelOpen] = useState(false);
+  const [multiCheckedIds, setMultiCheckedIds] = useState<Set<string>>(new Set());
+  const [multiConnectingIds, setMultiConnectingIds] = useState<Set<string>>(new Set());
+  /* 停止后的「本次结果」视图开关：与「上次录制」历史分开，关闭面板/开新一批后归入历史 */
+  const [multiShowResult, setMultiShowResult] = useState(false);
+  const multiRec = useMultiNodeRecording({
+    onStatus: setActionStatus,
+    pushActivity,
+    showToast,
+    updateToast,
+    onStopped: () => setMultiShowResult(true),
+  });
+  const multiLive = useMultiNodeLive({ pushActivity });
+  const multiRecordingCount = multiRec.targets.filter((t) => t.status === "recording" || t.status === "stopping").length;
+  const isRecordingCombined = Boolean(recordingSession) || multiRecordingCount > 0;
   const { localServiceState, localServiceStatusText, checkLocalServiceHealth } = useLocalService({ isElectron, setActionStatus, pushActivity, onServiceRestored: async () => { await fetchServers(); await fetchFinalShellSettings(); } });
   /* 在线更新（update-center-v1）：App 级订阅桌面更新状态；含启动自动检查（每会话一次）与红点来源 */
   const desktopUpdate = useDesktopUpdate();
@@ -1578,7 +1604,7 @@ export function App() {
     enterPathbarEditMode, exitPathbarEditMode,
     handleViewerSelectionMouseDown,
     handleViewerSelectionMouseUp, handleCopyViewerSelection,
-    openContextMenu, runSearch, browseLogFiles,
+    openContextMenu, runSearch, stopSearch, browseLogFiles,
     commitDirectoryPath, openDirectoryFromInput, browseParentDirectory,
     openEntry, loadFileMeta, loadSlice, navigateSlice,
     handleViewerWheel, loadTailSlice, handleBackToBottom,
@@ -3076,7 +3102,8 @@ export function App() {
       : `共 ${formatNumber(activeSearchResultCount)} 条结果${searchDoneSummary ? ` · ${searchDoneSummary}` : ""}`;
   const showSearchSummary = !showQueryAdvanced && isSearchView && Boolean(highlightCount || activeSearchResultCount || liveFollowEnabled || searchStartedAt);
   const canRecordLog = Boolean(serverId && filePath.trim() && isSearchView);
-  const canToggleRecording = recordingSession ? Boolean(serverId) : canRecordLog;
+  /* 批量录制：只要还开着会话就能打开面板；录制中（单/批量）恒可停止 */
+  const canToggleRecording = isRecordingCombined ? true : workspaceSessions.length > 0;
   const compactViewerTitle = selectedFileName || activeResultTab?.label || "日志预览";
   const canToolbarLive = Boolean(serverId && filePath.trim() && activeLogView === "search");
   const toggleToolbarLive = useCallback(() => {
@@ -3322,7 +3349,6 @@ export function App() {
 
 
   const {
-    startLogRecording,
     stopLogRecording,
   } = useLogRecording({
     serverId,
@@ -3337,9 +3363,180 @@ export function App() {
     updateToast,
   });
 
+  /* ---- 批量日志：会话行（含非当前会话快照）/ 开始（自动连接守卫）/ 预览 / 下载 ---- */
+  const multiSessionRows: MultiNodeSessionRow[] = workspaceSessions.map((session) => {
+    const isActive = session.id === activeWorkspaceSessionId;
+    const snapshot = isActive ? null : readWorkspaceSessionState(session);
+    const rowFilePath = (isActive ? filePath : snapshot?.filePath) || "";
+    const connected = isActive
+      ? connectionTestStatus?.connected === true
+      : snapshot?.connectionTestStatus?.connected === true;
+    return {
+      sessionId: session.id,
+      serverId: session.serverId,
+      serverName: session.serverName,
+      serverHost: session.serverHost,
+      username: servers.find((srv) => srv.id === session.serverId)?.username,
+      filePath: rowFilePath,
+      connected,
+      connecting: multiConnectingIds.has(session.id),
+      checked: multiCheckedIds.has(session.id),
+    };
+  });
+
+  const computeDefaultCheckedIds = useCallback(() => {
+    const next = new Set<string>();
+    workspaceSessions.forEach((session) => {
+      const isActive = session.id === activeWorkspaceSessionId;
+      const snapshot = isActive ? null : readWorkspaceSessionState(session);
+      const rowFilePath = (isActive ? filePath : snapshot?.filePath) || "";
+      const connected = isActive
+        ? connectionTestStatus?.connected === true
+        : snapshot?.connectionTestStatus?.connected === true;
+      if (rowFilePath && connected) next.add(session.id);
+    });
+    if (!next.size && activeWorkspaceSessionId && filePath.trim()) next.add(activeWorkspaceSessionId);
+    return next;
+  }, [workspaceSessions, activeWorkspaceSessionId, filePath, connectionTestStatus, readWorkspaceSessionState]);
+
+  const openMultiPanel = useCallback(() => {
+    const batchActive = multiRec.targets.some((t) => t.status === "recording" || t.status === "stopping");
+    if (!batchActive) {
+      /* 空闲打开 = 新一批：默认勾选全部就绪会话——后开的 tab 只要浏览到了文件就会进列表 */
+      setMultiCheckedIds(computeDefaultCheckedIds());
+    }
+    setMultiPanelOpen(true);
+    setMultiLivePanelOpen(false);
+  }, [multiRec, computeDefaultCheckedIds]);
+
+  const openMultiLivePanel = useCallback(() => {
+    /* 运行中也打开：面板进「窗格状态」视图（移除/重试/停止全部），不给无反馈的空点击 */
+    setMultiCheckedIds(computeDefaultCheckedIds());
+    setMultiLivePanelOpen(true);
+    setMultiPanelOpen(false);
+  }, [computeDefaultCheckedIds]);
+
+  const toggleMultiCheck = useCallback((sessionId: string, checked: boolean) => {
+    setMultiCheckedIds((current) => {
+      const next = new Set(current);
+      if (checked) next.add(sessionId);
+      else next.delete(sessionId);
+      return next;
+    });
+  }, []);
+
+  const startMulti = useCallback(async () => {
+    const rows = multiSessionRows.filter((r) => r.checked && r.filePath);
+    if (!rows.length) return;
+    const unconnected = rows.filter((r) => !r.connected);
+    let connFailures: { sessionId: string; serverId: string; serverName: string; failMsg: string }[] = [];
+    if (unconnected.length) {
+      setMultiConnectingIds(new Set(unconnected.map((r) => r.sessionId)));
+      setActionStatus(`正在连接：${unconnected.map((r) => r.serverName).join("、")}…`);
+      const attempts = await Promise.all(unconnected.map(async (row) => {
+        try {
+          const payload = await apiTestConnection(row.serverId, "/");
+          return { row, ok: payload.connected === true, message: payload.message || "" };
+        } catch (error) {
+          return { row, ok: false, message: error instanceof Error ? error.message : "连接失败" };
+        }
+      }));
+      setMultiConnectingIds(new Set());
+      connFailures = attempts
+        .filter((a) => !a.ok)
+        .map((a) => ({ sessionId: a.row.sessionId, serverId: a.row.serverId, serverName: a.row.serverName, failMsg: `连接失败：${a.message}` }));
+    }
+    const okRows = rows.filter((r) => !connFailures.some((f) => f.sessionId === r.sessionId));
+    const recItems = okRows.map((r) => {
+      const session = workspaceSessions.find((s) => s.id === r.sessionId);
+      const snapshot = r.sessionId === activeWorkspaceSessionId || !session ? null : readWorkspaceSessionState(session);
+      return {
+        sessionId: r.sessionId,
+        serverId: r.serverId,
+        serverName: r.serverName,
+        filePath: r.filePath,
+        directoryPath: (r.sessionId === activeWorkspaceSessionId ? directoryPath : snapshot?.directoryPath) || "",
+      };
+    });
+    await multiRec.startBatch(recItems, connFailures);
+    setMultiShowResult(false);
+  }, [multiSessionRows, multiRec, activeWorkspaceSessionId, directoryPath, workspaceSessions, readWorkspaceSessionState, setActionStatus]);
+
+  const startMultiLive = useCallback(() => {
+    const items = multiSessionRows
+      .filter((r) => r.checked && r.filePath)
+      .map((r) => ({ sessionId: r.sessionId, serverId: r.serverId, serverName: r.serverName, filePath: r.filePath }));
+    if (!items.length) return;
+    setMultiLivePanelOpen(false);
+    multiLive.start(items);
+    setActionStatus(`多窗格实时：${items.length} 窗格，独立读取、独立滚动（长行自动换行）`);
+  }, [multiSessionRows, multiLive, setActionStatus]);
+
+  /* 批量面板 Esc 关闭（录制/实时两面板统一行为）：
+     更高层弹窗（预览/各类对话框/检索面板/设置中心）打开时让位，由它们自己处理 Esc。 */
+  useEffect(() => {
+    if (!multiPanelOpen && !multiLivePanelOpen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      if (previewDialog || confirmDialog || renameDialog || moveDialog || batchMoveDialog || mkdirDialog || compressDialog || extractDialog || contextMenu || workspaceTabMenu || blankContextMenu || showViewerDebugPanel || paletteOpen || showConnectionSettings) {
+        return;
+      }
+      if (multiPanelOpen) {
+        setMultiPanelOpen(false);
+        setMultiShowResult(false);
+        return;
+      }
+      setMultiLivePanelOpen(false);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [multiPanelOpen, multiLivePanelOpen, previewDialog, confirmDialog, renameDialog, moveDialog, batchMoveDialog, mkdirDialog, compressDialog, extractDialog, contextMenu, workspaceTabMenu, blankContextMenu, showViewerDebugPanel, paletteOpen, showConnectionSettings]);
+
+  const previewMultiTarget = useCallback(async (target: MultiRecordTarget) => {
+    const fileName = target.outPath.split("/").pop() || "record.log";
+    setPreviewDialog({
+      filePath: target.outPath,
+      fileName,
+      content: "",
+      originalContent: "",
+      size: target.sizeBytes,
+      loading: true,
+      readOnly: true,
+      previewLabel: `录制预览 · ${target.serverName}`,
+      serverId: target.serverId,
+    });
+    try {
+      const payload = await apiPreviewFile(target.serverId, target.outPath);
+      setPreviewDialog({
+        filePath: payload.filePath,
+        fileName,
+        content: payload.content,
+        originalContent: payload.content,
+        size: payload.size,
+        readOnly: true,
+        previewLabel: `录制预览 · ${target.serverName}`,
+        serverId: target.serverId,
+      });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "加载失败";
+      setPreviewDialog((prev) => prev
+        ? { ...prev, loading: false, content: `/* 加载预览失败：${detail} */\n/* 可下载文件查看完整内容 */`, originalContent: "" }
+        : null);
+    }
+  }, []);
+
+  const handleToolbarRecordingToggle = useCallback(() => {
+    if (recordingSession) {
+      void stopLogRecording();
+      return;
+    }
+    /* 批量录制生命周期全在面板内：按钮只负责打开面板（进行中→运行视图；停止后→本次结果） */
+    openMultiPanel();
+  }, [recordingSession, stopLogRecording, openMultiPanel]);
 
   const {
     downloadFile,
+    cancelDownload,
     uploadFiles,
     uploadFileList,
     uploadDirectory,
@@ -3372,6 +3569,13 @@ export function App() {
       setShowTransferHistory(true);
     },
   });
+
+  const downloadAllMulti = useCallback(async () => {
+    const done = multiRec.targets.filter((t) => t.status === "done" && t.outPath);
+    for (const target of done) {
+      await downloadFile(target.outPath, { serverId: target.serverId });
+    }
+  }, [multiRec.targets, downloadFile]);
 
   /* 上传进度小窗桥接（Electron）：主窗口推进度，小窗回控制指令 */
   const { openTransferWindow } = useTransferPip({
@@ -4004,6 +4208,7 @@ export function App() {
                 keywordInputRef={keywordInputRef}
                 onKeywordInputChange={setKeywordInput}
                 onRunSearch={() => { void runSearch(); }}
+                onStopSearch={stopSearch}
                 settings={{
                   keywordInput,
                   keywordMode,
@@ -4062,11 +4267,13 @@ export function App() {
                 terminalPanelOpen={terminalPanelOpen}
                 onToggleTerminal={toggleTerminalPanel}
                 hasServer={!!serverId}
-                isRecording={!!recordingSession}
+                isRecording={isRecordingCombined}
+                recordingCount={multiRecordingCount}
                 canToggleRecording={canToggleRecording}
-                onToggleRecording={() => {
-                  void (recordingSession ? stopLogRecording() : startLogRecording());
-                }}
+                onToggleRecording={handleToolbarRecordingToggle}
+                multiLiveCount={multiLive.panes.length}
+                canOpenMultiLive={workspaceSessions.length > 0}
+                onOpenMultiLive={openMultiLivePanel}
                 showQueryAdvanced={showQueryAdvanced}
                 onToggleQueryAdvanced={() => {
                   setShowQueryAdvanced((current) => !current);
@@ -4077,6 +4284,42 @@ export function App() {
             </div>
 
             {/* connection info in sidebar */}
+
+            {/* 批量面板：绝对定位于工具栏正下方（锚定 .toolbar-panel，已在 styles-multi-node.css 置 relative）。
+                四相一体：选择 → 录制中/结果 → 实时状态，全部在面板内完成；关闭面板任务后台继续。 */}
+            <MultiNodePanel
+              open={multiPanelOpen}
+              onClose={() => {
+                setMultiPanelOpen(false);
+                setMultiShowResult(false);
+              }}
+              rows={multiSessionRows}
+              targets={multiRec.targets}
+              resultView={multiShowResult}
+              onExitResult={() => setMultiShowResult(false)}
+              onToggleCheck={toggleMultiCheck}
+              onStart={() => void startMulti()}
+              onStopAll={() => void multiRec.stopAll()}
+              onPreview={(target) => void previewMultiTarget(target)}
+              onDownload={(target) => void downloadFile(target.outPath, { serverId: target.serverId })}
+              onRetryTarget={(id) => void multiRec.retry(id)}
+              onDownloadAll={() => void downloadAllMulti()}
+            />
+            <MultiLivePanel
+              open={multiLivePanelOpen}
+              onClose={() => setMultiLivePanelOpen(false)}
+              rows={multiSessionRows}
+              panes={multiLive.panes}
+              onToggleCheck={toggleMultiCheck}
+              onStart={startMultiLive}
+              onLiveStop={() => {
+                multiLive.stopAll();
+                setActionStatus("已停止多窗格实时");
+                pushActivity("已停止多窗格实时");
+              }}
+              onLiveRemove={(id) => multiLive.remove(id)}
+              onLiveRetry={(id) => multiLive.retry(id)}
+            />
           </section>
 
           <section className={`workspace-panel ${isFileMode ? "workspace-panel-files" : ""}${terminalAsWorkspaceView ? " workspace-panel-terminal" : ""}`}>
@@ -4166,7 +4409,19 @@ export function App() {
               </>
             ) : !showServiceOfflineState && !showNoServerState && !showServiceCheckingState && !terminalDetached && (
               <>
-                {(!isFileMode || pip.isPip) ? (
+                {multiLive.active ? (
+                  /* 多窗格实时视墙：每会话一条 /ws/live，覆盖日志/文件视图（终端分支在其之前不受影响） */
+                  <MultiNodeLiveWall
+                    panes={multiLive.panes}
+                    onRemove={(id) => multiLive.remove(id)}
+                    onRetry={(id) => multiLive.retry(id)}
+                    onStopAll={() => {
+                      multiLive.stopAll();
+                      setActionStatus("已停止多窗格实时");
+                      pushActivity("已停止多窗格实时");
+                    }}
+                  />
+                ) : (!isFileMode || pip.isPip) ? (
                 <>
                 <div
                   className="viewer-workbench"
@@ -5617,6 +5872,7 @@ export function App() {
         downloadProgress={downloadProgress}
         toasts={toasts}
         onDismissToast={dismissToast}
+        onCancelDownload={cancelDownload}
       />
 
       {/* 侧栏移动档覆盖层：整屏选服层 / 目录树底部 sheet（宽档由 CSS display:none 隐藏，DOM 常驻） */}
@@ -5725,7 +5981,7 @@ export function App() {
         onPreviewDialogChange={(value) => setPreviewDialog((prev) => prev ? { ...prev, content: value } : null)}
         onPreviewDialogDownload={() => {
           if (previewDialog) {
-            void downloadFile(previewDialog.filePath);
+            void downloadFile(previewDialog.filePath, previewDialog.serverId ? { serverId: previewDialog.serverId } : undefined);
           }
         }}
         onPreviewDialogSave={() => void saveFileContent()}
@@ -5757,6 +6013,7 @@ export function App() {
         onResumeUpload={resumeUpload}
         onCancelUpload={cancelUpload}
         onOpenTransferWindow={() => { void openTransferWindow(); }}
+        onCancelDownload={cancelDownload}
         uploadFileQueue={uploadFileQueue}
       />
       {toolDrawerNode}

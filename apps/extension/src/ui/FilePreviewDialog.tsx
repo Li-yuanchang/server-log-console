@@ -40,6 +40,8 @@ export interface PreviewDialogState extends Omit<FilePreviewResponse, "filePath"
   filePath: string;
   fileName: string;
   originalContent: string;
+  /** 批量录制预览：文件所在会话的 serverId——下载按钮据此路由到正确节点 */
+  serverId?: string;
   selectedArchiveEntryName?: string;
   archiveEntryLoading?: boolean;
   archiveEntryError?: string;

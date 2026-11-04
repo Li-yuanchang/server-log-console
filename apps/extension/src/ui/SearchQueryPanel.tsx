@@ -17,6 +17,7 @@ type Props = {
   keywordInputRef: RefObject<HTMLInputElement | null>;
   onKeywordInputChange: (value: string) => void;
   onRunSearch: () => void;
+  onStopSearch?: () => void;
   settings: SearchSettingsState;
   onKeywordModeChange: (value: SearchSettingsState["keywordMode"]) => void;
   onExcludeInputChange: (value: string) => void;
@@ -147,7 +148,19 @@ export function SearchQueryPanel(props: Props) {
               （onKeyDown Enter），按钮与回车功能重复；检索中字节进度（S13）
               改显在输入组右端，不再占用独立按钮宽度。 */}
           {props.searching ? (
-            <span className="search-run-progress">{props.searchProgressLabel || "检索中"}</span>
+            <>
+              <span className="search-run-progress">{props.searchProgressLabel || "检索中"}</span>
+              {props.onStopSearch ? (
+                <button
+                  type="button"
+                  className="ghost-button slim-button search-run-stop"
+                  onClick={props.onStopSearch}
+                  title="停止本次检索，释放工作区切换"
+                >
+                  停止
+                </button>
+              ) : null}
+            </>
           ) : null}
         </div>
       ) : null}

@@ -101,6 +101,9 @@ let isQuitting = false;
 let gatewayStartPromise = null;
 let viewerPipWindow = null;
 let transferPipWindow = null;
+
+/* TEMP-DEBUG（批量日志验收用，验完移除）：CDP 远程调试 + 渲染进程控制台转发 */
+app.commandLine.appendSwitch("remote-debugging-port", "9222");
 const terminalPipWindows = new Map();
 
 function listPipWindows() {
