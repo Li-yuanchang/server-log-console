@@ -798,6 +798,41 @@ app.post("/api/servers/:serverId/system-profile", async (req, res) => {
   }
 });
 
+app.post("/api/servers/:serverId/diagnostics", async (req, res) => {
+  try {
+    const body = (req.body || {}) as { timeoutMs?: number; contextPath?: string };
+    const server = serverRegistryService.getServer(req.params.serverId);
+    const contextPath = body.contextPath?.trim() || "";
+    const isJumpServerEntry = sshExecutorService.isJumpServerBastion(server);
+    const parsedJumpPath = contextPath && isJumpServerEntry
+      ? (parseJumpServerSftpPath(contextPath) || parseJumpServerAssetRootPath(contextPath))
+      : null;
+
+    if (parsedJumpPath) {
+      const connection = await sshExecutorService.connectToJumpServerAsset(server.id, parsedJumpPath.assetKey, body.timeoutMs || 45000);
+      try {
+        const result = await serverSystemProfileService.diagnose(server.id, body.timeoutMs, {
+          connection,
+          hostOverride: parsedJumpPath.assetKey
+        });
+        res.json(result);
+      } finally {
+        connection.cleanup();
+      }
+      return;
+    }
+
+    if (isJumpServerEntry) {
+      throw new Error("堡垒机需先进入具体目标资产目录或打开目标资产日志，才能执行诊断。");
+    }
+
+    const result = await serverSystemProfileService.diagnose(server.id, body.timeoutMs);
+    res.json(result);
+  } catch (error) {
+    res.status(400).json({ message: error instanceof Error ? error.message : "诊断执行失败" });
+  }
+});
+
 app.post("/api/servers/:bastionId/jumpserver/browse-assets", async (req, res) => {
   try {
     const body = (req.body || {}) as { keyword?: string };
@@ -1151,20 +1186,45 @@ app.post("/api/files/upload/local/stream", async (req, res) => {
     res.setHeader("X-Accel-Buffering", "no");
     res.flushHeaders?.();
 
+    /* 客户端取消（fetch abort）时必须中止 fastPut（2026-11-07）：
+       fastPut 在网关侧自己读本地文件推 SFTP，客户端断开不会自然终止它 ——
+       不销毁通道的话，用户「取消」后大文件仍会在服务端静默传完。 */
+    let cancelTransfer: (() => void) | null = null;
+    let clientGone = false;
+    res.on("close", () => {
+      clientGone = true;
+      try {
+        cancelTransfer?.();
+      } catch (error) {
+        console.error("[upload/local/stream] cancel error:", error);
+      }
+    });
+
     console.log(`[upload/local/stream] serverId=${serverId} filePath=${filePath} localPath=${localPath}`);
     let lastEmit = 0;
     const result = await fileTransferService.uploadLocal(serverId, filePath, localPath, (transferred, chunkBytes, totalBytes) => {
+      if (clientGone) {
+        return;
+      }
       const now = Date.now();
       if (now - lastEmit < 200 && transferred < totalBytes) {
         return;
       }
       lastEmit = now;
       writeEvent({ type: "progress", transferred, chunkBytes, totalBytes });
+    }, {
+      onCancel: (fn) => { cancelTransfer = fn; },
     });
+    if (clientGone) {
+      return;
+    }
     writeEvent({ type: "done", filePath: result.filePath, size: result.size });
     res.end();
   } catch (error) {
     console.error("[upload/local/stream] error:", error);
+    if (res.writableEnded || res.destroyed) {
+      return;
+    }
     if (!res.headersSent) {
       res.status(400);
       res.setHeader("Content-Type", "application/x-ndjson; charset=utf-8");
