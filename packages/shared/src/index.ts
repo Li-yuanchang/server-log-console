@@ -381,6 +381,8 @@ export interface ServerSystemProcess {
   memoryPercent: number;
   rssKb: number;
   command: string;
+  /** 监听端口（来自 ss/netstat -tlnp 按 pid 聚合；无监听或采集不到为空） */
+  ports?: number[];
 }
 
 export interface ServerSystemNetworkInterface {
@@ -418,6 +420,42 @@ export interface ServerSystemProfileResponse {
   processes: ServerSystemProcess[];
   network: ServerSystemNetworkInterface[];
   warnings: string[];
+}
+
+export interface ServerDiagnosticsResponse {
+  serverId: string;
+  /** 堡垒机资产场景：资产标识（hostOverride） */
+  assetKey?: string;
+  collectedAt: string;
+  durationMs: number;
+  /** 采集降级说明（lsof 缺失 / dmesg 受限等） */
+  warnings: string[];
+  diskSpace: { filesystem: string; mount: string; percent: number }[];
+  inodes: { mount: string; percent: number }[];
+  /** 根分区一级目录占用 TOP（du -x -d1，8s 超时护栏下可能为部分结果） */
+  duTop: { path: string; sizeBytes: number }[];
+  /** 已删除但进程未释放的空间（GB）；lsof 不可用时为 null */
+  deletedOpenGb: number | null;
+  /** vmstat 第二帧：CPU 用户态% 与 IO 等待% */
+  vmstat: { usPercent: number; waPercent: number } | null;
+  /** MemAvailable 占总内存 % */
+  memAvailablePercent: number | null;
+  /** swap 已用字节（无 swap 或解析不到为 null） */
+  swapUsedBytes: number | null;
+  load1: number | null;
+  cores: number | null;
+  mysql: { active: string | null; serviceName: string | null; listening: boolean | null; logFile: string | null; logTail: string[] } | null;
+  ssh: {
+    active: string | null;
+    serviceName: string | null;
+    listening: boolean | null;
+    failedCount: number | null;
+    logFile: string | null;
+    logTail: string[];
+    /** 内核 OOM Kill 事件计数（dmesg） */
+    oomCount: number | null;
+    oomLastLine: string | null;
+  } | null;
 }
 
 export interface ManualServerUpsertRequest {

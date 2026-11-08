@@ -912,8 +912,10 @@
 }
 .theme-modern .xdrawer-head { border-bottom: 1px solid var(--line); }
 .theme-modern .xdrawer-title { font-size: var(--fs-sm); font-weight: 700; color: var(--ink); }
-.theme-modern .xrow { border-bottom: 1px solid var(--line); }
-.theme-modern .xrow:hover { background: color-mix(in srgb, var(--ink) 3.5%, transparent); }
+/* 2026-11-06：行分隔线下放到「只有历史记录区」才画，且左右内缩。
+   实现在 theme-modern.css 的 .xdrawer-reclist（单一真相，此处不再重复定义）。
+   原先这里无条件给所有 .xrow 加 border-bottom —— 进行中区块的每一行也带线，
+   整列线首尾相连、条条顶到抽屉两边，是「割裂感」的主要来源。 */
 
 /* ---------- 9. 页签细节：关闭钮悬浮/＋/分组 chip ---------- */
 /* 2026-10-16：× 对比增强（用户反馈「对比不明显」）。

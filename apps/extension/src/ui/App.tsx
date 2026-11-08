@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { FeedbackOverlays, type DownloadProgressState, type UploadProgressState } from "./FeedbackOverlays.js";
+import { useServerMonitorPool, type ServerMonitorEntry } from "./useServerMonitorPool.js";
 import { FileContextMenu, type FileContextMenuState } from "./FileContextMenu.js";
 import { ContextMenuShell } from "./ContextMenuShell.js";
 import { FileBrowserActions } from "./FileBrowserActions.js";
@@ -93,7 +94,7 @@ import { MultiNodeLiveWall } from "./MultiNodeLiveWall.js";
 import { useMultiNodeRecording, type MultiRecordTarget } from "./useMultiNodeRecording.js";
 import { useMultiNodeLive } from "./useMultiNodeLive.js";
 import { SidebarPanel } from "./SidebarPanel.js";
-import { ServerPickerOverlay, SidepanelMobileTop, SidepanelMobileTabBar, DirectorySheet } from "./SidepanelMobile.js";
+import { SidepanelMobileTop, SidepanelMobileTabBar, DirectorySheet } from "./SidepanelMobile.js";
 import { WorkspaceTabContextMenu, type WorkspaceTabMenuState } from "./WorkspaceTabContextMenu.js";
 import { WorkspaceSessionTabs } from "./WorkspaceSessionTabs.js";
 import { SettingsModalOverlay } from "./SettingsModalOverlay.js";
@@ -540,13 +541,14 @@ export function App() {
   const [showConnectionSettings, setShowConnectionSettings] = useState(() => new URLSearchParams(window.location.search).has("settings"));
   const [showTransferHistory, setShowTransferHistory] = useState(() => new URLSearchParams(window.location.search).has("transfer"));
   const [paletteOpen, setPaletteOpen] = useState(false);
-  /* 侧栏移动档（SidepanelMobile）：整屏选服层 / 目录树底部 sheet 的开关。
-     移动/宽档的显隐由 styles-sidepanel.css 容器查询决定，组件 DOM 常驻。 */
-  const [serverPickerOpen, setServerPickerOpen] = useState(false);
+  /* 侧栏移动档（SidepanelMobile）：目录树底部 sheet 的开关。
+     移动/宽档的显隐由 styles-sidepanel.css 容器查询决定，组件 DOM 常驻。
+     （选服层 2026-11-09 移除：桌面任何档位左侧都有完整服务器列表，覆盖抽屉纯重复）
+     Esc 关闭浮层（目录 sheet），与桌面弹层习惯一致 */
   const [dirSheetOpen, setDirSheetOpen] = useState(false);
-  /* Esc 关闭侧栏移动档浮层（选服层 / 目录 sheet），与桌面弹层习惯一致 */
+  /* Esc 关闭侧栏移动档浮层（目录 sheet），与桌面弹层习惯一致 */
   useEffect(() => {
-    if (!serverPickerOpen && !dirSheetOpen) {
+    if (!dirSheetOpen) {
       return;
     }
     const onKeyDown = (event: KeyboardEvent) => {
@@ -554,12 +556,11 @@ export function App() {
         return;
       }
       event.stopPropagation();
-      setServerPickerOpen(false);
       setDirSheetOpen(false);
     };
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, [serverPickerOpen, dirSheetOpen]);
+  }, [dirSheetOpen]);
   const [settingsWorkspaceView, setSettingsWorkspaceView] = useState<SettingsWorkspaceView>(() => {
     const param = new URLSearchParams(window.location.search).get("settings");
     if (param === "connections" || param === "gateway" || param === "preferences" || param === "update") {
@@ -1259,6 +1260,11 @@ export function App() {
     setPathbarMode("browse");
     setBatchMoveDialog(null);
     setSelectedFilePaths([]);
+    /* 服务器变了就收起传输记录抽屉（2026-11-06）：
+       工作区切换路径已由 useWorkspaceSessionManager 处理，这里兜住「关闭全部
+       工作区」「选中态被置空」等不经过 startWorkspaceActivation 的路径 ——
+       否则抽屉会留在屏幕上，显示一台已经关掉的服务器的记录。 */
+    setShowTransferHistory(false);
   }, [serverId]);
 
   useEffect(() => {
@@ -2080,8 +2086,46 @@ export function App() {
     () => selectedFileEntries.reduce((sum, entry) => sum + (entry.kind === "file" && typeof entry.size === "number" ? entry.size : 0), 0),
     [selectedFileEntries],
   );
-  // S6：传输列非常驻——目录内存在活动上传/下载时才显示该列
-  const hasActiveFileTransfers = Boolean(uploadProgress || downloadProgress);
+  /* 服务器监控采集池（2026-11-08 方案 E）：只采「已连接会话」。
+     成员资格：工作区会话快照里的 connectionTestStatus.connected（切换会话时
+     随快照存取）+ 活动服务器的实时连接态；10s 轮询 + 800ms 错峰，失败退避重试。 */
+  const connectedServerIds = useMemo(() => {
+    const ids = new Set<string>();
+    workspaceSessions.forEach((session) => {
+      const state = workspaceSessionStatesRef.current[session.id];
+      if (state?.connectionTestStatus?.connected || (state?.statusContextPath || "").trim()) ids.add(session.serverId);
+    });
+    if (serverId && connectionTestStatus?.connected) ids.add(serverId);
+    return [...ids];
+  }, [workspaceSessions, serverId, connectionTestStatus]);
+  const serverMonitor = useServerMonitorPool({
+    connectedServerIds,
+    getConnectedServerIds: () => connectedServerIds,
+    /* 堡垒机会话按状态上下文采集目标资产（网关 parseJumpServerSftpPath 解析虚拟路径） */
+    getContextPath: (sid) => {
+      if (sid === serverId) return effectiveServerStatusContext.path || undefined;
+      const session = workspaceSessions.find((s) => s.serverId === sid);
+      const state = session ? workspaceSessionStatesRef.current[session.id] : undefined;
+      return state?.statusContextPath || undefined;
+    }
+  });
+  /* 监控行「详情」：先切目标服务器，再打开既有状态面板（面板的 10s 轮询
+     effect 会因 serverId 变化自动取新服务器的 profile，无需在此重复取数） */
+  const openMonitorDetail = useCallback((targetServerId: string) => {
+    if (targetServerId !== serverId) selectServerById(targetServerId);
+    setActiveUtilityPanel("status");
+    setShowUtilityWorkspace(true);
+  }, [selectServerById, serverId]);
+
+  // S6：传输列非常驻——**当前目录内**存在活动上传/下载时才显示该列。
+  // 2026-11-07 修复：原判定是全局单例（任何目录有传输，所有目录的表头都多一列
+  // 空列），表现为「切换目录后传输进度表头残留」。上传按 currentTargetDir、
+  // 下载按 filePath 的父目录与当前目录比对。
+  const sameDir = (a?: string, b?: string) => (a || "").replace(/\/+$/, "") === (b || "").replace(/\/+$/, "");
+  const hasActiveFileTransfers = Boolean(
+    (uploadProgress && uploadProgress.stage !== "completed" && sameDir(uploadProgress.currentTargetDir, directoryPath))
+    || (downloadProgress && downloadProgress.percent < 100 && sameDir(downloadProgress.filePath ? getParentDirectoryPath(downloadProgress.filePath) : "", directoryPath))
+  );
   const treeListingTarget = useMemo(() => {
     if (!serverId) {
       return null;
@@ -2945,52 +2989,6 @@ export function App() {
     }
   }, [refreshServerSystemProfile, serverId, serverSystemProfile, setActionStatus]);
 
-  /* 终端状态栏资源迷你条（T1/批5）：终端视图激活期间按既有全局间隔轮询 system-profile。
-     CPU = loadAverage[0]/核数（与 ServerStatusPanel 同口径）；磁盘取使用率最高的挂载点。 */
-  const [terminalResources, setTerminalResources] = useState<{ cpu: number; mem: number; disk: number; diskPath?: string } | null>(null);
-  useEffect(() => {
-    const terminalViewActive = isStandaloneTerminalWindow || (terminalPanelOpen && !terminalDetached);
-    if (!terminalViewActive || !serverId) {
-      setTerminalResources(null);
-      return;
-    }
-    let cancelled = false;
-    const fetchProfile = async () => {
-      try {
-        const profile = await apiGetServerSystemProfile(serverId, 15000, effectiveServerStatusContext.path || undefined);
-        if (cancelled) {
-          return;
-        }
-        const memoryPercent = profile.memory?.percent ?? 0;
-        const disks = profile.disks ?? [];
-        const topDisk = disks.reduce<(typeof disks)[number] | null>((best, disk) => (!best || disk.percent > best.percent ? disk : best), null);
-        const cpuPercent = profile.cpu?.cores ? (profile.loadAverage[0] / profile.cpu.cores) * 100 : 0;
-        setTerminalResources({
-          cpu: clampPercent(cpuPercent),
-          mem: clampPercent(memoryPercent),
-          disk: clampPercent(topDisk?.percent ?? 0),
-          diskPath: topDisk?.mount,
-        });
-      } catch {
-        /* 资源条获取失败：**不再静默清空**（2026-10-23 用户反馈「监控状态栏没了」）。
-           原实现 catch 里什么都不做，但由于成功时才会 setTerminalResources，
-           一旦某次请求失败（Windows 上较常见：超时/权限/上下文路径不符），
-           该状态就永远停留在 null —— 状态栏里 CPU/内存/磁盘 那一整块是
-           `resources ? ... : null` 条件渲染，于是整块消失，看起来像「状态栏丢了」。
-           这里保留上一次成功值（不清空），下一轮 10s 轮询会自动恢复；
-           首次即失败时由状态栏渲染「--」占位（见 TerminalStatusBar），
-           保证监控区位置始终存在、不塌陷。 */
-      }
-    };
-    void fetchProfile();
-    const timer = window.setInterval(() => {
-      void fetchProfile();
-    }, SERVER_STATUS_REFRESH_INTERVAL_MS);
-    return () => {
-      cancelled = true;
-      window.clearInterval(timer);
-    };
-  }, [isStandaloneTerminalWindow, terminalPanelOpen, terminalDetached, serverId, effectiveServerStatusContext.path]);
 
   useEffect(() => {
     if (!showUtilityWorkspace || activeUtilityPanel !== "status" || !serverId) {
@@ -3537,6 +3535,9 @@ export function App() {
   const {
     downloadFile,
     cancelDownload,
+    downloadPaused,
+    pauseDownload,
+    resumeDownload,
     uploadFiles,
     uploadFileList,
     uploadDirectory,
@@ -3563,12 +3564,31 @@ export function App() {
     appendTransferHistory,
     browseLogFiles,
     setIsDragOver,
-    /* 上传开始即打开传输记录抽屉（用户反馈 2026-09-30：进度看抽屉，不弹气泡） */
-    onUploadStarted: () => {
-      setShowPathHistory(false);
-      setShowTransferHistory(true);
-    },
+    /* 2026-11-07：不再自动打开传输记录抽屉（用户反馈"侧滑窗口很碍事"，
+       对标调研也证实全行业无人自动弹面板）。传输开始后的进度入口 =
+       文件工具行的传输活动 chip（常驻可见、点击开抽屉）+ 文件表行内进度。 */
   });
+
+  /* 传输活动 chip（2026-11-07，对标 Termius tab 角标 / 百度网盘计数徽标）：
+     有活动传输才出现，显示各方向任务计数（↑n ↓m），详情（百分比/速度）进
+     tooltip；点击打开传输记录抽屉。completed 是完成卡 8s 驻留态不算活动中。
+     当前上传为单并发（P2 引入并发调度后再变为真实并行计数）。
+     位置必须在 useFileTransfer 之后：uploadPaused 由该 hook 返回（TDZ）。 */
+  const transferChipState = useMemo(() => {
+    const upActive = Boolean(uploadProgress && uploadProgress.stage !== "completed");
+    const dnActive = Boolean(downloadProgress && downloadProgress.percent < 100);
+    if (!upActive && !dnActive) return null;
+    const paused = Boolean(upActive && uploadPaused);
+    const parts: string[] = [];
+    if (upActive) parts.push(`上传 ${Math.max(2, uploadProgress!.current)}%${paused ? "（已暂停）" : ""}`);
+    if (dnActive) parts.push(`下载 ${Math.max(2, downloadProgress!.percent)}%${downloadPaused ? "（已暂停）" : ""}`);
+    return {
+      up: upActive ? 1 : 0,
+      dn: dnActive ? 1 : 0,
+      paused,
+      detail: parts.join(" · "),
+    };
+  }, [uploadProgress, downloadProgress, uploadPaused, downloadPaused]);
 
   const downloadAllMulti = useCallback(async () => {
     const done = multiRec.targets.filter((t) => t.status === "done" && t.outPath);
@@ -3581,6 +3601,7 @@ export function App() {
   const { openTransferWindow } = useTransferPip({
     enabled: isElectron,
     uploadProgress,
+    uploadFileQueue,
     directoryPath,
     uploadPaused,
     onPause: pauseUpload,
@@ -3915,7 +3936,6 @@ export function App() {
             onTogglePopup={() => undefined}
             detached={false}
             onSessionState={handleTerminalPaneSessionState}
-            resources={terminalResources}
           />
         </section>
         {/* Windows 自绘窗口控制：必须排在所有 drag 元素之后，与主窗口同理。 */}
@@ -3973,25 +3993,8 @@ export function App() {
     </ToolDrawer>
   ) : null;
 
-  /* 侧栏移动档（SidepanelMobile）共享数据：空态文案与 SidebarPanel 同源；
-     app bar 标题 / 底部 tab 高亮判定与桌面 toolbar-view-switch 的 is-active 同源（无宽度分支）。 */
-  const sidepanelServerEmptyState = showServiceOfflineState ? (
-    <div className="empty-box sidebar-empty-box">
-      <span className="empty-box-icon" aria-hidden="true">
-        <ServerOff size={18} strokeWidth={1.8} />
-      </span>
-      <strong>{isElectron ? "正在等待内置连接服务启动" : "本地服务未启动"}</strong>
-      <span>{isElectron ? "应用会自动重试连接本地服务；如果长时间没有恢复，我会继续排查安装版启动链路。" : "请在终端执行 npm run dev:gateway 启动本地连接服务，然后点击下方\"检查服务\"。"}</span>
-    </div>
-  ) : (
-    <div className="empty-box sidebar-empty-box">
-      <span className="empty-box-icon" aria-hidden="true">
-        <FolderSearch size={18} strokeWidth={1.8} />
-      </span>
-      <strong>还没有服务器</strong>
-      <span>检查 FinalShell 目录后导入，或手动补录连接信息。</span>
-    </div>
-  );
+  /* 侧栏移动档（SidepanelMobile）：视图高亮判定与桌面 toolbar-view-switch 的 is-active 同源（无宽度分支）。
+     选服层已移除（2026-11-09），原共享空态一并删除。 */
   const sidepanelMobileActiveView: "log" | "files" | "term" =
     showingLogPreview && !terminalAsWorkspaceView
       ? "log"
@@ -4034,6 +4037,17 @@ export function App() {
           isBusy={isBusy}
           onRetryConnect={() => { void testServerConnection(selectedServer?.basePath?.trim() || "/"); }}
           onCheckService={() => { void checkLocalServiceHealth(); }}
+          monitor={{
+            entries: serverMonitor.entries,
+            retry: serverMonitor.retry,
+            openDetail: openMonitorDetail
+          }}
+          getContextPath={(sid) => {
+            if (sid === serverId) return effectiveServerStatusContext.path || undefined;
+            const session = workspaceSessions.find((s) => s.serverId === sid);
+            const state = session ? workspaceSessionStatesRef.current[session.id] : undefined;
+            return state?.statusContextPath || undefined;
+          }}
         />
 
       <section className={`main-panel ${isFileMode ? "main-panel-files" : ""} sp-view-${sidepanelMobileActiveView}`}>
@@ -4086,7 +4100,6 @@ export function App() {
               showSettingsActive={showConnectionSettings}
               selectedServer={selectedServer}
               connectionTestStatus={connectionTestStatus}
-              onOpenServerPicker={() => setServerPickerOpen(true)}
               uiTheme={uiTheme}
             />
             <div className="toolbar-commandbar">
@@ -4174,6 +4187,11 @@ export function App() {
                       onUploadFiles={() => { void uploadFiles(); }}
                       onUploadDirectory={() => { void uploadDirectory(); }}
                       onRefresh={() => browseLogFiles(directoryPath || "/")}
+                      transferChip={transferChipState}
+                      onOpenTransferDrawer={() => {
+                        setShowPathHistory(false);
+                        setShowTransferHistory(true);
+                      }}
                     />
                     {/* 侧栏移动档：目录树收进底部 sheet，此处仅是打开入口（宽档 CSS 隐藏） */}
                     <button
@@ -4387,9 +4405,7 @@ export function App() {
                 onTogglePopup={toggleTerminalPopup}
                 detached={terminalDetached}
                 onSessionState={handleTerminalPaneSessionState}
-                resources={terminalResources}
-                onOpenMonitor={openServerStatusPanel}
-                onRevealInFiles={revealTerminalCwdInFiles}
+                        onRevealInFiles={revealTerminalCwdInFiles}
                 onOpenSettings={() => openSettingsWorkspace("preferences")}
                 onUploadFiles={handleTerminalUploadFiles}
               />
@@ -5322,6 +5338,7 @@ export function App() {
                         <FileBrowserTableRows
                           entries={tableEntries}
                           activeFilePath={filePath}
+                          directoryPath={directoryPath}
                           selectedFilePathSet={selectedFilePathSet}
                           isBusy={isBusy}
                           uiTheme={uiTheme}
@@ -5330,6 +5347,7 @@ export function App() {
                           formatDateTime={formatDateTime}
                           uploadProgress={uploadProgress}
                           downloadProgress={downloadProgress}
+                          showTransferColumn={uiTheme === "modern" && hasActiveFileTransfers}
                           onOpenEntry={openFileBrowserEntry}
                           onOpenContextMenu={(entry, clientX, clientY) => { openContextMenu(entry, clientX, clientY); }}
                           onToggleSelection={toggleFileSelection}
@@ -5435,8 +5453,8 @@ export function App() {
             )}
           </section>
 
-          {/* 侧栏移动档连接概览：原底部 sp-statusbar（400px 下过挤）已移除，
-              概览并入顶部 srv-chip 选服层（ServerPickerOverlay.overview）——2026-10-04 */}
+          {/* 选服层（ServerPickerOverlay）2026-11-09 移除：桌面任何档位左侧都有完整服务器列表，
+              覆盖抽屉纯重复；连接概览随选服层一并移除 */}
 
           {/* 侧栏移动档底部 tab 导航（sp-tabbar）：main-panel 最后一个子元素，宽档由 CSS 隐藏 */}
           <SidepanelMobileTabBar
@@ -5876,28 +5894,6 @@ export function App() {
       />
 
       {/* 侧栏移动档覆盖层：整屏选服层 / 目录树底部 sheet（宽档由 CSS display:none 隐藏，DOM 常驻） */}
-      <ServerPickerOverlay
-        open={serverPickerOpen}
-        onClose={() => setServerPickerOpen(false)}
-        serverFilter={serverFilter}
-        onServerFilterChange={setServerFilter}
-        filteredGroupedServers={filteredGroupedServers}
-        serverId={serverId}
-        connectionTestStatus={connectionTestStatus}
-        onSelectServer={(id) => {
-          selectServerById(id);
-          setServerPickerOpen(false);
-        }}
-        onDeleteServer={requestDeleteServer}
-        onOpenSettingsWorkspace={openSettingsWorkspace}
-        emptyState={sidepanelServerEmptyState}
-        overview={([
-          ["本地服务", localServiceStatusText],
-          ["服务器", selectedServer ? `${selectedServer.name} · ${connectionStateText || "--"}` : ""],
-          ["主机", selectedServer ? `${selectedServer.username}@${selectedServer.host}` : ""],
-          ["路径", directoryPath && directoryPath !== "/" ? directoryPath : ""],
-        ] as Array<[string, string]>).filter(([, value]) => Boolean(value))}
-      />
       <DirectorySheet
         open={dirSheetOpen}
         onClose={() => setDirSheetOpen(false)}
@@ -6014,6 +6010,9 @@ export function App() {
         onCancelUpload={cancelUpload}
         onOpenTransferWindow={() => { void openTransferWindow(); }}
         onCancelDownload={cancelDownload}
+        downloadPaused={downloadPaused}
+        onPauseDownload={pauseDownload}
+        onResumeDownload={resumeDownload}
         uploadFileQueue={uploadFileQueue}
       />
       {toolDrawerNode}

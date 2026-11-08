@@ -1051,3 +1051,141 @@ body.is-win32 .theme-modern.pip-standalone .terminal-panel-bar-standalone {
   min-height: 40px;
   cursor: pointer;
 }
+
+/* ============================================================
+   左栏双 Tab「服务器 / 监控」· 方案甲卡片（2026-11-08 实装）
+   页签 = 文件夹盖子（clip-path 梯形 + margin-bottom:-1px 盖接缝）；
+   监控 Tab = 单服务器读数卡（同色纸底、发丝线、大号等宽数字）。
+   ============================================================ */
+.app-shell .sidebar-panel > .sidebar-head { grid-row: 1; }
+.app-shell .sidebar-panel > .sidebar-tabs { grid-row: 2; }
+.app-shell .sidebar-panel > .pane-section:not(.server-groups):not(.smm-section) { grid-row: 3; }
+.app-shell .sidebar-panel > .server-groups { grid-row: 4; }
+.app-shell .sidebar-panel > .smm-section { grid-row: 3 / span 2; }
+
+/* 连体分段（2026-11-08 定稿）：整体一条 muted 底座、激活段白底微浮起；
+   左右呼吸 16px —— 与搜索框/树行底色/监控卡同一条基准线，切换零抖动 */
+.sidebar-tabs { display: flex; gap: 2px; margin: 8px 16px 0px; padding: 2px; background: var(--panel-muted, #f1f2ee); border-radius: 8px; }
+.sidebar-tabs button {
+  flex: 1; height: 24px; border: none; border-radius: 6px;
+  font-size: 11px; color: var(--ink-muted); background: transparent;
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px; cursor: pointer;
+  transition: background-color .12s ease, color .12s ease;
+}
+.sidebar-tabs button:hover { color: var(--ink); }
+.sidebar-tabs button.on { background: var(--panel, #fcfcf8); color: var(--ink); font-weight: 600; box-shadow: 0 1px 3px rgba(30, 38, 32, 0.14); }
+
+/* 连体分段（2026-11-08 二次反馈：梯形盖子在浅色侧栏里突兀）——
+   整体一条 muted 底座、激活段白底微浮起，iOS 分段控件语言，同色系无跳色 */
+.sidebar-tabs button {
+  flex: 1; height: 24px; border: none; border-radius: 6px;
+  font-size: 11px; color: var(--ink-muted); background: transparent;
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px; cursor: pointer;
+  transition: background-color .12s ease, color .12s ease;
+}
+.sidebar-tabs button:hover { color: var(--ink); }
+.sidebar-tabs button.on { background: var(--panel, #fcfcf8); color: var(--ink); font-weight: 600; box-shadow: 0 1px 3px rgba(30, 38, 32, 0.14); }
+.sidebar-tabs .smm-tab-count { font-size: 9px; background: var(--accent-soft); color: var(--accent); border-radius: 4px; padding: 0 5px; font-weight: 600; }
+.sidebar-tabs button:not(.on) .smm-tab-count { background: var(--panel); }
+
+/* ── 单服务器监控卡 ── */
+.smm-section { display: flex; flex-direction: column; min-height: 0; overflow-y: auto; background: var(--panel, #fcfcf8); }
+/* 几何对齐服务器树（CDP 实测）：树行底色 [8,205]、树文字起点 34px —— 监控卡同位。
+   带主题前缀压过 .pane-section 的 16px padding（否则监控卡左右空隙超标） */
+.smv-card { display: flex; flex-direction: column; padding: 8px 0 10px; min-height: 0; }
+/* 卡片 padding 归零（2026-11-08）：呼吸由各内容块自带 16px 水平内距，
+   基准线与页签/搜索框/树完全一致，切换零抖动 */
+.smv-card.stale .track, .smv-card.stale .smc-os { opacity: .55; }
+
+.smc-id { display: flex; align-items: center; gap: 7px; padding: 2px 0 0; }
+.smc-id b { font-size: 13px; font-weight: 650; }
+.smc-id em { font-style: normal; font-size: 9px; color: var(--ink-muted); background: var(--panel-muted, #f1f2ee); border-radius: 4px; padding: 1px 6px; }
+.smc-st { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; font-size: 9.5px; color: var(--green); white-space: nowrap; }
+.smc-st i { width: 6px; height: 6px; border-radius: 50%; background: var(--green); flex: none; }
+.smc-st.stale { color: var(--amber); }
+.smc-st.stale i { background: var(--amber); }
+.smc-st.collecting { color: var(--ink-muted); }
+.smc-st.collecting i { background: var(--ink-muted); }
+.smc-os { padding: 2px 0 0; font-size: 9.5px; color: var(--ink-muted); }
+
+.smc-hero { display: flex; align-items: center; gap: 12px; padding: 10px 0 6px; }
+.smc-hero-num {
+  font-family: var(--mono, ui-monospace, Menlo, monospace); font-size: 40px; font-weight: 700;
+  letter-spacing: -.04em; line-height: 1; font-variant-numeric: tabular-nums;
+  flex: none; width: 84px;
+}
+.smc-hero-num small { font-size: 15px; font-weight: 600; color: var(--ink-muted); letter-spacing: 0; margin-left: 3px; }
+.smc-hero-num.hot { color: var(--red); }
+.smc-hero-num.warm { color: var(--amber); }
+.smc-hero-label { font-size: 11.5px; font-weight: 600; color: var(--ink-soft, #5b6470); }
+/* 口径 / load 说明：全宽 meta 行（不再挤在数字右侧的窄列里换行） */
+.smc-hero-meta { display: flex; flex-wrap: wrap; gap: 3px 12px; padding: 0 0 7px; font-size: 9px; color: var(--ink-muted); border-bottom: 1px solid var(--hairline, #e7e8e1); }
+.smc-hero-meta .cap-ok { color: var(--green); }
+.smc-hero-meta .cap-est { color: var(--amber); }
+.smc-hero-meta .cap-load b { color: var(--amber); font-weight: 600; }
+
+
+.smc-srow {
+  display: grid; grid-template-columns: 44px 1fr auto; align-items: center; column-gap: 6px;
+  padding: 7px 0; border-bottom: 1px solid var(--hairline, #e7e8e1);
+}
+.smc-srow .lbl { font-size: 10px; color: var(--ink-soft, #5b6470); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.smc-srow .track { height: 10px; border-radius: 2px; position: relative; overflow: hidden; background: repeating-linear-gradient(to right, var(--hairline, #e7e8e1) 0 1px, transparent 1px 8px); }
+.smm-segbar { position: absolute; inset: 0; display: flex; gap: 1.5px; align-items: stretch; }
+.smm-seg { flex: 1 1 0; border-radius: 1px; }
+.smc-srow b {
+  font-family: var(--mono, ui-monospace, Menlo, monospace); font-size: 13px; font-weight: 650;
+  font-variant-numeric: tabular-nums; flex: none; min-width: 44px; text-align: right; color: var(--ink);
+}
+.smc-srow b small { font-size: 9px; font-weight: 600; color: var(--ink-muted); display: inline; margin-left: 2px; }
+.smc-srow b.dim { color: var(--ink-muted); font-size: 10px; font-weight: 500; }
+.smc-srow b.hot { color: var(--red); }
+.smc-srow b.warm { color: var(--amber); }
+
+.smc-sec { margin-top: 9px; padding: 8px 0 2px; font-size: 9px; letter-spacing: .14em; color: var(--ink-muted); }
+
+.smc-prow {
+  display: flex; align-items: center; gap: 10px; padding: 6px 0;
+  border-bottom: 1px solid var(--hairline, #e7e8e1);
+  font-family: var(--mono, ui-monospace, Menlo, monospace); font-size: 10px; color: var(--ink-soft, #5b6470);
+}
+.smc-prow:last-of-type { border-bottom: none; padding-bottom: 0; }
+.smc-prow .cmd { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); }
+.smc-prow .ports { flex: none; font-size: 9.5px; color: var(--ink-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.smc-prow .ports.empty { color: var(--ink3, #8b929c); opacity: .6; }
+.smc-prow b { font-variant-numeric: tabular-nums; color: var(--ink-soft, #5b6470); font-weight: 600; flex: none; min-width: 34px; text-align: right; }
+.smc-prow b.hot { color: var(--red); }
+
+.smc-foot {
+  display: flex; gap: 10px; padding: 9px 0 0; margin-top: 2px;
+  font-family: var(--mono, ui-monospace, Menlo, monospace); font-size: 9.5px;
+  color: var(--ink-muted); font-variant-numeric: tabular-nums;
+}
+.smc-foot .sp { flex: 1; }
+.smc-foot b { color: var(--ink-soft); font-weight: 600; }
+
+.smc-detail-btn {
+  margin: 10px 16px 0; width: calc(100% - 32px); height: 26px; border: 1px solid var(--hairline-strong, #d6d9d0);
+  border-radius: 7px; font-size: 11px; color: var(--ink-soft); background: transparent; cursor: pointer;
+}
+.smc-detail-btn:hover { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+
+.smc-stale-hint {
+  margin: 8px 0 0; display: flex; align-items: center; gap: 5px; padding: 4px 8px;
+  font-size: 9px; color: var(--amber); background: var(--amber-soft, rgba(180, 83, 9, 0.12)); border-radius: 6px;
+}
+.smc-idle { margin-top: 10px; font-size: 10.5px; color: var(--ink-muted); line-height: 1.7; padding: 10px 12px; background: var(--panel-muted, #f1f2ee); border-radius: 8px; }
+
+/* foot 里与 load/网速同排的「体检」入口（2026-11-08）：chip 形态 —— 图标 + 文字 + 浅底，
+   明确是一个可点动作而非数据文字；体检中变 accent + 旋转指示 */
+.smc-foot-link {
+  flex: none; display: inline-flex; align-items: center; gap: 4px;
+  height: 20px; padding: 0 9px; border-radius: 6px; border: none;
+  font-family: var(--mono, ui-monospace, Menlo, monospace); font-size: 9.5px;
+  color: var(--ink-soft); background: var(--panel-muted, #f1f2ee);
+  cursor: pointer; white-space: nowrap; font-variant-numeric: tabular-nums;
+}
+.smc-foot-link svg { flex: none; }
+.smc-foot-link:hover { color: var(--accent); background: var(--accent-soft); }
+.smc-foot-link.running { color: var(--accent); background: var(--accent-soft); }
+

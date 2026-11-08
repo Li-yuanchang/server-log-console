@@ -1,4 +1,4 @@
-import type { ServerSystemDisk, ServerSystemNetworkInterface, ServerSystemProcess, ServerSystemProfileResponse } from "@server-log-console/shared";
+import type { ServerDiagnosticsResponse, ServerSystemDisk, ServerSystemNetworkInterface, ServerSystemProcess, ServerSystemProfileResponse } from "@server-log-console/shared";
 import { shellEscape } from "../logs/remote-shell.js";
 import type { ManagedSshConnection, SshExecutorService } from "../logs/ssh-executor.service.js";
 import type { ServerRegistryService } from "./server-registry.service.js";
@@ -75,12 +75,23 @@ function parseDisks(map: LineMap): ServerSystemDisk[] {
 }
 
 function parseProcesses(map: LineMap): ServerSystemProcess[] {
+  /* 监听端口按 pid 聚合（PORT 行来自 ss/netstat -tlnp） */
+  const portsByPid = new Map<number, number[]>();
+  (map.get("PORT") || []).forEach(([pidRaw, portRaw]) => {
+    const pid = toNumber(pidRaw);
+    const port = toNumber(portRaw);
+    if (pid <= 0 || port <= 0) return;
+    const list = portsByPid.get(pid) || [];
+    if (!list.includes(port)) list.push(port);
+    portsByPid.set(pid, list);
+  });
   return (map.get("PROC") || []).map(([pid, cpu, memory, rss, ...commandParts]) => ({
     pid: toNumber(pid),
     cpuPercent: toNumber(cpu),
     memoryPercent: toNumber(memory),
     rssKb: toNumber(rss),
-    command: commandParts.join("\t").trim()
+    command: commandParts.join("\t").trim(),
+    ports: portsByPid.get(toNumber(pid))
   })).filter((process) => process.pid > 0);
 }
 
@@ -173,16 +184,144 @@ if command -v free >/dev/null 2>&1; then
 elif [ -r /proc/meminfo ]; then
   awk '/MemTotal:/ {mt=$2*1024} /MemAvailable:/ {ma=$2*1024} /SwapTotal:/ {st=$2*1024} /SwapFree:/ {sf=$2*1024} END {mu=mt-ma; su=st-sf; printf "MEM\t%d\t%d\t%d\t%.1f\n",mt,mu,ma,(mt>0?mu/mt*100:0); printf "SWAP\t%d\t%d\t%d\t%.1f\n",st,su,sf,(st>0?su/st*100:0)}' /proc/meminfo
 fi
-if command -v df >/dev/null 2>&1; then
+# 磁盘（2026-11-08 重写）：127.122 实测 df 整体卡死 —— 死挂载会让 df 在
+# stat 阶段永久阻塞、连一行都出不来（timeout 杀掉后仍是空输出）。
+# 改为从 /proc/mounts 只取真实块设备（/dev/*，天然排除 NFS/FUSE/overlay），
+# 逐挂载 df + 2s 护栏：单个坏挂载只丢它自己（并记 WARN），健康挂载照常返回。
+if [ -r /proc/mounts ] && command -v df >/dev/null 2>&1; then
+  awk '$1 ~ /^\/dev\// {print $2}' /proc/mounts 2>/dev/null | sort -u | while IFS= read -r mnt; do
+    [ -d "$mnt" ] || continue
+    if command -v timeout >/dev/null 2>&1; then
+      timeout 2 df -P -B1 "$mnt" 2>/dev/null || printf 'WARN\tdf 无响应，已跳过挂载 %s\n' "$mnt"
+    else
+      df -P -B1 "$mnt" 2>/dev/null
+    fi
+  done | awk '$1 ~ /^\/dev\// && NF>=6 {gsub(/%/,"",$5); printf "DISK\t%s\t%s\t%s\t%s\t%s\t%s\n",$1,$2,$3,$4,$5,$6}' | head -n 12
+elif command -v df >/dev/null 2>&1; then
   df -P -B1 2>/dev/null | awk 'NR>1 {gsub(/%/,"",$5); printf "DISK\t%s\t%s\t%s\t%s\t%s\t%s\n",$1,$2,$3,$4,$5,$6}' | head -n 12
 fi
 if command -v ps >/dev/null 2>&1; then
-  ps -eo pid=,pcpu=,pmem=,rss=,comm= --sort=-rss 2>/dev/null | head -n 8 | awk '{pid=$1; cpu=$2; mem=$3; rss=$4; $1=$2=$3=$4=""; sub(/^ +/,""); printf "PROC\t%s\t%s\t%s\t%s\t%s\n",pid,cpu,mem,rss,$0}'
+  if command -v timeout >/dev/null 2>&1; then
+    timeout 5 ps -eo pid=,pcpu=,pmem=,rss=,comm= --sort=-rss 2>/dev/null | head -n 8 | awk '{pid=$1; cpu=$2; mem=$3; rss=$4; $1=$2=$3=$4=""; sub(/^ +/,""); printf "PROC\t%s\t%s\t%s\t%s\t%s\n",pid,cpu,mem,rss,$0}'
+  else
+    ps -eo pid=,pcpu=,pmem=,rss=,comm= 2>/dev/null | head -n 8 | awk '{pid=$1; cpu=$2; mem=$3; rss=$4; $1=$2=$3=$4=""; sub(/^ +/,""); printf "PROC\t%s\t%s\t%s\t%s\t%s\n",pid,cpu,mem,rss,$0}'
+  fi
+fi
+# 监听端口（2026-11-08）：ss/netstat -tlnp 按 pid 聚合 —— 进程行可标注端口。
+# 需要 root（非 root 时 users/pid 列为空，自然退化为无端口）。有 timeout 护栏。
+if command -v ss >/dev/null 2>&1; then
+  if command -v timeout >/dev/null 2>&1; then
+    timeout 3 ss -tlnp 2>/dev/null | awk '{
+      n = split($4, a, ":"); port = a[n];
+      s = $NF; seen = "";
+      while (match(s, /pid=[0-9]+/)) {
+        pid = substr(s, RSTART + 4, RLENGTH - 4);
+        if (index(seen "," , pid ",") == 0 && index(seen, pid) == 0) { printf "PORT\t%s\t%s\n", pid, port; seen = seen "," pid }
+        s = substr(s, RSTART + RLENGTH);
+      }
+    }'
+  fi
+elif command -v netstat >/dev/null 2>&1; then
+  if command -v timeout >/dev/null 2>&1; then
+    timeout 3 netstat -tlnp 2>/dev/null | awk 'NR>2 { n = split($4, a, ":"); port = a[n]; split($7, b, "/"); pid = b[1]; if (pid + 0 > 0) printf "PORT\t%s\t%s\n", pid, port }'
+  fi
 fi
 if [ -r /proc/net/dev ]; then
   awk -F'[: ]+' 'NR>2 {printf "NET\t%s\t%s\t%s\n",$2,$3,$11}' /proc/net/dev
 elif command -v netstat >/dev/null 2>&1; then
   netstat -ibn 2>/dev/null | awk 'NR>1 && $1!="Name" {rx[$1]+=$7; tx[$1]+=$10} END {for (name in rx) printf "NET\t%s\t%s\t%s\n",name,rx[name],tx[name]}'
+fi
+`.trim();
+}
+
+function buildDiagnosticsScript(): string {
+  return String.raw`
+printf 'DXVER	1\n'
+# ── 磁盘空间（与监控采集同款逐挂载护栏：127.122 死挂载会让整体 df 连一行都出不来） ──
+if [ -r /proc/mounts ] && command -v df >/dev/null 2>&1; then
+  awk '$1 ~ /^\/dev\// {print $2}' /proc/mounts 2>/dev/null | sort -u | while IFS= read -r mnt; do
+    [ -d "$mnt" ] || continue
+    if command -v timeout >/dev/null 2>&1; then
+      timeout 2 df -P "$mnt" 2>/dev/null || printf 'WARN\tdf 无响应，已跳过挂载 %s\n' "$mnt"
+    else
+      df -P "$mnt" 2>/dev/null
+    fi
+  done | awk '$1 ~ /^\/dev\// && NF>=6 {gsub(/%/,"",$5); printf "DSPACE\t%s\t%s\t%s\n",$1,$6,$5}' | head -n 12
+fi
+# ── inode（同款逐挂载护栏） ──
+if [ -r /proc/mounts ] && command -v df >/dev/null 2>&1; then
+  awk '$1 ~ /^\/dev\// {print $2}' /proc/mounts 2>/dev/null | sort -u | while IFS= read -r mnt; do
+    [ -d "$mnt" ] || continue
+    if command -v timeout >/dev/null 2>&1; then
+      timeout 2 df -P -i "$mnt" 2>/dev/null
+    else
+      df -P -i "$mnt" 2>/dev/null
+    fi
+  done | awk '$1 ~ /^\/dev\// && NF>=6 {gsub(/%/,"",$5); printf "DINODE\t%s\t%s\n",$6,$5}' | head -n 12
+fi
+# ── 根分区 TOP 占用（8s 护栏；超时输出为部分结果，仍有效） ──
+if command -v timeout >/dev/null 2>&1; then
+  timeout 8 du -x -d1 / 2>/dev/null | sort -rn | head -n 6 | awk '{printf "DTOP\t%d\t%s\n",$1,$2}'
+else
+  du -x -d1 / 2>/dev/null | sort -rn | head -n 6 | awk '{printf "DTOP\t%d\t%s\n",$1,$2}'
+fi
+# ── 已删除未释放（lsof 降级 + 8s 护栏：大进程表机器上 lsof 可跑数十秒） ──
+if command -v lsof >/dev/null 2>&1; then
+  if command -v timeout >/dev/null 2>&1; then
+    timeout 8 lsof -nP 2>/dev/null | awk '$NF ~ /deleted/ {s+=$7} END {printf "DDEL\t%.0f\n", s/1048576}'
+  else
+    printf 'DDEL\tNA\n'
+  fi
+else
+  printf 'DDEL\tNA\n'
+fi
+# ── IO 等待（vmstat 第二帧：us/wa） ──
+if command -v vmstat >/dev/null 2>&1; then
+  vmstat 1 2 2>/dev/null | tail -n 1 | awk '{printf "VMSTAT\t%s\t%s\n",$13,$16}'
+fi
+# ── 内存可用 ──
+awk '/MemAvailable:/ {av=$2} /MemTotal:/ {t=$2} END {if (t>0) printf "MEMAVG\t%.0f\n", av/t*100}' /proc/meminfo 2>/dev/null
+# ── swap 已用 ──
+awk 'NR>1 {u+=$4} END {if (NR>1) printf "SWAPU\t%.0f\n", u*1024}' /proc/swaps 2>/dev/null
+# ── load / 核数 ──
+awk '{printf "LOAD1\t%s\n", $1}' /proc/loadavg 2>/dev/null
+command -v nproc >/dev/null 2>&1 && printf 'CORES\t%s\n' "$(nproc 2>/dev/null || printf 0)"
+# ── MySQL ──
+for svc in mysqld mysql mariadb; do
+  st=$(systemctl is-active $svc 2>/dev/null)
+  [ "$st" = "active" ] && { printf 'MYSQLD\tactive\t%s\n' "$svc"; break; }
+done
+if command -v ss >/dev/null 2>&1; then
+  ss -tln 2>/dev/null | awk '$4 ~ /:(3306|33060|3307)$/ {f=1} END {printf "MPORT\t%d\n", f}'
+fi
+for f in /var/log/mysqld.log /var/log/mysql/error.log /var/log/mysql.err /var/log/mariadb/mariadb.log; do
+  [ -r "$f" ] || continue
+  printf 'MLOGF\t%s\n' "$f"
+  tail -n 200 "$f" 2>/dev/null | grep -iE 'deadlock|timeout|error' | tail -n 4 | sed 's/^/MLOG\t/'
+  break
+done
+# ── SSH ──
+for svc in sshd ssh; do
+  st=$(systemctl is-active $svc 2>/dev/null)
+  [ "$st" = "active" ] && { printf 'SSHD\tactive\t%s\n' "$svc"; break; }
+done
+if command -v ss >/dev/null 2>&1; then
+  ss -tln 2>/dev/null | awk '$4 ~ /:22$/ {f=1} END {printf "SPORT\t%d\n", f}'
+fi
+for f in /var/log/secure /var/log/auth.log; do
+  [ -r "$f" ] || continue
+  printf 'SLOGF\t%s\n' "$f"
+  tail -n 200 "$f" 2>/dev/null | awk 'tolower($0) ~ /failed|invalid/ {c++} END {printf "SFAIL\t%d\n", c+0}'
+  tail -n 12 "$f" 2>/dev/null | grep -iE "failed|invalid|error" | tail -n 4 | sed 's/^/SLOG\t/'
+  break
+done
+# ── OOM（3s 护栏：dmesg 大内核环形缓冲同样可能拖慢） ──
+if command -v dmesg >/dev/null 2>&1; then
+  if command -v timeout >/dev/null 2>&1; then
+    timeout 3 dmesg -T 2>/dev/null | awk 'tolower($0) ~ /out of memory|oom-kill|killed process/ {c++; last=$0} END {printf "OOMC\t%d\n", c+0; if (last != "") printf "OOML\t%s\n", last}'
+  else
+    dmesg -T 2>/dev/null | awk 'tolower($0) ~ /out of memory|oom-kill|killed process/ {c++; last=$0} END {printf "OOMC\t%d\n", c+0; if (last != "") printf "OOML\t%s\n", last}'
+  fi
 fi
 `.trim();
 }
@@ -259,6 +398,109 @@ export class ServerSystemProfileService {
       processes: parseProcesses(map),
       network: parseNetwork(map),
       warnings
+    };
+  }
+
+  /**
+   * 服务器诊断（2026-11-08）：一条只读脚本一次 exec，解析全部检查分区。
+   * 与 collect 同机制（无 agent、逐段 timeout 护栏）；堡垒机场景由端点
+   * 传入 connection（目标资产连接），脚本在资产上执行。
+   */
+  async diagnose(
+    serverId: string,
+    timeoutMs = 45000,
+    options?: {
+      connection?: ManagedSshConnection;
+      hostOverride?: string;
+    }
+  ): Promise<ServerDiagnosticsResponse> {
+    const server = this.serverRegistry.getServer(serverId);
+    const command = `sh -c ${shellEscape(buildDiagnosticsScript())}`;
+    const effectiveTimeoutMs = Math.max(10000, Math.min(timeoutMs, 60000));
+    const startedAt = Date.now();
+    const output = options?.connection
+      ? await this.sshExecutor.execWithManagedConnection(options.connection, command, effectiveTimeoutMs)
+      : await this.sshExecutor.exec(server.id, command, effectiveTimeoutMs);
+    const map = parseLines(output);
+    const warnings: string[] = [];
+
+    const diskSpace = (map.get("DSPACE") || []).map(([filesystem, mount, percent]) => ({
+      filesystem: filesystem || "",
+      mount: mount || "",
+      percent: toNumber(percent)
+    }));
+    const inodes = (map.get("DINODE") || []).map(([mount, percent]) => ({
+      mount: mount || "",
+      percent: toNumber(percent)
+    }));
+    const duTop = (map.get("DTOP") || []).map(([kb, path]) => ({
+      path: path || "",
+      sizeBytes: toNumber(kb) * 1024
+    }));
+    const ddelRow = first(map, "DDEL");
+    const deletedOpenGb = ddelRow.length && ddelRow[0] !== "NA" ? toNumber(ddelRow[0]) : null;
+    if (ddelRow.length && ddelRow[0] === "NA") warnings.push("lsof 不可用，已删除未释放空间未检查。");
+    const vmRow = first(map, "VMSTAT");
+    const vmstat = vmRow.length >= 2 ? { usPercent: toNumber(vmRow[0]), waPercent: toNumber(vmRow[1]) } : null;
+    const memRow = first(map, "MEMAVG");
+    const memAvailablePercent = memRow.length ? toNumber(memRow[0]) : null;
+    const swapRow = first(map, "SWAPU");
+    const swapUsedBytes = swapRow.length ? toNumber(swapRow[0]) : null;
+    const loadRow = first(map, "LOAD1");
+    const load1 = loadRow.length ? toNumber(loadRow[0]) : null;
+    const coresRow = first(map, "CORES");
+    const cores = coresRow.length ? toNumber(coresRow[0]) : null;
+
+    const myRow = first(map, "MYSQLD");
+    const mportRow = first(map, "MPORT");
+    const mlogfRow = first(map, "MLOGF");
+    const mysql = myRow.length || mportRow.length
+      ? {
+          active: myRow.length ? myRow[0] : null,
+          serviceName: myRow.length ? myRow[1] : null,
+          listening: mportRow.length ? toNumber(mportRow[0]) === 1 : null,
+          logFile: mlogfRow.length ? mlogfRow[0] : null,
+          logTail: (map.get("MLOG") || []).map((row) => row.join(" "))
+        }
+      : null;
+
+    const sshRow = first(map, "SSHD");
+    const spRow = first(map, "SPORT");
+    const sfailRow = first(map, "SFAIL");
+    const slogfRow = first(map, "SLOGF");
+    const oomRow = first(map, "OOMC");
+    const oomLastRow = first(map, "OOML");
+    if (!oomRow.length) warnings.push("dmesg 不可读（权限受限），OOM 事件未检查。");
+    const ssh = sshRow.length || spRow.length
+      ? {
+          active: sshRow.length ? sshRow[0] : null,
+          serviceName: sshRow.length ? sshRow[1] : null,
+          listening: spRow.length ? toNumber(spRow[0]) === 1 : null,
+          failedCount: sfailRow.length ? toNumber(sfailRow[0]) : null,
+          logFile: slogfRow.length ? slogfRow[0] : null,
+          logTail: (map.get("SLOG") || []).map((row) => row.join(" ")),
+          oomCount: oomRow.length ? toNumber(oomRow[0]) : null,
+          oomLastLine: oomLastRow.length ? oomLastRow[0] : null
+        }
+      : null;
+
+    return {
+      serverId,
+      assetKey: options?.hostOverride,
+      collectedAt: new Date().toISOString(),
+      durationMs: Date.now() - startedAt,
+      warnings,
+      diskSpace,
+      inodes,
+      duTop,
+      deletedOpenGb,
+      vmstat,
+      memAvailablePercent,
+      swapUsedBytes,
+      load1,
+      cores,
+      mysql,
+      ssh
     };
   }
 }

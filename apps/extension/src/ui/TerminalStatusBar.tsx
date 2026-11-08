@@ -17,9 +17,7 @@ export interface TerminalStatusBarProps {
   hostLabel: string; // 如 root@192.168.127.38
   connectedAt: number | null; // 连接成功时间戳，用于显示「42 分钟」
   retry?: { attempt: number; max: number; reason?: string } | null; // 断线自动重试进度
-  resources?: { cpu: number; mem: number; disk: number; diskPath?: string } | null; // 0-100
   onReconnect?: () => void; // disconnected 时显示「立即重连」小按钮
-  onOpenMonitor?: () => void; // 点击资源条打开监控
 }
 
 /** 时长文案（对齐原型「42 分钟」）：不足 1 分钟显示「刚刚」，跨小时带分钟 */
@@ -65,30 +63,6 @@ function ConnectedDuration({ connectedAt }: { connectedAt: number }) {
 
 /** 单条资源迷你条：标签 + 数值 + 42×4px 圆角槽（对应原型 .rbar）。
     value 为 null 时渲染「--」占位（2026-10-23）：监控是功能，取不到数据也不能整块消失。 */
-function ResourceMeter({ label, value }: { label: string; value: number | null }) {
-  const hasValue = value != null;
-  const level = hasValue ? resourceLevel(value) : "idle";
-  const width = hasValue ? Math.max(0, Math.min(100, value)) : 0;
-  return (
-    <span
-      className={`terminal-statusbar-meter terminal-statusbar-meter-${level}`}
-      title={
-        hasValue
-          ? `${label} ${Math.round(value)}% · 来自网关每 10s 采集 · 点击打开监控`
-          : `${label} 暂无数据（网关未返回该指标，10s 后重试）· 点击打开监控`
-      }
-    >
-      <span className="terminal-statusbar-meter-label">{label}</span>
-      <span className="terminal-statusbar-meter-value">{hasValue ? `${Math.round(value)}%` : "--"}</span>
-      <span className="terminal-statusbar-meter-track">
-        <i
-          className={`terminal-statusbar-meter-fill terminal-statusbar-meter-fill-${level}`}
-          style={{ width: `${width}%` }}
-        />
-      </span>
-    </span>
-  );
-}
 
 /** 重连小图标（对齐原型「立即重连」按钮里的 refresh 图标） */
 function ReconnectIcon() {
@@ -111,26 +85,15 @@ function ReconnectIcon() {
 }
 
 export function TerminalStatusBar(props: TerminalStatusBarProps) {
-  const { state, hostLabel, connectedAt, retry, resources, onReconnect, onOpenMonitor } = props;
+  const { state, hostLabel, connectedAt, retry, onReconnect } = props;
 
   return (
     <div className="terminal-statusbar">
       {/* 左：状态点 + 连接状态（T1 连接 / T4 断线 / T8 空态） */}
       <span className="terminal-statusbar-state">
         <span className={`terminal-statusbar-dot terminal-statusbar-dot-${state}`} />
-        {state === "connected" ? (
-          <>
-            <span className="terminal-statusbar-label terminal-statusbar-label-ok">已连接</span>
-            <span className="terminal-statusbar-sep" />
-            <span className="terminal-statusbar-host">{hostLabel}</span>
-            {connectedAt != null ? (
-              <>
-                <span className="terminal-statusbar-sep" />
-                <ConnectedDuration connectedAt={connectedAt} />
-              </>
-            ) : null}
-          </>
-        ) : null}
+        {/* 已连接态不再展示主机/时长（2026-11-08）：监控卡与工作区页签已有同信息，
+            底条左段仅在 断开/保留/空闲 等需要用户行动的状态下出现 */}
         {state === "disconnected" ? (
           <>
             <span className="terminal-statusbar-label terminal-statusbar-label-err">已断开</span>
@@ -179,34 +142,17 @@ export function TerminalStatusBar(props: TerminalStatusBarProps) {
         {state === "idle" ? (
           <span className="terminal-statusbar-idle">未连接 · 连接后显示主机与资源信息</span>
         ) : null}
-      </span>
 
-      {/* 中：网关资源迷你条（每 10s 采集，整组可点打开监控）。
-          2026-10-23：改为**始终渲染**。原为 `resources ? ... : null`，一旦某次
-          采集失败（Windows 上易超时）监控块就整块消失，用户以为「状态栏丢了」。
-          现监控是功能、位置常驻：无数据显示「--」，恢复数据后自动回填。 */}
-      <button
-        type="button"
-        className="terminal-statusbar-res"
-        onClick={onOpenMonitor}
-        title="来自网关每 10s 采集 · 点击打开监控"
-        aria-label="打开监控"
-      >
-        <ResourceMeter label="CPU" value={resources?.cpu ?? null} />
-        <ResourceMeter label="内存" value={resources?.mem ?? null} />
-        <ResourceMeter label={resources?.diskPath || "磁盘"} value={resources?.disk ?? null} />
-      </button>
-
-      <span className="terminal-statusbar-grow" />
-
-      {/* 右：编码与查找提示 */}
-      <span className="terminal-statusbar-right">
+        {/* 功能提示跟随状态内容（2026-11-08 安置：已连接 = 绿点存活指示 + 提示组） */}
+        <span className="terminal-statusbar-sep" />
         <span className="terminal-statusbar-mono">UTF-8</span>
         <span className="terminal-statusbar-sep" />
         <span className="terminal-statusbar-hint">{formatKeyHint("⌘R")} 历史</span>
         <span className="terminal-statusbar-sep" />
         <span className="terminal-statusbar-hint">{formatKeyHint("⌘F")} 查找</span>
       </span>
+
+      <span className="terminal-statusbar-grow" />
     </div>
   );
 }

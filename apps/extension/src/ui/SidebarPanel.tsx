@@ -1,9 +1,12 @@
+import { useState } from "react";
 import type { ServerSummary, ServerConnectionTestResponse } from "@server-log-console/shared";
 import type { SettingsWorkspaceView } from "./ConnectionSettingsWorkspace.js";
 import { Command as CommandIcon, Search, ServerOff, FolderSearch } from "lucide-react";
 import { ToolIcon } from "./ToolIcon.js";
 import { formatKeyHint } from "./key-hints.js";
 import { ServerGroupsList } from "./SidepanelMobile.js";
+import { ServerMonitorCard } from "./ServerMonitorCard.js";
+import type { ServerMonitorEntry } from "./useServerMonitorPool.js";
 
 export type SidebarPanelProps = {
   uiTheme?: "classic" | "modern";
@@ -30,6 +33,14 @@ export type SidebarPanelProps = {
   isBusy?: boolean;
   onRetryConnect?: () => void;
   onCheckService?: () => void;
+  /** 监控 Tab 数据（2026-11-08 方案 E）：连接会话采集池 + 详情呼出 */
+  monitor?: {
+    entries: ServerMonitorEntry[];
+    retry: (serverId: string) => void;
+    openDetail: (serverId: string) => void;
+  };
+  /** 各 serverId 的状态上下文路径：堡垒机/jumpserver 会话体检必传（网关按虚拟路径解析目标资产） */
+  getContextPath?: (serverId: string) => string | undefined;
 };
 
 export function SidebarPanel(props: SidebarPanelProps) {
@@ -58,7 +69,23 @@ export function SidebarPanel(props: SidebarPanelProps) {
     isBusy,
     onRetryConnect,
     onCheckService,
+    monitor,
+    getContextPath,
   } = props;
+
+  /* 左栏双 Tab（2026-11-08 方案 E）：服务器树 / 监控列表同列切换。
+     默认服务器（用户确认：每次启动都从服务器树开始），会话内切换即记，不做持久化。 */
+  const [leftTab, setLeftTab] = useState<"servers" | "monitor">("servers");
+  const switchLeftTab = (tab: "servers" | "monitor") => {
+    setLeftTab(tab);
+  };
+  /* 分组标题映射：监控行显示服务器所属分组（测试/生产…） */
+  const groupTitleOf = (targetServerId: string): string | undefined => {
+    for (const [title, list] of filteredGroupedServers) {
+      if (list.some((srv) => srv.id === targetServerId)) return title;
+    }
+    return undefined;
+  };
 
   /* 底部状态条五态（原型 empty-states-a-v2 第 10 屏）：
      warn 服务离线 > err 连接失败 > connecting 连接中 > ok 已连接 > idle 未连接
@@ -104,6 +131,30 @@ export function SidebarPanel(props: SidebarPanelProps) {
         </div>
       </div>
 
+      {/* 左栏双 Tab（方案 E）：服务器树 / 监控列表，监控为常驻采集池视图 */}
+      <div className="sidebar-tabs" role="tablist" aria-label="左栏视图">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={leftTab === "servers"}
+          className={leftTab === "servers" ? "on" : ""}
+          onClick={() => switchLeftTab("servers")}
+        >
+          服务器
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={leftTab === "monitor"}
+          className={leftTab === "monitor" ? "on" : ""}
+          onClick={() => switchLeftTab("monitor")}
+        >
+          监控
+          {monitor && monitor.entries.length > 0 ? <b className="smm-tab-count">{monitor.entries.length}</b> : null}
+        </button>
+      </div>
+
+      {leftTab === "servers" ? (
       <section className="pane-section">
         {/* 2026-11-02 chrome v1 定稿：搜索框四边框保留、背景透明与树同底，
             内嵌细描边 🔍 前缀（过滤本就是输入即过滤，无按钮）；样式见 theme-modern.css 搜索框节。 */}
@@ -118,7 +169,26 @@ export function SidebarPanel(props: SidebarPanelProps) {
           />
         </div>
       </section>
+      ) : null}
 
+      {leftTab === "monitor" && monitor ? (
+        <section className="pane-section smm-section">
+          <ServerMonitorCard
+            entry={monitor.entries.find((e) => e.serverId === serverId) || null}
+            serverId={serverId}
+            serverName={selectedServer?.name}
+            groupTitle={groupTitleOf(serverId)}
+            staleSec={(() => {
+              const entry = monitor.entries.find((e) => e.serverId === serverId);
+              if (!entry || entry.status !== "ok" || !entry.lastSuccessAt) return 0;
+              const dt = Date.now() - entry.lastSuccessAt;
+              return dt > 30000 ? Math.round(dt / 1000) : 0;
+            })()}
+            onRetry={monitor.retry}
+            contextPath={getContextPath?.(serverId)}
+          />
+        </section>
+      ) : (
       <div className="server-groups pane-section">
         {showServiceOfflineState ? (
           <div className="empty-box sidebar-empty-box">
@@ -150,6 +220,7 @@ export function SidebarPanel(props: SidebarPanelProps) {
           />
         )}
       </div>
+      )}
 
       {/* 左下「连接概览」状态卡已移除（2026-10-25 用户决策）。
           原因：① 内容展示不全 —— .st-kv 是 50px+1fr 网格 + nowrap/ellipsis，

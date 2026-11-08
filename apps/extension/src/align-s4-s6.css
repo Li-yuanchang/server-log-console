@@ -195,6 +195,51 @@
   border-radius: 4px;
 }
 
+/* ---------- 传输活动 chip（2026-11-07） ----------
+   有活动上传/下载时出现在工具行末尾的环境指示器（对标 Termius tab 角标），
+   点击打开传输记录抽屉；无传输时整个不存在、不占位。
+   高度与行内控件基准一致（2026-10-25 用户定的 32px），胶囊形区分于方形按钮；
+   上传用 accent、下载用绿（与抽屉 xrow-ic-up/dn 同语义），暂停转琥珀。 */
+.theme-modern .transfer-activity-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 11px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  cursor: pointer;
+  white-space: nowrap;
+  flex: none;
+  animation: transfer-chip-in 0.16s ease;
+}
+@keyframes transfer-chip-in {
+  from { transform: scale(0.94); opacity: 0; }
+}
+.theme-modern .transfer-activity-chip:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.theme-modern .transfer-activity-chip-part {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-family: var(--mono-font-family, monospace);
+  font-size: var(--fs-2xs);
+  font-variant-numeric: tabular-nums;
+}
+.theme-modern .transfer-activity-chip-part b { font-weight: 600; color: var(--ink); }
+.theme-modern .transfer-activity-chip-up { color: var(--accent); }
+.theme-modern .transfer-activity-chip-dn { color: var(--green); }
+/* 暂停态：琥珀描边 + 半透明数字，一眼区分"在跑"与"停着" */
+.theme-modern .transfer-activity-chip-paused {
+  border-color: color-mix(in srgb, var(--amber, #b77935) 55%, transparent);
+}
+.theme-modern .transfer-activity-chip-paused .transfer-activity-chip-part b {
+  opacity: 0.55;
+}
+
 /* S6-18 选中行底色 = var(--accent-soft)（原型 155：rgba(0,112,243,.08)，
    实现误用 var(--accent) 色相）。 */
 .theme-modern .file-table .file-row.file-row-selected,

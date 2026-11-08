@@ -25,6 +25,7 @@ import type {
   ServerCredentialSecret,
   ServerCredentialStatus,
   ServerRouteConfig,
+  ServerDiagnosticsResponse,
   ServerSystemProfileResponse,
   ServerSummary
 } from "@server-log-console/shared";
@@ -500,6 +501,25 @@ export async function apiGetServerSystemProfile(serverId: string, timeoutMs = 30
   return readPayload<ServerSystemProfileResponse>(response, "读取服务器状态失败");
 }
 
+/** 服务器诊断（方案甲，2026-11-08）：一条只读脚本一次 exec，解析全部分区。
+    contextPath：堡垒机/jumpserver 会话必传（网关解析虚拟路径定位目标资产）。 */
+export async function apiGetServerDiagnostics(
+  serverId: string,
+  timeoutMs = 45000,
+  contextPath?: string
+): Promise<ServerDiagnosticsResponse> {
+  const response = await gatewayFetch(`${localServiceBase}/api/servers/${encodeURIComponent(serverId)}/diagnostics`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ timeoutMs, contextPath: contextPath || undefined })
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ message: "诊断执行失败" })) as { message?: string };
+    throw new Error(err.message || "诊断执行失败");
+  }
+  return readPayload<ServerDiagnosticsResponse>(response, "读取诊断结果失败");
+}
+
 /**
  * 测试服务器连接（2026-10-21 补超时）。
  *
@@ -614,14 +634,22 @@ export async function apiStopLogRecording(sessionId: string): Promise<LogRecordi
 export async function apiDownloadFile(
   serverId: string,
   filePath: string,
-  onProgress?: (downloaded: number, total: number, speed: number) => void,
-  signal?: AbortSignal
-): Promise<Blob> {
+  /* 2026-11-07 重构：chunk 通过 onChunk 交给调用方累积（跨恢复重建存活），
+     offset 断点续传 —— 网关从该字节起读，Content-Length 为剩余长度。 */
+  opts: {
+    offset?: number;
+    onChunk?: (chunk: Uint8Array) => void;
+    onProgress?: (downloaded: number, total: number, speed: number) => void;
+    signal?: AbortSignal;
+    gate?: { checkpoint: () => Promise<void> };
+  } = {},
+): Promise<{ received: number; total: number }> {
+  const offset = Math.max(0, Math.floor(opts.offset ?? 0));
   const response = await gatewayFetch(`${localServiceBase}/api/files/download`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ serverId, filePath }),
-    signal
+    body: JSON.stringify({ serverId, filePath, offset: offset > 0 ? offset : undefined }),
+    signal: opts.signal
   });
   if (!response.ok) {
     const err = await response.json().catch(() => ({ message: "下载失败" })) as { message?: string };
@@ -629,33 +657,40 @@ export async function apiDownloadFile(
   }
 
   const contentLength = Number(response.headers.get("Content-Length") || "0");
-  if (!onProgress || !contentLength || !response.body) {
-    return response.blob();
+  const total = offset + contentLength;
+
+  const reader = response.body?.getReader();
+  if (!reader) {
+    const blob = await response.blob();
+    const buf = new Uint8Array(await blob.arrayBuffer());
+    opts.onChunk?.(buf);
+    return { received: buf.length, total: offset + buf.length };
   }
 
-  const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
   let received = 0;
   let speedSampleTime = Date.now();
-  let speedSampleOffset = 0;
+  let speedSampleOffset = offset;
   let speed = 0;
 
   for (;;) {
+    /* 暂停/继续闸门：每个 chunk 读取前过检查点 —— 暂停时停止读取，
+       TCP 背压会让网关侧 SFTP 流停发（缓冲填满后阻塞），连接保持、恢复从断点续读。 */
+    await opts.gate?.checkpoint();
     const { done, value } = await reader.read();
     if (done) break;
-    chunks.push(value);
+    opts.onChunk?.(value);
     received += value.length;
     const now = Date.now();
     const elapsed = (now - speedSampleTime) / 1000;
     if (elapsed >= 0.4) {
-      speed = (received - speedSampleOffset) / elapsed;
+      speed = (offset + received - speedSampleOffset) / elapsed;
       speedSampleTime = now;
-      speedSampleOffset = received;
+      speedSampleOffset = offset + received;
     }
-    onProgress(received, contentLength, speed);
+    opts.onProgress?.(offset + received, total, speed);
   }
 
-  return new Blob(chunks as unknown as BlobPart[], { type: response.headers.get("Content-Type") || "application/octet-stream" });
+  return { received, total };
 }
 
 export async function apiDeleteFile(serverId: string, filePath: string): Promise<void> {
@@ -737,6 +772,7 @@ function uploadFormData(
   formData: FormData,
   fallbackMessage: string,
   onProgress?: (payload: UploadProgressEventPayload) => void,
+  signal?: AbortSignal,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
@@ -761,7 +797,16 @@ function uploadFormData(
       }
     };
     xhr.onerror = () => reject(new Error(`${fallbackMessage}：网络异常`));
-    xhr.onabort = () => reject(new Error(`${fallbackMessage}：请求已取消`));
+    /* 取消统一抛 AbortError（2026-11-07）：调用方按 name 识别「用户取消」，
+       不再当成传输失败 */
+    xhr.onabort = () => reject(new DOMException("上传已取消", "AbortError"));
+    if (signal) {
+      if (signal.aborted) {
+        xhr.abort();
+      } else {
+        signal.addEventListener("abort", () => xhr.abort(), { once: true });
+      }
+    }
     xhr.send(formData);
   });
 }
@@ -771,12 +816,13 @@ export async function apiUploadSmall(
   filePath: string,
   file: File,
   onProgress?: (payload: UploadProgressEventPayload) => void,
+  signal?: AbortSignal,
 ): Promise<void> {
   const formData = new FormData();
   formData.append("file", file);
   formData.append("serverId", serverId);
   formData.append("filePath", filePath);
-  await uploadFormData(`${localServiceBase}/api/files/upload`, formData, "上传失败", onProgress);
+  await uploadFormData(`${localServiceBase}/api/files/upload`, formData, "上传失败", onProgress, signal);
 }
 
 export async function apiUploadLocalFile(
@@ -784,12 +830,14 @@ export async function apiUploadLocalFile(
   filePath: string,
   localPath: string,
   onProgress?: (payload: { transferred: number; chunkBytes: number; totalBytes: number }) => void,
+  signal?: AbortSignal,
 ): Promise<{ filePath: string; size: number }> {
   if (!onProgress) {
     const res = await gatewayFetch(`${localServiceBase}/api/files/upload/local`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ serverId, filePath, localPath })
+      body: JSON.stringify({ serverId, filePath, localPath }),
+      signal
     });
     if (!res.ok) {
       const body = await res.json().catch(() => ({})) as { message?: string };
@@ -798,10 +846,13 @@ export async function apiUploadLocalFile(
     return res.json() as Promise<{ filePath: string; size: number }>;
   }
 
+  /* abort（2026-11-07）：断开进度流只是第一步 —— 网关在该端点监听 res close
+     并销毁 SFTP 通道，fastPut 才会真正停止（否则服务端会把文件静默传完）。 */
   const res = await gatewayFetch(`${localServiceBase}/api/files/upload/local/stream`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ serverId, filePath, localPath })
+    body: JSON.stringify({ serverId, filePath, localPath }),
+    signal
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({})) as { message?: string };
@@ -874,11 +925,12 @@ export async function apiUploadChunk(
   uploadId: string,
   chunk: Blob,
   onProgress?: (payload: UploadProgressEventPayload) => void,
+  signal?: AbortSignal,
 ): Promise<void> {
   const formData = new FormData();
   formData.append("chunk", chunk);
   formData.append("uploadId", uploadId);
-  await uploadFormData(`${localServiceBase}/api/files/upload/chunk`, formData, "分片上传失败", onProgress);
+  await uploadFormData(`${localServiceBase}/api/files/upload/chunk`, formData, "分片上传失败", onProgress, signal);
 }
 
 export async function apiUploadFinish(uploadId: string): Promise<void> {

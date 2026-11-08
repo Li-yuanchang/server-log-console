@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { ReactNode } from "react";
 import type { ServerSummary, ServerConnectionTestResponse } from "@server-log-console/shared";
 import type { SettingsWorkspaceView } from "./ConnectionSettingsWorkspace.js";
-import { Command as CommandIcon, Copy, Ellipsis, Pencil, Trash2, ChevronDown, X, FileText, FolderOpen, TerminalSquare } from "lucide-react";
+import { Command as CommandIcon, Copy, Ellipsis, Pencil, Trash2, X, FileText, FolderOpen, TerminalSquare } from "lucide-react";
 import { ToolIcon } from "./ToolIcon.js";
 
 /* 侧栏（Chrome side panel）移动档共享组件。
@@ -22,7 +22,7 @@ export type ServerGroupsListProps = {
 };
 
 /* SidebarPanel 服务器分组列表的原样抽取（server-item 悬浮快捷组 + server-item-menu 一并搬来），
-   SidebarPanel 与 ServerPickerOverlay 共用，保证桌面侧栏视觉零变化。 */
+   SidebarPanel 共用，保证桌面侧栏视觉零变化。 */
 export function ServerGroupsList(props: ServerGroupsListProps) {
   const [serverMenuId, setServerMenuId] = useState("");
   const {
@@ -130,91 +130,8 @@ export function ServerGroupsList(props: ServerGroupsListProps) {
   );
 }
 
-export type ServerPickerOverlayProps = {
-  open: boolean;
-  onClose: () => void;
-  serverFilter: string;
-  onServerFilterChange: (value: string) => void;
-  filteredGroupedServers: readonly (readonly [string, ServerSummary[]])[];
-  serverId: string;
-  connectionTestStatus: ServerConnectionTestResponse | null;
-  onSelectServer: (id: string) => void;
-  onDeleteServer: (server: ServerSummary) => void;
-  onOpenSettingsWorkspace: (view?: SettingsWorkspaceView) => void;
-  emptyState?: ReactNode;
-  /** 连接概览（kv 行）：原底部 sp-statusbar 移除后并入选服层顶部（2026-10-04） */
-  overview?: Array<[string, string]>;
-};
-
-/* 移动档整屏选服层（scrim + aside），宽档由 CSS display:none 隐藏，DOM 常驻。 */
-export function ServerPickerOverlay(props: ServerPickerOverlayProps) {
-  const {
-    open,
-    onClose,
-    serverFilter,
-    onServerFilterChange,
-    filteredGroupedServers,
-    serverId,
-    connectionTestStatus,
-    onSelectServer,
-    onDeleteServer,
-    onOpenSettingsWorkspace,
-    emptyState,
-    overview,
-  } = props;
-
-  if (!open) {
-    return null;
-  }
-
-  return (
-    <>
-      <div className="sp-picker-scrim" onClick={onClose} />
-      <aside className="sp-picker" role="dialog" aria-modal="true" aria-label="选择服务器">
-        <div className="sp-picker-head">
-          <span className="sp-picker-title">选择服务器</span>
-          <button
-            type="button"
-            className="ghost-button icon-button"
-            title="关闭"
-            aria-label="关闭服务器列表"
-            onClick={onClose}
-          >
-            <X size={14} strokeWidth={1.8} />
-          </button>
-        </div>
-        {overview?.length ? (
-          <div className="sp-picker-overview">
-            <div className="sp-picker-overview-hd">连接概览</div>
-            <div className="sp-picker-overview-grid">
-              {overview.map(([key, value]) => (
-                <div key={key} className="sp-status-kv"><span>{key}</span><b>{value}</b></div>
-              ))}
-            </div>
-          </div>
-        ) : null}
-        <div className="sp-picker-filter">
-          <input
-            value={serverFilter}
-            onChange={(event) => onServerFilterChange(event.target.value)}
-            placeholder="输入名称、分组或地址"
-          />
-        </div>
-        <div className="sp-picker-groups">
-          <ServerGroupsList
-            filteredGroupedServers={filteredGroupedServers}
-            serverId={serverId}
-            connectionTestStatus={connectionTestStatus}
-            onSelectServer={onSelectServer}
-            onDeleteServer={onDeleteServer}
-            onOpenSettingsWorkspace={onOpenSettingsWorkspace}
-            emptyState={emptyState}
-          />
-        </div>
-      </aside>
-    </>
-  );
-}
+/* 选服层（ServerPickerOverlay）2026-11-09 移除：桌面任何档位左侧都有完整服务器列表，
+   覆盖抽屉纯重复；窄档 ≤559.9px 侧栏隐藏时换服务器走加宽窗口（原选服层路径删除）。 */
 
 export type SidepanelMobileTopProps = {
   onOpenPalette: () => void;
@@ -222,13 +139,13 @@ export type SidepanelMobileTopProps = {
   showSettingsActive?: boolean;
   selectedServer: ServerSummary | null;
   connectionTestStatus: ServerConnectionTestResponse | null;
-  onOpenServerPicker: () => void;
   /* 与 SidebarPanel sidebar-head-buttons 的 ToolIcon 主题保持一致 */
   uiTheme?: "classic" | "modern";
 };
 
-/* 顶栏 app bar（全档位）：chip = 服务器上下文 + 选服入口（v3 并入顶栏，砍掉独立 chip 行），
-   命令面板/设置靠右。视图名不在此重复（移动档由底部 tab 承担、宽档由视图切换承担）。 */
+/* 顶栏 app bar（全档位）：chip = 服务器上下文纯状态显示（2026-11-09 选服层移除后不再可点，
+   换服务器走左侧「服务器」页），命令面板/设置靠右。视图名不在此重复
+   （移动档由底部 tab 承担、宽档由视图切换承担）。 */
 export function SidepanelMobileTop(props: SidepanelMobileTopProps) {
   const {
     onOpenPalette,
@@ -236,28 +153,23 @@ export function SidepanelMobileTop(props: SidepanelMobileTopProps) {
     showSettingsActive,
     selectedServer,
     connectionTestStatus,
-    onOpenServerPicker,
     uiTheme,
   } = props;
 
   return (
     <div className="sp-appbar">
-      <button
-        type="button"
+      <span
         className="srv-chip"
-        onClick={onOpenServerPicker}
-        title="切换服务器"
-        aria-label={selectedServer ? `当前服务器 ${selectedServer.name}，点击切换` : "选择服务器"}
+        title={selectedServer ? `当前服务器 ${selectedServer.name} —— 换服务器见左侧「服务器」页` : "未选择服务器"}
       >
         <span className={`srv-chip-dot${selectedServer && connectionTestStatus?.connected ? " is-ok" : ""}`} />
         <span className="srv-chip-text">
-          <span className="srv-chip-name">{selectedServer ? selectedServer.name : "选择服务器"}</span>
+          <span className="srv-chip-name">{selectedServer ? selectedServer.name : "未选择服务器"}</span>
           {selectedServer ? (
             <span className="srv-chip-host">{selectedServer.username}@{selectedServer.host}</span>
           ) : null}
         </span>
-        <ChevronDown className="srv-chip-caret" size={12} strokeWidth={1.8} aria-hidden="true" />
-      </button>
+      </span>
       <span className="sp-top-sp" />
       <button
         className="ghost-button icon-button"

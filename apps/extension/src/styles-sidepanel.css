@@ -1091,3 +1091,5 @@ body.extension-sidepanel .sp-status-kv b {
 } /* ← 闭合 548 行 @container slc-sp (max-width:559.9px)；此前文件末尾多了一个多余的 "}"，
      导致括号深度 -1、esbuild 压缩报 Unexpected "}"。已确认为 HEAD 版本既有的问题。 */
 
+
+/* 选服层 2026-11-09 移除，其红绿灯安全区样式一并删除 */

@@ -3710,23 +3710,11 @@ body.is-resizing-tree .theme-modern .browser-resizer::after {
   color: #dc3545 !important;
 }
 
-/* --- 34. Upload Progress --- */
-.theme-modern .upload-progress-bar {
-  color: var(--ink);
-  font-family: var(--font-ui);
-}
-
-.theme-modern .upload-progress-track {
-  background: rgba(17, 24, 39, 0.08);
-}
-
-.theme-modern .upload-progress-fill:not(.download-progress-fill) {
-  background: linear-gradient(90deg, var(--accent), #4aa3ff);
-}
-
-.theme-modern .download-progress-fill {
-  background: linear-gradient(90deg, #0f9f6e, #34c99a);
-}
+/* --- 34. Upload Progress ---
+   右下角下载悬浮卡已退役（2026-11-06），原 .upload-progress-bar / -track /
+   -fill 的覆盖规则一并删除，避免留下无 DOM 匹配的死规则。
+   进度条语言现收敛为两处：文件表传输列（.file-transfer-fill）与抽屉进行中行
+   （.xprog i），两者同为 accent→#4aa3ff 渐变 + scaleX 缓动。 */
 
 /* --- 35. Confirm Dialog --- */
 .theme-modern .confirm-dialog {
@@ -5223,7 +5211,7 @@ button.settings-pref-row + button.settings-pref-row,
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 9px 16px;
+  padding: 9px 14px;
   border-top: 1px solid var(--line);
 }
 .xdrawer-section { flex: none; }
@@ -5244,7 +5232,7 @@ button.settings-pref-row + button.settings-pref-row,
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 7px 16px;
+  padding: 7px 14px;
   border-bottom: 1px solid var(--line);
   font-size: var(--fs-2xs);
   color: var(--ink-muted);
@@ -5280,14 +5268,62 @@ button.settings-pref-row + button.settings-pref-row,
   outline: none;
 }
 .xdrawer-search-shell input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+/* 「历史记录」分组标题（原型 .rec-label）：与「进行中」同款小标题，但用中性灰
+   区分"正在跑"与"已完成"。此前完全没有这个标题，两块之间只剩一条线。 */
+.xdrawer-rec-label {
+  flex: none;
+  padding: 10px 14px 4px;
+  font-size: var(--fs-2xs);
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  color: var(--ink-muted);
+}
+
+/* 历史记录列表容器：行分隔线只在这里画，且左右内缩 ——
+   线不再顶到抽屉边缘、也不与左右边框相接，视觉上收在内容区里。 */
+.xdrawer-reclist {
+  flex: none;
+  padding: 0 8px;
+}
+.xdrawer-reclist .xrow {
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  /* 容器已给 8px 内缩，这里补 6px，合计 14 ——
+     与头部 / 上下文行 / chips 行 / 页脚的 14px 基线对齐，
+     文字不会因为容器内缩而整体右移。 */
+  padding-left: 6px;
+  padding-right: 6px;
+}
+.xdrawer-reclist .xrow:last-child {
+  border-bottom: none;
+}
+
 .xdrawer-list { flex: 1; overflow-y: auto; }
-.xdrawer-live-block { border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--accent) 3%, transparent); }
+/* 「进行中」区块（2026-11-06）：
+   原为整宽淡 accent 底 + 上下贯通的分隔线，横向顶到抽屉两边、纵向又与
+   历史记录的线首尾相接，四边都在"撞墙"，是割裂感最重的一块。
+   现改为内缩 8px 的圆角块：底色收在内容区里，下面不再画强调线 ——
+   区块边界交给「历史记录」标题的间距来表达。 */
+.xdrawer-live-block {
+  margin: 6px 8px 2px;
+  padding-bottom: 2px;
+  border-radius: var(--r-m);
+  background: color-mix(in srgb, var(--accent) 4%, transparent);
+}
 .xdrawer-live-label {
-  padding: 7px 16px 0;
+  padding: 7px 6px 0;
   font-size: var(--fs-2xs);
   font-weight: 650;
   letter-spacing: 0.08em;
   color: var(--accent);
+}
+/* 进行中区块内的行：底色由区块提供，行自身 hover 再叠一层更深的底 */
+.xdrawer-live-block .xrow {
+  padding-left: 6px;
+  padding-right: 6px;
+}
+.xdrawer-live-block .xrow:hover {
+  background: color-mix(in srgb, var(--ink) 4%, transparent);
 }
 .xdrawer-empty {
   padding: 48px 20px;
@@ -5295,13 +5331,22 @@ button.settings-pref-row + button.settings-pref-row,
   color: var(--ink-muted);
   font-size: var(--fs-xs);
 }
+/* ================= 传输行（原型 transfer-drawer-v2 .trow） =================
+   2026-11-06 重做「割裂感」：
+   ① 行本身**不带**下边框（原型 .trow 就没有，只有记录区 .rec-list .trow 才画）。
+      此前基础类无条件 border-bottom，进行中区块里的行、历史区的行、每条之间
+      全长着一条贯通到抽屉左右边缘的线，条条顶边、像被切成一段段。
+   ② hover 不再铺满整宽顶到两侧，改为左右内缩 + 圆角的小卡片块 ——
+      铺满的色块撞上抽屉左右边框时，视觉上会"贴死在墙边"。
+   padding 左右 16，行内元素自己不再额外缩进。 */
 .xrow {
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 8px 16px;
-  border-bottom: 1px solid var(--line);
+  border-radius: var(--r-s);
   cursor: pointer;
+  transition: background-color 0.12s ease;
 }
 .xrow:hover { background: color-mix(in srgb, var(--ink) 3.5%, transparent); }
 .xrow-ic {
@@ -5356,8 +5401,32 @@ button.settings-pref-row + button.settings-pref-row,
   text-overflow: ellipsis;
   cursor: default;
 }
-.xprog { height: 4px; border-radius: 2px; background: var(--panel-muted); overflow: hidden; margin: 5px 0 3px; }
-.xprog i { display: block; height: 100%; background: var(--accent); border-radius: 2px; }
+/* 抽屉「进行中」行进度条（2026-11-06 对齐文件表传输列）：
+   此前是 4px 纯 var(--accent) 实心块 + width 过渡，与文件表行内那条
+   accent→#4aa3ff 的渐变「彩带」明显不是一套语言（用户反馈「策划进度条
+   不好看，不如文件上的」）。现统一为同款渐变 + scaleX 缓动：
+   scaleX 走合成层、不触发布局，200ms 内逐帧推进比 width 的 reflow 顺滑。 */
+.xprog {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--panel-muted);
+  overflow: hidden;
+  margin: 5px 0 3px;
+}
+.xprog i {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--accent), #4aa3ff);
+  transform-origin: left center;
+  transition: transform 200ms ease;
+}
+/* 暂停态：抽掉渐变改成中性灰，一眼区分「在跑」和「停着」 */
+.xprog-paused i {
+  background: var(--ink-muted);
+  opacity: 0.5;
+}
 .xrow-ops { display: none; gap: 2px; flex: none; }
 .xrow:hover .xrow-ops { display: flex; }
 /* 抽屉 v2：进行中行的操作键（上传 暂停/取消、下载 取消）常显 */
