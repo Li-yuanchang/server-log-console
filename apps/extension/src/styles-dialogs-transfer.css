@@ -2507,7 +2507,9 @@ button.class-outline-row {
    ============================================================ */
 
 .xqueue {
-  margin: 6px 0 8px;
+  /* 2026-11-06：左右各留 8px —— 外层 .xdrawer-live-block 已内缩 8px，
+     队列块再缩进一档，避免贴着区块底色边缘（原来 margin 上下有、左右无）。 */
+  margin: 6px 8px 8px;
   border: 1px solid var(--line, #d9ded0);
   border-radius: 6px;
   overflow: hidden;
@@ -2560,11 +2562,18 @@ button.class-outline-row {
   overflow: hidden;
 }
 
+/* 批量队列细条（2026-11-06 对齐 xprog / 文件表传输列）：
+   同样走 accent→#4aa3ff 渐变 + scaleX，与抽屉主进度条、文件行进度条三点一致。
+   逐文件条更细（3px）以区分层级：主条 = 整批，细条 = 单个文件。 */
 .xqueue-bar i {
   display: block;
+  width: 100%;
   height: 100%;
-  background: var(--accent, #426b57);
-  transition: width 0.2s ease;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent, #426b57), #4aa3ff);
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 0.2s ease;
 }
 
 .xqueue-done .xqueue-bar i { background: var(--green-dot, #4cae62); }
@@ -2575,6 +2584,223 @@ button.class-outline-row {
   font-size: 9.5px;
   color: var(--ink-muted, #92988d);
   font-variant-numeric: tabular-nums;
+}
+
+/* ============================================================
+   传输抽屉 v3.1：三 Tab + 批次组（2026-11-07，对齐百度网盘传输列表）
+   传输中 / 已完成 / 失败 三个 Tab；批次组 = 两级任务模型的上半
+   （一次拖拽/多选 = 一个批次，头部聚合、子行逐文件）。
+   ============================================================ */
+
+/* 2026-11-07 修复「tab 与搜索框没有垂直居中」：
+   初版写成浏览器标签式（贴底下圆角、padding-bottom:0、搜索框 margin-bottom
+   硬凑），行内三种高度互相错位。现统一为 26px 等高垂直居中一行：
+   tab = 胶囊（与抽屉既有 fchip 同语言），搜索框等高，容器上下对称 8px。
+   规则带 .theme-modern 前缀压过全局 button 基础样式（否则边框/底色漏进来）。 */
+.xdtabs {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+.theme-modern .xdtabs .xdtab {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 11px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font: inherit;
+  font-size: var(--fs-xs);
+  color: var(--ink-muted);
+  background: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.theme-modern .xdtabs .xdtab:hover { color: var(--ink); }
+.theme-modern .xdtabs .xdtab.on {
+  color: var(--accent);
+  font-weight: 600;
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 30%, transparent);
+}
+.theme-modern .xdtabs .xdtab .cnt {
+  font-size: 9.5px;
+  border-radius: 4px;
+  padding: 0 4px;
+  margin-left: 4px;
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+.theme-modern .xdtabs .xdtab.on .cnt { background: var(--accent-soft); color: var(--accent); }
+.theme-modern .xdtabs .xdtab-search {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 26px;
+  color: var(--ink-muted);
+  margin-left: 4px;
+}
+.theme-modern .xdtabs .xdtab-search svg { position: absolute; left: 8px; }
+.theme-modern .xdtabs .xdtab-search input {
+  width: 100%;
+  height: 26px;
+  padding: 0 9px 0 26px;
+  font: inherit;
+  font-size: var(--fs-xs);
+  border: 1px solid var(--line);
+  border-radius: var(--r-s);
+  background: var(--panel);
+  color: var(--ink);
+  outline: none;
+}
+.theme-modern .xdtabs .xdtab-search input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+
+/* Tab 面板里的历史行：恢复行分隔线（此前只挂在 .xdrawer-reclist 容器上，
+   三 Tab 后历史行直接落在 .xdrawer-list 里，这里按 Tab 面板给线） */
+.xdrawer-list > .xrow { border-bottom: 1px solid var(--line); }
+.xdrawer-list > .xrow:last-child { border-bottom: none; }
+
+/* 批量控制条（全部暂停 / 全部取消 / 弹出小窗） */
+.xbatchbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--accent) 3%, transparent);
+}
+.xbbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font: inherit;
+  font-size: 10.5px;
+  color: var(--ink-soft);
+  background: var(--panel);
+  white-space: nowrap;
+}
+.xbbtn:hover:not(:disabled) { color: var(--ink); border-color: var(--line-strong); }
+.xbbtn:disabled { opacity: 0.45; cursor: default; }
+.xbbtn.xdanger:hover:not(:disabled) { color: var(--red); border-color: var(--red); background: var(--red-soft); }
+
+/* 批次组：头部聚合 + 子行逐文件 */
+.xbatch {
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--accent) 3%, transparent);
+}
+.xbatch-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 12px 6px;
+}
+.xbatch-sub {
+  font-size: 10px;
+  color: var(--ink-muted);
+  margin: 1px 0 3px;
+}
+.xbatch-kids {
+  padding: 0 12px 8px 48px;
+  display: flex;
+  flex-direction: column;
+}
+.xkid {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 11px;
+  color: var(--ink-soft);
+  border-top: 1px dashed color-mix(in srgb, var(--line-strong) 70%, transparent);
+  min-width: 0;
+}
+.xkid-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.xkid-bar {
+  flex: 0 0 72px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--panel-muted);
+  overflow: hidden;
+}
+.xkid-bar i {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), #4aa3ff);
+  transform-origin: left center;
+}
+.xkid-meta {
+  flex: none;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+.xkid-done {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  color: var(--green);
+}
+.xkid-error { flex: none; font-size: 10px; color: var(--red); font-weight: 600; }
+.xqueued-tag {
+  flex: none;
+  font-style: normal;
+  font-size: 9.5px;
+  color: var(--ink-muted);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0 4px;
+}
+
+/* 通道标签（直传 / 分片）：诚实 UI 的可视部分 */
+.xtag {
+  font-style: normal;
+  font-size: 9.5px;
+  font-weight: 600;
+  border-radius: 4px;
+  padding: 1px 5px;
+  flex: none;
+}
+.xtag-direct { color: var(--amber, #b45309); background: var(--amber-soft, rgba(180, 83, 9, 0.10)); }
+.xtag-chunk { color: #3d7fd9; background: rgba(61, 127, 217, 0.10); }
+.xrow-dir {
+  display: block;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--ink-muted);
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.xrow-note { color: var(--amber, #b45309); }
+.xdtab-empty {
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--ink-muted);
+  font-size: var(--fs-xs);
 }
 
 /* ============================================================
@@ -2721,3 +2947,136 @@ button.class-outline-row {
   font-weight: 600;
   color: var(--accent-strong);
 }
+
+/* ── 服务器体检弹窗（2026-11-08）：与 confirm-dialog 同一纸底语言，宽幅横向展开五项检查 ── */
+.diag-dialog {
+  width: min(600px, calc(100vw - 32px));
+  max-height: min(720px, calc(100vh - 56px));
+  display: flex;
+  flex-direction: column;
+  padding: 18px 20px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: 0 16px 42px rgba(15, 23, 42, 0.18);
+}
+
+.diag-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.diag-title { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.diag-title b { font-size: var(--fs-lg); line-height: 1.3; font-weight: 600; color: var(--ink); }
+.diag-sub { font-size: 10px; color: var(--ink-muted); }
+
+/* 右侧分组：汇总色块 + 关闭按钮整体贴右 —— 体检中（无汇总块）时 × 也不会飘到中间 */
+.diag-head-right { margin-left: auto; display: inline-flex; align-items: center; gap: 10px; flex: none; }
+.diag-sum { display: inline-flex; align-items: center; gap: 4px; }
+.diag-sum .chip {
+  min-width: 18px; text-align: center;
+  font-family: var(--mono, ui-monospace, Menlo, monospace);
+  font-size: 10px; font-weight: 650; font-style: normal;
+  border-radius: 4px; padding: 2px 6px;
+}
+.diag-sum .chip.g { color: var(--green); background: color-mix(in srgb, var(--green) 14%, transparent); }
+.diag-sum .chip.a { color: var(--amber); background: color-mix(in srgb, var(--amber) 16%, transparent); }
+.diag-sum .chip.r { color: var(--red); background: color-mix(in srgb, var(--red) 14%, transparent); }
+.diag-sum em {
+  font-style: normal; margin-left: 4px;
+  font-family: var(--mono, ui-monospace, Menlo, monospace);
+  font-size: 10px; color: var(--ink-muted); font-variant-numeric: tabular-nums;
+}
+/* 关闭按钮：对齐 .preview-close 规范 —— 30px 命中区 + hover 变红（× 不会缩成小点） */
+.diag-x {
+  flex: none; display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; padding: 0; border-radius: 8px;
+  color: var(--ink-muted); background: transparent; border: none; cursor: pointer;
+}
+.diag-x:hover { background: rgba(239, 68, 68, 0.12); color: #b91c1c; }
+
+.diag-body {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  padding: 2px 2px 8px;
+}
+
+.diag-warn { flex: none; margin: 10px 0 0; font-size: 10px; color: var(--amber); line-height: 1.6; }
+.diag-err { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--red); line-height: 1.7; padding: 12px 0; }
+.diag-err span { word-break: break-all; }
+
+.diag-checks { display: flex; flex-direction: column; }
+.diag-check { border-bottom: 1px solid var(--line); padding: 10px 0; }
+.diag-check:last-child { border-bottom: none; }
+.diag-check .head { display: flex; align-items: center; gap: 8px; }
+.diag-check .head b { font-size: 12px; font-weight: 600; color: var(--ink); }
+.diag-check .badge { margin-left: auto; font-size: 10px; border-radius: 4px; padding: 1px 8px; font-weight: 600; white-space: nowrap; }
+.diag-check .badge.run { color: var(--ink-soft); background: var(--panel-muted, #f1f2ee); }
+.diag-check .badge.g { color: var(--green); background: color-mix(in srgb, var(--green) 14%, transparent); }
+.diag-check .badge.a { color: var(--amber); background: color-mix(in srgb, var(--amber) 16%, transparent); }
+.diag-check .badge.r { color: var(--red); background: color-mix(in srgb, var(--red) 14%, transparent); }
+.diag-check .findings { margin-top: 6px; display: flex; flex-direction: column; gap: 4px; }
+.diag-check .f { display: flex; gap: 7px; font-size: 11px; line-height: 1.65; color: var(--ink-soft); }
+.diag-check .f .mk { flex: none; font-weight: 650; width: 10px; text-align: center; }
+.diag-check .f .mk.g { color: var(--green); }
+.diag-check .f .mk.a { color: var(--amber); }
+.diag-check .f .mk.r { color: var(--red); }
+.diag-check .f .mk.dim { color: var(--ink-muted); }
+.diag-check .f.sug { color: var(--accent); padding-left: 17px; }
+/* 命令行（2026-11-09）：真命令 + 点击复制 —— 可粘贴终端直接执行 */
+.diag-check .cmd {
+  margin-top: 7px;
+  display: flex; align-items: flex-start; gap: 6px;
+  font-family: var(--mono, ui-monospace, Menlo, monospace); font-size: 9.5px;
+  color: var(--ink-muted); background: var(--panel-muted, #f1f2ee); border-radius: 6px;
+  padding: 6px 9px; line-height: 1.7; word-break: break-all;
+  cursor: pointer; user-select: none;
+}
+.diag-check .cmd:hover { color: var(--ink-soft); outline: 1px solid var(--accent); }
+.diag-check .cmd:hover .tip { color: var(--accent); opacity: 1; }
+.diag-check .cmd .c { flex: none; color: var(--ink-muted); }
+.diag-check .cmd .ln { flex: 1; min-width: 0; }
+.diag-check .cmd .tip {
+  flex: none; display: inline-flex; align-items: center; gap: 3px;
+  font-size: 9.5px; color: var(--ink-muted); opacity: 0.75; padding-top: 1px;
+}
+.diag-check .cmd .tip.ok { color: var(--green); opacity: 1; }
+
+.diag-actions {
+  flex: none;
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.diag-rerun {
+  height: 28px; padding: 0 14px;
+  border: 1px solid var(--line); border-radius: 7px;
+  font-size: 11px; color: var(--ink-soft); background: var(--panel); cursor: pointer;
+}
+.diag-rerun:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+.diag-rerun:disabled { opacity: 0.55; cursor: default; }
+
+/* 体检进行中的异步状态：头部下不确定进度线 + 逐项旋转（2026-11-08） */
+.diag-progress {
+  flex: none; height: 2px; border-radius: 1px; overflow: hidden;
+  margin: 10px 0 2px; background: var(--panel-muted, #f1f2ee); position: relative;
+}
+.diag-progress::after {
+  content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: 40%;
+  border-radius: 1px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  animation: diag-slide 1.15s ease-in-out infinite;
+}
+@keyframes diag-slide {
+  0% { transform: translateX(-110%); }
+  100% { transform: translateX(360%); }
+}
+.diag-check .diag-run-ic { flex: none; color: var(--accent); }
+.diag-check .diag-run-text { margin-left: auto; font-size: 10px; color: var(--ink-muted); }

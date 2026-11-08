@@ -55,7 +55,10 @@ button, input, select, textarea, a,
 .sidebar-panel {
   padding: 8px 6px 6px;
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+  /* 6 行：head / 左栏 Tabs（方案 E 2026-11-08）/ 搜索或空 / 树或监控(1fr) / 底部状态 ×2。
+     Tabs 与内容区的行位由 styles-sidebar-toolbar.css 的 grid-row 显式指定，
+     两个 Tab 各自的子元素序列都能落进同一模板。 */
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto auto;
   gap: 2px;
   min-height: 0;
   overflow: hidden;

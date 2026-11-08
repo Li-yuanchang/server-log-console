@@ -3,6 +3,7 @@ import { ChevronRight, Download, Ellipsis, FileText, Folder, Pencil, Search, Fol
 import type { DragEvent as ReactDragEvent } from "react";
 import type { LogFileEntry } from "@server-log-console/shared";
 import type { DownloadProgressState, UploadProgressState } from "./FeedbackOverlays.js";
+import { getParentDirectoryPath } from "./utils.js";
 import { ToolIcon } from "./ToolIcon.js";
 
 type RowTransferProgress = {
@@ -13,6 +14,9 @@ type RowTransferProgress = {
 type Props = {
   entries: LogFileEntry[];
   activeFilePath: string;
+  /** 当前浏览目录（2026-11-07）：行内进度只挂「目标目录 === 当前目录」的任务，
+     其他目录的同名文件不再误显进度条 */
+  directoryPath?: string;
   selectedFilePathSet: Set<string>;
   isBusy: boolean;
   uiTheme: "classic" | "modern";
@@ -22,6 +26,9 @@ type Props = {
   formatDateTime: (value: LogFileEntry["modifiedTime"]) => string;
   uploadProgress?: UploadProgressState | null;
   downloadProgress?: DownloadProgressState | null;
+  /** 目录内是否有活动传输：为 true 时整表启用「传输进度」列，无传输的行也渲染空占位，
+      保证列数与表头一致（见 styles 里 :has(.file-transfer-cell) 的 6 列模板） */
+  showTransferColumn?: boolean;
   onOpenEntry: (entry: LogFileEntry) => void;
   onOpenContextMenu: (entry: LogFileEntry, clientX: number, clientY: number) => void;
   onToggleSelection: (path: string, checked: boolean) => void;
@@ -42,15 +49,30 @@ function resolveRowTransferProgress(
   uploadProgress: UploadProgressState | null | undefined,
   downloadProgress: DownloadProgressState | null | undefined,
   formatBytes: (size: number) => string,
+  directoryPath?: string,
 ): RowTransferProgress | null {
   if (entry.kind !== "file") {
     return null;
   }
-  if (uploadProgress && uploadProgress.fileName === entry.name) {
+  /* 2026-11-07 双重匹配：文件名 + 目标目录 === 当前目录。
+     此前上传按带前缀的 fileName 匹配（永不命中 → 进度从不显示），
+     修成裸文件名后又缺目录校验（其他目录的同名文件误显进度条）。 */
+  const inDir = !directoryPath
+    || (uploadProgress?.currentTargetDir || "").replace(/\/+$/, "") === directoryPath.replace(/\/+$/, "");
+  // 上传进度用裸文件名匹配：fileName 带 "(${i}/${total}) " 批次前缀，
+  // 直接比对 entry.name 永远不相等（上传行内进度此前从不显示）。
+  const uploadName = uploadProgress?.currentFileName
+    || (uploadProgress?.fileName || "").replace(/^\(\d+\/\d+\)\s*/, "");
+  if (uploadProgress && inDir && uploadName && uploadName === entry.name) {
     const percent = Math.min(100, Math.max(0, uploadProgress.current));
     return { percent, label: formatTransferMeta(percent, uploadProgress.speed, formatBytes) };
   }
-  if (downloadProgress && downloadProgress.fileName === entry.name) {
+  const downloadDir = downloadProgress?.filePath
+    ? getParentDirectoryPath(downloadProgress.filePath)
+    : "";
+  const downloadInDir = !directoryPath
+    || (downloadDir || "").replace(/\/+$/, "") === directoryPath.replace(/\/+$/, "");
+  if (downloadProgress && downloadInDir && downloadProgress.fileName === entry.name) {
     const percent = Math.min(100, Math.max(0, downloadProgress.percent));
     return { percent, label: formatTransferMeta(percent, downloadProgress.speed, formatBytes) };
   }
@@ -118,7 +140,7 @@ export function FileBrowserTableRows(props: Props) {
           }
         };
         const rowTransfer = props.uiTheme === "modern"
-          ? resolveRowTransferProgress(entry, props.uploadProgress, props.downloadProgress, props.formatBytes)
+          ? resolveRowTransferProgress(entry, props.uploadProgress, props.downloadProgress, props.formatBytes, props.directoryPath)
           : null;
         const openLabel = entry.kind === "directory" ? "打开" : "预览";
         return (
@@ -289,20 +311,26 @@ export function FileBrowserTableRows(props: Props) {
               </button>
             </span>
           </span>
-          {/* S6：传输列非常驻——仅该行有活动传输时渲染，占位与表头同步 */}
-          {props.uiTheme === "modern" && rowTransfer ? (
+          {/* S6：传输列非常驻——仅目录内存在活动传输时整列出现（showTransferColumn）。
+             出现时必须给**每一行**都渲染占位，否则表头是 6 列、无传输的行只有 5 个
+              子元素，grid 会把「大小/修改时间/类型」整体左移一格，与表头错位。 */}
+          {props.uiTheme === "modern" && (rowTransfer || props.showTransferColumn) ? (
             <span className="file-transfer-cell">
-              <span
-                className="file-transfer-track"
-                role="progressbar"
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-valuenow={rowTransfer.percent}
-                aria-label={`${entry.name} 传输进度`}
-              >
-                <span className="file-transfer-fill" style={{ transform: `scaleX(${rowTransfer.percent / 100})` }} />
-              </span>
-              <span className="file-transfer-meta">{rowTransfer.label}</span>
+              {rowTransfer ? (
+                <>
+                  <span
+                    className="file-transfer-track"
+                    role="progressbar"
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={rowTransfer.percent}
+                    aria-label={`${entry.name} 传输进度`}
+                  >
+                    <span className="file-transfer-fill" style={{ transform: `scaleX(${rowTransfer.percent / 100})` }} />
+                  </span>
+                  <span className="file-transfer-meta">{rowTransfer.label}</span>
+                </>
+              ) : null}
             </span>
           ) : null}
           <span className="file-size-cell">{entry.kind === "file" && typeof entry.size === "number" ? props.formatBytes(entry.size) : "--"}</span>

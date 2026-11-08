@@ -94,8 +94,6 @@ interface TerminalPanelProps {
   /** pane 会话状态上报（App 级 map） */
   onSessionState?: (tabId: string, state: TerminalPaneSessionState | null) => void;
   /** 状态栏资源迷你条数据（App 轮询 system-profile） */
-  resources?: { cpu: number; mem: number; disk: number; diskPath?: string } | null;
-  onOpenMonitor?: () => void;
 }
 
 /* ------------------------------------------------------------------ */
@@ -1200,9 +1198,7 @@ export function TerminalPanel(props: TerminalPanelProps) {
         hostLabel={hostLabel}
         connectedAt={activePaneState?.connectedAt ?? null}
         retry={retry}
-        resources={props.resources ?? null}
         onReconnect={!activeSplitLayout && (statusState === "disconnected" || statusState === "preserved") ? reconnectActive : undefined}
-        onOpenMonitor={props.onOpenMonitor}
       />
 
       {/* 上传：系统文件选择器（可多选），走 App 的统一上传通道 */}

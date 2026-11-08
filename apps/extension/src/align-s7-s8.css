@@ -395,9 +395,12 @@
   flex: none;
 }
 
-/* 筛选 chips 行：padding 10px 16px（原型 789，去掉多余的 4px 下间距）+ 下边框 */
+/* 筛选 chips 行：padding 10px 14px + 下边框。
+   2026-11-06：左右从 16 统一到 14 —— 头部（原 14）、上下文行（原 16）、
+   chips 行（原 16）、页脚（16）四处左右内边距各不相同，四条竖向基线彼此错位，
+   是「看着割裂、又说不上来」的一个来源。原型 transfer-drawer-v2 全部用 14。 */
 .theme-modern .xdrawer-chip-row {
-  padding: 10px 16px;
+  padding: 10px 14px;
   border-bottom: 1px solid var(--line);
 }
 /* 失败 chip 红字（原型 793）：F0 已补 .fchip-red，这里确保选中态不吞掉红色语义 */

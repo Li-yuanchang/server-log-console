@@ -60,6 +60,10 @@ export type DialogOverlaysProps = {
   onCancelUpload: () => void;
   onOpenTransferWindow?: () => void;
   onCancelDownload?: () => void;
+  /* 下载暂停/继续（2026-11-07）：与上传同一套闸门模型 */
+  downloadPaused?: boolean;
+  onPauseDownload?: () => void;
+  onResumeDownload?: () => void;
   uploadFileQueue?: Array<{ name: string; size: number; transferred: number; status: "pending" | "uploading" | "done" | "error" }>;
 };
 
@@ -118,6 +122,9 @@ export function DialogOverlays(props: DialogOverlaysProps) {
     onCancelUpload,
     onOpenTransferWindow,
     onCancelDownload,
+    downloadPaused,
+    onPauseDownload,
+    onResumeDownload,
     uploadFileQueue,
   } = props;
 
@@ -235,6 +242,9 @@ export function DialogOverlays(props: DialogOverlaysProps) {
         onCancelUpload={onCancelUpload}
         onOpenTransferWindow={onOpenTransferWindow}
         onCancelDownload={onCancelDownload}
+        downloadPaused={downloadPaused}
+        onPauseDownload={onPauseDownload}
+        onResumeDownload={onResumeDownload}
         uploadFileQueue={uploadFileQueue}
       />
 

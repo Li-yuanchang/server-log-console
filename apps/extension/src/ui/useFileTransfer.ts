@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import type { UploadProgressState, DownloadProgressState } from "./FeedbackOverlays.js";
 import {
   apiDownloadFile,
@@ -60,6 +60,13 @@ function clearTransferProgressAfterHold(setUploadProgress: (v: UploadProgressSta
   window.setTimeout(() => {
     setUploadProgress((prev) => prev?.stage === "completed" ? null : prev);
   }, TRANSFER_SUCCESS_HOLD_MS);
+}
+
+/* 上传取消判定（2026-11-07）：闸门取消 + 在途请求 abort（AbortError）都算用户取消。
+   XHR abort / fetch abort 抛的 DOMException name 都是 "AbortError"。 */
+function isUploadCanceled(error: unknown): boolean {
+  if (error instanceof TransferCancelledError) return true;
+  return error instanceof Error && error.name === "AbortError";
 }
 
 function isJunkFile(name: string): boolean {
@@ -138,6 +145,10 @@ export type FileTransferAPI = {
   downloadFile: (targetFilePath: string, options?: { serverId?: string }) => Promise<void>;
   /** 取消当前下载（AbortController；网关检测到连接断开会自动销毁 SFTP 流） */
   cancelDownload: () => void;
+  /** 下载暂停/继续（2026-11-07）：chunk 读取检查点上挂起，恢复从断点续读 */
+  downloadPaused: boolean;
+  pauseDownload: () => void;
+  resumeDownload: () => void;
   uploadFiles: () => Promise<void>;
   /** 直传 File 列表（终端工具行「上传」用：容器选好文件后走同一上传通道，目标 = 应用层联动目录） */
   uploadFileList: (files: File[]) => Promise<void>;
@@ -167,7 +178,7 @@ export function useFileTransfer(deps: {
   serverId: string;
   directoryPath: string;
   isBusy: boolean;
-  setDownloadProgress: (v: DownloadProgressState | null) => void;
+  setDownloadProgress: Dispatch<SetStateAction<DownloadProgressState | null>>;
   setUploadProgress: (v: UploadProgressState | null | ((prev: UploadProgressState | null) => UploadProgressState | null)) => void;
   setActionStatus: (s: string) => void;
   pushActivity: (a: string) => void;
@@ -177,8 +188,6 @@ export function useFileTransfer(deps: {
   appendTransferHistory: (entry: Omit<TransferHistoryEntry, "id" | "serverId" | "serverLabel" | "createdAt">) => void;
   browseLogFiles: (path: string, options?: { manual?: boolean; silent?: boolean }) => Promise<unknown>;
   setIsDragOver: (v: boolean) => void;
-  /* 上传开始回调：打开传输记录抽屉（进度看抽屉，不弹悬浮气泡） */
-  onUploadStarted?: () => void;
 }): FileTransferAPI {
   const {
     serverId,
@@ -192,22 +201,70 @@ export function useFileTransfer(deps: {
     appendTransferHistory,
     browseLogFiles,
     setIsDragOver,
-    onUploadStarted,
   } = deps;
 
   /* 上传流程闸门：pause / resume / cancel 三态。
-     同一时刻只有一条上传在跑，用 ref 持有当前闸门即可（新上传会替换旧闸门）。 */
+     同一时刻只有一条上传在跑，用 ref 持有当前闸门即可（新上传会替换旧闸门）。
+     AbortController（2026-11-07）：闸门只能在检查点（文件/分片边界）停下，
+     取消要立即生效还得 abort 在途请求 —— 网关在 /upload/local/stream 监听
+     连接断开会销毁 SFTP 通道，fastPut 随即中止；分片通道 abort 当前片。 */
   const uploadGateRef = useRef<TransferGate | null>(null);
+  const uploadAbortRef = useRef<AbortController | null>(null);
   const [uploadPaused, setUploadPaused] = useState(false);
 
   /* 下载取消载体：每次 downloadFile 新建 AbortController，取消按钮 abort 掉 fetch，
      网关 res.on("close") → cleanup 会顺带销毁 SFTP 流 */
   const downloadAbortRef = useRef<AbortController | null>(null);
+  /* 下载暂停/继续闸门（2026-11-07）：与上传同一套检查点模型 ——
+     每个 chunk 读取前 checkpoint，暂停即停止读取（TCP 背压让服务端停发），
+     连接保持、恢复从断点续读；取消时 abort + gate.cancel 双保险。 */
+  const downloadGateRef = useRef<TransferGate | null>(null);
+  const [downloadPaused, setDownloadPaused] = useState(false);
+  /* 恢复看门狗（2026-11-07）：暂停期间连接可能被系统休眠/网络层掐死，
+     恢复放行后 read() 会挂在死 socket 上永远静默 —— 表现为「点继续没反应」。
+     恢复/开始后 N 秒无新字节即判定连接死亡，静默断开重连。
+     downloadPausedRef：暂停瞬间的最后一个在途进度包不得把 paused 标志覆盖回去。 */
+  const downloadPausedRef = useRef(false);
+  const downloadBytesRef = useRef(0);
+  /* 断点续传（2026-11-07）：已收 chunk 累积在 ref 里 —— 恢复重建时保留，
+     新流从已收字节 offset 续传追加；fresh 下载/取消/真实失败时清空 */
+  const downloadChunksRef = useRef<Uint8Array[]>([]);
+  const downloadCtxRef = useRef<{ gate: TransferGate; controller: AbortController; arm: (delayMs: number) => void } | null>(null);
+  const recoveringRef = useRef(false);
+  const recoverCountRef = useRef(0);
+  const lastDownloadOptsRef = useRef<{ path: string; serverId?: string } | null>(null);
+  /* 指向恢复入口的 ref：downloadFile 与 recover 相互引用，用 ref 打破循环依赖 */
+  const recoverDownloadRef = useRef<(path: string, serverId?: string) => void>(() => {});
+
+  const pauseDownload = useCallback(() => {
+    const gate = downloadGateRef.current;
+    if (!gate || gate.isCancelled || gate.isPaused) return;
+    gate.pause();
+    downloadPausedRef.current = true;
+    setDownloadPaused(true);
+    setDownloadProgress((prev) => prev ? { ...prev, paused: true } : prev);
+    setActionStatus("下载已暂停");
+  }, [setDownloadProgress, setActionStatus]);
+
+  const resumeDownload = useCallback(() => {
+    const gate = downloadGateRef.current;
+    if (!gate || gate.isCancelled || !gate.isPaused) return;
+    gate.resume();
+    downloadPausedRef.current = false;
+    setDownloadPaused(false);
+    setDownloadProgress((prev) => prev ? { ...prev, paused: false } : prev);
+    setActionStatus("继续下载...");
+    /* 恢复看门狗：4 秒无新字节 → 连接已死 → 自动重建下载 */
+    downloadCtxRef.current?.arm(4000);
+  }, [setDownloadProgress, setActionStatus]);
 
   const cancelDownload = useCallback(() => {
     const controller = downloadAbortRef.current;
     if (!controller) return;
+    downloadGateRef.current?.cancel();
+    downloadPausedRef.current = false;
     controller.abort();
+    setDownloadPaused(false);
     setActionStatus("正在取消下载...");
   }, [setActionStatus]);
 
@@ -215,6 +272,7 @@ export function useFileTransfer(deps: {
   const beginUploadGate = useCallback((): TransferGate => {
     const gate = new TransferGate();
     uploadGateRef.current = gate;
+    uploadAbortRef.current = new AbortController();
     setUploadPaused(false);
     return gate;
   }, []);
@@ -239,6 +297,9 @@ export function useFileTransfer(deps: {
     const gate = uploadGateRef.current;
     if (!gate) return;
     gate.cancel();
+    /* 立即断流（2026-11-07）：不等检查点。在途请求 abort 后，
+       分片通道当前片以 AbortError 收场；直传通道由网关销毁 SFTP 通道。 */
+    uploadAbortRef.current?.abort();
     setUploadPaused(false);
     setActionStatus("正在取消上传...");
   }, [setActionStatus]);
@@ -252,6 +313,7 @@ export function useFileTransfer(deps: {
       fileIndex: number;
       totalFiles: number;
       displayName: string;
+      targetDir: string;
       speedState: { sampleTime: number; sampleOffset: number; speed: number };
     },
     gate?: TransferGate,
@@ -277,10 +339,16 @@ export function useFileTransfer(deps: {
       const current = batch.totalBytes > 0
         ? getUploadPercent(uploaded, batch.totalBytes)
         : 100;
+      /* 单文件进度同步进队列（抽屉批次子行 / 小窗逐文件条共用） */
+      setUploadFileQueue((prev) => prev.map((item, index) =>
+        index === batch.fileIndex - 1 ? { ...item, transferred: Math.min(fileBytesUploaded, file.size), status: "uploading" as const } : item
+      ));
       setUploadProgress((prev) => prev ? {
         ...prev,
         current: Math.max(prev.current, current),
         fileName: `(${batch.fileIndex}/${batch.totalFiles}) ${batch.displayName}`,
+        currentFileName: batch.displayName.split("/").pop() || batch.displayName,
+        currentTargetDir: batch.targetDir,
         fileSize: batch.totalBytes,
         bytesUploaded: uploaded,
         speed: batch.speedState.speed,
@@ -301,7 +369,7 @@ export function useFileTransfer(deps: {
       updateBatchProgress(0, "uploading");
       await apiUploadSmall(serverId!, targetPath, file, ({ loaded }) => {
         updateBatchProgress(Math.min(loaded, file.size), "uploading");
-      });
+      }, uploadAbortRef.current?.signal);
       updateBatchProgress(file.size, "uploading");
       return;
     }
@@ -321,28 +389,83 @@ export function useFileTransfer(deps: {
       updateBatchProgress(offset, "uploading", i + 1, totalChunks);
       await apiUploadChunk(uploadId, blob, ({ loaded }) => {
         updateBatchProgress(Math.min(chunkStart + loaded, file.size), "uploading", i + 1, totalChunks);
-      });
+      }, uploadAbortRef.current?.signal);
 
       offset = end;
       updateBatchProgress(offset, "uploading", i + 1, totalChunks);
     }
 
     await apiUploadFinish(uploadId);
-  }, [serverId, setUploadProgress]);
+  }, [serverId, setUploadProgress, uploadAbortRef]);
 
-  const downloadFile = useCallback(async (targetFilePath: string, options?: { serverId?: string }) => {
+  const downloadFile = useCallback(async (targetFilePath: string, options?: { serverId?: string; isRecovery?: boolean }) => {
     const effectiveServerId = options?.serverId || serverId;
     if (!effectiveServerId) return;
     const fileName = targetFilePath.split("/").pop() || "download";
-    let downloadedBytes = 0;
+    const isRecovery = Boolean(options?.isRecovery);
+    /* 断点续传：恢复时保留已收 chunk，从已收字节 offset 续拉 */
+    const startOffset = isRecovery ? downloadBytesRef.current : 0;
+    let downloadedBytes = startOffset;
+    let totalBytes = 0;
     const controller = new AbortController();
+    const gate = new TransferGate();
     downloadAbortRef.current = controller;
-    setDownloadProgress({ fileName, fileSize: 0, bytesDownloaded: 0, speed: 0, percent: 0 });
+    downloadGateRef.current = gate;
+    if (!isRecovery) {
+      recoverCountRef.current = 0;
+      downloadChunksRef.current = [];
+      downloadBytesRef.current = 0;
+    }
+    downloadPausedRef.current = false;
+    lastDownloadOptsRef.current = { path: targetFilePath, serverId: effectiveServerId };
+    /* 恢复/开始后的看门狗：delayMs 内字节无增长且不在暂停态 → 连接已死，自动重建。
+       gate.cancel() 让挂在检查点上的循环退出；abort 让挂在 read() 上的循环退出；
+       两者都被 catch 的 recovering 分支静默吞掉，不写取消历史。 */
+    const armWatchdog = (delayMs: number) => {
+      const bytesAtArm = downloadBytesRef.current;
+      window.setTimeout(() => {
+        if (downloadGateRef.current !== gate) return;
+        if (controller.signal.aborted) return;
+        if (gate.isPaused || downloadPausedRef.current) return;
+        if (downloadBytesRef.current !== bytesAtArm) return;
+        if (recoverCountRef.current >= 3) {
+          setActionStatus("下载连接多次中断，请停止后重新下载");
+          return;
+        }
+        recoverCountRef.current += 1;
+        recoveringRef.current = true;
+        setActionStatus("下载连接已中断，正在重新建立…");
+        gate.cancel();
+        controller.abort();
+        window.setTimeout(() => {
+          recoveringRef.current = false;
+          void downloadFile(targetFilePath, { serverId: effectiveServerId, isRecovery: true });
+        }, 80);
+      }, delayMs);
+    };
+    downloadCtxRef.current = {
+      gate,
+      controller,
+      arm: (delayMs: number) => armWatchdog(delayMs),
+    };
+    setDownloadProgress({ fileName, filePath: targetFilePath, fileSize: 0, bytesDownloaded: startOffset, speed: 0, percent: 0, paused: false });
+    armWatchdog(8000);
     try {
-      const blob = await apiDownloadFile(effectiveServerId, targetFilePath, (downloaded, total, speed) => {
-        downloadedBytes = downloaded;
-        setDownloadProgress({ fileName, fileSize: total, bytesDownloaded: downloaded, speed, percent: total > 0 ? Math.round((downloaded / total) * 100) : 0 });
-      }, controller.signal);
+      const { total } = await apiDownloadFile(effectiveServerId, targetFilePath, {
+        offset: startOffset,
+        onChunk: (chunk) => { downloadChunksRef.current.push(chunk); },
+        onProgress: (downloaded, totalSize, speed) => {
+          downloadedBytes = downloaded;
+          totalBytes = totalSize;
+          downloadBytesRef.current = downloaded;
+          setDownloadProgress({ fileName, filePath: targetFilePath, fileSize: totalSize, bytesDownloaded: downloaded, speed, percent: totalSize > 0 ? Math.round((downloaded / totalSize) * 100) : 0, paused: downloadPausedRef.current });
+        },
+        signal: controller.signal,
+        gate,
+      });
+      totalBytes = total || totalBytes;
+      const blob = new Blob(downloadChunksRef.current as BlobPart[], { type: "application/octet-stream" });
+      downloadChunksRef.current = [];
       setDownloadProgress(null);
       const api = (window as any).electronAPI;
       if (api?.saveFile) {
@@ -429,8 +552,24 @@ export function useFileTransfer(deps: {
       }
       return;
     } catch (error) {
-      /* 用户取消：fetch/流读取以 AbortError 中断，记「取消」而非失败 */
-      if (controller.signal.aborted || (error instanceof Error && error.name === "AbortError")) {
+      /* 恢复重建触发的 abort/取消：静默收场，不写历史、不弹提示 */
+      if (recoveringRef.current) {
+        recoveringRef.current = false;
+        return;
+      }
+      /* 断点失效（远端文件被截断/替换）：丢弃已收 chunk，从头重下一次 */
+      if (isRecovery && error instanceof Error && error.message.includes("断点")) {
+        recoverCountRef.current += 1;
+        if (recoverCountRef.current <= 3) {
+          setActionStatus("远端文件已变化，从头重新下载…");
+          downloadChunksRef.current = [];
+          downloadBytesRef.current = 0;
+          void downloadFile(targetFilePath, { serverId: effectiveServerId, isRecovery: true });
+          return;
+        }
+      }
+      /* 用户取消：abort / 闸门取消（暂停中取消走这里）都以「取消」收场，不记失败 */
+      if (controller.signal.aborted || error instanceof TransferCancelledError || (error instanceof Error && error.name === "AbortError")) {
         const message = "用户取消下载";
         setActionStatus("已取消下载");
         pushActivity(`已取消下载：${targetFilePath}`);
@@ -461,9 +600,28 @@ export function useFileTransfer(deps: {
       if (downloadAbortRef.current === controller) {
         downloadAbortRef.current = null;
       }
-      setDownloadProgress(null);
+      if (downloadGateRef.current === gate) {
+        downloadGateRef.current = null;
+      }
+      if (downloadCtxRef.current?.controller === controller) {
+        downloadCtxRef.current = null;
+      }
+      downloadPausedRef.current = false;
+      setDownloadPaused(false);
+      /* 恢复重建中：保留已收 chunk 与进度行（新流会从断点续传）；
+         其余收场（完成/取消/失败）全部清空 */
+      if (!recoveringRef.current) {
+        downloadChunksRef.current = [];
+        downloadBytesRef.current = 0;
+        setDownloadProgress(null);
+      }
     }
   }, [serverId, setDownloadProgress, setActionStatus, pushActivity, showToast, appendTransferHistory]);
+
+  /* 恢复入口（ref 打破 downloadFile ↔ recover 循环依赖）：重建同一目标的下载 */
+  recoverDownloadRef.current = (path, serverId) => {
+    void downloadFile(path, { serverId, isRecovery: true });
+  };
 
   const uploadLocalFileList = useCallback(async (files: LocalUploadFile[], gate?: TransferGate) => {
     if (!serverId || !directoryPath || files.length === 0) return;
@@ -474,7 +632,20 @@ export function useFileTransfer(deps: {
     let uploadedBefore = 0;
     const speedState = { sampleTime: Date.now(), sampleOffset: 0, speed: 0 };
     setActionStatus(`正在本地直传 ${total} 个文件...`);
-    onUploadStarted?.();
+    /* 逐文件队列（2026-11-07 修复）：直传通道此前不填 uploadFileQueue，
+       抽屉批次组与小窗文件列表都拿不到数据 —— 文件夹上传只显示当前一行
+       （还误标「仅可取消」）、小窗空空如也。现与浏览器通道同构填充。 */
+    setUploadFileQueue(files.map((file) => ({
+      name: file.name,
+      size: file.size,
+      transferred: 0,
+      status: "pending" as const
+    })));
+    /* 上传开始即刷新目标目录（2026-11-07）：SFTP 对部分写入的文件可见，
+       早刷新让文件行立刻出现在列表里、行内进度就地挂上 —— 此前要等传完才
+       刷新，用户「看不到正在上传的文件」。2s 后补一次：首写落盘往往晚于首轮刷新。 */
+    void browseLogFiles(uploadDir, { silent: true });
+    window.setTimeout(() => { void browseLogFiles(uploadDir, { silent: true }); }, 2000);
     try {
       for (let i = 0; i < files.length; i++) {
         /* 直传是服务端一条流式拷贝，无法中途打断 → 暂停/取消在文件边界生效 */
@@ -482,6 +653,9 @@ export function useFileTransfer(deps: {
         const file = files[i];
         const targetPath = `${uploadDir}/${file.name}`;
         currentUpload = { fileName: file.name, localPath: file.path, targetPath, size: file.size };
+        setUploadFileQueue((prev) => prev.map((item, index) =>
+          index === i ? { ...item, status: "uploading" as const } : item
+        ));
         const updateLocalProgress = (bytesUploaded: number, chunkBytes = 0, _remoteTotalBytes = file.size) => {
           const now = Date.now();
           const overallUploaded = Math.min(batchTotalBytes, uploadedBefore + Math.min(bytesUploaded, file.size));
@@ -497,10 +671,16 @@ export function useFileTransfer(deps: {
             }
           }
           const current = getUploadPercent(overallUploaded, batchTotalBytes);
+          /* 单文件进度同步进队列（抽屉批次子行 / 小窗逐文件条共用） */
+          setUploadFileQueue((prev) => prev.map((item, index) =>
+            index === i ? { ...item, transferred: Math.min(bytesUploaded, file.size), status: "uploading" as const } : item
+          ));
           setUploadProgress((prev) => prev ? {
             ...prev,
             current: Math.max(prev.current, current),
             fileName: `(${i + 1}/${total}) ${file.name}`,
+            currentFileName: file.name,
+            currentTargetDir: uploadDir,
             fileSize: batchTotalBytes,
             bytesUploaded: overallUploaded,
             speed: speedState.speed,
@@ -517,6 +697,8 @@ export function useFileTransfer(deps: {
           current: getUploadPercent(uploadedBefore, batchTotalBytes),
           total,
           fileName: `(${i + 1}/${total}) ${file.name}`,
+          currentFileName: file.name,
+          currentTargetDir: uploadDir,
           fileSize: batchTotalBytes,
           bytesUploaded: uploadedBefore,
           speed: speedState.speed,
@@ -528,8 +710,11 @@ export function useFileTransfer(deps: {
         });
         await apiUploadLocalFile(serverId, targetPath, file.path, ({ transferred, chunkBytes, totalBytes }) => {
           updateLocalProgress(transferred, chunkBytes, totalBytes);
-        });
+        }, uploadAbortRef.current?.signal);
         updateLocalProgress(file.size, 0, file.size);
+        setUploadFileQueue((prev) => prev.map((item, index) =>
+          index === i ? { ...item, transferred: file.size, status: "done" as const } : item
+        ));
         uploadedBefore += file.size;
         pushActivity(`已本地直传文件：${targetPath}`);
         appendTransferHistory({
@@ -553,7 +738,7 @@ export function useFileTransfer(deps: {
       await browseLogFiles(uploadDir, { silent: true });
       clearTransferProgressAfterHold(setUploadProgress);
     } catch (error) {
-      if (error instanceof TransferCancelledError) {
+      if (isUploadCanceled(error)) {
         /* 用户取消：不记为失败，仅提示已取消 */
         setActionStatus("已取消上传");
         if (currentUpload) {
@@ -590,7 +775,7 @@ export function useFileTransfer(deps: {
     } finally {
       setUploadProgress((prev) => prev?.stage === "completed" ? prev : null);
     }
-  }, [serverId, directoryPath, setUploadProgress, setActionStatus, pushActivity, showToast, appendTransferHistory, browseLogFiles, onUploadStarted]);
+  }, [serverId, directoryPath, setUploadProgress, setActionStatus, pushActivity, showToast, appendTransferHistory, browseLogFiles]);
 
   /* ---------- 上传冲突检测 ----------
      此前是静默覆盖：同名文件直接顶掉远端文件，没有任何提示。
@@ -687,7 +872,9 @@ export function useFileTransfer(deps: {
     let uploadedBefore = 0;
     const speedState = { sampleTime: Date.now(), sampleOffset: 0, speed: 0 };
     setActionStatus(`正在上传 ${total} 个文件${skippedCount ? `（已过滤 ${skippedCount} 个垃圾文件）` : ""}...`);
-    onUploadStarted?.();
+    /* 同 uploadLocalFileList：开始即刷新目标目录，正在上传的文件立刻可见 */
+    void browseLogFiles(uploadDir, { silent: true });
+    window.setTimeout(() => { void browseLogFiles(uploadDir, { silent: true }); }, 2000);
     try {
       for (let i = 0; i < accepted.length; i++) {
         /* 文件边界检查点：暂停时挂起，取消时抛 TransferCancelledError */
@@ -704,6 +891,8 @@ export function useFileTransfer(deps: {
           current: getUploadPercent(uploadedBefore, totalBytes),
           total,
           fileName: `(${i + 1}/${total}) ${relativePath}`,
+          currentFileName: relativePath.split("/").pop() || relativePath,
+          currentTargetDir: uploadDir,
           fileSize: totalBytes,
           bytesUploaded: uploadedBefore,
           speed: speedState.speed,
@@ -719,6 +908,7 @@ export function useFileTransfer(deps: {
           fileIndex: i + 1,
           totalFiles: total,
           displayName: relativePath,
+          targetDir: uploadDir,
           speedState,
         }, gate);
         uploadedBefore += file.size;
@@ -746,7 +936,7 @@ export function useFileTransfer(deps: {
       await browseLogFiles(uploadDir, { silent: true });
       clearTransferProgressAfterHold(setUploadProgress);
     } catch (error) {
-      if (error instanceof TransferCancelledError) {
+      if (isUploadCanceled(error)) {
         /* 用户取消：不记为失败，仅提示已取消 */
         setActionStatus("已取消上传");
         if (currentUpload) {
@@ -780,7 +970,7 @@ export function useFileTransfer(deps: {
     } finally {
       setUploadProgress((prev) => prev?.stage === "completed" ? prev : null);
     }
-  }, [serverId, directoryPath, uploadOneFileWithBatchProgress, uploadLocalFileList, setUploadProgress, setActionStatus, pushActivity, showToast, appendTransferHistory, browseLogFiles, onUploadStarted]);
+  }, [serverId, directoryPath, uploadOneFileWithBatchProgress, uploadLocalFileList, setUploadProgress, setActionStatus, pushActivity, showToast, appendTransferHistory, browseLogFiles]);
 
   /**
    * 上传入口：先检测同名冲突，有冲突则挂起等用户确认；无冲突直接开始。
@@ -972,6 +1162,10 @@ export function useFileTransfer(deps: {
   return {
     downloadFile,
     cancelDownload,
+    /* 下载暂停/继续（2026-11-07）：与上传同一套闸门模型 */
+    downloadPaused,
+    pauseDownload,
+    resumeDownload,
     uploadFiles,
     uploadFileList,
     uploadDirectory,

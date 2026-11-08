@@ -675,7 +675,11 @@
   font-size: var(--fs-2xs);
 }
 
-.file-name-cell {
+/* 文件名是行内主识别信息：用主题主墨色（--ink），其余列保持 muted；
+   2026-11-09 修正 —— 此前名字随 .file-row span(0,1,1) 掉到 muted 灰，与目录树（--ink）对比失衡；
+   这里需要 (0,2,0) 才能盖过它 */
+.file-row .file-name-cell {
+  color: var(--ink);
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;

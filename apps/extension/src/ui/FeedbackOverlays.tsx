@@ -1,9 +1,16 @@
-import { AlertCircle, Check, Download, Loader2, X } from "lucide-react";
+import { AlertCircle, Check, Loader2, X } from "lucide-react";
 
 export interface UploadProgressState {
   current: number;
   total: number;
+  /** 展示名：批量上传时带 "(${i}/${total}) " 前缀，直接给人看 */
   fileName: string;
+  /** 裸文件名（不含批次前缀）。文件表行内进度按它匹配行，
+      此前用 fileName 匹配，带前缀永远不等于 entry.name → 上传行进度从不显示。 */
+  currentFileName?: string;
+  /** 上传目标目录（2026-11-07）：行内匹配 = 文件名 + 目标目录 === 当前目录，
+      否则其他目录里的同名文件也会长出进度条（跨目录误命中）。 */
+  currentTargetDir?: string;
   fileSize: number;
   bytesUploaded: number;
   speed: number;
@@ -19,10 +26,14 @@ export interface UploadProgressState {
 
 export interface DownloadProgressState {
   fileName: string;
+  /** 完整远程路径（2026-11-07）：行内/表头按「父目录 === 当前目录」判定，防跨目录误命中 */
+  filePath?: string;
   fileSize: number;
   bytesDownloaded: number;
   speed: number;
   percent: number;
+  /** 暂停态（2026-11-07）：闸门挂起后置位，抽屉显示「已暂停」并隐藏过期速度 */
+  paused?: boolean;
 }
 
 export interface ToastState {
@@ -40,79 +51,22 @@ interface FeedbackOverlaysProps {
   onCancelDownload?: () => void;
 }
 
-function formatTransferSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-  return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
-}
-
-function formatDuration(seconds?: number): string {
-  if (!seconds || !Number.isFinite(seconds) || seconds <= 0) return "--";
-  if (seconds < 60) return `${Math.ceil(seconds)} 秒`;
-  const minutes = Math.floor(seconds / 60);
-  const rest = Math.ceil(seconds % 60);
-  if (minutes < 60) return `${minutes} 分 ${rest} 秒`;
-  const hours = Math.floor(minutes / 60);
-  const minuteRest = minutes % 60;
-  return `${hours} 小时 ${minuteRest} 分`;
-}
-
 export function FeedbackOverlays(props: FeedbackOverlaysProps) {
-  const { downloadProgress, toasts, onDismissToast } = props;
-  const downloadEtaSeconds = downloadProgress && downloadProgress.fileSize > 0 && downloadProgress.speed > 0
-    ? Math.max(0, (downloadProgress.fileSize - downloadProgress.bytesDownloaded) / downloadProgress.speed)
-    : undefined;
-  const downloadPercent = downloadProgress
-    ? Math.min(100, Math.max(0, downloadProgress.percent))
-    : 0;
-  const downloadHasKnownProgress = Boolean(downloadProgress && downloadProgress.fileSize > 0 && downloadProgress.bytesDownloaded > 0);
+  const { toasts, onDismissToast } = props;
+
+  /* 右下角「正在下载」悬浮卡已整体移除（2026-11-06）：
+     ① 与文件表行内传输列、传输记录抽屉的「进行中」区完全重复，同一进度三处显示；
+     ② 上传早在 2026-09-30 就因遮挡视线移除了悬浮气泡，下载却留着，行为不一致；
+     ③ 卡片外壳 .upload-progress-bar 是 pointer-events:none，而卡内 × 未恢复 auto，
+        导致「取消下载」实际点不动 —— 用户反馈「也不能关闭」的正是这个。
+     下载进度改由抽屉「进行中」行承载（含取消），行内传输列同时可见。
+     入参 downloadProgress / onCancelDownload 保留在 props 中：调用方仍在传，
+     删字段会牵动 DialogOverlays 之外的多处接线，后续若要恢复入口也不必再改类型。 */
+  void props.downloadProgress;
+  void props.onCancelDownload;
 
   return (
     <>
-      {downloadProgress ? (
-        <div className="upload-progress-bar upload-progress-card download-progress-card">
-          <div className="upload-progress-card-head">
-            <span className="upload-progress-icon download-progress-icon"><Download size={16} strokeWidth={2.2} /></span>
-            <div className="upload-progress-title-block">
-              <span className="upload-progress-kicker">正在下载</span>
-              <span className="upload-progress-text" title={downloadProgress.fileName}>{downloadProgress.fileName}</span>
-            </div>
-            <span className="upload-progress-percent-wrap">
-              <strong className="upload-progress-percent download-progress-percent">
-                {downloadHasKnownProgress ? `${downloadPercent}%` : "准备中"}
-              </strong>
-              {props.onCancelDownload ? (
-                <button
-                  type="button"
-                  className="ghost-button icon-button transfer-cancel"
-                  title="取消下载"
-                  aria-label="取消下载"
-                  onClick={props.onCancelDownload}
-                >
-                  <X size={14} strokeWidth={2} />
-                </button>
-              ) : null}
-            </span>
-          </div>
-          <div className="upload-progress-track">
-            <div
-              className={`upload-progress-fill download-progress-fill${downloadHasKnownProgress ? "" : " transfer-progress-fill-empty"}`}
-              style={{ transform: `scaleX(${(downloadHasKnownProgress ? downloadPercent : 0) / 100})` }}
-            />
-          </div>
-          <div className="upload-progress-detail-grid">
-            <span>{formatTransferSize(downloadProgress.bytesDownloaded)}{downloadProgress.fileSize > 0 ? ` / ${formatTransferSize(downloadProgress.fileSize)}` : ""}</span>
-            <span>{downloadProgress.speed > 0 ? `${formatTransferSize(downloadProgress.speed)}/s` : "计算速率中"}</span>
-            <span>{downloadEtaSeconds ? `剩余 ${formatDuration(downloadEtaSeconds)}` : "剩余 --"}</span>
-            <span>{downloadProgress.fileSize > 0 ? "远程文件接收中" : "等待文件大小"}</span>
-          </div>
-        </div>
-      ) : null}
-
-      {/* 上传进度不再用悬浮气泡（用户反馈 2026-09-30：遮挡视线）——
-          进行中进度见传输记录抽屉「进行中」区与文件表传输列；上传开始即自动打开抽屉 */}
-
       {toasts.length > 0 ? (
         <div className="toast-container">
           {toasts.map((toast) => (

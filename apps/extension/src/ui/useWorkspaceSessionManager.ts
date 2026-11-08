@@ -310,7 +310,10 @@ export function useWorkspaceSessionManager(params: WorkspaceSessionManagerParams
       showFileTools,
       errorHighlightEnabled,
       showPathHistory,
-      showTransferHistory,
+      /* 抽屉是临时浮层，刻意不写入快照（见 applyWorkspaceSessionState 注释）：
+         写进去就会在切回该工作区时被恢复，表现为「它自己又开出来」。
+         字段本身保留在 WorkspaceSessionState 类型里，旧存量快照读取时被忽略即可。 */
+      showTransferHistory: false,
       terminalPanelOpen,
       terminalDetached,
       terminalOverlay,
@@ -401,7 +404,11 @@ export function useWorkspaceSessionManager(params: WorkspaceSessionManagerParams
     setters.setPathbarMode("browse");
     setters.setBatchMoveDialog(null as any);
     setters.setShowPathHistory(nextState.showPathHistory);
-    setters.setShowTransferHistory(nextState.showTransferHistory);
+    /* 传输记录抽屉不再跟随工作区记忆（2026-11-06）：它是一个临时浮层，不属于
+       某个服务器的「工作台状态」。此前这里从 nextState 恢复，导致 A 服务器开着
+       抽屉 → 切到 B → 再切回 A 时抽屉自己又冒出来，叠加「上传/下载开始自动开」
+       就表现为「打开之后永远不关」。切换工作区一律收起。 */
+    setters.setShowTransferHistory(false);
     setters.setFileLoadingName("");
     setters.setTerminalSessionId(nextState.terminalSessionId);
     setters.setTerminalTabs(nextState.terminalTabs || []);
@@ -430,6 +437,12 @@ export function useWorkspaceSessionManager(params: WorkspaceSessionManagerParams
     if (!options?.skipSaveCurrent) {
       saveCurrentWorkspaceSessionState();
     }
+
+    /* 切换工作区立刻收起传输记录抽屉（2026-11-06）：
+       抽屉是临时浮层，不属于工作台状态。这里必须放在终端延迟分支之前 ——
+       终端开着时 applyWorkspaceSessionState 会被推迟到终端收起之后（见 App.tsx
+       的 pendingWorkspaceActivationRef），期间抽屉会一直挂在新的服务器 tab 上。 */
+    setters.setShowTransferHistory(false);
 
     const hasCachedState = Boolean(workspaceSessionStatesRef.current[session.id]);
     const nextState = readWorkspaceSessionState(session);

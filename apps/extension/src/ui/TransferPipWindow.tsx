@@ -87,6 +87,12 @@ export function TransferPipWindow() {
     bridge?.sendTransferControl?.(action);
   };
 
+  /* 小窗是独立 BrowserWindow，App 对 mode=transfer 裸渲染本组件 ——
+     不套 app-shell/theme-modern 的话 CSS 变量全部回落硬编码色，
+     macOS hiddenInset 红绿灯也会压住标题（2026-11-07 修复）。 */
+  const isMacOS = typeof navigator !== "undefined" && /Mac/.test(navigator.userAgent) && !/iPhone|iPad/.test(navigator.userAgent);
+  const shellClassName = `app-shell theme-modern${isMacOS ? " electron-macos-immersive" : ""}`;
+
   const percent = data.totalBytes > 0
     ? Math.min(100, Math.round((data.bytesUploaded / data.totalBytes) * 1000) / 10)
     : 0;
@@ -97,9 +103,12 @@ export function TransferPipWindow() {
   const isRunning = data.stage === "uploading" || (data.stage === "preparing" && data.files.length > 0);
   const isFinished = data.stage === "done";
   const isFailed = data.stage === "error" || data.stage === "canceled";
+  /* 未就绪态（2026-11-07）：totalBytes 还没到位时不渲染字节数 ——
+     此前显示 "14.0 B / 1.0 B" 这类未初始化数字。 */
+  const isPending = !isFinished && !isFailed && data.totalBytes <= 0;
 
   return (
-    <div className="tpw-root">
+    <div className={`tpw-root ${shellClassName}`}>
       <header className="tpw-head">
         <span className={`tpw-dot tpw-dot-${isFinished ? "ok" : isFailed ? "bad" : data.files.length === 0 ? "idle" : "active"}`} />
         <strong>
@@ -107,22 +116,22 @@ export function TransferPipWindow() {
             ? "传输完成"
             : isFailed
               ? (data.stage === "canceled" ? "已取消" : "传输失败")
-              : data.files.length === 0
-                ? "等待传输"
+              : isPending
+                ? "准备中…"
                 : "正在上传"}
         </strong>
-        <span className="tpw-count">{doneCount}/{data.files.length}</span>
+        <span className="tpw-count">{data.files.length > 0 ? `${doneCount}/${data.files.length}` : ""}</span>
       </header>
 
       <div className="tpw-meta">
         <span className="tpw-dir" title={data.directoryPath}>{data.directoryPath || "—"}</span>
         <span className="tpw-stat">
-          {formatBytes(data.bytesUploaded)} / {formatBytes(data.totalBytes)}
+          {isPending ? "正在建立传输…" : `${formatBytes(data.bytesUploaded)} / ${formatBytes(data.totalBytes)}`}
         </span>
       </div>
 
       <div className="tpw-bar">
-        <i style={{ width: `${percent}%` }} className={isFinished ? "done" : isFailed ? "bad" : ""} />
+        <i style={{ width: `${isPending ? 0 : percent}%` }} className={isFinished ? "done" : isFailed ? "bad" : ""} />
       </div>
 
       <div className="tpw-files">

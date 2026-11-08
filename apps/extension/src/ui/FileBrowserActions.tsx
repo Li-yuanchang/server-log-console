@@ -1,7 +1,17 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
+import { Download, Upload } from "lucide-react";
 import { ToolIcon } from "./ToolIcon.js";
 import { useEffect, useRef } from "react";
+
+/** 传输活动 chip 数据（2026-11-07）：up/dn = 各方向活动任务数（0 = 无），
+    detail = tooltip 用的百分比/速度摘要 */
+export type TransferActivityChip = {
+  up: number;
+  dn: number;
+  paused: boolean;
+  detail: string;
+};
 
 type Props = {
   uiTheme: "classic" | "modern";
@@ -10,6 +20,8 @@ type Props = {
   filterValue: string;
   showPathHistory: boolean;
   showTransferHistory: boolean;
+  transferChip?: TransferActivityChip | null;
+  onOpenTransferDrawer?: () => void;
   onFilterChange: (value: string) => void;
   onBrowseParent: () => void;
   onTogglePathHistory: () => void;
@@ -132,6 +144,32 @@ export function FileBrowserActions(props: Props) {
           document.body,
         ) : null}
       </div>
+      {/* 传输活动 chip（2026-11-07，对标 Termius tab 角标的环境指示器）：
+          有活动传输才出现，取代旧的"传输开始自动弹抽屉"。放行末 ——
+          出现/消失时不推动过滤框与既有按钮（放中间会把上传/刷新/更多
+          三个控件整体推移一个 chip 宽度）。点击打开传输记录抽屉。 */}
+      {props.transferChip ? (
+        <button
+          type="button"
+          className={`transfer-activity-chip${props.transferChip.paused ? " transfer-activity-chip-paused" : ""}`}
+          title={`${props.transferChip.detail || "传输进行中"} · 点击查看传输记录`}
+          aria-label="传输进行中，查看传输记录"
+          onClick={props.onOpenTransferDrawer}
+        >
+          {props.transferChip.up > 0 ? (
+            <span className="transfer-activity-chip-part transfer-activity-chip-up">
+              <Upload size={11} strokeWidth={2.1} />
+              <b>{props.transferChip.up}</b>
+            </span>
+          ) : null}
+          {props.transferChip.dn > 0 ? (
+            <span className="transfer-activity-chip-part transfer-activity-chip-dn">
+              <Download size={11} strokeWidth={2.1} />
+              <b>{props.transferChip.dn}</b>
+            </span>
+          ) : null}
+        </button>
+      ) : null}
     </>
   );
 }

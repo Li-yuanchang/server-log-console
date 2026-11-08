@@ -16,6 +16,10 @@ import type { TransferProgressPayload } from "./TransferPipWindow.js";
 interface Options {
   enabled: boolean;
   uploadProgress: UploadProgressState | null;
+  /** 逐文件队列（2026-11-07）：与抽屉批次组同源 —— 直传/分片通道都会填充，
+      小窗文件列表不再自行按文件名累积（旧法把批级字节当单文件大小、
+      甚至把百分比当字节数发过去，小窗显示 14.0 B / 1.0 B 即此因） */
+  uploadFileQueue: Array<{ name: string; size: number; transferred: number; status: "pending" | "uploading" | "done" | "error" }>;
   directoryPath: string;
   uploadPaused: boolean;
   onPause: () => void;
@@ -25,9 +29,7 @@ interface Options {
 }
 
 export function useTransferPip(options: Options) {
-  const { enabled, uploadProgress, directoryPath, uploadPaused, onPause, onResume, onCancel, onStatus } = options;
-  /* 逐文件累积：uploadProgress 只带当前文件，这里按文件名累积成列表 */
-  const filesRef = useRef<Map<string, { name: string; size: number; transferred: number; status: "pending" | "uploading" | "done" | "error" }>>(new Map());
+  const { enabled, uploadProgress, uploadFileQueue, directoryPath, uploadPaused, onPause, onResume, onCancel, onStatus } = options;
   const lastStageRef = useRef<string>("");
 
   /** 打开小窗（用户点按钮时调用） */
@@ -55,50 +57,36 @@ export function useTransferPip(options: Options) {
     if (!bridge?.sendTransferProgress) return;
 
     if (!uploadProgress) {
-      /* 一轮结束：把累积表清空，避免下次上传看到旧文件 */
-      if (filesRef.current.size > 0) {
-        const stage = lastStageRef.current === "completed" ? "done" : "uploading";
+      /* 一轮结束：把完成态推给小窗后清场，避免下次上传看到旧文件 */
+      if (lastStageRef.current === "completed" || uploadFileQueue.some(f => f.status === "done")) {
         bridge.sendTransferProgress({
           directoryPath,
-          stage,
+          stage: "done",
           bytesUploaded: 0,
           totalBytes: 0,
           speed: 0,
-          files: [...filesRef.current.values()]
+          files: uploadFileQueue
         });
-        filesRef.current.clear();
       }
       lastStageRef.current = "";
       return;
     }
 
-    const name = uploadProgress.fileName || "未命名文件";
-    const existing = filesRef.current.get(name);
-    const transferred = uploadProgress.bytesUploaded ?? 0;
-    filesRef.current.set(name, {
-      name,
-      size: uploadProgress.fileSize || existing?.size || 0,
-      transferred,
-      status: uploadProgress.stage === "completed" ? "done" : "uploading"
-    });
-
-    const totalFiles = uploadProgress.totalFiles ?? filesRef.current.size;
     const stage: TransferProgressPayload["stage"] =
       uploadProgress.stage === "completed" ? "done" : uploadProgress.stage === "preparing" ? "preparing" : "uploading";
 
     bridge.sendTransferProgress({
       directoryPath,
       stage,
-      bytesUploaded: uploadProgress.current ?? transferred,
-      totalBytes: uploadProgress.total || uploadProgress.fileSize || 0,
+      /* 字节就是字节（2026-11-07 修复：此前误发 current 百分比） */
+      bytesUploaded: uploadProgress.bytesUploaded ?? 0,
+      totalBytes: uploadProgress.fileSize ?? 0,
       speed: uploadProgress.speed || 0,
       paused: uploadPaused,
-      files: [...filesRef.current.values()],
-      /* totalFiles 只用于小窗显示 N/M，不参与计算 */
-      ...(totalFiles ? {} : {})
+      files: uploadFileQueue
     });
     lastStageRef.current = uploadProgress.stage || "";
-  }, [enabled, uploadProgress, directoryPath, uploadPaused]);
+  }, [enabled, uploadProgress, uploadFileQueue, directoryPath, uploadPaused]);
 
   /* 订阅小窗控制指令 */
   useEffect(() => {

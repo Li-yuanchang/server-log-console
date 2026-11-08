@@ -327,8 +327,12 @@ export interface LineContextState extends LogLineContextResponse {
 
 export async function copyText(text: string) {
   if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(text);
-    return;
+    try {
+      await navigator.clipboard.writeText(text);
+      return;
+    } catch {
+      /* 焦点丢失 / 权限被拒时落到 execCommand 兜底，不让复制静默失败 */
+    }
   }
 
   const textarea = document.createElement("textarea");

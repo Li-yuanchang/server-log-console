@@ -32,6 +32,12 @@
   min-width: 0;
 }
 
+/* macOS hiddenInset 红绿灯让位（2026-11-07）：trafficLightPosition x:12，
+   三枚灯占宽约 52px → 标题从 78px 起，不再被压住（此前红绿灯叠在「正在上传」上）。 */
+.tpw-root.electron-macos-immersive .tpw-head {
+  padding-left: 78px;
+}
+
 .tpw-count {
   font-size: 10px;
   color: var(--ink-muted, #92988d);
