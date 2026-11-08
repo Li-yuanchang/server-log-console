@@ -101,9 +101,6 @@ let isQuitting = false;
 let gatewayStartPromise = null;
 let viewerPipWindow = null;
 let transferPipWindow = null;
-
-/* TEMP-DEBUG（批量日志验收用，验完移除）：CDP 远程调试 + 渲染进程控制台转发 */
-app.commandLine.appendSwitch("remote-debugging-port", "9222");
 const terminalPipWindows = new Map();
 
 function listPipWindows() {
@@ -1054,8 +1051,11 @@ ipcMain.handle("open-pip-window", (_event, config = {}) => {
   const nextPipWindow = new BrowserWindow({
     width: config.width || 980,
     height: config.height || 680,
-    minWidth: 720,
-    minHeight: 420,
+    /* 2026-11-07：传输进度小窗只要 360×460（useTransferPip 请求值）——
+       统一 minWidth:720 把它钳成两倍宽，进度内容被拉伸出大片空白。
+       按模式给最小尺寸：传输小窗 320×300，其余（日志/终端/工具）维持 720×420。 */
+    minWidth: isTransferMode ? 320 : 720,
+    minHeight: isTransferMode ? 300 : 420,
     title: config.title || "日志控制台",
     alwaysOnTop: isUtilityMode || isTransferMode ? false : true,
     /* 标题栏按平台分三套（2026-10-24，与主窗口方案 B 一致）：
