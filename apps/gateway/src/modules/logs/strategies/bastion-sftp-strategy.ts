@@ -47,8 +47,9 @@ export class BastionSftpStrategy implements BastionSftpConnectionStrategy {
     return this.sshExecutor.sftpReadRange(this.serverId, filePath, 0, stat.size);
   }
 
-  async createReadStream(filePath: string): Promise<import("stream").Readable> {
-    return this.sshExecutor.sftpCreateReadStream(this.serverId, filePath);
+  async createReadStream(filePath: string, opts?: { offset?: number; limitBytes?: number }): Promise<import("stream").Readable> {
+    const offset = Math.max(0, Math.floor(opts?.offset ?? 0));
+    return this.sshExecutor.sftpCreateReadStream(this.serverId, filePath, offset > 0 ? { start: offset } : undefined);
   }
 
   async uploadFile(filePath: string, content: Buffer): Promise<void> {
@@ -62,9 +63,15 @@ export class BastionSftpStrategy implements BastionSftpConnectionStrategy {
     }
   }
 
-  async uploadLocalFile(filePath: string, localPath: string, onProgress?: (transferred: number, chunkBytes: number, totalBytes: number) => void): Promise<void> {
+  async uploadLocalFile(
+    filePath: string,
+    localPath: string,
+    onProgress?: (transferred: number, chunkBytes: number, totalBytes: number) => void,
+    hooks?: { onCancel?: (fn: () => void) => void }
+  ): Promise<void> {
     const session = await this.sshExecutor.sftpOpenSession(this.serverId);
     try {
+      hooks?.onCancel?.(() => session.destroy());
       const parentDir = filePath.substring(0, filePath.lastIndexOf("/")) || "/";
       await session.ensureDir(parentDir);
       await session.fastPut(localPath, filePath, onProgress);

@@ -48,8 +48,15 @@ export interface ConnectionStrategy {
   /** 上传 Buffer 到远程文件 */
   uploadFile(filePath: string, content: Buffer): Promise<void>;
 
-  /** 从 gateway 所在机器本地路径上传到远程文件 */
-  uploadLocalFile(filePath: string, localPath: string, onProgress?: (transferred: number, chunkBytes: number, totalBytes: number) => void): Promise<void>;
+  /** 从 gateway 所在机器本地路径上传到远程文件。
+      hooks.onCancel：注册传输取消回调 —— 客户端 HTTP 连接断开时由端点触发，
+      实现内部应据此中止 SFTP 传输（fastPut 只能靠销毁通道中止）。 */
+  uploadLocalFile(
+    filePath: string,
+    localPath: string,
+    onProgress?: (transferred: number, chunkBytes: number, totalBytes: number) => void,
+    hooks?: { onCancel?: (fn: () => void) => void }
+  ): Promise<void>;
 
   /** 开始分片上传，返回可复用的写入句柄 */
   startUpload(filePath: string): Promise<UploadHandle>;
@@ -77,7 +84,8 @@ export interface DirectConnectionStrategy extends ConnectionStrategy {
   execStreaming(command: string, timeoutMs?: number): Promise<StreamingExecHandle>;
 
   /** 创建 SSH exec stdout 可读流，用于流式下载大文件 */
-  createReadStream(filePath: string, limitBytes?: number): Promise<{ stream: import("stream").Readable; cleanup: () => void }>;
+  /** limitBytes：只取前 N 字节（预览）；offset：从该字节起读到末尾（断点续传） */
+  createReadStream(filePath: string, opts?: { offset?: number; limitBytes?: number }): Promise<{ stream: import("stream").Readable; cleanup: () => void }>;
 }
 
 /**
@@ -92,8 +100,8 @@ export interface BastionSftpConnectionStrategy extends ConnectionStrategy {
   /** 单次连接内完成 stat + read（避免堡垒机 2 次 SSH 延迟） */
   statAndRead(filePath: string, offset: number, length: number): Promise<{ stat: FileStat; data: Buffer }>;
 
-  /** 创建 SFTP 可读流，用于流式下载大文件 */
-  createReadStream(filePath: string): Promise<import("stream").Readable>;
+  /** 创建 SFTP 可读流，用于流式下载大文件；opts.offset = 从该字节起读（断点续传） */
+  createReadStream(filePath: string, opts?: { offset?: number; limitBytes?: number }): Promise<import("stream").Readable>;
 }
 
 /** 类型守卫 */

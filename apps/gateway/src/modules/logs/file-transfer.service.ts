@@ -15,7 +15,9 @@ import { shellEscape } from "./remote-shell.js";
 
 const downloadSchema = z.object({
   serverId: z.string(),
-  filePath: z.string()
+  filePath: z.string(),
+  /* 断点续传（2026-11-07）：从该字节起读（0/缺省 = 从头） */
+  offset: z.number().int().min(0).optional()
 });
 
 const uploadSchema = z.object({
@@ -140,22 +142,32 @@ export class FileTransferService {
     const stat = await strategy.fileStat(request.filePath);
     const fileName = request.filePath.split("/").pop() || "download";
 
+    /* 断点续传（2026-11-07）：offset 语义 = 从该字节起读剩余部分。
+       远端文件比断点还小（被截断/替换）时拒绝续传，客户端回落到从头下载。 */
+    const offset = request.offset ?? 0;
+    if (offset > stat.size) {
+      throw new Error("断点与当前文件大小不符（远端文件可能已变化），请从头重新下载");
+    }
+    const remaining = stat.size - offset;
+    const streamOpts = { offset, limitBytes: 0 };
+
     if (isBastionSftpStrategy(strategy)) {
-      const stream = await strategy.createReadStream(request.filePath);
+      const stream = await strategy.createReadStream(request.filePath, streamOpts);
       /* cleanup 必须有：客户端取消时 res "close" 触发 cleanup 销毁 SFTP 流，
          否则流悬空持续占用连接，池的在途流计数也永远不会归零 */
-      return { stream, fileName, filePath: request.filePath, size: stat.size, cleanup: () => { try { stream.destroy(); } catch {} } };
+      return { stream, fileName, filePath: request.filePath, size: remaining, cleanup: () => { try { stream.destroy(); } catch {} } };
     }
 
     if (isDirectStrategy(strategy)) {
-      const { stream, cleanup } = await strategy.createReadStream(request.filePath, stat.size);
-      return { stream, fileName, filePath: request.filePath, size: stat.size, cleanup };
+      const { stream, cleanup } = await strategy.createReadStream(request.filePath, streamOpts);
+      return { stream, fileName, filePath: request.filePath, size: remaining, cleanup };
     }
 
     // Fallback: buffer download
     const buffer = await strategy.downloadFile(request.filePath);
-    const memoryStream = Readable.from(buffer);
-    return { stream: memoryStream, fileName, filePath: request.filePath, size: buffer.length, cleanup: () => { try { memoryStream.destroy(); } catch {} } };
+    const sliced = offset > 0 ? buffer.subarray(offset) : buffer;
+    const memoryStream = Readable.from(sliced);
+    return { stream: memoryStream, fileName, filePath: request.filePath, size: sliced.length, cleanup: () => { try { memoryStream.destroy(); } catch {} } };
   }
 
   async delete(rawRequest: unknown): Promise<{ filePath: string }> {
@@ -333,7 +345,8 @@ export class FileTransferService {
     serverId: string,
     filePath: string,
     localPath: string,
-    onProgress?: (transferred: number, chunkBytes: number, totalBytes: number) => void
+    onProgress?: (transferred: number, chunkBytes: number, totalBytes: number) => void,
+    hooks?: { onCancel?: (fn: () => void) => void }
   ): Promise<{ filePath: string; size: number }> {
     localUploadSchema.parse({ serverId, filePath, localPath });
     const strategy = this.strategyResolver.resolve(serverId);
@@ -343,7 +356,7 @@ export class FileTransferService {
     }
     await strategy.uploadLocalFile(filePath, localPath, (transferred, chunkBytes, totalBytes) => {
       onProgress?.(transferred, chunkBytes, totalBytes || fileStat.size);
-    });
+    }, hooks);
     return { filePath, size: fileStat.size };
   }
 

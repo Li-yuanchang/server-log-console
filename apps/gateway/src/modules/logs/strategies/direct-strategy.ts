@@ -267,11 +267,13 @@ export class DirectStrategy implements DirectConnectionStrategy {
     return Buffer.from(output.trim(), "base64");
   }
 
-  async createReadStream(filePath: string, limitBytes?: number): Promise<{ stream: import("stream").Readable; cleanup: () => void }> {
+  async createReadStream(filePath: string, opts?: { offset?: number; limitBytes?: number }): Promise<{ stream: import("stream").Readable; cleanup: () => void }> {
     const fileArg = shellEscape(filePath);
-    const command = limitBytes && limitBytes > 0
-      ? `head -c ${limitBytes} ${fileArg}`
-      : `cat ${fileArg}`;
+    const offset = Math.max(0, Math.floor(opts?.offset ?? 0));
+    const limitBytes = opts?.limitBytes ?? 0;
+    /* 断点续传：tail -c +N 从第 N 字节起输出（1 基） */
+    const base = offset > 0 ? `tail -c +${offset + 1} ${fileArg}` : `cat ${fileArg}`;
+    const command = limitBytes > 0 ? `${base} | head -c ${limitBytes}` : base;
     return this.sshExecutor.execRawStream(this.serverId, command, 600000);
   }
 
@@ -283,9 +285,15 @@ export class DirectStrategy implements DirectConnectionStrategy {
     await this.sshExecutor.execWithStdin(this.serverId, command, b64 + "\n", 120000);
   }
 
-  async uploadLocalFile(filePath: string, localPath: string, onProgress?: (transferred: number, chunkBytes: number, totalBytes: number) => void): Promise<void> {
+  async uploadLocalFile(
+    filePath: string,
+    localPath: string,
+    onProgress?: (transferred: number, chunkBytes: number, totalBytes: number) => void,
+    hooks?: { onCancel?: (fn: () => void) => void }
+  ): Promise<void> {
     const session = await this.sshExecutor.sftpOpenSession(this.serverId);
     try {
+      hooks?.onCancel?.(() => session.destroy());
       const parentDir = filePath.substring(0, filePath.lastIndexOf("/")) || "/";
       await session.ensureDir(parentDir);
       await session.fastPut(localPath, filePath, onProgress);

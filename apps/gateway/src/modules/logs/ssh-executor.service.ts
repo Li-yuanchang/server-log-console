@@ -22,6 +22,8 @@ export interface SftpSession {
   rename(oldPath: string, newPath: string): Promise<void>;
   ensureDir(dirPath: string): Promise<void>;
   close(): void;
+  /** 掐断底层 SFTP 通道（fastPut 无法中途 abort，取消传输只能销毁通道） */
+  destroy(): void;
 }
 
 export interface ManagedSshConnection {
@@ -899,9 +901,9 @@ export class SshExecutorService {
   /**
    * Create a readable stream for a remote file using the cached SFTP connection.
    */
-  async sftpCreateReadStream(serverId: string, filePath: string): Promise<import("ssh2").ReadStream> {
+  async sftpCreateReadStream(serverId: string, filePath: string, opts?: { start?: number }): Promise<import("ssh2").ReadStream> {
     const sftp = await this.acquireSftp(serverId);
-    const stream = sftp.createReadStream(filePath);
+    const stream = sftp.createReadStream(filePath, opts && opts.start ? { start: opts.start } : undefined);
     this.trackSftpStream(serverId, stream);
     return stream;
   }
@@ -1088,6 +1090,16 @@ export class SshExecutorService {
       },
       close() {
         // No-op: pool manages connection lifecycle
+      },
+      /* 传输取消钩子（2026-11-07）：fastPut 无法中途 abort，唯一手段是掐断
+         底层 SFTP 通道让传输 promise 以错误收场。连接池会把这条死连接踢掉，
+         后续传输自动开新会话（与「通道耗尽后强制踢池」同一套自愈机制）。 */
+      destroy() {
+        try {
+          sftp.end();
+        } catch {
+          /* 通道可能已死，忽略 */
+        }
       }
     };
   }
