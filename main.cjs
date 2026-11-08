@@ -872,6 +872,36 @@ ipcMain.handle("slc:win:is-maximized", (event) => {
   return Boolean(win && !win.isDestroyed() && win.isMaximized());
 });
 
+/* --- 关闭二次确认（2026-10-30 用户反馈「点关闭直接 kill，没有反应时间」）---
+   Windows 下拦截 close、转告渲染层弹确认框：自绘 ✕ 与 Alt+F4 统一走这一条路。
+   渲染层确认 → slc:win:confirm-close（destroy 绕过本拦截真正关窗，closed 仍会
+   触发 → window-all-closed → app.quit）；取消/Esc → slc:win:cancel-close
+   清挂起标记，下次关闭重新询问。isQuitting（托盘退出/更新安装/before-quit）
+   放行不拦。仅 win32 挂：mac 点关闭=藏托盘（本就有缓冲），Linux 系统默认。 */
+const closeConfirmPending = new Set();
+
+function attachCloseConfirm(win) {
+  if (process.platform !== "win32") return;
+  win.on("close", (event) => {
+    if (isQuitting) return;
+    if (win.webContents.isCrashed()) return;
+    event.preventDefault();
+    if (closeConfirmPending.has(win.webContents.id)) return;
+    closeConfirmPending.add(win.webContents.id);
+    win.webContents.send("slc:close-request");
+  });
+}
+
+ipcMain.handle("slc:win:confirm-close", (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  closeConfirmPending.delete(event.sender.id);
+  if (win && !win.isDestroyed()) win.destroy();
+});
+
+ipcMain.handle("slc:win:cancel-close", (event) => {
+  closeConfirmPending.delete(event.sender.id);
+});
+
 
 ipcMain.handle("save-file", async (_event, buffer, defaultName) => {
   const win = BrowserWindow.getFocusedWindow() || mainWindow;
@@ -1075,6 +1105,11 @@ ipcMain.handle("open-pip-window", (_event, config = {}) => {
   };
   nextPipWindow.on("maximize", pushPipMaximizeState);
   nextPipWindow.on("unmaximize", pushPipMaximizeState);
+  /* 终端/查看器/传输小窗在 Windows 同样自绘 ✕ → 关闭二次确认一起生效；
+     工具小窗（utility）是系统边框系统按钮，不拦。 */
+  if (!isUtilityMode) {
+    attachCloseConfirm(nextPipWindow);
+  }
   nextPipWindow.webContents.on("render-process-gone", (_event, details) => {
     probe(`pip render-process-gone ${pipMode} ${details.reason} ${details.exitCode}`);
     if (isQuitting || details.reason === "clean-exit") return;
@@ -1333,15 +1368,13 @@ function createWindow() {
        - Linux：保持默认边框（自绘标题栏暂不覆盖 Linux）。
        另：不再需要 titleBarOverlay / slc:set-titlebar-overlay / 让位带。
 
-       ⚠️ Windows 必须 frame:false，不能用 titleBarStyle:"hidden"（0.3.320 修复）：
-       用户反馈「三按钮点不了，只有最大化时能点」——完全没反应、连 hover 都没有，
-       说明事件根本没进网页。根因是 titleBarStyle:"hidden" 在 Windows 上并**不是**
-       真正无边框：它保留 WS_CAPTION 风格，非最大化时顶部那条 caption 区仍由系统
-       DWM 做 hit-test（用于拖拽/双击最大化/Snap Layouts），网页的
-       -webkit-app-region:no-drag 管不到系统层，所以按钮收不到 click。
-       最大化时系统移除 caption 边框 → 才恢复可点，这正好对上"只有最大化能点"。
-       之前几轮加 no-drag / pointer-events:auto / z-index:9999 全无效，正是因为
-       它们只能管网页层。frame:false 直接不创建 caption，问题根除。 */
+       ⚠️ 2026-10-30 更正：三按钮「点不动」的真正根因不是系统 caption。
+       Electron 32 里 titleBarStyle:"hidden" 同样会 set_has_frame(false)
+       （native_window_views.cc），且无边框窗口本来就会被补 WS_CAPTION 用于
+       缩放/贴边动画 —— 改 frame / titleBarStyle 都不会影响点击命中。
+       真正原因见 styles-sidebar-toolbar.css §Windows 自绘窗口按钮：
+       拖拽区按 DOM 顺序叠加，WindowControls 必须渲染在 <main> 末尾。
+       frame:false 保留（与 hidden 等价，意图更明确；macOS 分支不受影响）。 */
     ...(process.platform === "win32" ? { frame: false } : {}),
     /* Windows 走 frame:false，titleBarStyle 在此为冗余（frame:false 优先），
        保留 "hidden" 只为不改变 mac/Linux 分支语义。 */
@@ -1400,12 +1433,21 @@ function createWindow() {
   });
 
   mainWindow.on("close", (event) => {
-    if (isQuitting || process.platform !== "darwin") {
+    if (isQuitting) {
       return;
     }
+    if (process.platform === "darwin") {
+      event.preventDefault();
+      probe("createWindow close intercepted hide");
+      hideMainWindowToTray();
+      return;
+    }
+    /* Windows/Linux：关闭二次确认（自绘 ✕ / Alt+F4 统一），机制见 attachCloseConfirm 注释 */
+    if (mainWindow.webContents.isCrashed()) return;
     event.preventDefault();
-    probe("createWindow close intercepted hide");
-    hideMainWindowToTray();
+    if (closeConfirmPending.has(mainWindow.webContents.id)) return;
+    closeConfirmPending.add(mainWindow.webContents.id);
+    mainWindow.webContents.send("slc:close-request");
   });
 
   mainWindow.on("closed", () => {
