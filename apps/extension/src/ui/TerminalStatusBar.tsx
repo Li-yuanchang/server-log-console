@@ -91,7 +91,12 @@ export function TerminalStatusBar(props: TerminalStatusBarProps) {
     <div className="terminal-statusbar">
       {/* 左：状态点 + 连接状态（T1 连接 / T4 断线 / T8 空态） */}
       <span className="terminal-statusbar-state">
-        <span className={`terminal-statusbar-dot terminal-statusbar-dot-${state}`} />
+        {/* 状态点只在「需要用户留意」的状态出现（2026-11-09 用户要求去掉终端左下角绿点）：
+            已连接是正常态，页签条上的绿点已经表达存活，底条左侧在没有文案时再单独放一颗
+            绿点只是重复装饰，看起来像个孤立的脏点。断线/保活/空闲仍需这枚点做状态提示。 */}
+        {state !== "connected" ? (
+          <span className={`terminal-statusbar-dot terminal-statusbar-dot-${state}`} />
+        ) : null}
         {/* 已连接态不再展示主机/时长（2026-11-08）：监控卡与工作区页签已有同信息，
             底条左段仅在 断开/保留/空闲 等需要用户行动的状态下出现 */}
         {state === "disconnected" ? (
@@ -143,8 +148,10 @@ export function TerminalStatusBar(props: TerminalStatusBarProps) {
           <span className="terminal-statusbar-idle">未连接 · 连接后显示主机与资源信息</span>
         ) : null}
 
-        {/* 功能提示跟随状态内容（2026-11-08 安置：已连接 = 绿点存活指示 + 提示组） */}
-        <span className="terminal-statusbar-sep" />
+        {/* 功能提示组（UTF-8 / ⌘R 历史 / ⌘F 查找）。
+            前置竖线只在它前面确实有状态文案时才画：已连接态左段已清空，
+            此时再留一条竖线就是贴在左边缘的一根孤立细线。 */}
+        {state !== "connected" ? <span className="terminal-statusbar-sep" /> : null}
         <span className="terminal-statusbar-mono">UTF-8</span>
         <span className="terminal-statusbar-sep" />
         <span className="terminal-statusbar-hint">{formatKeyHint("⌘R")} 历史</span>

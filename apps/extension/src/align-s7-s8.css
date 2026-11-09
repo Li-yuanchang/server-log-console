@@ -230,7 +230,8 @@
   font: inherit;
   font-size: var(--fs-2xs);
   border: 1px solid var(--line-strong);
-  border-radius: var(--r-s, 6px);
+  /* 去掉兜底值（THEME-SPEC §10.4：令牌缺失应暴露而非静默回退） */
+  border-radius: var(--r-s);
   background: var(--panel);
   color: var(--ink);
   outline: none;

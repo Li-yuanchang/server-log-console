@@ -489,7 +489,7 @@
   height: 28px;
   padding: 0 8px;
   border: 1px solid #dde2e9;
-  border-radius: 6px;
+  border-radius: var(--r-s);
   background: var(--panel);
   color: var(--ink);
 }

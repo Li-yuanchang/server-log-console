@@ -18,16 +18,46 @@
          8 套主题的 bg 色表与 useUiTheme THEME_PRESETS 一致；toneMode=system 时
          读 prefers-color-scheme 在同族内取变体。 */
       try{
-        var __slcBg={'geist':'#fafafa','carbon':'#0a0a0a','steel':'#f6f8fa','slate':'#0b1220','sand':'#faf9f7','espresso':'#1c1917','cal':'#ffffff','ink':'#09090b','sage':'#f5f6f2','graphite':'#171a19'};
+        /* 主题色表（与 useUiTheme.ts 的 THEME_PRESETS 一一对应：
+           [bg, panel, muted, line, ink, ink-soft, ink-muted, accent]）。
+           启动页要在 React 挂载前就跑起来，此时拿不到主题模块，只能在此镜像一份；
+           改主题配色时这张表必须同步，否则启动页与应用首屏会有一次跳色。 */
+        var __slcSplash={
+          geist:['#f7f7f4','#fcfcf8','#f0f0ec','#e2e3da','#1c1e1a','#5f635c','#8b8f86','#3b6b5a'],
+          carbon:['#121411','#191c17','#1f231d','#2e332a','#eceee7','#a8ac9f','#7c8172','#5fa88a'],
+          steel:['#f5f7f7','#fbfcfc','#eef1f1','#dfe5e7','#1b232b','#57646d','#7f8d96','#3f6c86'],
+          slate:['#101820','#16202a','#121b23','#243140','#e0e7ec','#8d9aa4','#6b7883','#5b93b8'],
+          sand:['#f8f6f1','#fbf9f3','#f1ede5','#e5dfd2','#211d18','#665e52','#918777','#7d5a22'],
+          espresso:['#1e1a16','#282320','#231f19','#363029','#f2efe9','#b5ada2','#847a6f','#c98a3f'],
+          cal:['#fbfbf9','#fdfdfb','#f4f4f1','#e4e4df','#1c1c1a','#616159','#8b8b82','#2a2a26'],
+          ink:['#0d0d0c','#1a1a18','#131312','#282825','#faf9f5','#a3a29b','#72716a','#f0efe9'],
+          sage:['#f5f6f2','#fbfbf7','#eef1e8','#d9ded0','#27302a','#747b70','#92988d','#426b57'],
+          graphite:['#171a19','#202521','#29312b','#39433b','#e7ebe6','#a7b0a8','#7f8981','#73b59a']
+        };
         var __slcFam={geist:'neutral',carbon:'neutral',steel:'cool',slate:'cool',sand:'warm',espresso:'warm',cal:'mono',ink:'mono',sage:'sage',graphite:'sage'};
         var __slcPair={neutral:['geist','carbon'],cool:['steel','slate'],warm:['sand','espresso'],mono:['cal','ink'],sage:['sage','graphite']};
         var __slcPreset=localStorage.getItem('ui-theme-preset')||'geist';
-        if(!__slcBg[__slcPreset])__slcPreset='geist';
+        if(!__slcSplash[__slcPreset])__slcPreset='geist';
         var __slcTone=localStorage.getItem('ui-tone-mode')||'system';
         var __slcDark=__slcTone==='dark'||(__slcTone==='system'&&window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches);
         var __slcId=__slcTone==='light'?__slcPair[__slcFam[__slcPreset]][0]:__slcTone==='dark'?__slcPair[__slcFam[__slcPreset]][1]:(__slcDark?__slcPair[__slcFam[__slcPreset]][1]:__slcPair[__slcFam[__slcPreset]][0]);
         document.documentElement.dataset.skTheme=__slcId;
-        document.documentElement.style.background=__slcBg[__slcId];
+        var __s=__slcSplash[__slcId]||__slcSplash.geist;
+        var __st=document.documentElement.style;
+        __st.background=__s[0];
+        /* 2026-11-09 修复「启动页固定白底、不跟主题走」：
+           此前 #app-loading 在自己的元素上又声明了一套硬编码 --sk-*，
+           而自定义属性「元素自身声明」优先于「从父级继承」——父级算好的
+           主题值被整个挡掉，启动页恒为浅色。现改为在这里把主题值写到
+           <html> 上，#app-loading 只继承、不再自声明默认值。 */
+        __st.setProperty('--sk-bg',__s[0]);
+        __st.setProperty('--sk-panel',__s[1]);
+        __st.setProperty('--sk-muted',__s[2]);
+        __st.setProperty('--sk-line',__s[3]);
+        __st.setProperty('--sk-ink',__s[4]);
+        __st.setProperty('--sk-ink-soft',__s[5]);
+        __st.setProperty('--sk-ink-muted',__s[6]);
+        __st.setProperty('--sk-accent',__s[7]);
       }catch(e){}
     </script>
     <style>
@@ -36,22 +66,23 @@
       /* 启动页（2026-10-04 重设计，原型 docs/prototypes/loading-splash-v1.html）：
          品牌居中 splash，与宽度无关 —— 旧版模拟「侧栏 + 工具栏」的骨架布局在
          窄容器（sidepanel 单列）下是幻觉布局，已被移除。
-         品牌图形 = icon.svg（与应用图标同源）；文案/几何走主题令牌。 */
+         品牌图形 = icon.svg（与应用图标同源）；文案/几何走主题令牌。
+
+         ⚠️ 这里**不声明** --sk-* 的默认值（2026-11-09）。原因：自定义属性由
+         「最近的自身声明」决定，若在此写死一套浅色默认值，就会挡住 <html> 上
+         由上方脚本按主题写入的值，启动页永远停在白底（用户反馈「初次启动白屏，
+         没跟主题走」）。默认值下沉到 <html>：#app-loading 只继承。
+         mist / paper 两套皮肤已删除 —— 它们靠 html[data-sk-surface] 触发，
+         而该属性全项目从未被赋值，属死代码。 */
+      html{
+        --sk-bg:#f7f7f4;--sk-panel:#fcfcf8;--sk-muted:#f0f0ec;--sk-line:#e2e3da;
+        --sk-ink:#1c1e1a;--sk-ink-muted:#8b8f86;--sk-ink-soft:#5f635c;--sk-accent:#3b6b5a;
+      }
       #app-loading{
-        --sk-bg:#fafafa;--sk-panel:#ffffff;--sk-muted:#f2f2f2;--sk-line:#eaeaea;
-        --sk-ink:#171717;--sk-ink-muted:#8f8f8f;--sk-ink-soft:#666666;--sk-accent:#0070f3;
         position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;
         background:var(--sk-bg);color:var(--sk-ink-muted);
         font-family:-apple-system,BlinkMacSystemFont,'Geist Sans','PingFang SC',sans-serif;
         transition:opacity .25s ease;
-      }
-      html[data-sk-surface="mist"] #app-loading{
-        --sk-bg:#eef5f7;--sk-panel:rgba(248,252,253,.94);--sk-muted:#e7eff3;
-        --sk-line:rgba(49,95,141,.16);--sk-ink-soft:#4f6a80;--sk-ink-muted:#7d95a8;
-      }
-      html[data-sk-surface="paper"] #app-loading{
-        --sk-bg:#f4efe4;--sk-panel:rgba(255,252,244,.94);--sk-muted:#ece3d2;
-        --sk-line:rgba(120,88,48,.16);--sk-ink-soft:#6d5a3d;--sk-ink-muted:#9c8a6b;
       }
       .splash{display:flex;flex-direction:column;align-items:center;text-align:center;animation:splash-in .45s cubic-bezier(.2,.7,.3,1)}
       @keyframes splash-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}

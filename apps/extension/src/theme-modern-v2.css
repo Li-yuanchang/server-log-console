@@ -137,7 +137,9 @@
   padding: 0 10px;
   font-size: var(--fs-sm);
   border: 1px solid var(--line);
-  border-radius: var(--v2-radius-s);
+  /* 统一引用 --r-s（2026-11-09）：--v2-radius-s 与 --r-s 值相同但属两套变量，
+     多一套别名就多一个漂移点，输入类控件一律以 --r-s 为准。 */
+  border-radius: var(--r-s);
   background: var(--panel);
   color: var(--ink);
   box-shadow: none;
@@ -296,9 +298,11 @@
 .theme-modern .sidebar-panel input[placeholder*="名称"] {
   height: 28px;
   font-size: var(--fs-xs);
-  /* 2026-10-21 对齐 VRC：圆角 7px（原 --v2-radius-s=6px）。本规则后加载，
-     会覆盖 theme-modern.css 里 pane-section input 的 radius，故在此同步。 */
-  border-radius: 6px;
+  /* 圆角 --r-s = 6px（2026-11-09 搜索框统一后改为引用 token）。
+     原为字面值 6px —— 本规则后加载会覆盖基础 .command-input 的半径，
+     故必须在此显式声明；改成 token 后与全站搜索框同源，不再各写各的。
+     （旧注释曾写「对齐 VRC：圆角 7px」但代码是 6px，注释与实现漂移，一并更正。） */
+  border-radius: var(--r-s);
 }
 
 /* 服务器行（原型 .srow：40px，点+名+host+端口）
@@ -485,7 +489,12 @@
   gap: 5px;
   border: none !important;
   border-bottom: 2px solid transparent !important;
-  border-radius: 0 !important;
+  /* 圆角对齐 UI 规范 --r-s = 6px（用户反馈 2026-11-09：hover 是方角、current 是圆角，
+     同一条页签在 hover→选中时「方角突变圆角」）。
+     此前这里写死 0（页签曾被设计成下划线式，方角合理），而选中态在
+     align-selected.css 给了 6px 的 accent-soft 药丸底 —— 两处不对称就是那个跳变的根因。
+     现两边同取 6px：形状恒定，只有颜色在 hover(中性灰) / 选中(墨绿淡底) 之间过渡。 */
+  border-radius: var(--r-s) !important;
   background: transparent !important;
   box-shadow: none !important;
 }
@@ -501,6 +510,8 @@
    保留 border-bottom 宽度（仅颜色透明），34px 盒高不变。 */
 .theme-modern .workspace-session-tab:not(.workspace-session-tab-active):hover {
   border-bottom-color: transparent !important;
+  /* hover 底与选中底同圆角（见上方 border-radius 注释）：只差颜色深浅 */
+  border-radius: var(--r-s) !important;
   background: var(--panel-muted) !important;
 }
 .theme-modern .workspace-session-tab-active {
@@ -619,10 +630,11 @@
   /* 2026-10-28 用户要求去掉 tab 切换边框：容器不再有描边，
      分段边界由内部按钮的 hover/active 背景承担。 */
   border: 0;
-  /* 圆角统一 4px（2026-10-25 用户要求「按钮圆角统一改为 4px，别太大」）。
-     原 8px（--v2-radius-s 在别处被覆盖）/10px 来回打架，现与内部按钮同值，
-     内外圈同心不出「方角里套圆角」的错位感。 */
-  border-radius: 4px;
+  /* 圆角对齐 UI 规范刻度 --r-s = 6px（用户反馈 2026-11-09「tab 圆角不统一」）。
+     2026-10-25「按钮统一 4px」针对的是 .ghost-button 这类动作按钮；分段/页签属于
+     「容器 + 内部块」的复合控件，应与终端页签(6px)、侧栏分段(6px)、
+     服务器页签选中态(6px) 同档，否则同一个界面里 tab 有三种圆角。 */
+  border-radius: var(--r-s);
   /* 2026-10-28 用户要求：**只去边框、保留背景色**。
      原 --panel-muted 是分段控件的浅灰底，标识「这是一组可切换的
      选项」——去掉边框后这层底色仍需保留，否则控件会完全隐形。 */
@@ -640,6 +652,8 @@
 .theme-modern .toolbar-view-switch-btn,
 .theme-modern .toolbar-view-switch-btn + .toolbar-view-switch-btn {
   border: none !important;
+  /* 同心圆角 = 容器(var(--r-s)=6px) − 容器内边距(2px) = 4px。
+     这是 iOS/VRC 分段控件的标准做法：内外圈圆心重合，才不会「方角里套圆角」。 */
   border-radius: 4px !important;
   background: transparent !important;
   box-shadow: none !important;

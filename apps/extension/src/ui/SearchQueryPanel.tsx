@@ -1,5 +1,5 @@
 import { useRef, useState, type RefObject } from "react";
-import { Search } from "lucide-react";
+import { Search, Square } from "lucide-react";
 import { Drawer } from "./Drawer.js";
 import type { SearchSettingsState } from "./utils.js";
 import { readSearchHistory } from "./storage.js";
@@ -108,8 +108,14 @@ export function SearchQueryPanel(props: Props) {
             />
             {/* 右端附属控件：仅在有内容时显示「清空 ✕」（固定贴右端）。
                 空态不再放「/」历史提示按钮 —— 它与占位文字抢位、把 placeholder 压住（用户反馈，
-                DevTools 确认被遮挡元素即 button.keyword-input-kbd）。检索历史仍可在聚焦时自动展开（onFocus）。 */}
-            {props.settings.keywordInput ? (
+                DevTools 确认被遮挡元素即 button.keyword-input-kbd）。检索历史仍可在聚焦时自动展开（onFocus）。
+
+                检索期间隐藏（2026-11-09 用户反馈「搜索过程中为什么还有 × 按钮」）：
+                清空只是把输入框置空，**不会停止正在跑的检索** —— 结果是进度仍在走
+                （如 3.0GB/5.8GB）、而该批结果对应的关键字已从框中消失，用户看不出
+                这批结果查的是什么，也无法从界面推断清空是否取消了检索。
+                检索期间右端的动作语义只有一个：停止。故此时不渲染清空。 */}
+            {props.settings.keywordInput && !props.searching ? (
               <button
                 type="button"
                 className="keyword-input-clear"
@@ -151,13 +157,19 @@ export function SearchQueryPanel(props: Props) {
             <>
               <span className="search-run-progress">{props.searchProgressLabel || "检索中"}</span>
               {props.onStopSearch ? (
+                /* 停止检索：图标按钮（2026-11-09 用户要求「停止改为 icon」）。
+                   与批量录制 / 多窗格实时视墙的「停止全部」同款 Square 图标与规格
+                   （MultiNodeLiveWall.tsx / MultiLivePanel.tsx 均为 size=13、strokeWidth 1.8），
+                   全应用「停止」语义只用一个图形，不再文字/图标混用。
+                   文字标签通过 title + aria-label 保留，功能可发现性不降。 */
                 <button
                   type="button"
-                  className="ghost-button slim-button search-run-stop"
+                  className="ghost-button icon-button search-run-stop"
                   onClick={props.onStopSearch}
                   title="停止本次检索，释放工作区切换"
+                  aria-label="停止本次检索"
                 >
-                  停止
+                  <Square size={13} strokeWidth={1.8} />
                 </button>
               ) : null}
             </>

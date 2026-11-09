@@ -2301,7 +2301,8 @@ button.class-outline-row {
   min-height: 32px;
   padding: 0 10px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  /* 圆角 --r-s = 6px（2026-11-09 全站搜索框统一；原 8px 与本组其它搜索框不一致） */
+  border-radius: var(--r-s);
   background: var(--panel-strong);
 }
 

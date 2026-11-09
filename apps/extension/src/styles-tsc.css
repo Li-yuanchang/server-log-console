@@ -1172,7 +1172,9 @@
 .tai-input {
   height: 28px;
   border: 1px solid rgba(59, 130, 246, 0.14);
-  border-radius: 5px;
+  /* 圆角 --r-s = 6px（2026-11-09 输入框统一；原 5px 是仅存的一档例外）。
+     --r-s 定义在 :root，经典主题同样取得到值。 */
+  border-radius: var(--r-s);
   background: rgba(15, 23, 42, 0.22);
   color: rgba(248, 250, 252, 0.9);
   font-size: var(--fs-xs);

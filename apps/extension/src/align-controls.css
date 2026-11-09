@@ -212,7 +212,10 @@
   padding: 2px;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 4px;
+  /* 圆角对齐 UI 规范刻度 --r-s = 6px（2026-11-09 用户决定：全站搜索框统一 6px）。
+     原 4px 是 2026-10-25「按钮统一 4px」那批的产物；搜索框属于输入类控件，
+     应与 .command-input / 各抽屉搜索框同档，而不是跟动作按钮同档。 */
+  border-radius: var(--r-s);
 }
 .theme-modern .toolbar-commandbar .toolbar-search-row:focus-within {
   border-color: var(--accent);
@@ -226,17 +229,39 @@
   background: transparent !important;
   box-shadow: none;
 }
-/* 「检索」嵌进组内：26px 高、2px 同心圆角（!important 压 v2 §1 的 4px 基础规则） */
+/* 「检索」嵌进组内：26px 高、同心圆角（!important 压 v2 §1 的 4px 基础规则）。
+   同心值 = 外层 var(--r-s) 6px − 内缩 3px（1px 边框 + 2px 内衬）= 3px，
+   见 theme-modern.css 的 --r-s-inset 定义。 */
 .theme-modern .toolbar-commandbar .toolbar-search-row .slim-button {
   height: 26px;
   min-height: 26px;
   max-height: 26px;
 }
 .theme-modern .toolbar-commandbar .toolbar-search-row button.ghost-button.search-run-button {
-  border-radius: 2px !important;
+  /* 同心圆角 = 外层 6px − 内缩 3px（原写死 2px，按旧外层 4px 推出来的） */
+  border-radius: var(--r-s-inset) !important;
 }
 .theme-modern .toolbar-commandbar .toolbar-search-row button.search-run-button:hover:not(:disabled) {
   box-shadow: none;
+}
+
+/* 检索进行中的「停止」图标钮（2026-11-09）。它是组内成员，必须与输入框同高同圆角：
+   .icon-button 默认 28×28 + --r-m(8px)，放进 26px 高的组里会高出 2px、
+   圆角也比同组的同心值大一圈，故在此收口到 26 与同心圆角。 */
+.theme-modern .toolbar-commandbar .toolbar-search-row .ghost-button.icon-button.search-run-stop {
+  width: 26px;
+  height: 26px;
+  min-width: 26px;
+  min-height: 26px;
+  max-height: 26px;
+  padding: 0;
+  border-radius: var(--r-s-inset) !important;
+}
+/* 停止是破坏性动作：hover 用红色语义底，与「清空」等中性按钮区分开
+   （与批量录制面板的 multi-icon-btn-danger 同一语义取向）。 */
+.theme-modern .toolbar-commandbar .toolbar-search-row .search-run-stop:hover:not(:disabled) {
+  background: var(--red-soft);
+  color: var(--red);
 }
 
 /* ---------- 7. 结果页签内部按钮（2026-10-30 用户反馈「hover 页签边框就没了」） ----------

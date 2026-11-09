@@ -87,8 +87,10 @@
   padding: 0 10px 0 28px;
   font-size: var(--fs-2xs);
   border: 1px solid var(--line);
-  /* 圆角统一 4px（2026-10-25 全站收敛）：与同行箭头按钮 / 跳到尾部 同半径 */
-  border-radius: 4px;
+  /* 圆角对齐 UI 规范 --r-s = 6px（2026-11-09 用户决定「搜索框统一 6px」）。
+     原 4px 属 2026-10-25「按钮统一 4px」那批；过滤框是输入类控件，与
+     .command-input / 文件过滤框 / 抽屉搜索框同档更合理。 */
+  border-radius: var(--r-s);
   background: var(--panel);
   color: var(--ink);
   outline: none;
@@ -177,8 +179,9 @@
   padding: 0 10px;
   font-size: var(--fs-2xs);
   border: 1px solid var(--line);
-  /* 圆角统一 4px（2026-10-25 用户要求）。原 var(--v2-radius-s, 6px) = 6px。 */
-  border-radius: 4px;
+  /* 圆角对齐 UI 规范 --r-s = 6px（2026-11-09 搜索框统一）。
+     原 4px（2026-10-25），当时与按钮同批收敛；过滤框是输入类控件。 */
+  border-radius: var(--r-s);
   background: var(--panel);
   color: var(--ink);
   outline: none;

@@ -21,6 +21,14 @@
   --r-s: 6px;
   --r-m: 8px;
   --r-l: 10px;
+  /* 同心圆角（2026-11-09）：嵌在「有内边距的容器」里的子控件用这个，
+     而不是自己猜一个数字。公式 = 外圆角 − 内缩距离，同心才不会出现
+     「方角里套圆角」的错位。
+     当前用于检索组：外层 --r-s(6px)，容器 1px 边框 + 2px 内衬 = 内缩 3px
+     → 内部控件 3px。
+     ⚠️ 不要写成 var(--r-s)/2：那只是本组内缩恰好为 3px 时的巧合结果，
+     一旦容器的边框/内衬改了，除以 2 就不再同心，而减法永远成立。 */
+  --r-s-inset: calc(var(--r-s) - 3px);
 }
 
 /* ============================================================
@@ -1048,11 +1056,13 @@
      prototype.html 第 57 / 405 行），此前误做成灰底无边框 r8 高 30。
      2026-10-25 用户要求：整行控件统一 32px（tab 容器 38 = 2px padding + 1px 边框
      ×2 + 32px 内容；主搜索框、过滤框、图标按钮同为 32px 内容高），故此处 28 → 32。
-     圆角同步统一 4px（原 6px，用户要求按钮圆角统一 4px、别太大）。 */
+     圆角 2026-11-09 回归规范刻度 --r-s = 6px（用户决定「搜索框统一 6px」）。
+     注：在主界面的检索组里，本输入框是组内「透明的底」，实际可见的外圈圆角
+     由 .toolbar-search-row 承担；此值服务于它独立出现的场景（PiP / 窄窗）。 */
   height: 32px;
   border: 1px solid var(--line) !important;
   background: var(--panel) !important;
-  border-radius: 4px !important;
+  border-radius: var(--r-s) !important;
 }
 
 .theme-modern .command-input-keyword:focus {
@@ -2189,7 +2199,8 @@
   height: 32px;
   padding: 0 12px;
   border: none;
-  border-radius: 8px;
+  /* 圆角 --r-s = 6px（2026-11-09 搜索框统一；原 8px） */
+  border-radius: var(--r-s);
   background: var(--panel-muted);
   font-size: var(--fs-xs);
   color: var(--ink);
@@ -3548,6 +3559,15 @@ body.is-resizing-tree .theme-modern .browser-resizer::after {
      正文留白保留），按钮条用下面两条规则负 margin 抵消以满宽到边 */
   --viewer-pad-x: 16px;
   padding: 0 var(--viewer-pad-x) 8px;
+  /* 底色（2026-11-09 用户反馈「日志输出区背景色和 body 背景色有色差」）：
+     本元素的 padding 是「挖」出来的留白，而 padding 区不画自己的背景，
+     会一路透到最外层 .app-shell 的 --bg（比 --panel 暗一档）。
+     日志正文 .console-block 却是 --panel —— 于是左右各出现一条 16px 的
+     深色竖沟、底部一条 8px 的深色横沟，看着像「内容被框在另一个底上」。
+     补上 --panel 后，留白与正文同色，整块日志区是一个平面。
+     （align-log-light.css 已把内嵌视图的 --log-viewer-background 定为
+     var(--panel)，此处取同一 token，保证两者永远同色。） */
+  background: var(--panel);
 }
 
 /* 文件预览按钮条满宽（用户反馈 2026-10-05：bar 左右两端没到头）：
@@ -4569,7 +4589,7 @@ body.is-electron .settings-exclusive-head input {
   color: var(--ink);
   background: var(--panel-strong);
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--r-s);
   outline: none;
 }
 
@@ -6195,7 +6215,8 @@ button.settings-pref-row + button.settings-pref-row,
   font: inherit;
   font-size: var(--fs-sm);
   border: 1px solid var(--line);
-  border-radius: 8px;
+  /* 圆角 --r-s = 6px（2026-11-09 搜索框统一；原 8px 与其他搜索框不一致） */
+  border-radius: var(--r-s);
   background: var(--panel);
   color: var(--ink);
   outline: none;
