@@ -9,7 +9,7 @@ export type TerminalWindowManagerAPI = {
   ensureTerminalSessionId: () => string;
   openTerminalView: (options?: { auto?: boolean }) => void;
   closeTerminalOverlay: () => void;
-  toggleTerminalOverlay: (nextOverlay: "shortcuts" | "ai") => void;
+  toggleTerminalOverlay: (nextOverlay: "ai") => void;
   restoreEmbeddedTerminalWindow: (targetSessionId?: string) => Promise<void>;
   reconcileDetachedTerminalOwnership: (nextSessionId: string) => Promise<void>;
   toggleTerminalPanel: () => void;
@@ -27,8 +27,8 @@ export type TerminalWindowManagerParams = {
   setTerminalDetached: (detached: boolean) => void;
   terminalPanelOpen: boolean;
   setTerminalPanelOpen: (open: boolean) => void;
-  terminalOverlay: "none" | "shortcuts" | "ai";
-  setTerminalOverlay: (overlay: "none" | "shortcuts" | "ai") => void;
+  terminalOverlay: "none" | "ai";
+  setTerminalOverlay: (overlay: "none" | "ai") => void;
   preserveTerminalOnInactive: boolean;
   setPreserveTerminalOnInactive: (preserve: boolean) => void;
 
@@ -158,7 +158,7 @@ export function useTerminalWindowManager(params: TerminalWindowManagerParams): T
     setTerminalOverlay("none");
   }
 
-  function toggleTerminalOverlay(nextOverlay: "shortcuts" | "ai") {
+  function toggleTerminalOverlay(nextOverlay: "ai") {
     setTerminalOverlay(terminalOverlay === nextOverlay ? "none" : nextOverlay);
   }
 

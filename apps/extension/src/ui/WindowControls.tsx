@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
 import { Copy, Minus, Square, X } from "lucide-react";
+import { useWindowMaximized } from "./useWindowMaximized.js";
 
 /**
  * Windows 自绘窗口控制按钮（2026-10-24 方案 B）。
@@ -14,21 +14,7 @@ import { Copy, Minus, Square, X } from "lucide-react";
  * PiP 小窗仍走系统原生标题栏。
  */
 export function WindowControls() {
-  const [maximized, setMaximized] = useState(false);
-
-  useEffect(() => {
-    const api = (window as any).electronAPI;
-    if (!api) return;
-    let disposed = false;
-    void api.isWindowMaximized?.().then((value: boolean) => {
-      if (!disposed) setMaximized(Boolean(value));
-    });
-    const off = api.onWindowMaximizeChanged?.((value: boolean) => setMaximized(Boolean(value)));
-    return () => {
-      disposed = true;
-      off?.();
-    };
-  }, []);
+  const maximized = useWindowMaximized();
 
   return (
     <div className="win-window-controls">

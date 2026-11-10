@@ -119,7 +119,24 @@ function useTerminalDomController(onExecute: (command: string) => void): Termina
         /* 命令回显行与末尾提示符不作为输出 */
         if (lines.length > 0 && lines[0].includes(command)) lines.shift();
         while (lines.length > 0 && !lines[lines.length - 1].trim()) lines.pop();
-        if (lines.length > 0 && /(\]#|\$|%)\s*$/u.test(lines[lines.length - 1].trim())) lines.pop();
+        /* 末尾提示符剔除（2026-11-10 修正）：
+           原正则 /(\]#|\$|%)\s*$/ 只要行尾是 $ / % / ]# 就删，
+           会把「usage: 100%」「total price 5$」这类正常输出的最后一行吃掉。
+           现改为**只认提示符形态**：行首必须是 user@host（可带 :path）或
+           常见 shell 提示符开头，且整行长度较短。这样普通输出不会被误删，
+           而 root@host:~# / [root@iZ ~]# / user@host:/app$ 都能正确识别。 */
+        if (lines.length > 0) {
+          const lastLine = lines[lines.length - 1].trim();
+          const promptLike =
+            lastLine.length <= 100
+            && (
+              /^\[?[\w.-]+@[\w.-]+[^\s]*[#$%>]$/u.test(lastLine)          /* user@host:~# / [root@iZ ~]# */
+              || /^\[?[^\]]*[\w.-]+@[\w.-]+[^\]]*\][#$]$/u.test(lastLine)  /* [root@host ~]# 变体 */
+              || /^(?:bash|sh|zsh)-[\d.]+[#$]$/u.test(lastLine)            /* bash-4.4# */
+              || /^[A-Za-z]:\\[^>]*>$/u.test(lastLine)                      /* Windows C:\path> */
+            );
+          if (promptLike) lines.pop();
+        }
         resolve({ output: lines.join("\n"), timedOut: Date.now() - startedAt >= 15000 });
       }, 250);
     }),
@@ -135,17 +152,6 @@ interface TerminalAIProps {
   /* 把命令写入激活终端（工作台既有管道） */
   onExecute: (command: string) => void;
   onClose: () => void;
-}
-
-/* 把具体模型归一为模型族标签（头部 chip 用） */
-function modelChipLabel(model: string): string {
-  const normalized = (model || "").trim();
-  if (!normalized) return "GLM-4";
-  if (/glm/i.test(normalized)) return "GLM-4";
-  if (/deepseek/i.test(normalized)) return "DeepSeek";
-  if (/qwen/i.test(normalized)) return "Qwen";
-  if (/gpt/i.test(normalized)) return "GPT";
-  return normalized;
 }
 
 /* 输入框下方快捷追问 chips */
@@ -290,7 +296,9 @@ function CommandCard(props: {
             ) : (
               <span className="tai-cmd-captured">
                 <CircleCheck size={12} />
-                {phase.timedOut ? "输出等待超时，已捕获部分内容" : `已捕获 ${phase.output.split("\n").filter((l) => l.trim()).length} 行输出，已附加到上下文`}
+                {phase.timedOut
+                  ? `输出不完整（15 秒未结束，已捕获 ${phase.output.split("\n").filter((l) => l.trim()).length} 行）`
+                  : `已捕获 ${phase.output.split("\n").filter((l) => l.trim()).length} 行输出，已附加到上下文`}
               </span>
             )}
             {!props.analyzing ? (
@@ -617,6 +625,17 @@ export function TerminalAI(props: TerminalAIProps) {
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    /* IME 组合输入保护（2026-11-10 修复）：
+       中文输入法用 Enter 确认候选词时，keydown 同样是 Enter，
+       原实现会直接发送，导致「打一半就被发出去」。
+       判断依据与同项目 SearchQueryPanel.tsx:99 一致：
+         · nativeEvent.isComposing：组合中（标准属性）
+         · keyCode === 229：部分旧版 IME / Windows 输入法在组合期返回 229
+       任一命中即视为输入法在用 Enter，交还给输入法处理。 */
+    const composing =
+      (e.nativeEvent as KeyboardEvent).isComposing
+      || (e.nativeEvent as KeyboardEvent).keyCode === 229;
+    if (composing) return;
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       void handleSend();
@@ -655,9 +674,8 @@ export function TerminalAI(props: TerminalAIProps) {
           {!configured && <span className="tai-badge-unconfigured">未配置</span>}
         </div>
         <div className="tai-header-actions">
-          <span className="chip tai-model-chip" title={`${activeModel || "未选择模型"} · 快捷键 ${formatKeyHint("⌘J")}`}>
-            {activeProvider ? modelChipLabel(activeModel) : "未配置"}
-          </span>
+          {/* 顶部模型 tag 已移除（2026-11-10）：底部输入框内已有模型选择，
+              顶部重复显示会让人以为是两个不同的东西。 */}
           <button
             type="button"
             className="tai-hdr-btn tai-hdr-btn-chat"

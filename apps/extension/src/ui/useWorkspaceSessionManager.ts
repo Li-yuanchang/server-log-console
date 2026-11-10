@@ -76,7 +76,7 @@ export type WorkspaceSessionSetters = {
   setActiveTerminalTabId: (v: string) => void;
   setTerminalDetached: (v: boolean) => void;
   setTerminalPanelOpen: (v: boolean) => void;
-  setTerminalOverlay: (v: "none" | "shortcuts" | "ai") => void;
+  setTerminalOverlay: (v: "none" | "ai") => void;
   setPreserveTerminalOnInactive: (v: boolean) => void;
   // Recording/live follow
   setRecordingSession: (v: WorkspaceSessionState["recordingSession"]) => void;
@@ -140,7 +140,7 @@ export type WorkspaceSessionManagerParams = {
   showTransferHistory: boolean;
   terminalPanelOpen: boolean;
   terminalDetached: boolean;
-  terminalOverlay: "none" | "shortcuts" | "ai";
+  terminalOverlay: "none" | "ai";
   terminalSessionId: string;
   terminalTabs: WorkspaceSessionState["terminalTabs"];
   activeTerminalTabId: string;

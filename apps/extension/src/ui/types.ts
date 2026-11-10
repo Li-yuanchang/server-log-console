@@ -82,7 +82,7 @@ export type WorkspaceSessionState = {
   showTransferHistory: boolean;
   terminalPanelOpen: boolean;
   terminalDetached: boolean;
-  terminalOverlay: "none" | "shortcuts" | "ai";
+  terminalOverlay: "none" | "ai";
   /** 旧单会话字段：仅作迁移来源与弹窗协议（openPipWindow）兼容保留，新代码读写 terminalTabs */
   terminalSessionId: string;
   /** 终端内多标签组（每工作区独立，随上层工作区整套切换）；分屏布局不持久化（内存态） */

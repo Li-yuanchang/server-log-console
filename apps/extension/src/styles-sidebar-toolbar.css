@@ -1189,3 +1189,52 @@ body.is-win32 .theme-modern.pip-standalone .terminal-panel-bar-standalone {
 .smc-foot-link:hover { color: var(--accent); background: var(--accent-soft); }
 .smc-foot-link.running { color: var(--accent); background: var(--accent-soft); }
 
+
+/* ============================================================
+   Windows 窗口圆角（2026-11-10，修「四角毛刺」）
+   ------------------------------------------------------------
+   背景：frame:false 后窗口圆角由 DWM 硬裁，无抗锯齿 → 弧线呈 1px 阶梯
+   （全库 shell 级容器本来就没有 border-radius，圆角完全来自系统）。
+   现在主窗口 transparent:true，圆角改由 .app-shell 自己画，
+   抗锯齿交给 Chromium，四角才圆润。
+
+   三条约束（改动时务必一并守住）：
+   ① 只给「透明窗口」加圆角。PiP 小窗同样 frame:false 但**没有** transparent，
+      给它加圆角会在四角露出矩形底色 → 用 :not(.pip-standalone) 排除。
+   ② body/#root 必须透明，否则窗口外层仍是不透明矩形，圆角外显示的是
+      该层底色而不是桌面。
+   ③ **不能**给 .app-shell 设 background:transparent ——
+      那会以更高特异性抹掉 .theme-modern.ui-bg-aurora/-image 等用户自选背景
+      （0,3,1 压过 0,2,0）。让 .app-shell 保留自己的底色/贴图，
+      靠 border-radius + overflow:hidden 自己裁出圆角即可。
+   最大化时圆角归零 —— 否则窗口贴合屏幕边缘会露出四个圆角缝。
+   ============================================================ */
+body.is-win32:has(.has-win-controls) #root {
+  background: transparent;
+}
+
+/* html / body 也必须透明：theme-modern.css 的 `:root:has(.theme-modern)` 和
+   styles-base.css 的 `html, body, #root` 各自铺了 --bg，窗口透明后这些底色
+   仍会把整个「矩形」填满 → 圆角外看到的是底色块而不是桌面。
+   特异性 (0,2,1) > `:root:has(.theme-modern)` 的 (0,2,0)，能压过。 */
+html:has(.has-win-controls),
+body.is-win32:has(.has-win-controls) {
+  background: transparent;
+}
+
+body.is-win32:has(.has-win-controls) .app-shell:not(.pip-standalone) {
+  border-radius: 10px;
+  overflow: hidden;
+  /* 透明窗口会失去 DWM 原生投影（Windows 不给 transparent 窗口画阴影），
+     不补就会像一张贴在桌面上的纸。用 box-shadow 模拟一圈柔和外阴影；
+     最大化时由下面那条一并去掉，避免边缘出现一圈内阴影。 */
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--line) 55%, transparent),
+    0 8px 28px rgba(0, 0, 0, 0.22);
+}
+
+/* 最大化：贴屏，圆角与投影一起归零（同特异性、靠后生效，压过上面那条） */
+body.is-win32:has(.has-win-controls) .app-shell:not(.pip-standalone).win-maximized {
+  border-radius: 0;
+  box-shadow: none;
+}

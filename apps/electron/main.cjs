@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, Tray, nativeImage, ipcMain, shell, dialog } = require("electron");
+const { app, BrowserWindow, Menu, Tray, nativeImage, ipcMain, shell, dialog, screen } = require("electron");
 const { spawn } = require("child_process");
 const fs = require("fs");
 const path = require("path");
@@ -1351,11 +1351,21 @@ function createWindow() {
   const indexFile = path.join(getExtensionDistDir(), "index.html");
   probe(`createWindow start ${indexFile}`);
 
+  /* 窗口初始尺寸按屏幕工作区收敛（2026-11-10）：
+     此前写死 1280×860，而 1366×768 这类笔记本屏工作区高度只有约 728，
+     窗口底部（状态条）会被挤出屏幕外。这里取「期望尺寸」与工作区的较小值，
+     并留 40px 余量，保证完整落在屏幕内。 */
+  const workArea = screen.getPrimaryDisplay().workAreaSize;
+  const initialWidth = Math.min(1280, Math.max(800, workArea.width - 40));
+  const initialHeight = Math.min(860, Math.max(560, workArea.height - 40));
+
   mainWindow = new BrowserWindow({
-    width: 1280,
-    height: 860,
+    width: initialWidth,
+    height: initialHeight,
     minWidth: 800,
-    minHeight: 600,
+    /* minHeight 同步收敛：原 600 在小屏上易顶满工作区，改取工作区高度 -120
+       与 600 的较小值（下限 400，仍能容纳顶栏 + 内容区 + 状态条）。 */
+    minHeight: Math.min(600, Math.max(400, workArea.height - 120)),
     title: "",
     show: false,
     backgroundColor: "#fafafa",
@@ -1379,6 +1389,14 @@ function createWindow() {
        拖拽区按 DOM 顺序叠加，WindowControls 必须渲染在 <main> 末尾。
        frame:false 保留（与 hidden 等价，意图更明确；macOS 分支不受影响）。 */
     ...(process.platform === "win32" ? { frame: false } : {}),
+    /* 透明窗口 + CSS 自绘圆角（2026-11-10，修「Windows 四角毛刺」）：
+       frame:false 之后窗口圆角由 DWM 硬裁（无抗锯齿）→ 弧线上出现 1px 阶梯，
+       在浅色内容上尤其明显。改为窗口透明、由根元素用 border-radius 画圆角，
+       抗锯齿交给 Chromium，四角才真正圆润。
+       注意：transparent 在 Windows 上必须 frameless（Electron 文档明确），
+       本分支已满足；最大化时前端把圆角归零（否则屏幕角会露缝）。
+       macOS/Linux 不加 transparent，保持系统原生圆角/边框。 */
+    ...(process.platform === "win32" ? { transparent: true, backgroundColor: "#00000000" } : {}),
     /* Windows 走 frame:false，titleBarStyle 在此为冗余（frame:false 优先），
        保留 "hidden" 只为不改变 mac/Linux 分支语义。 */
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : process.platform === "win32" ? "hidden" : "default",

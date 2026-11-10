@@ -76,6 +76,7 @@ import { useLocalService } from "./useLocalService.js";
 import { useSearchTimer } from "./useSearchTimer.js";
 import { usePanelResize } from "./usePanelResize.js";
 import { useElectronEnv } from "./useElectronEnv.js";
+import { useWindowMaximized } from "./useWindowMaximized.js";
 import { WindowControls } from "./WindowControls.js";
 import { useUiTheme, monoFontFamilyValue, uiFontSizeVars, THEME_PRESETS, BG_LAYERS, TERMINAL_SCHEMES, onAccentColor, accentHoverColor, accentSoftColor } from "./useUiTheme.js";
 import { useWorkspaceTabDrag } from "./useWorkspaceTabDrag.js";
@@ -275,7 +276,7 @@ export function App() {
   const [activeTerminalTabId, setActiveTerminalTabId] = useState<string>(() => (isStandaloneTerminalWindow ? "tt-standalone" : ""));
   /* pane 会话状态 map（激活标签的状态供工具栏/独立窗标题派生） */
   const [terminalPaneStates, setTerminalPaneStates] = useState<Record<string, TerminalPaneSessionState>>({});
-  const [terminalOverlay, setTerminalOverlay] = useState<"none" | "shortcuts" | "ai">("none");
+  const [terminalOverlay, setTerminalOverlay] = useState<"none" | "ai">("none");
   const [activeViewerTabId, setActiveViewerTabId] = useState("file");
   const [workspaceSessions, setWorkspaceSessions] = useState<WorkspaceSession[]>([]);
   const [activeWorkspaceSessionId, setActiveWorkspaceSessionId] = useState<string | null>(null);
@@ -341,6 +342,9 @@ export function App() {
     isElectron
     && (window as any).electronAPI?.platform === "win32"
     && (isStandaloneViewerWindow || isStandaloneTerminalWindow || !isStandalonePipWindow);
+  /* 窗口圆角（2026-11-10）：Windows 无边框窗口改为透明，四角由 CSS 画
+     （DWM 硬裁会有 1px 阶梯）。最大化时归零，否则屏幕四角会露出圆角缝。 */
+  const windowMaximized = useWindowMaximized();
   const { toasts, showToast, updateToast, dismissToast } = useToasts();
   const { isBusy, actionStatus, activityLines, setIsBusy, setActionStatus, pushActivity, withBusy } = useAsyncStatus({ showToast, updateToast, dismissToast });
   /* ---- 批量日志（多节点）：批量对象 = 已打开的工作区会话。
@@ -3769,7 +3773,7 @@ export function App() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [selectedFilePaths.length, clearSelectedFiles, confirmDialog, renameDialog, moveDialog, batchMoveDialog, mkdirDialog, previewDialog, contextMenu, workspaceTabMenu, blankContextMenu, showViewerDebugPanel, paletteOpen, showConnectionSettings, setActionStatus]);
 
-  const appShellClassName = `app-shell${uiTheme === "modern" ? " theme-modern" : ""} ui-density-${uiDensity} ui-theme-${resolvedTheme.id} ui-bg-${uiBackground}${uiBackground !== "solid" ? " ui-bg-fancy" : ""} ui-motion-${motionMode}${dynamicBackground && motionMode !== "reduced" ? " ui-dynamic-background" : ""}${isElectron ? " electron-immersive" : ""}${isElectron && isMacOS ? " electron-macos-immersive" : ""}${hasWinControls ? " has-win-controls" : ""}`;
+  const appShellClassName = `app-shell${uiTheme === "modern" ? " theme-modern" : ""} ui-density-${uiDensity} ui-theme-${resolvedTheme.id} ui-bg-${uiBackground}${uiBackground !== "solid" ? " ui-bg-fancy" : ""} ui-motion-${motionMode}${dynamicBackground && motionMode !== "reduced" ? " ui-dynamic-background" : ""}${isElectron ? " electron-immersive" : ""}${isElectron && isMacOS ? " electron-macos-immersive" : ""}${hasWinControls ? " has-win-controls" : ""}${hasWinControls && windowMaximized ? " win-maximized" : ""}`;
 
   /* 终端配色（独立槽位）：背景与 ITheme 都来自所选方案。
      follow = 「跟随主题」卡：底色/文字取主题 shell，ANSI 用默认控制台色。

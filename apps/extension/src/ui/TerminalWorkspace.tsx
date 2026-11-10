@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { MouseEvent as ReactMouseEvent } from "react";
-import { Columns2, Command, Ellipsis, LayoutGrid, Rows2, Search, Terminal as TerminalIcon, Upload, X, Zap } from "lucide-react";
+import { Columns2, Ellipsis, LayoutGrid, Rows2, Search, Terminal as TerminalIcon, Upload, X, Zap } from "lucide-react";
 import type { Terminal } from "@xterm/xterm";
 import type { ServerSummary } from "@server-log-console/shared";
 import { localServiceBase } from "./api.js";
@@ -13,8 +13,6 @@ import { TerminalHistoryPanel } from "./TerminalHistoryPanel.js";
 import { appendTerminalHistory } from "./useTerminalHistory.js";
 import { useTerminalSearch } from "./useTerminalSearch.js";
 import { TerminalContextMenu, TerminalMenuShell, TerminalMoreMenu, type TerminalContextMenuActions, type TerminalMenuItem } from "./TerminalMenus.js";
-import { TerminalQuickBar } from "./TerminalQuickBar.js";
-import { ShortcutsManagerDialog } from "./ShortcutsManagerDialog.js";
 import { useTerminalFit } from "./useTerminalFit.js";
 import { useTerminalSession } from "./useTerminalSession.js";
 import { useTerminalTabs, TERMINAL_QUICKBAR_OPEN_STORAGE_KEY } from "./useTerminalTabs.js";
@@ -29,7 +27,7 @@ import type { TerminalTabState } from "./types.js";
 /**
  * TerminalWorkspace —— 终端工作台五段式容器（对应原型 T1/T2/T3/T8/T10）：
  * 工具行（纯动作，全图标）→ TerminalTabStrip → 终端区（panes + 悬浮 FindBar + 右键菜单 + 分屏）
- * → TerminalQuickBar（可开关）→ TerminalStatusBar。
+ * → TerminalStatusBar。
  *
  * - 每标签一个 TerminalTabPane（内部挂 useTerminalSession）：非激活 display:none 保 live 输出；
  *   关闭终端视图/切工作区时会话 detach（网关保留 90s），重开恢复。
@@ -81,7 +79,9 @@ interface TerminalPanelProps {
   terminalCursorBlink?: boolean;
   /** 解析后的主题标识：变更时刷新 xterm ITheme（v3 色差修复，见 useTerminalSession.themeKey） */
   terminalThemeKey?: string;
-  terminalOverlay: "none" | "shortcuts" | "ai";
+  /* 2026-11-10：去掉 "shortcuts" —— 快捷命令功能已移除，
+     该值不再有任何设置方，留着会误导（以为还有第三个浮层）。 */
+  terminalOverlay: "none" | "ai";
   onToggleTerminalOverlay: (overlay: "ai") => void;
   /** 弹出/收回独立小窗（App 组合 openDetachedTerminalWindow / restoreEmbeddedTerminalWindow） */
   onTogglePopup: () => void;
@@ -423,7 +423,6 @@ export function TerminalPanel(props: TerminalPanelProps) {
   const [moreMenu, setMoreMenu] = useState<{ x: number; y: number } | null>(null);
   const [splitMenu, setSplitMenu] = useState<{ x: number; y: number } | null>(null);
   const [selectionText, setSelectionText] = useState("");
-  const [shortcutsDialogOpen, setShortcutsDialogOpen] = useState(false);
 
   /* 选区文本只做上报（AI 面板引用命令行）；选中本身不再弹操作浮层，
      右键菜单是唯一入口（右键时按当前选区取样）。 */
@@ -560,29 +559,6 @@ export function TerminalPanel(props: TerminalPanelProps) {
     } else {
       searchRef.current.open();
     }
-  }, []);
-
-  /* --- 快捷命令行开关（localStorage 持久化）。
-      2026-10-28 用户要求：**默认关闭**（原默认开）。
-      理由：它常驻占一行终端高度，多数场景直接敲命令即可；
-      需要时点工具行开关调出，选择会被记住。 --- */
-  const [quickBarOpen, setQuickBarOpen] = useState(() => {
-    try {
-      return globalThis.localStorage?.getItem(TERMINAL_QUICKBAR_OPEN_STORAGE_KEY) === "true";
-    } catch {
-      return false;
-    }
-  });
-  const toggleQuickBar = useCallback(() => {
-    setQuickBarOpen((prev) => {
-      const next = !prev;
-      try {
-        globalThis.localStorage?.setItem(TERMINAL_QUICKBAR_OPEN_STORAGE_KEY, next ? "true" : "false");
-      } catch {
-        /* 忽略存储失败（隐私模式等），仅本次会话内生效 */
-      }
-      return next;
-    });
   }, []);
 
   /* --- ⋯ 菜单 / 分屏菜单 / 右键菜单 --- */
@@ -801,6 +777,7 @@ export function TerminalPanel(props: TerminalPanelProps) {
   const showBrowserPipPlaceholder = browserPip.isPip && !isStandalone;
   const showAI = props.terminalOverlay === "ai";
   const terminalTitle = props.server?.name || props.server?.host || "终端";
+
   const statusState: "connected" | "disconnected" | "preserved" | "idle" = !hasTabs
     ? "idle"
     : activePaneState?.connected
@@ -815,6 +792,38 @@ export function TerminalPanel(props: TerminalPanelProps) {
       }
     : null;
   const toolbarDisabled = !hasTabs;
+
+  /* 独立小窗切换（2026-11-10）：原逻辑内联在工具行按钮的 onClick 里，
+     按钮移入「更多」菜单后抽成函数复用。逻辑一字未改。 */
+  const togglePipWindow = useCallback(() => {
+    if (isElectronRuntime) {
+      props.onTogglePopup();
+      return;
+    }
+    if (browserPip.isPip) {
+      browserPip.close();
+      return;
+    }
+    if (!shellRef.current) return;
+    void browserPip.open({
+      el: shellRef.current,
+      title: terminalTitle,
+      onFit: () => {
+        /* PiP 内 addon-fit 的 proposeDimensions 跨窗口失效 → 优先手动量尺寸 resize */
+        const api = sessionApisRef.current[activeTabIdRef.current];
+        if (api?.resizeToContainer?.()) {
+          return;
+        }
+        api?.fitTerminal();
+      },
+    });
+  }, [browserPip, props, terminalTitle]);
+  /* 禁用条件：与原先按钮上的 disabled 保持一致
+     （浏览器 PiP 分屏激活时禁用；PiP 打开中保持可点用于收回） */
+  const pipDisabled =
+    toolbarDisabled ||
+    (!isElectronRuntime && !browserPip.isPip && (Boolean(activeSplitLayout) || !browserPip.supported));
+  const pipActive = Boolean(props.detached) || browserPip.isPip;
 
   /* 终端区拖拽：只认外部文件（含文件夹），内部拖拽（批量条移动）不拦。
      未连接服务器 / 上传通道未就绪时不显示落点提示 —— 免得用户拖进来才发现传不了。 */
@@ -922,15 +931,6 @@ export function TerminalPanel(props: TerminalPanelProps) {
           </button>
           <button
             type="button"
-            className={`terminal-toolbar-button terminal-toolbar-button-icon${quickBarOpen ? " terminal-shortcuts-toggle-active" : ""}`}
-            onClick={toggleQuickBar}
-            disabled={toolbarDisabled}
-            title="快捷命令行开关"
-          >
-            <Command size={13} />
-          </button>
-          <button
-            type="button"
             className={`terminal-toolbar-button terminal-toolbar-button-icon${showAI ? " tai-toggle-active" : ""}`}
             onClick={() => props.onToggleTerminalOverlay("ai")}
             disabled={toolbarDisabled}
@@ -942,33 +942,10 @@ export function TerminalPanel(props: TerminalPanelProps) {
             <button
               type="button"
               className="terminal-toolbar-button terminal-toolbar-button-icon"
-              onClick={() => {
-                if (isElectronRuntime) {
-                  props.onTogglePopup();
-                } else if (browserPip.isPip) {
-                  browserPip.close();
-                } else if (shellRef.current) {
-                  void browserPip.open({
-                    el: shellRef.current,
-                    title: terminalTitle,
-                    onFit: () => {
-                      /* PiP 内 addon-fit 的 proposeDimensions 跨窗口失效 → 优先手动量尺寸 resize */
-                      const api = sessionApisRef.current[activeTabIdRef.current];
-                      if (api?.resizeToContainer?.()) {
-                        return;
-                      }
-                      api?.fitTerminal();
-                    },
-                  });
-                }
-              }}
-              disabled={
-                toolbarDisabled ||
-                /* 浏览器 PiP：分屏激活时禁用（多窗格搬迁不在支持范围），PiP 打开中保持可点用于收回 */
-                (!isElectronRuntime && !browserPip.isPip && (Boolean(activeSplitLayout) || !browserPip.supported))
-              }
+              onClick={togglePipWindow}
+              disabled={pipDisabled}
               title={
-                props.detached || browserPip.isPip
+                pipActive
                   ? "收回终端"
                   : !isElectronRuntime && activeSplitLayout
                     ? "分屏状态下不支持画中画，先取消分屏"
@@ -1182,16 +1159,6 @@ export function TerminalPanel(props: TerminalPanelProps) {
         </div>
       ) : null}
 
-      {/* ④ 快捷命令行（可开关） */}
-      {hasTabs ? (
-        <TerminalQuickBar
-          open={quickBarOpen}
-          cwd={props.cwd}
-          onExecute={(command) => pasteToActiveTerminal(command)}
-          onManage={() => setShortcutsDialogOpen(true)}
-        />
-      ) : null}
-
       {/* ⑤ 状态栏（T1/T4/T8）；分屏态重连按钮不显示——分屏窗格头部自带连接按钮（用户反馈 Bug④） */}
       <TerminalStatusBar
         state={statusState}
@@ -1214,12 +1181,6 @@ export function TerminalPanel(props: TerminalPanelProps) {
           }
           event.target.value = "";
         }}
-      />
-
-      <ShortcutsManagerDialog
-        open={shortcutsDialogOpen}
-        cwd={props.cwd}
-        onClose={() => setShortcutsDialogOpen(false)}
       />
     </section>
   );

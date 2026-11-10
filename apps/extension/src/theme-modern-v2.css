@@ -980,18 +980,26 @@
   padding: 0 7px;
   line-height: 15px;
 }
+/* 新建会话 ＋（2026-11-10）：由「文字全角 ＋」改为 SVG 图标。
+   原写法 font-size + line-height:1 的两个问题：
+     ① 全角字形中线在 22px 盒里偏 0.5px，且偏移量随字体度量变化
+        （Windows 雅黑 / macOS PingFang 不同），换机器就可能偏；
+     ② 22px 比旁边 34px 的页签矮一圈，视觉上像个小方块悬着。
+   改法：尺寸 22→24（与终端工具条图标同刻度），display:grid + place-items:center
+   让 SVG 几何居中（不依赖字体），并移除 font-size / line-height 两条声明。 */
 .theme-modern .workspace-session-add {
   flex: none;
-  width: 22px;
-  height: 22px;
-  margin-left: 4px;
+  width: 24px;
+  height: 24px;
+  margin-left: 6px;
   border: none;
   background: none;
-  border-radius: 5px;
+  border-radius: var(--r-s);
   color: var(--ink-muted);
-  font-size: var(--fs-sm);
   cursor: pointer;
-  line-height: 1;
+  display: grid;
+  place-items: center;
+  line-height: 0;
 }
 .theme-modern .workspace-session-add:hover { background: var(--panel-muted); color: var(--ink); }
 

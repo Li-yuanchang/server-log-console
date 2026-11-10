@@ -1,4 +1,4 @@
-import { X } from "lucide-react";
+import { Plus, X } from "lucide-react";
 import type { WorkspaceSession } from "./types.js";
 import type { WorkspaceTabDragState, WorkspaceTabDragAPI } from "./useWorkspaceTabDrag.js";
 import type { WorkspaceTabMenuState } from "./WorkspaceTabContextMenu.js";
@@ -100,7 +100,9 @@ export function WorkspaceSessionTabs(props: WorkspaceSessionTabsProps) {
           aria-label="新建会话"
           onClick={onOpenPalette}
         >
-          ＋
+          {/* 2026-11-10：文字全角「＋」改为 SVG —— 全角字形行盒随字体变化、
+              22×22 盒内基线偏 0.5px 且比 34px 页签矮一圈；SVG 位置确定。 */}
+          <Plus size={13} strokeWidth={2} />
         </button>
       </div>
     </div>

@@ -16,9 +16,15 @@
    =========================================================================== */
 
 /* ---------- 容器（压过 styles-tsc 的深色玻璃底） ---------- */
+/* 高度：**内容自适应，最高撑满容器**（2026-11-10 还原）。
+   曾经改成 height:80%，结果抽屉下沿露出 20% 的 xterm 深色底
+   （.terminal-main-shell 的 --terminal-background = #0a0a0a），
+   看起来像"底下一块黑"，用户反馈还原。
+   现行为：内容少时抽屉矮，内容多时撑到 calc(100% - 8px)，不留缝。 */
 .tai-dropdown {
   min-width: 0;
   min-height: 0;
+  max-height: calc(100% - 8px);
 }
 
 /* ---------- 上下文条 ---------- */
@@ -1017,3 +1023,53 @@
     display: none;
   }
 }
+
+/* ---------- 头部操作按钮（2026-11-10 改） ----------
+   styles-tsc.css:803 给 .tai-hdr-btn 加了 1px 边框 + 28px 尺寸，
+   在浅色底上看起来像三个小方块，喧宾夺主。改为标准 icon 按钮：
+   纯图标、无边框、无背景、26px 热区，hover 才有淡底。
+   选择器加 .tai-dropdown 前缀 (0,2,0) 压过 styles-tsc 的 (0,1,0)。 */
+.tai-dropdown .tai-hdr-btn {
+  width: 26px;
+  height: 26px;
+  border: none;
+  background: none;
+  border-radius: 6px;
+  color: var(--ink-muted, #8f8f8f);
+  box-shadow: none;
+}
+.tai-dropdown .tai-hdr-btn:hover {
+  background: var(--panel-muted, #f5f5f5);
+  border: none;
+  color: var(--ink, #171717);
+}
+.tai-dropdown .tai-hdr-btn:disabled {
+  opacity: 0.35;
+  background: none;
+}
+.tai-dropdown .tai-hdr-btn:disabled:hover {
+  background: none;
+  color: var(--ink-muted, #8f8f8f);
+}
+/* 「新对话」原本带蓝色底（tai-hdr-btn-chat），也是破坏简洁的因素。
+   改为与其它图标一致，仅 hover 时给 accent 淡底提示它是主操作。 */
+.tai-dropdown .tai-hdr-btn-chat {
+  width: 26px;
+  min-width: 0;
+  padding: 0;
+  gap: 0;
+  color: var(--ink-soft, #666);
+  background: none;
+  border: none;
+}
+.tai-dropdown .tai-hdr-btn-chat:hover:not(:disabled) {
+  background: var(--accent-soft, rgba(59, 107, 90, 0.1));
+  color: var(--accent, #3b6b5a);
+  border: none;
+}
+/* 图标本体统一 15px，与标题字号协调 */
+.tai-dropdown .tai-hdr-btn svg {
+  width: 15px;
+  height: 15px;
+}
+/* 顶部模型 tag 已移除 —— 底部输入框内已有模型选择 */
