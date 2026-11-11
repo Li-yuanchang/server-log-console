@@ -1209,22 +1209,37 @@ body.is-win32 .theme-modern.pip-standalone .terminal-panel-bar-standalone {
       靠 border-radius + overflow:hidden 自己裁出圆角即可。
    最大化时圆角归零 —— 否则窗口贴合屏幕边缘会露出四个圆角缝。
    ============================================================ */
-body.is-win32:has(.has-win-controls) #root {
-  background: transparent;
+/* html / body / #root 三层都必须透明：窗口已 transparent，但这三层各自铺了
+   底色（styles-base.css 的 `html,body,#root{background:var(--bg)}`、
+   theme-modern.css 的 `:root:has(.theme-modern){background:var(--bg)}`），
+   任一层漏设 → 圆角外露出直角底色块，圆角等于白做。
+
+   ⚠️ 特异性必须压过 (0,2,0) 的 :root:has(.theme-modern)，否则规则输了、
+   底色照铺，表现为「圆角没生效（变直角）」（2026-11-10 实测踩过）。
+   故 html 也由 preload 打上 is-win32 类，配合 :has() 得到 (0,2,1)。
+
+   ⚠️ 还要 !important：index.html 启动脚本用 inline style
+   （`__st.background = __s[0]`）把主题底色写到 <html> 上防首屏白闪，
+   inline 优先级高于任何选择器，不加重会被它盖回去。 */
+html.is-win32:has(.has-win-controls),
+html.is-win32:has(.has-win-controls) body,
+html.is-win32:has(.has-win-controls) #root {
+  background: transparent !important;
 }
 
-/* html / body 也必须透明：theme-modern.css 的 `:root:has(.theme-modern)` 和
-   styles-base.css 的 `html, body, #root` 各自铺了 --bg，窗口透明后这些底色
-   仍会把整个「矩形」填满 → 圆角外看到的是底色块而不是桌面。
-   特异性 (0,2,1) > `:root:has(.theme-modern)` 的 (0,2,0)，能压过。 */
-html:has(.has-win-controls),
-body.is-win32:has(.has-win-controls) {
+/* 首屏骨架 #app-loading 是 position:fixed;inset:0 的全屏层，
+   会直接铺满窗口四角 → 同样要它透明，否则启动/重载瞬间仍是方角。 */
+html.is-win32:has(.has-win-controls) #app-loading {
   background: transparent;
 }
 
 body.is-win32:has(.has-win-controls) .app-shell:not(.pip-standalone) {
   border-radius: 10px;
   overflow: hidden;
+  /* 经典主题下 .app-shell 有 padding:4px（styles-layout.css 基础层，
+     theme-modern 才归零）。窗口透明后这 4px 会露出桌面、形成一圈缝，
+     故圆角模式下一律贴边。 */
+  padding: 0;
   /* 透明窗口会失去 DWM 原生投影（Windows 不给 transparent 窗口画阴影），
      不补就会像一张贴在桌面上的纸。用 box-shadow 模拟一圈柔和外阴影；
      最大化时由下面那条一并去掉，避免边缘出现一圈内阴影。 */

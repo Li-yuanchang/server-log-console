@@ -8,7 +8,14 @@ const { contextBridge, ipcRenderer, webUtils } = require("electron");
 const addPlatformClasses = () => {
   const cls = document.body.classList;
   cls.add("is-electron");
-  cls.add(process.platform === "win32" ? "is-win32" : process.platform === "darwin" ? "is-macos" : "is-linux");
+  const platformClass =
+    process.platform === "win32" ? "is-win32" : process.platform === "darwin" ? "is-macos" : "is-linux";
+  cls.add(platformClass);
+  /* html 也要带同一平台类（2026-11-10）：Windows 窗口圆角需要把 html 背景
+     置透明，而主题里 `:root:has(.theme-modern){background:var(--bg)}` 特异性
+     是 (0,2,0)。html 上没有 class 时只能写出 (0,1,1) 的规则、压不过它，
+     结果底色把自绘圆角盖住 → 变直角。带上 class 后可写到 (0,2,1)。 */
+  document.documentElement.classList.add(platformClass);
 };
 if (document.body) addPlatformClasses();
 else document.addEventListener("DOMContentLoaded", addPlatformClasses);

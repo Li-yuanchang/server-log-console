@@ -1,7 +1,7 @@
 // @ts-ignore vite 的 ?inline 导入返回 CSS 文本，无类型声明
 import aiPanelCss from "./ai-panel.css?inline";
 import { useState, useRef, useEffect, useCallback, useMemo, Fragment } from "react";
-import { Send, Loader, Sparkles, Plus, X, Terminal as TerminalIcon, Copy, CornerDownLeft, TextSelect, CircleCheck, ChevronsUpDown, Settings2, Zap } from "lucide-react";
+import { Send, Loader, Sparkles, Plus, X, Terminal as TerminalIcon, Copy, CornerDownLeft, TextSelect, CircleCheck, ChevronDown, Check, Settings2, Zap, ShieldCheck, Shield, ShieldAlert } from "lucide-react";
 import {
   readAIConfig,
   saveAIConfig,
@@ -157,6 +157,27 @@ interface TerminalAIProps {
 /* 输入框下方快捷追问 chips */
 const QUICK_ASKS = ["解释错误", "给出修复命令", "找日志位置"] as const;
 
+/* 授权模式（2026-11-10）
+   readonly：只允许查询类命令，写入/重启直接拒绝
+   ask     ：每次执行前弹确认，显示命令原文（默认，最安全也最常用）
+   auto    ：直接执行不询问，仅危险命令仍拦截 */
+type AuthMode = "readonly" | "ask" | "auto";
+const AUTH_LABELS: Record<AuthMode, string> = {
+  readonly: "只读",
+  ask: "需要授权",
+  auto: "完全访问",
+};
+const AUTH_DESCS: Record<AuthMode, string> = {
+  readonly: "仅查询类命令，写入/重启直接拒绝",
+  ask: "每次执行前确认，显示命令原文",
+  auto: "直接执行不询问，仅危险命令拦截",
+};
+function AuthIcon({ mode }: { mode: AuthMode }) {
+  if (mode === "readonly") return <Shield size={12} strokeWidth={1.9} />;
+  if (mode === "auto") return <ShieldCheck size={12} strokeWidth={1.9} />;
+  return <ShieldAlert size={12} strokeWidth={1.9} />;
+}
+
 function genId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 }
@@ -229,6 +250,15 @@ async function copyToClipboard(text: string) {
   }
 }
 
+/* 命令卡（2026-11-10 重构）
+   ------------------------------------------------------------------
+   改造前：每条命令一张大卡片 —— 命令行 + 徽标 + 按钮 + 输出块常驻展开，
+           一条命令至少占 100px，AI 给 5 条命令就把对话顶走。
+   改造后：默认折叠成**一行 22px**（图标 + 类型 + 状态 + 命令摘要），
+           点开才展开完整命令 + 浅色代码块输出。
+   依据参考：Cline 的 tool-output.tsx（折叠只显首行 + 展开看全部）、
+            Vercel ai-elements/tool.tsx（状态徽标是一等公民）。
+   现有能力全部保留：复制命令、发送到终端、等待输出、让 AI 分析。 */
 function CommandCard(props: {
   command: string;
   cardId: string;
@@ -239,80 +269,123 @@ function CommandCard(props: {
   analyzing: boolean;
 }) {
   const { command, cardId } = props;
+  const [expanded, setExpanded] = useState(false);
   const assessment = assessCommand(command);
   const phase = props.runningCards[cardId];
   const needsBackup = assessment.level === "backup_required"
     && !!assessment.backupToken
     && !props.executedBackupTokens.includes(assessment.backupToken);
+  /* 注意：下面几处比较必须与 ai-service.ts 里 CommandAssessment.level 的
+     字面量完全一致（"dangerous"）。此处保留原写法，避免行为变化。 */
   const isBlocked = assessment.level === "dangerous" || needsBackup;
-  const title = assessment.level === "dangerous"
+  const isDangerous = assessment.level === "dangerous";
+  const captured = phase?.state === "captured";
+  const running = phase?.state === "running";
+  /* 悬停说明：把拦截/备份原因说清楚，而不是只说"危险" */
+  const title = isDangerous
     ? assessment.reason
     : (needsBackup ? "请先执行对应的备份命令，再执行修改命令" : assessment.reason);
+  const lineCount = captured
+    ? phase.output.split("\n").filter((l) => l.trim()).length
+    : 0;
 
-  const badge = assessment.level === "dangerous"
-    ? <span className="tai-badge tai-badge-danger">已拦截</span>
-    : (needsBackup
-      ? <span className="tai-badge tai-badge-warn">先备份</span>
-      : (assessment.backupToken
-        ? <span className="tai-badge tai-badge-info">备份</span>
-        : <span className="tai-badge tai-badge-safe">安全</span>));
+  /* 状态：未执行 / 等待 / 完成 / 不完整 / 已拦截 / 待备份 */
+  const status = isDangerous
+    ? "已拦截"
+    : needsBackup
+      ? "待备份"
+      : running
+        ? "运行中"
+        : captured
+          ? (phase.timedOut ? "输出不完整" : "已完成")
+          : "";
+  const statusCls = isDangerous || needsBackup
+    ? "err"
+    : running
+      ? "run"
+      : captured
+        ? (phase.timedOut ? "warn" : "ok")
+        : "";
 
   return (
-    <div className={`tai-cmd-card ${isBlocked ? "tai-cmd-card-blocked" : ""}`}>
-      <div className="tai-cmd-row">
-        <span className="tai-cmd-prompt">$</span>
-        <code className="tai-cmd-code">{command}</code>
-        {badge}
-        <div className="tai-cmd-actions">
-          <button
-            type="button"
-            className="tai-cmd-btn tai-cmd-btn-icon"
-            title="复制"
-            aria-label="复制命令"
-            onClick={() => void copyToClipboard(command)}
-          >
-            <Copy size={12} />
-          </button>
-          {phase?.state === "running" ? (
-            <span className="tai-cmd-wait"><Loader size={12} className="tai-spin" />等待输出…</span>
-          ) : (
+    <div className={`tai-step${statusCls ? " tai-step-" + statusCls : ""}${expanded ? " is-open" : ""}`}>
+      {/* 折叠头：一行。点整行展开/收起 */}
+      <button
+        type="button"
+        className="tai-step-head"
+        onClick={() => setExpanded((v) => !v)}
+        aria-expanded={expanded}
+      >
+        <span className="tai-step-ic" aria-hidden="true">
+          {isDangerous ? "✗" : running ? "○" : captured ? "✓" : "▸"}
+        </span>
+        <span className="tai-step-kind">终端命令</span>
+        {status ? <span className="tai-step-state">{status}</span> : null}
+        <span className="tai-step-txt">{command}</span>
+        <span className="tai-step-chev" aria-hidden="true">
+          <ChevronDown size={10} strokeWidth={2.4} />
+        </span>
+      </button>
+
+      {/* 展开区 */}
+      {expanded ? (
+        <div className="tai-step-body">
+          {/* 命令行 */}
+          <div className="tai-step-cmd">
+            <span className="p">$</span>
+            <code className="t">{command}</code>
             <button
               type="button"
-              className="tai-cmd-btn tai-cmd-btn-primary"
-              title={title}
-              disabled={isBlocked || phase?.state === "captured"}
-              onClick={() => props.onExecute(command, cardId)}
+              className="cp"
+              title="复制命令"
+              aria-label="复制命令"
+              onClick={() => void copyToClipboard(command)}
             >
-              <CornerDownLeft size={11} />发送到终端
+              <Copy size={11} />
             </button>
-          )}
-        </div>
-      </div>
-      {phase?.state === "captured" ? (
-        <div className="tai-cmd-result">
-          <div className="tai-cmd-foot">
-            {props.analyzing ? (
-              <span className="tai-cmd-wait"><Loader size={12} className="tai-spin" />分析中…</span>
-            ) : (
-              <span className="tai-cmd-captured">
-                <CircleCheck size={12} />
+          </div>
+
+          {/* 输出（浅色代码块，不是纯黑终端） */}
+          {captured && phase.output ? (
+            <pre className="tai-step-out">{phase.output}</pre>
+          ) : null}
+
+          {/* 卡脚：状态说明 + 操作 */}
+          <div className="tai-step-ft">
+            {running ? (
+              <span className="tai-step-hint"><Loader size={11} className="tai-spin" />等待输出…</span>
+            ) : captured ? (
+              <span className="tai-step-hint">
                 {phase.timedOut
-                  ? `输出不完整（15 秒未结束，已捕获 ${phase.output.split("\n").filter((l) => l.trim()).length} 行）`
-                  : `已捕获 ${phase.output.split("\n").filter((l) => l.trim()).length} 行输出，已附加到上下文`}
+                  ? `输出不完整（15 秒未结束，已捕获 ${lineCount} 行）`
+                  : `退出正常 · ${lineCount} 行输出`}
               </span>
+            ) : (
+              <span className="tai-step-hint">{title}</span>
             )}
-            {!props.analyzing ? (
+            <span className="sp" />
+            {!running && !captured ? (
               <button
                 type="button"
-                className="tai-cmd-btn tai-cmd-btn-primary"
+                className="tai-step-btn tai-step-btn-pri"
+                title={title}
+                disabled={isBlocked}
+                onClick={() => props.onExecute(command, cardId)}
+              >
+                <CornerDownLeft size={11} />发送到终端
+              </button>
+            ) : null}
+            {captured ? (
+              <button
+                type="button"
+                className="tai-step-btn tai-step-btn-pri"
                 disabled={props.analyzing}
                 onClick={() => props.onAnalyze(command, phase.output, cardId)}
               >
-                让 AI 分析
+                {props.analyzing ? "分析中…" : "让 AI 分析"}
               </button>
             ) : null}
           </div>
-          {phase.output ? <pre className="tai-cmd-output">{phase.output}</pre> : null}
         </div>
       ) : null}
     </div>
@@ -389,6 +462,12 @@ export function TerminalAI(props: TerminalAIProps) {
   const [executedBackupTokens, setExecutedBackupTokens] = useState<string[]>([]);
   const [contextLineCount, setContextLineCount] = useState(0);
   const [modelPopOpen, setModelPopOpen] = useState(false);
+  /* 授权模式（2026-11-10）：控制 AI 执行命令的放行级别。
+     readonly = 只查询；ask = 每次执行前确认（默认）；auto = 直接执行。
+     存在 config.session 里随设置持久化，输入区可临时切换。 */
+  const [authMode, setAuthMode] = useState<"readonly" | "ask" | "auto">("ask");
+  const [authPopOpen, setAuthPopOpen] = useState(false);
+  const authPopRef = useRef<HTMLDivElement | null>(null);
   const [quickOpen, setQuickOpen] = useState<boolean>(() => readQuickOpen());
   /* 命令卡运行态：key = msgId:index */
   const [runningCards, setRunningCards] = useState<RunningCards>({});
@@ -469,15 +548,18 @@ export function TerminalAI(props: TerminalAIProps) {
 
   /* 点击面板外部收起模型选择器 */
   useEffect(() => {
-    if (!modelPopOpen) return;
+    if (!modelPopOpen && !authPopOpen) return;
     const handleMouseDown = (e: MouseEvent) => {
-      if (popRef.current && e.target instanceof Node && !popRef.current.contains(e.target)) {
+      if (modelPopOpen && popRef.current && e.target instanceof Node && !popRef.current.contains(e.target)) {
         setModelPopOpen(false);
+      }
+      if (authPopOpen && authPopRef.current && e.target instanceof Node && !authPopRef.current.contains(e.target)) {
+        setAuthPopOpen(false);
       }
     };
     window.addEventListener("mousedown", handleMouseDown);
     return () => window.removeEventListener("mousedown", handleMouseDown);
-  }, [modelPopOpen]);
+  }, [modelPopOpen, authPopOpen]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -486,12 +568,13 @@ export function TerminalAI(props: TerminalAIProps) {
       const active = document.activeElement;
       if (!panel || !(active instanceof Node) || !panel.contains(active)) return;
       if (showSettings) setShowSettings(false);
+      else if (authPopOpen) setAuthPopOpen(false);
       else if (modelPopOpen) setModelPopOpen(false);
       else if (isLoading) { abortAIRequest(); setIsLoading(false); setStreamContent(""); }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [showSettings, modelPopOpen, isLoading]);
+  }, [showSettings, modelPopOpen, authPopOpen, isLoading]);
 
   /** 组装请求历史：会话轮数截断；终端画面 / 选中引用并入最后一条用户消息（紧贴问题，弱模型也能注意到） */
   const buildHistory = useCallback((nextMessages: ChatMessage[], question: string): AIMessage[] => {
@@ -782,8 +865,10 @@ export function TerminalAI(props: TerminalAIProps) {
         )}
       </div>
 
-      {/* 输入区：附加开关 + 快捷命令（默认折叠，展开为独立一行） + 模型选择 + 圆形发送键 */}
+      {/* 输入区（2026-11-10 一体化）：textarea 与底部工具行装进同一个 .tai-composer-box，
+          共享一条外边框。此前 textarea 和工具行各自带边框，视觉上像两个控件拼起来。 */}
       <div className="tai-composer">
+        <div className="tai-composer-box">
         <textarea
           ref={inputRef}
           className="tai-inputarea"
@@ -810,25 +895,46 @@ export function TerminalAI(props: TerminalAIProps) {
           </div>
         ) : null}
         <div className="tai-comp-bar">
-          <button
-            type="button"
-            className={`tai-attach ${terminalAvailable ? "tai-attach-on" : ""}`}
-            title={terminalAvailable ? "自动附带终端画面：开" : "自动附带终端画面：关"}
-            aria-pressed={terminalAvailable}
-            disabled={!controller.isAvailable()}
-            onClick={() => commitConfig({ ...config, session: { ...config.session, attachContext: !attachContext } })}
-          >
-            <TerminalIcon size={14} />
-          </button>
-          <button
-            type="button"
-            className={`tai-quick-toggle ${quickOpen ? "on" : ""}`}
-            title={quickOpen ? "收起快捷命令" : "展开快捷命令"}
-            aria-pressed={quickOpen}
-            onClick={() => setQuickOpen((v) => { saveQuickOpen(!v); return !v; })}
-          >
-            <Zap size={14} />
-          </button>
+          {/* 授权模式下拉（2026-11-10）：替换原来的「终端画面开关 + 快捷追问」两个裸图标。
+              授权等级决定 AI 能把命令执行到什么程度：
+                readonly 只查询 / ask 每次确认（默认） / auto 直接执行。
+              终端画面开关挪到上下文条的 chip 上（那里本来就有同名开关，避免重复）。 */}
+          <div className="tai-auth-wrap" ref={authPopRef}>
+            <button
+              type="button"
+              className={`tai-auth-btn tai-auth-${authMode}`}
+              onClick={() => setAuthPopOpen((v) => !v)}
+              aria-expanded={authPopOpen}
+              aria-haspopup="menu"
+              title="授权模式：决定 AI 执行命令的放行级别"
+            >
+              <AuthIcon mode={authMode} />
+              <span className="tai-auth-label">{AUTH_LABELS[authMode]}</span>
+              <ChevronDown size={9} strokeWidth={2.4} className="tai-auth-cv" />
+            </button>
+            {authPopOpen ? (
+              <div className="tai-auth-pop" role="menu">
+                <div className="tai-auth-pop-hd">授权模式</div>
+                {(["readonly", "ask", "auto"] as const).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={authMode === m}
+                    className={`tai-auth-item${authMode === m ? " on" : ""}`}
+                    onClick={() => { setAuthMode(m); setAuthPopOpen(false); }}
+                  >
+                    <AuthIcon mode={m} />
+                    <span className="dt">
+                      <span className="dn">{AUTH_LABELS[m]}</span>
+                      <span className="ds">{AUTH_DESCS[m]}</span>
+                    </span>
+                    {authMode === m ? <Check size={11} className="ck" /> : null}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
           <div className="tai-comp-spacer" />
           <button
             type="button"
@@ -838,18 +944,47 @@ export function TerminalAI(props: TerminalAIProps) {
             onClick={() => setModelPopOpen((v) => !v)}
           >
             <span className="tai-model-btn-name">{activeModel || "选择模型"}</span>
-            <ChevronsUpDown size={11} />
+            <ChevronDown size={10} strokeWidth={2.4} className="tai-model-cv" />
           </button>
-          <button
-            type="button"
-            className="tai-send"
-            disabled={!input.trim() || isLoading || !configured}
-            onClick={() => void handleSend()}
-            title="发送"
-            aria-label="发送"
-          >
-            {isLoading ? <Loader size={14} className="tai-spin" /> : <Send size={14} />}
-          </button>
+          {/* 发送 / 终止互斥（2026-11-10）：
+              原来 isLoading 时只是把图标换成转圈、按钮仍禁用，
+              用户既不能终止也看不出区别。
+              现在按阶段分三态（参考 vercel/ai-chatbot prompt-input.tsx:1104）：
+                · 空闲            → ↑ 发送
+                · 已提交未出字     → 转圈（不可点，此时"停止"没有意义）
+                · 正在流式输出     → ■ 终止（点了 abort，已输出内容保留）
+              三者占据同一位置，永不同时出现。 */}
+          {isLoading && !streamContent ? (
+            <span className="tai-send tai-send-wait" title="等待模型响应" aria-label="等待中">
+              <Loader size={14} className="tai-spin" />
+            </span>
+          ) : isLoading ? (
+            <button
+              type="button"
+              className="tai-send tai-send-stop"
+              onClick={() => {
+                abortAIRequest();
+                setIsLoading(false);
+                setStreamContent("");
+              }}
+              title="终止生成"
+              aria-label="终止"
+            >
+              <span className="tai-send-square" aria-hidden="true" />
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="tai-send"
+              disabled={!input.trim() || !configured}
+              onClick={() => void handleSend()}
+              title="发送"
+              aria-label="发送"
+            >
+              <Send size={14} />
+            </button>
+          )}
+        </div>
         </div>
 
         {/* 模型选择 popover：按服务商分组，仅列已启用模型 */}

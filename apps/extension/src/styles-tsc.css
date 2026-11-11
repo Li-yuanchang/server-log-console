@@ -55,10 +55,10 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  color: rgba(248, 250, 252, 0.94);
-  font-weight: 600;
+  color: var(--ink, #171717);
+  font-weight: 650;
   font-size: var(--fs-xs);
-  letter-spacing: 0.2px;
+  letter-spacing: -0.01em;
   min-width: 0;
 }
 
@@ -730,22 +730,21 @@
   z-index: 150;
   width: 340px;
   max-width: calc(100% - 12px);
-  background:
-    radial-gradient(circle at top left, rgba(59, 130, 246, 0.16), transparent 30%),
-    linear-gradient(180deg, rgba(17, 24, 39, 0.98) 0%, rgba(15, 23, 42, 0.98) 100%);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
+  /* 浅色化（2026-11-10）：原为深色玻璃底
+     （radial-gradient + linear-gradient(rgba(17,24,39,.98)) + backdrop-blur），
+     与整个应用的浅色主题割裂；且内部 chip/按钮早就在用 --panel-muted/--ink
+     等浅色 token，形成「深壳套浅件」。改为纯 token 底，深色主题自动跟随。 */
+  background: var(--panel, #ffffff);
+  border: 1px solid var(--line-strong, #d4d4d4);
+  border-radius: 10px;
   box-shadow:
-    0 8px 32px rgba(0, 0, 0, 0.42),
-    0 6px 18px rgba(15, 23, 42, 0.32),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    0 12px 32px rgba(0, 0, 0, 0.1),
+    0 2px 6px rgba(0, 0, 0, 0.04);
   font-size: var(--fs-xs);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  color: rgba(248, 250, 252, 0.92);
+  color: var(--ink, #171717);
 }
 
 .tai-dropdown button {
@@ -765,8 +764,8 @@
   align-items: center;
   justify-content: space-between;
   padding: 10px 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  background: linear-gradient(180deg, rgba(59, 130, 246, 0.08), rgba(59, 130, 246, 0.02));
+  border-bottom: 1px solid var(--line, #eaeaea);
+  background: var(--panel, #ffffff);
   flex-shrink: 0;
 }
 
@@ -774,7 +773,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  color: rgba(248, 250, 252, 0.94);
+  color: var(--ink, #171717);
   font-weight: 600;
   font-size: var(--fs-xs);
   letter-spacing: 0.2px;
@@ -804,17 +803,17 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
-  color: rgba(226, 232, 240, 0.58);
-  border-radius: 7px;
-  border: 1px solid rgba(148, 163, 184, 0.08);
+  width: 26px;
+  height: 26px;
+  color: var(--ink-muted, #8f8f8f);
+  border-radius: 6px;
+  border: none;
+  background: none;
 }
 
 .tai-hdr-btn:hover {
-  background: rgba(59, 130, 246, 0.12);
-  border-color: rgba(59, 130, 246, 0.18);
-  color: rgba(248, 250, 252, 0.92);
+  background: var(--panel-muted, #f5f5f5);
+  color: var(--ink, #171717);
 }
 
 .tai-hdr-btn:disabled {
@@ -823,19 +822,24 @@
 }
 
 .tai-hdr-btn:disabled:hover {
-  background: transparent;
-  border-color: rgba(148, 163, 184, 0.08);
-  color: rgba(226, 232, 240, 0.58);
+  background: none;
+  color: var(--ink-muted, #8f8f8f);
+}
+
+/* 图标本体 15px，与标题字协调 */
+.tai-hdr-btn svg {
+  width: 15px;
+  height: 15px;
 }
 
 .tai-hdr-btn-chat {
-  width: auto;
-  min-width: 70px;
-  padding: 0 10px;
-  gap: 5px;
-  color: rgba(224, 231, 255, 0.88);
-  background: rgba(59, 130, 246, 0.12);
-  border-color: rgba(59, 130, 246, 0.2);
+  width: 26px;
+  min-width: 0;
+  padding: 0;
+  gap: 0;
+  color: var(--ink-soft, #666);
+  background: none;
+  border: none;
 }
 
 .tai-hdr-btn-chat span {
@@ -843,9 +847,9 @@
   line-height: 1;
 }
 
-.tai-hdr-btn-chat:hover {
-  background: rgba(59, 130, 246, 0.18);
-  border-color: rgba(59, 130, 246, 0.3);
+.tai-hdr-btn-chat:hover:not(:disabled) {
+  background: var(--accent-soft, rgba(59, 107, 90, 0.1));
+  color: var(--accent, #3b6b5a);
 }
 
 .tai-messages {
@@ -860,8 +864,8 @@
 }
 
 .tai-messages::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.22);
-  border-radius: 2px;
+  background: #dcdcdc;
+  border-radius: 4px;
 }
 
 .tai-welcome {
@@ -880,7 +884,7 @@
 }
 
 .tai-welcome-title {
-  color: rgba(248, 250, 252, 0.9);
+  color: var(--ink, #171717);
   font-weight: 600;
   font-size: var(--fs-sm);
   margin: 0 0 4px;
@@ -902,7 +906,7 @@
 
 .tai-suggestion {
   font-size: var(--fs-2xs);
-  color: rgba(224, 231, 255, 0.78);
+  color: var(--ink-soft, #666);
   border: 1px solid rgba(59, 130, 246, 0.18) !important;
   border-radius: 14px !important;
   padding: 5px 10px !important;
@@ -912,7 +916,7 @@
 }
 
 .tai-suggestion:hover {
-  color: rgba(248, 250, 252, 0.95);
+  color: var(--ink, #171717);
   border-color: rgba(59, 130, 246, 0.34) !important;
   background: rgba(59, 130, 246, 0.16);
 }
@@ -933,7 +937,7 @@
 .tai-msg-user p {
   display: inline-block;
   background: rgba(59, 130, 246, 0.22);
-  color: rgba(248, 250, 252, 0.94);
+  color: var(--ink, #171717);
   padding: 5px 10px;
   border-radius: 10px 10px 2px 10px;
   max-width: 85%;
@@ -946,7 +950,7 @@
 }
 
 .tai-msg-text {
-  color: rgba(226, 232, 240, 0.82);
+  color: var(--ink-soft, #666);
   font-size: var(--fs-xs);
   line-height: 1.55;
   white-space: pre-wrap;
@@ -988,7 +992,7 @@
   align-items: center;
   gap: 6px;
   padding: 5px 8px;
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--panel-muted, #f5f5f5);
   border: 1px solid rgba(59, 130, 246, 0.14);
   border-radius: 6px;
   transition: border-color 100ms;
@@ -1098,7 +1102,7 @@
   border: 1px solid rgba(59, 130, 246, 0.14);
   border-radius: 8px;
   background: rgba(15, 23, 42, 0.22);
-  color: rgba(248, 250, 252, 0.9);
+  color: var(--ink, #171717);
   font-size: var(--fs-xs);
   padding: 5px 10px;
   outline: none;
@@ -1153,7 +1157,7 @@
 
 .tai-settings-title {
   font-weight: 600;
-  color: rgba(248, 250, 252, 0.88);
+  color: var(--ink, #171717);
   font-size: var(--fs-xs);
   margin-bottom: 2px;
 }
@@ -1176,7 +1180,7 @@
      --r-s 定义在 :root，经典主题同样取得到值。 */
   border-radius: var(--r-s);
   background: rgba(15, 23, 42, 0.22);
-  color: rgba(248, 250, 252, 0.9);
+  color: var(--ink, #171717);
   font-size: var(--fs-xs);
   padding: 0 8px;
   outline: none;
@@ -1194,7 +1198,7 @@
   align-items: center;
   gap: 6px;
   font-size: var(--fs-xs);
-  color: rgba(226, 232, 240, 0.78);
+  color: var(--ink-soft, #666);
   cursor: pointer;
 }
 
@@ -1220,13 +1224,13 @@
   border-radius: 6px !important;
   transition: background 80ms ease, border-color 80ms ease, color 80ms ease, box-shadow 80ms ease;
   text-align: left;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--panel-muted, #f5f5f5);
 }
 
 .tai-preset-btn strong {
   font-size: var(--fs-2xs);
   font-weight: 600;
-  color: rgba(248, 250, 252, 0.82);
+  color: var(--ink, #171717);
 }
 
 .tai-preset-btn span {
@@ -1273,12 +1277,12 @@
   flex: 1;
   height: 28px;
   border-radius: 6px;
-  color: rgba(226, 232, 240, 0.68);
+  color: var(--ink-soft, #666);
   font-size: var(--fs-xs);
 }
 
 .tai-btn-cancel:hover {
-  background: rgba(255, 255, 255, 0.07);
+  background: var(--panel-muted, #f5f5f5);
 }
 
 .tai-toggle-active {

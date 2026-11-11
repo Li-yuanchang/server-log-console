@@ -303,18 +303,17 @@
 }
 
 /* ---------- 输入区（composer 卡片） ---------- */
+/* 外层容器：只负责间距，**不带边框和背景**（2026-11-10）。
+   原来是「.tai-composer 一层边框 + .tai-composer-box 再来一层」，
+   两层叠在一起让底部露出灰色描边，看起来像多出一条底边。
+   现在只保留 .tai-composer-box 作为唯一的视觉盒子。 */
 .tai-dropdown .tai-composer {
   flex: none;
-  margin: 8px 12px 12px;
-  border: 1px solid var(--line, #eaeaea);
-  border-radius: var(--r-m, 10px);
-  background: var(--panel, #fff);
-  transition: border-color 0.15s, box-shadow 0.15s;
+  margin: 8px 10px 10px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
   position: relative;
-}
-.tai-dropdown .tai-composer:focus-within {
-  border-color: var(--accent, #0070f3);
-  box-shadow: 0 0 0 3px var(--accent-soft, rgba(0, 112, 243, 0.08));
 }
 .tai-dropdown .tai-inputarea {
   display: block;
@@ -338,12 +337,27 @@
 .tai-dropdown .tai-inputarea:disabled {
   opacity: 0.6;
 }
+/* 底部工具行（2026-11-10 第二次调整）
+   用户反馈：图标大文字小、垂直没居中、呼吸间距不统一。
+   统一规则：
+     · 所有子元素 line-height:1 且 align-items:center → 严格垂直居中
+     · 左（授权）/ 右（模型 + 发送）之间用 flex:1 的 spacer 分隔
+     · 图标统一 12px，与 10~11px 文字同视觉高
+     · 行高 26px 与发送按钮一致，三者中心线对齐 */
 .tai-dropdown .tai-comp-bar {
   display: flex;
   align-items: center;
-  gap: 5px;
-  padding: 4px 8px 8px;
+  gap: 4px;
+  padding: 3px 7px 7px 6px;
   flex-wrap: nowrap;
+  min-height: 30px;
+}
+.tai-dropdown .tai-comp-bar > * {
+  align-self: center;
+}
+.tai-dropdown .tai-comp-spacer {
+  flex: 1;
+  min-width: 4px;
 }
 .tai-dropdown button.tai-attach {
   flex: none;
@@ -423,26 +437,64 @@
 .tai-dropdown button.tai-qchip:disabled {
   opacity: 0.45;
 }
-.tai-dropdown button.tai-send {
+/* 发送 / 终止 / 等待 三态（2026-11-10 统一入口）
+   这里的 button 前缀保证压过 .tai-dropdown .tai-send（后面的规则同优先级）
+   —— 两条规则合并成这一处，避免 30px/26px 打架。 */
+.tai-dropdown button.tai-send,
+.tai-dropdown .tai-send {
   flex: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  width: 30px;
-  height: 30px;
-  min-height: 30px;
-  padding: 2px;
+  /* 尺寸锁定：抽屉里这枚按钮必须和授权/模型按钮同高（26px），
+     否则一眼看去"图标大、文字小"。用 !important 兜住任何全局 button 规则。 */
+  width: 26px !important;
+  height: 26px !important;
+  min-width: 26px !important;
+  min-height: 26px !important;
+  max-width: 26px;
+  max-height: 26px;
+  padding: 0 !important;
   border: none;
-  border-radius: 50%;
-  background: var(--accent, #0070f3);
+  border-radius: 999px;
+  background: var(--accent, #3b6b5a);
   color: var(--on-accent, #ffffff);
+  transition: background 0.15s ease;
 }
 .tai-dropdown button.tai-send:hover:not(:disabled) {
-  background: var(--accent-strong, var(--accent, #0070f3));
+  background: var(--accent-strong, #2e5748);
+  color: #ffffff;
 }
 .tai-dropdown button.tai-send:disabled {
-  opacity: 0.4;
+  background: #d8dcd6;
+  color: #ffffff;
+  opacity: 1;
+  cursor: not-allowed;
+}
+/* 等待态：淡底转圈，不可点 */
+.tai-dropdown .tai-send-wait {
+  background: var(--panel-muted, #f5f5f5);
+  color: var(--ink-muted, #8f8f8f);
+  cursor: default;
+}
+/* 终止态：深色实心圆 + 白方块 */
+.tai-dropdown button.tai-send-stop {
+  background: var(--ink, #171717);
+}
+.tai-dropdown button.tai-send-stop:hover {
+  background: #000000;
+}
+.tai-dropdown .tai-send-square {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  background: #ffffff;
+  display: block;
+}
+.tai-dropdown .tai-send svg {
+  width: 13px;
+  height: 13px;
 }
 
 /* ---------- 对话内模型选择器 ---------- */
@@ -1073,3 +1125,491 @@
   height: 15px;
 }
 /* 顶部模型 tag 已移除 —— 底部输入框内已有模型选择 */
+
+/* ---------- 输入区一体化（2026-11-10） ----------
+   之前 .tai-inputarea 与 .tai-comp-bar 各自带边框，视觉像两个控件拼接。
+   现在统一装进 .tai-composer-box：textarea 与工具行都去掉自己的边框，
+   只由外层盒子提供唯一的边框，聚焦时整盒子一起响应。 */
+.tai-dropdown .tai-composer-box {
+  border: 1px solid var(--line-strong, #d4d4d4);
+  border-radius: 11px;
+  background: var(--panel, #ffffff);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  /* 注意：这里**不能** overflow:hidden —— 授权下拉与模型弹层都是
+     向上绝对定位在盒子内部，裁剪后会被切掉（用户 2026-11-10 反馈
+     「左侧需授权下拉框显示不全」就是这个原因）。
+     圆角靠子元素的 border-radius 自己处理。 */
+  position: relative;
+}
+.tai-dropdown .tai-composer-box:focus-within {
+  border-color: var(--accent, #3b6b5a);
+  box-shadow: 0 0 0 3px var(--accent-soft, rgba(59, 107, 90, 0.1));
+}
+/* textarea：去掉自身边框与底色，融入盒子 */
+.tai-dropdown .tai-composer-box .tai-inputarea {
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  padding: 9px 11px 4px;
+  min-height: 38px;
+  width: 100%;
+  resize: none;
+  outline: none;
+}
+/* 工具行：不再是独立卡片 */
+.tai-dropdown .tai-composer-box .tai-comp-bar {
+  border: none !important;
+  background: transparent !important;
+  padding: 4px 8px 7px 9px;
+  gap: 4px;
+}
+/* 快捷追问行（Zap 展开）：也放进盒子内部 */
+.tai-dropdown .tai-composer-box .tai-quickrow {
+  padding: 0 9px 6px;
+  gap: 4px;
+}
+
+
+/* ---------- 授权模式下拉（2026-11-10，第二次修正） ----------
+   上一版的问题（用户截图指出）：
+     ① 名称与说明文字重叠 —— 被 .tai-dropdown button 的 line-height:1 压扁
+     ② icon 比文字大，视觉重心偏
+     ③ icon / 文字 / 对勾之间没有呼吸间距
+     ④ hover 区域贴边，没有内缩呼吸
+   本版规则：
+     · 所有按钮文字行高显式声明，并加 !important 压过全局 button 规则
+     · icon 11px，与 11px 正文同高；用 flex 中心对齐
+     · 三段式间距：padding 8/10、gap 8、行间距 2
+     · hover 底色为圆角内缩块（inset 靠 padding 撑开，不改宽度）
+   ------------------------------------------------------------ */
+.tai-dropdown .tai-auth-wrap {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+}
+/* 触发按钮：图标 + 文字 + 箭头 三者垂直居中 */
+/* 触发按钮：图标 / 文字 / 箭头 三者严格垂直居中（2026-11-10 第三次修正）
+   之前混用了两套做法 —— align-items:center 已把文字盒居中，
+   又给文字加了 transform:translateY(-0.5px) 微调，等于推歪了。
+   现在统一用 grid + place-items:center：
+   每个子项在自己的格子里居中，不再依赖基线或手调偏移。 */
+.tai-dropdown button.tai-auth-btn {
+  display: inline-grid;
+  grid-auto-flow: column;
+  grid-auto-columns: max-content;
+  align-items: center;      /* 行内垂直居中 */
+  justify-items: center;    /* 每格水平居中 */
+  gap: 5px;
+  height: 26px;
+  padding: 0 7px 0 6px;
+  border-radius: 7px;
+  border: none;
+  background: none;
+  color: var(--ink-soft, #666);
+  font-size: var(--fs-2xs);
+  line-height: 1 !important;
+  white-space: nowrap;
+}
+.tai-dropdown button.tai-auth-btn:hover {
+  background: var(--panel-muted, #f5f5f5);
+  color: var(--ink, #171717);
+}
+/* 三个子项都设为块级 + 自身居中，尺寸取整数避免半像素 */
+.tai-dropdown .tai-auth-btn > svg {
+  display: block;
+  flex: none;
+  width: 12px;
+  height: 12px;
+}
+.tai-dropdown .tai-auth-label {
+  display: block;
+  line-height: 1 !important;
+  /* 关键：不再用 translateY 微调。中文字形在 line-height:1 的盒子里
+     本身居中，加偏移只会把基线推歪（用户截图指出的正是这个）。
+     grid 的 align-items:center 已经把它对齐到图标中心。 */
+}
+.tai-dropdown .tai-auth-cv {
+  display: block;
+  flex: none;
+  width: 9px;
+  height: 9px;
+  opacity: 0.6;
+  margin-left: 1px;
+}
+/* 三档图标色 */
+.tai-dropdown .tai-auth-readonly > svg:first-child { color: #6b7280; }
+.tai-dropdown .tai-auth-ask > svg:first-child { color: #8a6d3b; }
+.tai-dropdown .tai-auth-auto > svg:first-child { color: var(--accent, #3b6b5a); }
+
+/* ---- 弹出层 ---- */
+.tai-dropdown .tai-auth-pop {
+  position: absolute;
+  bottom: calc(100% + 7px);
+  left: 0;
+  z-index: 300;
+  width: 232px;
+  max-width: calc(100vw - 40px);
+  padding: 4px;
+  background: var(--panel, #ffffff);
+  border: 1px solid var(--line-strong, #d4d4d4);
+  border-radius: 10px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.05);
+}
+.tai-dropdown .tai-auth-pop::after {
+  content: "";
+  position: absolute;
+  bottom: -4px;
+  left: 15px;
+  width: 8px;
+  height: 8px;
+  background: var(--panel, #ffffff);
+  border-right: 1px solid var(--line-strong, #d4d4d4);
+  border-bottom: 1px solid var(--line-strong, #d4d4d4);
+  transform: rotate(45deg);
+}
+.tai-dropdown .tai-auth-pop-hd {
+  padding: 6px 10px 4px;
+  font-size: 9px;
+  line-height: 1;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-muted, #8f8f8f);
+  font-family: var(--mono-font-family, monospace);
+}
+
+/* ---- 选项：图标 / 文字块 / 对勾 三段，垂直居中 ---- */
+.tai-dropdown button.tai-auth-item {
+  display: flex;
+  align-items: center;          /* 图标与文字块中心对齐，不再 flex-start */
+  gap: 8px;                     /* 图标→文字 的呼吸间距 */
+  width: 100%;
+  padding: 7px 9px;             /* 上下 7、左右 9，hover 块留得出内缩 */
+  border-radius: 7px;
+  border: none;
+  background: none;
+  text-align: left;
+  color: var(--ink-soft, #666);
+  font-size: var(--fs-2xs);
+  /* 关键：压过全局 button 的 line-height:1，否则两行文字会叠在一起 */
+  line-height: 1.5 !important;
+}
+.tai-dropdown button.tai-auth-item:hover {
+  background: var(--panel-muted, #f5f5f5);
+  color: var(--ink, #171717);
+}
+.tai-dropdown button.tai-auth-item.on {
+  background: var(--accent-soft, rgba(59, 107, 90, 0.1));
+  color: var(--accent, #3b6b5a);
+}
+/* 左侧状态图标：12px，与第一行文字同高 */
+.tai-dropdown .tai-auth-item > svg:first-child {
+  flex: none;
+  width: 12px;
+  height: 12px;
+}
+/* 文字块：名称 + 说明，两行 */
+.tai-dropdown .tai-auth-item .dt {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;                     /* 名称与说明之间的呼吸间距 */
+}
+.tai-dropdown .tai-auth-item .dn {
+  display: block;
+  line-height: 1.35 !important;
+  font-size: var(--fs-2xs);
+}
+.tai-dropdown .tai-auth-item.on .dn {
+  font-weight: 600;
+}
+.tai-dropdown .tai-auth-item .ds {
+  display: block;
+  line-height: 1.35 !important;
+  font-size: 9.5px;
+  font-weight: 400;
+  color: var(--ink-muted, #8f8f8f);
+}
+.tai-dropdown .tai-auth-item .ck {
+  flex: none;
+  width: 11px;
+  height: 11px;
+  color: var(--accent, #3b6b5a);
+}
+
+/* ---------- 模型选择：去掉边框，改为无框胶囊 ---------- */
+/* 模型选择：与授权按钮同一套 grid 对齐，保证底部三个控件基线一致 */
+.tai-dropdown .tai-composer-box .tai-model-btn {
+  display: inline-grid;
+  grid-auto-flow: column;
+  grid-auto-columns: max-content;
+  align-items: center;
+  justify-items: center;
+  border: none !important;
+  background: none !important;
+  box-shadow: none !important;
+  height: 26px;                   /* 与授权按钮、发送键同高 */
+  padding: 0 6px;
+  border-radius: 7px;
+  color: var(--ink-soft, #666);
+  font-size: 10px;
+  line-height: 1 !important;
+  font-family: var(--mono-font-family, monospace);
+  gap: 4px;
+  max-width: 138px;
+}
+/* 名称与箭头都是块级，去掉内联基线的干扰 */
+.tai-dropdown .tai-composer-box .tai-model-btn-name {
+  display: block;
+  line-height: 1 !important;
+}
+.tai-dropdown .tai-composer-box .tai-model-cv {
+  display: block;
+  width: 9px;
+  height: 9px;
+  flex: none;
+}
+.tai-dropdown .tai-composer-box .tai-model-btn:hover:not(:disabled) {
+  background: var(--panel-muted, #f5f5f5) !important;
+  color: var(--ink, #171717);
+}
+.tai-dropdown .tai-composer-box .tai-model-btn.on {
+  background: var(--panel-muted, #f5f5f5) !important;
+}
+.tai-dropdown .tai-composer-box .tai-model-btn-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+/* ============================================================
+   命令卡折叠行（tai-step-*，2026-11-10 新增）
+   旧 .tai-cmd-* 大卡片规则保留未删，便于回滚；组件已不再使用它们。
+   目标：折叠态一行 ~24px；展开后是浅色代码块（不是纯黑终端）。
+   ============================================================ */
+.tai-dropdown .tai-step {
+  border-radius: 8px;
+  border: 1px solid transparent;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.tai-dropdown .tai-step:hover {
+  background: #fbfbfa;
+}
+.tai-dropdown .tai-step.is-open {
+  border-color: var(--line, #eaeaea);
+  background: var(--panel, #ffffff);
+}
+
+/* 折叠头：一行 */
+.tai-dropdown button.tai-step-head {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  width: 100%;
+  min-width: 0;
+  padding: 4px 6px;
+  border: none;
+  background: none;
+  border-radius: 7px;
+  text-align: left;
+  font-size: var(--fs-2xs);
+  line-height: 1.5;
+  color: var(--ink-soft, #666);
+}
+.tai-dropdown button.tai-step-head:hover {
+  background: var(--panel-muted, #f5f5f5);
+}
+/* 状态符：✓ ✗ ○ ▸ 四选一 */
+.tai-dropdown .tai-step-ic {
+  flex: none;
+  width: 12px;
+  text-align: center;
+  font-size: 10px;
+  color: var(--ink-muted, #8f8f8f);
+}
+.tai-dropdown .tai-step-ok .tai-step-ic { color: var(--green, #0a7b3e); }
+.tai-dropdown .tai-step-err .tai-step-ic { color: var(--red, #d41313); }
+.tai-dropdown .tai-step-run .tai-step-ic { color: var(--accent, #3b6b5a); }
+.tai-dropdown .tai-step-warn .tai-step-ic { color: var(--amber, #b45309); }
+
+.tai-dropdown .tai-step-kind {
+  flex: none;
+  color: var(--ink-soft, #666);
+  white-space: nowrap;
+}
+.tai-dropdown .tai-step-state {
+  flex: none;
+  color: var(--ink-muted, #8f8f8f);
+  white-space: nowrap;
+}
+.tai-dropdown .tai-step-run .tai-step-state { color: var(--accent, #3b6b5a); }
+.tai-dropdown .tai-step-err .tai-step-txt { color: #b05a5a; }
+/* 命令摘要：等宽 + 单行省略 */
+.tai-dropdown .tai-step-txt {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--mono-font-family, monospace);
+  font-size: 10.5px;
+  color: var(--ink-muted, #8f8f8f);
+}
+.tai-dropdown .tai-step-chev {
+  flex: none;
+  color: #c0c4c9;
+  display: grid;
+  place-items: center;
+  transition: transform 0.15s ease;
+}
+.tai-dropdown .tai-step.is-open .tai-step-chev {
+  transform: rotate(180deg);
+}
+
+/* 展开区 */
+.tai-dropdown .tai-step-body {
+  margin: 2px 6px 6px 20px;
+  border: 1px solid var(--line, #eaeaea);
+  border-radius: 7px;
+  overflow: hidden;
+  background: var(--panel, #ffffff);
+}
+/* 命令行 */
+.tai-dropdown .tai-step-cmd {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 6px 8px;
+  background: var(--panel-muted, #f5f5f5);
+  border-bottom: 1px solid var(--line, #eaeaea);
+  font-family: var(--mono-font-family, monospace);
+  font-size: 10.5px;
+  line-height: 1.55;
+}
+.tai-dropdown .tai-step-cmd .p {
+  flex: none;
+  color: var(--green, #0a7b3e);
+  user-select: none;
+  font-weight: 600;
+}
+.tai-dropdown .tai-step-cmd .t {
+  flex: 1;
+  min-width: 0;
+  color: var(--ink, #171717);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.tai-dropdown button.tai-step-cmd .cp,
+.tai-dropdown .tai-step-cmd .cp {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: none;
+  background: none;
+  border-radius: 4px;
+  color: var(--ink-muted, #8f8f8f);
+}
+.tai-dropdown .tai-step-cmd .cp:hover {
+  background: #e9ece5;
+  color: var(--ink, #171717);
+}
+
+/* 输出：浅色代码块（GitHub light 配色），不是纯黑终端 */
+.tai-dropdown .tai-step-out {
+  margin: 0;
+  padding: 7px 9px;
+  max-height: 150px;
+  overflow: auto;
+  background: #f7f8f6;
+  color: #2b2f2a;
+  font-family: var(--mono-font-family, monospace);
+  font-size: 10px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.tai-dropdown .tai-step-out::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.tai-dropdown .tai-step-out::-webkit-scrollbar-thumb {
+  background: #cfd3cc;
+  border-radius: 4px;
+}
+
+/* 卡脚 */
+.tai-dropdown .tai-step-ft {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-top: 1px solid var(--line, #eaeaea);
+  background: var(--panel, #ffffff);
+}
+.tai-dropdown .tai-step-ft .sp {
+  flex: 1;
+  min-width: 0;
+}
+.tai-dropdown .tai-step-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 9.5px;
+  color: var(--ink-muted, #8f8f8f);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tai-dropdown .tai-step-ok .tai-step-hint { color: var(--green, #0a7b3e); }
+.tai-dropdown .tai-step-warn .tai-step-hint { color: var(--amber, #b45309); }
+.tai-dropdown .tai-step-err .tai-step-hint { color: var(--red, #d41313); }
+/* 卡脚按钮 */
+.tai-dropdown button.tai-step-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 21px;
+  padding: 0 8px;
+  flex: none;
+  border: 1px solid var(--line, #eaeaea);
+  border-radius: 5px;
+  background: var(--panel, #ffffff);
+  color: var(--ink-soft, #666);
+  font-size: 9.5px;
+  white-space: nowrap;
+}
+.tai-dropdown button.tai-step-btn:hover:not(:disabled) {
+  background: var(--panel-muted, #f5f5f5);
+  color: var(--ink, #171717);
+  border-color: var(--line-strong, #d4d4d4);
+}
+.tai-dropdown button.tai-step-btn:disabled {
+  opacity: 0.45;
+}
+.tai-dropdown button.tai-step-btn-pri {
+  background: var(--accent, #3b6b5a);
+  border-color: transparent;
+  color: #ffffff;
+  font-weight: 600;
+}
+.tai-dropdown button.tai-step-btn-pri:hover:not(:disabled) {
+  background: var(--accent-strong, #2e5748);
+  color: #ffffff;
+}
+
+/* 命令卡外层与助手消息之间的间距收紧（原来大卡片间距太大） */
+.tai-dropdown .tai-cmdlist {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 3px 0;
+}
+/* 模型箭头颜色略淡，与授权箭头一致 */
+.tai-dropdown .tai-composer-box .tai-model-cv {
+  opacity: 0.65;
+}
