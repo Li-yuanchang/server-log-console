@@ -17,6 +17,10 @@ import {
 import type { AIConfig, AIMessage, ChatMessage } from "./ai-service.js";
 import { TerminalAISettings } from "./TerminalAISettings.js";
 import { formatKeyHint } from "./key-hints.js";
+/* Markdown 渲染（2026-11-10）：与 Vercel ai-chatbot / Cline 同一方案 */
+import { Streamdown } from "streamdown";
+import { cjk } from "@streamdown/cjk";
+import type { Components } from "streamdown";
 
 /* 抽屉样式运行时注入：不进全局样式加载链，对抽屉外组件零影响 */
 let panelStyleInjected = false;
@@ -242,6 +246,80 @@ type CardPhase = { state: "running" } | { state: "captured"; output: string; tim
 type RunningCards = Record<string, CardPhase>;
 const cardKey = (messageId: string, index: number) => `${messageId}:${index}`;
 
+/* Markdown 渲染配置（2026-11-10）
+   ------------------------------------------------------------------
+   参考 Vercel ai-chatbot 的 ai-elements/reasoning.tsx:204 与
+   Cline 的 ai-elements/streamdown.tsx 的做法：
+   用 Streamdown + @streamdown/cjk，并通过 components 覆盖代码块，
+   让 ```bash 块渲染成本项目的浅色代码卡（带语言标 + 复制）。
+   ------------------------------------------------------------------ */
+const markdownPlugins = { cjk };
+
+/* 行内代码：`xxx` */
+function MdInlineCode({ children }: { children?: React.ReactNode }) {
+  return <code className="tai-md-code">{children}</code>;
+}
+
+/* 围栏代码块：```lang ... ``` */
+function MdCodeBlock({ children, className }: { children?: React.ReactNode; className?: string }) {
+  const lang = className?.match(/language-([\w-]+)/)?.[1] ?? "";
+  const raw = typeof children === "string" ? children : String(children ?? "");
+  const text = raw.replace(/\n$/, "");
+  return (
+    <div className="tai-md-block">
+      <div className="tai-md-block-hd">
+        <span className="tai-md-lang">{lang || "text"}</span>
+        <span className="tai-md-block-sp" />
+        <button
+          type="button"
+          className="tai-md-copy"
+          title="复制代码"
+          onClick={() => void copyToClipboard(text)}
+        >
+          <Copy size={11} />
+        </button>
+      </div>
+      <pre className="tai-md-pre">{text}</pre>
+    </div>
+  );
+}
+
+const markdownComponents: Components = {
+  /* 行内 code 与围栏 code 都由 code 渲染，靠有没有 language- 区分 */
+  code: (props) => {
+    const cls = typeof props.className === "string" ? props.className : "";
+    const isBlock = /language-/.test(cls) || String(props.children ?? "").includes("\n");
+    if (isBlock) {
+      return <MdCodeBlock className={cls}>{props.children}</MdCodeBlock>;
+    }
+    return <MdInlineCode>{props.children}</MdInlineCode>;
+  },
+  /* 段落：去掉默认外边距，避免流式输出时不断跳动 */
+  p: ({ children }) => <p className="tai-md-p">{children}</p>,
+  /* 列表 */
+  ul: ({ children }) => <ul className="tai-md-ul">{children}</ul>,
+  ol: ({ children }) => <ol className="tai-md-ol">{children}</ol>,
+  li: ({ children }) => <li className="tai-md-li">{children}</li>,
+  /* 标题：终端场景下收敛成 3 档 */
+  h1: ({ children }) => <div className="tai-md-h tai-md-h1">{children}</div>,
+  h2: ({ children }) => <div className="tai-md-h tai-md-h2">{children}</div>,
+  h3: ({ children }) => <div className="tai-md-h tai-md-h3">{children}</div>,
+  h4: ({ children }) => <div className="tai-md-h tai-md-h3">{children}</div>,
+  /* 引用 / 分隔线 / 表格 */
+  blockquote: ({ children }) => <blockquote className="tai-md-quote">{children}</blockquote>,
+  hr: () => <hr className="tai-md-hr" />,
+  table: ({ children }) => (
+    <div className="tai-md-table-wrap">
+      <table className="tai-md-table">{children}</table>
+    </div>
+  ),
+  a: ({ children, href }) => (
+    <a className="tai-md-link" href={href} target="_blank" rel="noreferrer noopener">
+      {children}
+    </a>
+  ),
+};
+
 async function copyToClipboard(text: string) {
   try {
     await navigator.clipboard.writeText(text);
@@ -446,7 +524,22 @@ function MessageBubble(props: {
         }
         const text = part.trim();
         if (!text) return null;
-        return <p key={i} className="tai-ai-text">{text}</p>;
+        /* 2026-11-10：Markdown 渲染交给 Streamdown（与 Vercel ai-chatbot 同一选择）。
+           此前是纯文本 p 标签，粗体、行内代码、列表全部原样显示成符号。
+           选 Streamdown 而不是 react-markdown 的原因：
+             · 专为 AI 流式输出设计，未闭合语法（如流到一半的 **）不会闪烁
+             · @streamdown/cjk 处理中日韩断行（中文长句不会撑破容器）
+             · 支持 components 覆盖，代码块能替换成自己的样式 */
+        return (
+          <div key={i} className="tai-ai-text tai-md">
+            <Streamdown
+              components={markdownComponents}
+              shikiTheme={["github-light", "github-dark"]}
+            >
+              {text}
+            </Streamdown>
+          </div>
+        );
       })}
     </div>
   );
