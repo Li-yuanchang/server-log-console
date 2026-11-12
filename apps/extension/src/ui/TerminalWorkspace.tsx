@@ -20,7 +20,7 @@ import { TerminalSplitView, type FocusedPaneSnapshot, type PaneStateSnapshot } f
 import { useBrowserTerminalPip } from "./useBrowserTerminalPip.js";
 import { TerminalAI } from "./TerminalAI.js";
 import { PipExpandIcon } from "./PipExpandIcon.js";
-import { LogEmptyState } from "./LogEmptyState.js";
+import { LogEmptyState, StageMarkTerminal } from "./LogEmptyState.js";
 import { formatKeyHint } from "./key-hints.js";
 import type { TerminalTabState } from "./types.js";
 
@@ -423,6 +423,10 @@ export function TerminalPanel(props: TerminalPanelProps) {
   const [moreMenu, setMoreMenu] = useState<{ x: number; y: number } | null>(null);
   const [splitMenu, setSplitMenu] = useState<{ x: number; y: number } | null>(null);
   const [selectionText, setSelectionText] = useState("");
+  /* AI 面板是否已最小化为悬浮球（2026-11-10）。
+     最小化后 .terminal-side-panel 完全不渲染 —— 否则它仍占 420px flex 宽度，
+     终端右侧会留一大片空白（用户截图）。 */
+  const [aiMinimized, setAiMinimized] = useState(false);
 
   /* 选区文本只做上报（AI 面板引用命令行）；选中本身不再弹操作浮层，
      右键菜单是唯一入口（右键时按当前选区取样）。 */
@@ -1027,19 +1031,29 @@ export function TerminalPanel(props: TerminalPanelProps) {
                 </div>
                 {/* 2026-10-29 用户反馈「终端刚打开有 3 秒左右的空白，然后才出现登录，
                     太生硬」：hasTabs 为真后立即渲染 xterm，但 SSH 握手 + 远端 shell
-                    首屏输出需要 1~3 秒，这段时间画布是全空的，没有任何反馈。
-                    这里在「已有标签但尚未连上」时叠一层轻量提示（吸附在终端底部，
-                    不遮挡将来的输出），连上后自动消失。
-                    不加全屏遮罩：SSH 有时会很快返回 banner，闪一下反而更突兀。 */}
-                {hasTabs && activePaneState && !activePaneState.connected ? (
-                  <div className="terminal-connecting-hint" role="status" aria-live="polite">
-                    <span className="terminal-connecting-spin" aria-hidden="true" />
-                    <span>
-                      {activePaneState.phase === "reconnecting"
-                        ? `连接已断开，正在重试（第 ${activePaneState.retryCount} 次）…`
-                        : "正在建立 SSH 连接…"}
-                    </span>
-                  </div>
+                    首屏输出需要 1~3 秒，这段时间画布是全空的。
+                2026-11-12 对接原型 ④：editorial 大标题 + livebar + 幽灵输出行 + 终端水印
+                （in-terminal 覆盖层，连上后自动消失）。底部吸附药丸退役。
+                写死深底 = 文案写死浅色（铁则），不吃主题 token。 */}
+                {/* 2026-11-12 生硬消失修复（Boss）：覆盖层**常驻挂载**，
+                    连接成功只切 lp3-leave 类（透明度过渡淡出 + pointer-events 放行），
+                    渐变里露出底下已就绪的画布 —— 卸载式消失的生硬感消除。
+                    phase=reconnecting 时自动淡回连接态。 */}
+                {hasTabs && activePaneState ? (
+                  <LogEmptyState
+                    className={`in-terminal term-dark${activePaneState.connected ? " lp3-leave" : ""}`}
+                    align="ed"
+                    live={!activePaneState.connected}
+                    liveBar
+                    bars
+                    watermark={<StageMarkTerminal />}
+                    icon={<TerminalIcon />}
+                    title={activePaneState.phase === "reconnecting"
+                      ? `连接已断开，正在重试（第 ${activePaneState.retryCount} 次）`
+                      : "正在建立 SSH 连接"}
+                    sub="SSH 握手 + 远端 shell 首屏输出需要 1~3 秒，连上后输出直接打在画布上。"
+                    chip={<>{props.server ? `${props.server.username}@${props.server.host}:${props.server.port}` : "SSH"}<span className="lp3-sep">·</span>握手中<i className="lp3-ellip" aria-hidden="true" /></>}
+                  />
                 ) : null}
                 {activeSplitLayout && activeTab ? (
                   <TerminalSplitView
@@ -1134,14 +1148,20 @@ export function TerminalPanel(props: TerminalPanelProps) {
             )}
           </div>
           {/* AI 抽屉（T6）：非模态侧挂，纯图标开关 */}
+          {/* AI 面板（2026-11-10）
+              TerminalAI 始终挂载（保住对话/滚动状态），只有外壳 aside 随最小化变动。
+              最小化时 aside 用 .is-minimized 收成 0 宽 —— 不是卸载组件，
+              也不是 display:none（那样球在 portal 里虽然还在，但侧栏仍占位）。
+              这里必须改 flex-basis，否则终端右侧留 420px 空白（用户截图）。 */}
           {showAI && props.serverId ? (
-            <aside className="terminal-side-panel">
+            <aside className={`terminal-side-panel${aiMinimized ? " is-minimized" : ""}`}>
               <TerminalAI
                 serverId={props.serverId}
                 serverLabel={props.server?.name || props.server?.host || props.serverId}
                 selectionText={selectionText}
                 onExecute={(command) => pasteToActiveTerminal(command)}
                 onClose={() => props.onToggleTerminalOverlay("ai")}
+                onMinimizedChange={setAiMinimized}
               />
             </aside>
           ) : null}

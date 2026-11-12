@@ -1626,11 +1626,17 @@
    根因：.terminal-side-panel 虽有 flex-basis 320px（theme-modern-v2 §29/21），但未禁收缩——
    flex 行布局里被左侧内容挤压至 <320px，头部一行放不下「GLM-4·⌘J + 新对话 + 设置 + ×」
    相互重叠，消息区被压到 ~160px 导致文字两三字一断。此处钉死宽度 + 头部收缩策略。 */
+/* AI 侧板宽度（2026-11-10）
+   历史上这里钉死 320px，但抽屉内部又要 420px（头部四个图标 + 标题 + badge），
+   结果内容溢出被 overflow:hidden 裁掉 —— × 按钮消失、模型名被截断
+   （用户截图：宽窗口右侧被切）。
+   现在宽度由 TerminalAI 通过 JS 内联 style 控制（可拖拽 320~720），
+   CSS 只给兜底值，不再 min/max 死钉。 */
 .theme-modern .terminal-side-panel {
-  flex: 0 0 320px;
-  width: 320px;
+  flex: 0 0 420px;
+  width: 420px;
   min-width: 320px;
-  max-width: 320px;
+  max-width: 720px;
 }
 .theme-modern .terminal-side-panel .tai-dropdown {
   width: 100%;
@@ -1679,19 +1685,56 @@
   .theme-modern .terminal-body-layout {
     position: relative;
   }
+  /* 小窗模式（<1024px）：侧板 absolute 悬浮覆盖终端。
+     间距与全屏模式统一 —— 全屏时抽屉自身 margin:10px，
+     这里侧板定位也用 10px，两种模式的呼吸间距才一致
+     （用户 2026-11-10 反馈"上下不对齐"）。
+     边框/圆角/阴影/底色都不在这里加 —— 抽屉 .tai-dropdown 自己已经有了，
+     两层叠加会产生"框中框"。 */
+  /* 小窗模式（<1024px）：侧板 absolute 悬浮覆盖终端
+     ------------------------------------------------------------------
+     留白只由 top/bottom/right 的 10px 提供，其余一律清零。
+     关键三条（2026-11-10 用 CDP 实测确认，改前 comp bottom=830 贴死）：
+       ① padding:0 !important  —— 清掉全屏模式的 padding:10，
+          否则留白叠加成 20px，顶部空隙大、底部被 overflow 裁掉
+       ② height:auto !important —— 不能再有 height:100%，
+          top+bottom+height 三者同时存在时浏览器会**忽略 bottom**，
+          侧板底部超出容器 10px → 输入框贴底
+       ③ flex:none !important  —— absolute 元素不参与 flex，
+          但全屏规则里的 flex:0 0 420px 会残留影响宽度计算 */
   .theme-modern .terminal-side-panel {
     position: absolute;
-    top: 8px;
+    top: 10px;
     right: 10px;
-    bottom: 8px;
+    bottom: 10px;
+    left: auto;
     z-index: 15;
-    width: min(320px, calc(100% - 20px));
+    width: min(420px, calc(100% - 20px));
     min-width: 0;
     max-width: calc(100% - 20px);
-    border: 1px solid var(--line-strong);
-    border-radius: var(--r-m);
-    box-shadow: var(--v2-shadow-pop);
-    background: var(--panel);
+    height: auto !important;
+    max-height: none !important;
+    flex: none !important;
+    padding: 0 !important;
+    box-sizing: border-box;
+    background: transparent;
+    border: none;
+    overflow: visible;
+  }
+  /* 小窗模式下抽屉填满侧板的内框（2026-11-10 修正）
+     问题：侧板已经是 top:10 / bottom:10 的绝对定位框，
+          抽屉又设 height:100% —— 100% 是相对"侧板内容高度"算的，
+          而侧板没有显式 height（靠 top/bottom 拉伸），
+          height:100% 在这种情况会退化成 auto 或算错，
+          结果顶部留白偏大、底部贴死（用户截图）。
+     修正：用 flex 撑满而不是 height:100%。侧板是 flex column，
+          抽屉 flex:1 就能精确填满剩余空间。 */
+  .theme-modern .terminal-side-panel .tai-dropdown {
+    margin: 0;
+    height: auto !important;
+    max-height: none !important;
+    flex: 1 1 auto;
+    min-height: 0;
   }
   /* 覆盖态下终端主体恢复全宽，不再被侧板压缩 */
   .theme-modern .terminal-main-shell {

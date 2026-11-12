@@ -135,6 +135,69 @@ const SYSTEM_PROMPT = `你是一个 Linux 服务器终端智能助手，嵌入�
 - 优先使用安全、非破坏性的命令
 - 如果不确定用户的操作系统，默认假设 CentOS/RHEL 7+`;
 
+/* 自动执行协议（2026-11-10 新增）
+   ------------------------------------------------------------------
+   背景：系统提示词原先要求 AI「严禁说无法执行命令」，但架构上 AI 并没有
+   执行能力 —— 它只能输出 bash 代码块让用户手动点按钮。结果模型要么违背
+   指令、要么违心胡说。用户明确要求「让 AI 自己执行」。
+   实现：不依赖模型的 function calling（用户用的 deepseek-v4.1-flash
+   未必支持 tools），改用**约定标记**：
+     · AI 想执行命令时，在 bash 代码块后紧跟一行 [[RUN]]
+     · 前端解析到 [[RUN]] 就自动执行该代码块，把输出作为
+       【终端命令执行输出】回灌，再发下一轮
+     · 轮次上限 MAX_AUTO_ROUNDS，防止死循环
+   授权档位（readonly / ask / auto）决定是否真的执行：
+     · readonly：不执行任何写操作，只回灌「已被只读模式拒绝」
+     · ask：本次会话第一条弹确认，用户同意后本会话内不再问
+     · auto：直接执行（危险命令仍由 assessCommand 拦截）
+   ------------------------------------------------------------------ */
+export const AUTO_RUN_MARKER = "[[RUN]]";
+/** 单次提问最多自动执行几轮，防止模型陷入循环 */
+export const MAX_AUTO_ROUNDS = 4;
+
+/** 三个反引号，避免在模板字符串里直接写代码围栏 */
+const FENCE = String.fromCharCode(96, 96, 96);
+
+/** 追加自动执行协议到系统提示词（按授权档位拼不同段落） */
+export function buildSystemPrompt(authMode: "readonly" | "ask" | "auto"): string {
+  if (authMode === "readonly") {
+    return [
+      SYSTEM_PROMPT,
+      "",
+      "【只读模式】",
+      "你没有执行权限。所有命令都必须由用户手动执行。",
+      `给出命令时用 ${FENCE}bash 包裹即可，不要输出 ${AUTO_RUN_MARKER} 标记。`,
+      "如果用户要求你执行，告诉他当前是只读模式，需要切换授权档位。",
+    ].join("\n");
+  }
+  const confirmNote = authMode === "ask"
+    ? "执行前系统会弹确认框（用户可能拒绝）。被拒绝时不要重试同一命令，改为解释原因或给替代方案。"
+    : "执行不需要确认，直接下发。但危险命令会被系统拦截。";
+  return [
+    SYSTEM_PROMPT,
+    "",
+    "【你可以真实执行命令】",
+    "你具备在用户 SSH 终端里执行命令的能力，不要再说\"我无法执行\"或\"请自行执行\"。",
+    "",
+    "执行方式：当你需要运行命令时，把命令放进 bash 代码块，"
+    + `并在代码块之后紧跟单独一行 ${AUTO_RUN_MARKER} 标记。`
+    + "系统会自动执行并把你得到的输出以【终端命令执行输出】回灌给你，你据此继续分析。",
+    "",
+    "示例：",
+    FENCE + "bash",
+    "df -h",
+    FENCE,
+    AUTO_RUN_MARKER,
+    "",
+    "规则：",
+    "- 一次只标记一条命令（要跑多条就分多个代码块，各带自己的标记）",
+    `- 只需要给用户看、不需要你拿到结果的命令，不要加 ${AUTO_RUN_MARKER}`,
+    `- ${confirmNote}`,
+    "- 拿到执行输出后先给结论，再决定是否继续下一步",
+    `- 最多自动执行 ${MAX_AUTO_ROUNDS} 轮，请优先把最关键的几条命令合并执行`,
+  ].join("\n");
+}
+
 const DEFAULT_SESSION: AISessionConfig = {
   contextTurns: 10,
   maxTokens: 2048,
@@ -368,6 +431,9 @@ export async function sendAIChat(
   config: AIConfig,
   messages: AIMessage[],
   onChunk?: (chunk: string) => void,
+  /* 授权档位决定系统提示词里要不要教 AI 输出 [[RUN]] 标记。
+     默认 readonly —— 调用方不传时保持原行为（只给建议不执行）。 */
+  authMode: "readonly" | "ask" | "auto" = "readonly",
 ): Promise<string> {
   const provider = getActiveProvider(config);
   const model = getActiveModel(config);
@@ -382,7 +448,8 @@ export async function sendAIChat(
   abortController = new AbortController();
   const signal = abortController.signal;
 
-  const withSystem: AIMessage[] = [{ role: "system" as const, content: SYSTEM_PROMPT }, ...messages];
+  const systemPrompt = buildSystemPrompt(authMode);
+  const withSystem: AIMessage[] = [{ role: "system" as const, content: systemPrompt }, ...messages];
   const bodyMessages: AIMessage[] = provider.protocol === "anthropic"
     ? withSystem.filter((m) => m.role !== "system")
     : withSystem;
@@ -393,7 +460,7 @@ export async function sendAIChat(
       "Content-Type": "application/json",
       ...protocolHeaders(provider.protocol, provider.apiKey),
     },
-    body: JSON.stringify(buildRequestBody(provider, model, bodyMessages, config.session, SYSTEM_PROMPT)),
+    body: JSON.stringify(buildRequestBody(provider, model, bodyMessages, config.session, systemPrompt)),
     signal,
   });
 

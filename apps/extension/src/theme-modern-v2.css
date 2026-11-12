@@ -1946,10 +1946,10 @@
   flex-direction: column;
 }
 /* AI 抽屉（终端右侧，非模态伴生） */
+/* 宽度由 align-s5-terminal.css 统一控制（2026-11-10），此处不再重复钉 320px */
 .theme-modern .terminal-side-panel {
-  flex: 0 0 320px;
-  width: 320px;
-  border-left: 1px solid var(--line);
+  flex: 0 0 420px;
+  width: 420px;
 }
 /* 分屏工作区条 */
 .theme-modern .terminal-workarea-split {
@@ -2705,8 +2705,7 @@ body:has(.theme-modern) button:disabled {
    styles-tsc.css 里的 .tai-* 原为独立深色主题（80 处深色硬编码、零主题适配），
    压在浅色应用里形成突兀黑块，此处统一改走 token。 */
 .theme-modern .terminal-side-panel {
-  width: 320px;
-  border-left: 1px solid var(--line);
+  width: 420px;
   background: var(--panel);
 }
 .theme-modern .tai-dropdown,

@@ -299,23 +299,6 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
     }
 
     const { shellBg } = readTerminalTheme(containerRef.current, options.terminalBackgroundColor);
-    /* 🔍 临时诊断（保证执行：终端创建时必经此处）。
-       目的：一次看清「变量是否正确」——这是前面反复排查的盲区。 */
-    try {
-      const el = containerRef.current;
-      const cs = el ? getComputedStyle(el) : null;
-      const diagText =
-        "scheme=" + String(options.terminalScheme) +
-        " bgProp=" + String(options.terminalBackgroundColor) +
-        " cssVar=" + String(cs?.getPropertyValue("--terminal-background").trim()) +
-        " tex=" + String(cs?.getPropertyValue("--terminal-texture-image").trim()).slice(0, 60) +
-        " contBg=" + String(cs?.backgroundColor);
-      console.info("[term-diag-create] " + diagText);
-      /* 同时挂到 DOM 上，便于在浏览器里直接查看（不依赖 DevTools 日志） */
-      try {
-        if (el) el.setAttribute("data-term-diag", diagText);
-      } catch { /* ignore */ }
-    } catch { /* 诊断自身不得影响主流程 */ }
 
     const terminal = new Terminal({
       /* 光标：样式/闪烁改为可配置（默认仍 bar + 闪烁 = 原写死值，观感不变） */
@@ -327,7 +310,7 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
          未开启时 findNext 在高亮环节抛错（被 safeSearchCall 吞掉 → 恒 0/0）、着色静默失效。 */
       allowProposedApi: true,
       /* 2026-10-27 关键修复：不开启时 xterm 的 canvas 会用 theme.background 铺满不透明，
-         完全盖住 .xterm-container 上的背景纹理层 —— 表现为「选了方格纹理但看不到任何变化」。
+         完全盖住 .xterm-container 上的背景层 —— 表现为「选了背景图但看不到任何变化」。
          开启后画布透明，背景由 CSS 层（--terminal-background + --terminal-texture-image）承担。 */
       allowTransparency: true,
       /* 原型 .term（prototype.html 190 行）原为 11px，用户确认过小 → 默认 14

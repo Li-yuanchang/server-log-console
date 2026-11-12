@@ -1,7 +1,8 @@
 // @ts-ignore vite 的 ?inline 导入返回 CSS 文本，无类型声明
 import aiPanelCss from "./ai-panel.css?inline";
 import { useState, useRef, useEffect, useCallback, useMemo, Fragment } from "react";
-import { Send, Loader, Sparkles, Plus, X, Terminal as TerminalIcon, Copy, CornerDownLeft, TextSelect, CircleCheck, ChevronDown, Check, Settings2, Zap, ShieldCheck, Shield, ShieldAlert } from "lucide-react";
+import { createPortal } from "react-dom";
+import { Send, Loader, Sparkles, Plus, X, Terminal as TerminalIcon, Copy, CornerDownLeft, TextSelect, CircleCheck, ChevronDown, Check, Minus, Settings2, Zap, ShieldCheck, Shield, ShieldAlert } from "lucide-react";
 import {
   readAIConfig,
   saveAIConfig,
@@ -13,6 +14,7 @@ import {
   getActiveModel,
   isAIConfigured,
   PROTOCOL_LABELS,
+  MAX_AUTO_ROUNDS,
 } from "./ai-service.js";
 import type { AIConfig, AIMessage, ChatMessage } from "./ai-service.js";
 import { TerminalAISettings } from "./TerminalAISettings.js";
@@ -150,6 +152,10 @@ function useTerminalDomController(onExecute: (command: string) => void): Termina
 
 interface TerminalAIProps {
   serverId: string;
+  /* 最小化状态上报（2026-11-10）：球用 portal 渲染到 body，
+     父级 .terminal-side-panel 无法用 :has() 探测到它，
+     必须由组件显式通知父级"我最小化了，请把侧栏收起来"。 */
+  onMinimizedChange?: (minimized: boolean) => void;
   serverLabel: string;
   /* 自动引用终端选中内容 */
   selectionText?: string;
@@ -561,11 +567,60 @@ export function TerminalAI(props: TerminalAIProps) {
   const [authMode, setAuthMode] = useState<"readonly" | "ask" | "auto">("ask");
   const [authPopOpen, setAuthPopOpen] = useState(false);
   const authPopRef = useRef<HTMLDivElement | null>(null);
+  /* ask 模式下本次会话是否已确认过自动执行（确认一次后不再弹） */
+  const autoApprovedRef = useRef(false);
+  /* 最小化为悬浮球（2026-11-10）：用户要求"缩成侧边 AI 萌宠"。
+     实现选悬浮球而不是窄旁条 —— 不占终端宽度、不遮挡内容。 */
+  const [minimized, setMinimized] = useState(false);
+  /* 上报给父级（TerminalWorkspace），让它收起 .terminal-side-panel */
+  useEffect(() => {
+    props.onMinimizedChange?.(minimized);
+  }, [minimized, props.onMinimizedChange]);
+  /* 宽度可拖拽（2026-11-10）：只允许拖左右改宽度，不允许自由浮动位置
+     （自由拖动会挡住终端输出，Cursor/VS Code 也都是固定停靠）。
+     范围 280~560，持久化到 localStorage。 */
+  const [panelWidth, setPanelWidth] = useState<number>(() => {
+    try {
+      const v = Number(localStorage.getItem("server-log-console:ai-panel-width"));
+      /* 默认 420：340 太窄，头部四个图标 + 标题 + 「未配置」badge 挤不下，
+         × 按钮被裁到容器外（用户截图）。420 能放下全部头部元素且不浪费终端宽度。 */
+      return Number.isFinite(v) && v >= 320 && v <= 720 ? v : 420;
+    } catch {
+      return 420;
+    }
+  });
+  const resizingRef = useRef(false);
   const [quickOpen, setQuickOpen] = useState<boolean>(() => readQuickOpen());
   /* 命令卡运行态：key = msgId:index */
   const [runningCards, setRunningCards] = useState<RunningCards>({});
   const [analyzingKey, setAnalyzingKey] = useState<string | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
+  /* 宽度同步到父级侧板（2026-11-10 修正）
+     ------------------------------------------------------------------
+     关键：内联 style 优先级高于 CSS 类！之前无条件写
+       host.style.width = `${panelWidth}px`
+     导致最小化时 `.is-minimized { width:0 }` 被内联值压掉 →
+     侧栏仍占 420px，终端右侧留大片空白（用户截图）。
+     现在：
+       · 最小化 → 清空所有内联宽度，让 CSS 的 .is-minimized 接管
+       · 展开   → 写入记忆宽度
+     同时侧板最小化时靠 flex-basis 归零，所以 flex 也必须清掉。 */
+  useEffect(() => {
+    const host = panelRef.current?.closest(".terminal-side-panel") as HTMLElement | null;
+    if (!host) return;
+    if (minimized) {
+      host.style.removeProperty("flex");
+      host.style.removeProperty("width");
+      host.style.removeProperty("min-width");
+      host.style.removeProperty("max-width");
+      return;
+    }
+    host.style.flex = `0 0 ${panelWidth}px`;
+    host.style.width = `${panelWidth}px`;
+    host.style.minWidth = `${panelWidth}px`;
+    host.style.maxWidth = `${panelWidth}px`;
+  }, [panelWidth, minimized]);
+
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const popRef = useRef<HTMLDivElement | null>(null);
@@ -691,13 +746,50 @@ export function TerminalAI(props: TerminalAIProps) {
     return history;
   }, [config.session.contextTurns, controller, selectionText, terminalAvailable]);
 
-  const runRequest = useCallback(async (nextMessages: ChatMessage[], history: AIMessage[]) => {
+  /* 从 AI 回复里解析「要自动执行的命令」：
+     [[RUN]] 标记前面紧邻的那个 bash 代码块就是要跑的。
+     返回 [{command, markerIndex}]，按出现顺序。 */
+  const parseAutoRuns = useCallback((content: string): string[] => {
+    const out: string[] = [];
+    /* 匹配 ```lang
+...
+``` 后面（允许空行）跟着 [[RUN]] */
+    const re = /```(?:bash|sh|shell)?\s*\n([\s\S]*?)```\s*\n?\s*\[\[RUN\]\]/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(content)) !== null) {
+      const block = m[1].trim();
+      /* 一个块里多行命令时只取第一行有效命令，避免误跑注释或续行 */
+      const first = block.split("\n").map((l) => l.trim()).find((l) => l && !l.startsWith("#"));
+      if (first) out.push(first);
+    }
+    return out;
+  }, []);
+
+  /* 核心：一次提问 + 自动执行循环
+     ------------------------------------------------------------------
+     流程：发请求 → 解析 [[RUN]] → 执行 → 把输出回灌 → 再发 → …
+     直到没有 [[RUN]]、或达到 MAX_AUTO_ROUNDS、或用户终止。
+     授权档位：
+       readonly → 不执行，回灌「只读模式拒绝」
+       ask      → 本次会话首次执行前弹确认（用 confirm 简化）
+       auto     → 直接执行（危险命令仍被 assessCommand 拦截）
+     ------------------------------------------------------------------ */
+  const runRequest = useCallback(async (
+    nextMessages: ChatMessage[],
+    history: AIMessage[],
+    autoRounds = 0,
+  ) => {
     setIsLoading(true);
     setStreamContent("");
     try {
-      const fullContent = await sendAIChat(config, history, (chunk) => {
-        setStreamContent(chunk);
-      });
+      const fullContent = await sendAIChat(
+        config,
+        history,
+        (chunk) => {
+          setStreamContent(chunk);
+        },
+        authMode,
+      );
       const commands = extractCommands(fullContent);
       const aiMsg: ChatMessage = {
         id: genId(),
@@ -706,9 +798,81 @@ export function TerminalAI(props: TerminalAIProps) {
         timestamp: Date.now(),
         commands,
       };
-      setMessages((prev) => [...prev, aiMsg]);
+      const withAi = [...nextMessages, aiMsg];
+      setMessages(withAi);
+
+      /* ---- 自动执行 ---- */
+      const autoRuns = authMode === "readonly" ? [] : parseAutoRuns(fullContent);
+      if (autoRuns.length === 0 || autoRounds >= MAX_AUTO_ROUNDS) {
+        if (autoRuns.length > 0 && autoRounds >= MAX_AUTO_ROUNDS) {
+          /* 到轮次上限：提示一下，不静默停 */
+          setMessages((prev) => [...prev, {
+            id: genId(),
+            role: "assistant",
+            content: `（已达单次自动执行上限 ${MAX_AUTO_ROUNDS} 轮，后续命令请手动执行）`,
+            timestamp: Date.now(),
+          }]);
+        }
+        setStreamContent("");
+        setIsLoading(false);
+        return;
+      }
+
+      /* ask 模式：首次执行前确认一次，本次会话记住 */
+      if (authMode === "ask" && !autoApprovedRef.current) {
+        const preview = autoRuns.map((c) => `  $ ${c}`).join("\n");
+        const ok = window.confirm(`AI 请求执行以下命令：\n\n${preview}\n\n允许执行吗？（本次会话不再询问）`);
+        if (!ok) {
+          setMessages((prev) => [...prev, {
+            id: genId(),
+            role: "assistant",
+            content: "已拒绝执行。如果你希望我继续，请切换授权档位或手动执行上述命令。",
+            timestamp: Date.now(),
+          }]);
+          setStreamContent("");
+          setIsLoading(false);
+          return;
+        }
+        autoApprovedRef.current = true;
+      }
+
+      /* 逐条执行，收集输出 */
+      const results: string[] = [];
+      for (const cmd of autoRuns) {
+        const assessment = assessCommand(cmd);
+        if (assessment.level === "dangerous") {
+          results.push(`$ ${cmd}\n[已拦截] ${assessment.reason}`);
+          continue;
+        }
+        setRunningCards((prev) => ({ ...prev, [`auto:${cmd}`]: { state: "running" } }));
+        try {
+          const { output, timedOut } = await controller.executeAndCapture(cmd);
+          results.push(`$ ${cmd}\n${output || "(无输出)"}${timedOut ? "\n[输出不完整：15 秒未结束]" : ""}`);
+          setRunningCards((prev) => {
+            const next = { ...prev };
+            delete next[`auto:${cmd}`];
+            return next;
+          });
+        } catch (e: any) {
+          results.push(`$ ${cmd}\n[执行异常] ${e?.message ?? "未知错误"}`);
+        }
+      }
+
+      /* 回灌输出，继续下一轮 */
+      const feedBack = `【终端命令执行输出】\n${results.join("\n\n")}`;
+      const nextHistory: AIMessage[] = [
+        ...history,
+        { role: "assistant", content: fullContent },
+        { role: "user", content: feedBack },
+      ];
+      setStreamContent("");
+      await runRequest(withAi, nextHistory, autoRounds + 1);
     } catch (err: any) {
-      if (err?.name === "AbortError") return;
+      if (err?.name === "AbortError") {
+        setIsLoading(false);
+        setStreamContent("");
+        return;
+      }
       const errMsg: ChatMessage = {
         id: genId(),
         role: "assistant",
@@ -716,11 +880,10 @@ export function TerminalAI(props: TerminalAIProps) {
         timestamp: Date.now(),
       };
       setMessages((prev) => [...prev, errMsg]);
-    } finally {
       setIsLoading(false);
       setStreamContent("");
     }
-  }, [config]);
+  }, [authMode, config, controller, parseAutoRuns]);
 
   const handleSend = useCallback(async (messageText?: string) => {
     const text = (messageText ?? input).trim();
@@ -800,6 +963,55 @@ export function TerminalAI(props: TerminalAIProps) {
     setModelPopOpen(false);
   }
 
+  /* 左右拖拽改宽度（2026-11-10）
+     抽屉贴右，所以向左拖 = 变宽：新宽度 = 起点宽度 + (起点X - 当前X)。
+     用 pointer 事件 + setPointerCapture，避免鼠标移出后丢失跟随。 */
+  const startResize = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const startX = e.clientX;
+    const startW = panelWidth;
+    const el = e.currentTarget;
+    el.setPointerCapture(e.pointerId);
+    resizingRef.current = true;
+    /* 拖动期间禁用侧板过渡，否则鼠标拖了面板还在追赶（手感发飘） */
+    const hostEl = el.closest(".terminal-side-panel") as HTMLElement | null;
+    hostEl?.classList.add("is-resizing");
+
+    const onMove = (ev: PointerEvent) => {
+      const next = Math.min(720, Math.max(320, startW + (startX - ev.clientX)));
+      setPanelWidth(next);
+      /* 关键：宽度要同时写到侧板容器上。
+         抽屉本身已改为 position:static 跟随侧板，
+         只改抽屉宽度不会让终端让位（会盖在终端上）。 */
+      const host = el.closest(".terminal-side-panel") as HTMLElement | null;
+      if (host) {
+        host.style.flex = `0 0 ${next}px`;
+        host.style.width = `${next}px`;
+        host.style.minWidth = `${next}px`;
+        host.style.maxWidth = `${next}px`;
+      }
+    };
+    const onUp = (ev: PointerEvent) => {
+      resizingRef.current = false;
+      el.releasePointerCapture(ev.pointerId);
+      el.removeEventListener("pointermove", onMove);
+      el.removeEventListener("pointerup", onUp);
+      hostEl?.classList.remove("is-resizing");
+      /* 落盘：只在拖动结束时写一次，避免高频写 localStorage */
+      setPanelWidth((w) => {
+        try {
+          localStorage.setItem("server-log-console:ai-panel-width", String(w));
+        } catch {
+          /* 忽略 */
+        }
+        return w;
+      });
+    };
+    el.addEventListener("pointermove", onMove);
+    el.addEventListener("pointerup", onUp);
+  }, [panelWidth]);
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     /* IME 组合输入保护（2026-11-10 修复）：
        中文输入法用 Enter 确认候选词时，keydown 同样是 Enter，
@@ -835,13 +1047,50 @@ export function TerminalAI(props: TerminalAIProps) {
     );
   }
 
+  /* 最小化态：只渲染一个圆形悬浮球（2026-11-10）
+     选悬浮球而非窄旁条 —— 不占终端宽度、不遮挡正文。
+     球上有未读提示点时说明 AI 有新回复（此处以"对话非空"近似）。 */
+  if (minimized) {
+    /* 最小化：球必须渲染到侧栏**外面** —— 侧栏会被 display:none 或宽度归零，
+       球留在里面会一起消失。这里用 createPortal 挂到 body，
+       再用 fixed 定位钉在终端区右下角。 */
+    return createPortal(
+      <button
+        type="button"
+        className="tai-orb"
+        title="展开终端 AI"
+        aria-label="展开终端 AI"
+        onMouseDown={(event) => event.stopPropagation()}
+        onClick={(event) => {
+          event.stopPropagation();
+          setMinimized(false);
+        }}
+      >
+        <Sparkles size={19} strokeWidth={1.85} />
+        {messages.length > 0 ? <span className="tai-orb-dot" aria-hidden="true" /> : null}
+      </button>,
+      document.body,
+    );
+  }
+
   return (
     <div
       ref={panelRef}
       className="tai-dropdown"
+      /* 不再设内联 width：宽度由父级 .terminal-side-panel 决定，
+         抽屉 width:100% 自适应。设了内联宽反而会和侧板 padding 冲突。 */
       onMouseDown={(event) => event.stopPropagation()}
       onClick={(event) => event.stopPropagation()}
     >
+      {/* 左边缘拖拽手柄：只改宽度，不移动位置 */}
+      <div
+        className="tai-resizer"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="拖动调整面板宽度"
+        title="拖动调整宽度"
+        onPointerDown={startResize}
+      />
       {/* Header（共享类，视觉沿用旧 token 化适配层） */}
       <div className="tai-header">
         <div className="tai-header-title">
@@ -861,6 +1110,15 @@ export function TerminalAI(props: TerminalAIProps) {
             onClick={handleNewChat}
           >
             <Plus size={13} />
+          </button>
+          <button
+            type="button"
+            className="tai-hdr-btn"
+            title="最小化为悬浮球"
+            aria-label="最小化"
+            onClick={() => setMinimized(true)}
+          >
+            <Minus size={15} />
           </button>
           <button type="button" className="tai-hdr-btn" title="AI 设置" onClick={() => setShowSettings(true)}>
             <Settings2 size={13} />

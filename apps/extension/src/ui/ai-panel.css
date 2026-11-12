@@ -21,10 +21,47 @@
    （.terminal-main-shell 的 --terminal-background = #0a0a0a），
    看起来像"底下一块黑"，用户反馈还原。
    现行为：内容少时抽屉矮，内容多时撑到 calc(100% - 8px)，不留缝。 */
+/* 高度（2026-11-10 定版）：撑满 100%
+   历史反复：
+     ① 内容自适应        → 内容少时抽屉矮，下方露出终端深色区（灰边）
+     ② height:80%        → 仍留 20% 缝
+     ③ calc(100% - 8px)  → 与 styles-tsc 的 top:4px 叠加后，上下各留 4px，
+                           实际是 96% 左右，仍然不是 100%（用户指出）
+   定版：直接把定位改成 top:0/bottom:0，高度 100%，不再用 calc 扣减。
+   这样抽屉四边完全贴合容器，滚动交给内部 .tai-messages。 */
+/* 尺寸与定位（2026-11-10 修正 —— 上一版定位完全错误）
+   ------------------------------------------------------------------
+   错误经过：我给 .tai-dropdown 写了 position:absolute + top/right + calc 高度，
+   但 AI 面板是挂在 .terminal-side-panel 里的：
+     · 宽屏（≥1024px）：侧板在 flex 流里与终端**并排**，占 320px
+     · 窄屏（<1024px）：侧板才 absolute 悬浮（见 align-s5-terminal.css §16）
+   我的 absolute 覆盖把并排模式破坏了 —— 面板脱流后飘到容器右下角，
+   而侧板占的 320px 变成一片空白（用户截图指出的问题）。
+
+   现在：不再声明 position / top / right / height。
+   · 宽屏：跟随侧板，flex 流内正常并排，height:100% 撑满
+   · 窄屏：由 §16 的媒体查询接管 absolute 悬浮
+   宽度由侧板的 flex-basis 控制，拖拽只改侧板宽度（见下方 .tai-resizer）。 */
 .tai-dropdown {
+  position: static;
   min-width: 0;
+  /* 上下呼吸间距：用户要求像独立小窗那样有留白（2026-11-10）。
+     侧板是 flex 容器，用 margin 而不是改 height —— 
+     改 height 会因为父级高度含 padding 而算出误差，margin 永远是准的。 */
+  height: 100%;
+  max-height: 100%;
+  flex: 1 1 auto;
+  /* 留白由侧板 padding 提供，这里不再加 margin —— 否则 width:100% + margin
+     会超出父级宽度被裁（正是右侧内容消失的原因）。 */
+  margin: 0;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
   min-height: 0;
-  max-height: calc(100% - 8px);
+  overflow: hidden;
+  border-radius: 10px;
+  border: 1px solid var(--line-strong, #d4d4d4);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
 }
 
 /* ---------- 上下文条 ---------- */
@@ -309,7 +346,10 @@
    现在只保留 .tai-composer-box 作为唯一的视觉盒子。 */
 .tai-dropdown .tai-composer {
   flex: none;
-  margin: 8px 10px 10px;
+  /* 底部 margin 由 10px 收到 8px，与左右一致（2026-11-10）。
+     原来底部比左右多 2px，加上抽屉 height 取整，最下方会露出一条
+     与内部不同的色带（用户截图指出的"灰色底边距"）。 */
+  margin: 6px 8px 8px;
   border: none;
   border-radius: 0;
   background: transparent;
@@ -1792,4 +1832,323 @@
   color: var(--accent, #3b6b5a);
   text-decoration: underline;
   text-underline-offset: 2px;
+}
+
+/* ============================================================
+   最小化悬浮球 + 宽度拖拽（2026-11-10）
+   ============================================================ */
+
+/* 悬浮球：圆形按钮，贴在抽屉原来的左下角位置。
+   选它而不是窄旁条 —— 不占终端宽度，不遮挡正文。 */
+/* 悬浮球：最小化后的形态。
+   位置：挂在 .terminal-side-panel 内（该元素 position:relative 时相对它定位；
+   宽屏下侧板在 flex 流里，球会显示在终端正文区右下角，而不是窗口右下角 —— 
+   上一版绝对定位到 body 坐标系，结果飘到终端外面去了（用户截图）。 */
+/* ============================================================
+   最小化悬浮球（2026-11-10 重设计）
+   ------------------------------------------------------------
+   用户反馈：之前的 hover 是"单纯放大"，生硬且廉价。
+   本版改用**物理隐喻**：球像真的被托起来 ——
+     · 只做位移（translateY），不做缩放
+     · 阴影随之扩散变淡（远距模糊光晕 + 近距实影两层）
+     · 边缘一圈柔光渐显，暗示"被点亮"
+     · 图标缓慢自转，呼吸感来自动画而不是尺寸
+   动效清单：
+     · idle      ：光晕呼吸 3.2s（很轻，不抢注意力）
+     · hover     ：上浮 4px + 阴影扩散 + 图标 200ms 缓转 12° + 光晕收束
+     · active    ：落回 1px（按下感）
+     · 最小化进入：从中心弹出（scale 仅用于入场，不用于 hover）
+   ============================================================ */
+.tai-dropdown-orb,
+.tai-orb {
+  /* 侧栏在最小化时 display:none，所以球不能相对侧栏定位。
+     改为 fixed 挂在视口右下角，但避开状态栏（bottom 48）与右侧滚动条。 */
+  position: fixed;
+  right: 22px;
+  bottom: 48px;
+  z-index: 160;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border-radius: 999px;
+  /* 底色改为极浅的 accent 渐变，比纯白有质感 */
+  background:
+    radial-gradient(circle at 32% 28%, #ffffff 0%, #f6faf8 55%, #eef5f1 100%);
+  border: 1px solid color-mix(in srgb, var(--accent, #3b6b5a) 22%, transparent);
+  color: var(--accent, #3b6b5a);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  isolation: isolate;
+  /* 两层阴影：近影（实）+ 远晕（虚），hover 时拉开距离 */
+  box-shadow:
+    0 2px 4px rgba(20, 40, 32, 0.10),
+    0 6px 16px -4px rgba(20, 40, 32, 0.18);
+  transition:
+    transform 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 0.28s ease;
+  /* 入场：仅此处允许 scale */
+  animation: taiOrbIn 0.34s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes taiOrbIn {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* ---------- 多层 hover 动效（2026-11-10 二次重设计） ----------
+   用户反馈"就一个旋转太 low"。本版把 hover 拆成 5 层联动：
+     L1 球体：上浮 5px（位移，不缩放）
+     L2 阴影：近影收紧 + 远晕扩散，明暗对比拉开
+     L3 光晕：外圈由"呼吸"切换为"实光圈"，并有 8% → 26% 的浓度过渡
+     L4 扫光：一道 45° 高光从左下扫到右上（0.6s，仅 hover 触发一次）
+     L5 图标：上浮 + 微旋转 + 尺寸微增（1.0 → 1.08，仅图标不缩球）
+   注意：球体本身永不用 scale，缩放只发生在图标与扫光上。 */
+.tai-orb::before {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border-radius: 999px;
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--accent, #3b6b5a) 16%, transparent) 0%,
+    transparent 70%
+  );
+  opacity: 0.5;
+  z-index: -1;
+  transition: opacity 0.3s ease, inset 0.3s ease;
+  animation: taiOrbBreath 3.2s ease-in-out infinite;
+}
+@keyframes taiOrbBreath {
+  0%, 100% { opacity: 0.38; }
+  50%      { opacity: 0.68; }
+}
+
+/* L4 扫光层：平时不可见，hover 时扫过一遍 */
+.tai-orb::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  overflow: hidden;
+  background: linear-gradient(
+    115deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.85) 48%,
+    rgba(255, 255, 255, 0.2) 58%,
+    transparent 70%
+  );
+  background-size: 260% 260%;
+  background-position: 130% 130%;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+}
+.tai-orb:hover::after {
+  opacity: 1;
+  animation: taiOrbSheen 0.62s cubic-bezier(0.3, 0.7, 0.4, 1) 1;
+}
+@keyframes taiOrbSheen {
+  0%   { background-position: 130% 130%; }
+  100% { background-position: -30% -30%; }
+}
+
+/* L5 图标：hover 时上浮 + 微旋 + 轻微放大（只作用于图标） */
+.tai-orb > svg {
+  transition: transform 0.46s cubic-bezier(0.22, 1, 0.36, 1);
+  transform-origin: 50% 50%;
+  will-change: transform;
+}
+
+/* L1 + L2 + L3：hover 主态 */
+.tai-orb:hover {
+  transform: translateY(-5px);
+  border-color: color-mix(in srgb, var(--accent, #3b6b5a) 48%, transparent);
+  box-shadow:
+    0 2px 4px rgba(20, 40, 32, 0.08),
+    0 18px 34px -8px rgba(20, 40, 32, 0.30);
+}
+.tai-orb:hover::before {
+  animation: none;
+  opacity: 1;
+  inset: -9px;
+}
+.tai-orb:hover > svg {
+  transform: translateY(-1px) rotate(18deg) scale(1.08);
+}
+
+/* active：落回，制造按下手感 */
+.tai-orb:active {
+  transform: translateY(-1px);
+  transition-duration: 0.1s;
+  box-shadow:
+    0 1px 2px rgba(20, 40, 32, 0.12),
+    0 4px 10px -3px rgba(20, 40, 32, 0.18);
+}
+
+/* 键盘可达性：focus-visible 给一圈实线，不用阴影 */
+.tai-orb:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent, #3b6b5a) 55%, transparent);
+  outline-offset: 3px;
+}
+
+/* 未读提示点：加一圈脉冲，暗示"有新内容" */
+.tai-orb-dot {
+  position: absolute;
+  top: 8px;
+  right: 9px;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--accent, #3b6b5a);
+  box-shadow: 0 0 0 2px #ffffff;
+}
+.tai-orb-dot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: var(--accent, #3b6b5a);
+  animation: taiOrbDotPulse 1.8s ease-out infinite;
+}
+@keyframes taiOrbDotPulse {
+  0%   { opacity: 0.7; transform: scale(1); }
+  70%  { opacity: 0;   transform: scale(2.6); }
+  100% { opacity: 0;   transform: scale(2.6); }
+}
+
+/* 尊重系统「减少动态效果」偏好 */
+@media (prefers-reduced-motion: reduce) {
+  .tai-orb,
+  .tai-orb::before,
+  .tai-orb > svg,
+  .tai-orb-dot::after {
+    animation: none !important;
+    transition-duration: 0.01ms !important;
+  }
+  .tai-orb:hover {
+    transform: none;
+    box-shadow:
+      0 3px 6px rgba(20, 40, 32, 0.09),
+      0 14px 28px -6px rgba(20, 40, 32, 0.26);
+  }
+}
+
+/* 宽度拖拽手柄：抽屉左边缘一条 5px 的透明热区 */
+.tai-dropdown .tai-resizer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 5px;
+  cursor: col-resize;
+  z-index: 5;
+  background: transparent;
+  transition: background 0.12s ease;
+}
+/* hover / 拖动时给一条 accent 细线，明确"这里能拖" */
+.tai-dropdown .tai-resizer:hover,
+.tai-dropdown .tai-resizer:active {
+  background: color-mix(in srgb, var(--accent, #3b6b5a) 35%, transparent);
+}
+/* 拖动期间禁止选中文字，否则会一路选过去 */
+.tai-dropdown .tai-resizer:active {
+  user-select: none;
+}
+
+/* 抽屉入场：从右侧滑入 8px + 淡入，0.22s。
+   只在新挂载时跑一次（React 重渲染不会重放，因为元素没被卸载）。
+   用 translate 而非宽度动画，不会触发终端重排。 */
+@keyframes taiPanelIn {
+  from {
+    opacity: 0;
+    transform: translateX(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.theme-modern .tai-dropdown {
+  animation: taiPanelIn 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* 侧板宽度变化时给终端一个平滑让位，而不是硬跳 */
+.theme-modern .terminal-side-panel {
+  transition: flex-basis 0.18s ease, width 0.18s ease;
+}
+/* 但拖拽过程中要禁用过渡，否则鼠标跟不上（手感发飘） */
+.theme-modern .terminal-side-panel.is-resizing {
+  transition: none;
+}
+
+/* AI 侧板：宽屏并排时的容器（2026-11-10）
+   侧板宽度由 JS 内联 style 控制（拖拽调宽），这里只保证它是
+   flex 容器、撑满高度、不被内容压塌。 */
+/* AI 侧板（宽屏并排的容器）
+   底色 = 终端底色（--terminal-background），不是 --panel。
+   原因（2026-11-10 用户反馈）：全屏模式下抽屉四周有 10px 呼吸间距，
+   若侧板底色是白色，留白显示为"白色边"；而小窗模式抽屉 absolute 悬浮在
+   终端上，留白处露出的是终端黑色底。两种模式观感不一致。
+   统一成终端底色后，两种模式留白都是"终端背景透出来"，视觉连续。 */
+.theme-modern .terminal-side-panel {
+  display: flex;
+  flex-direction: column;
+  /* 不用 height:100%（2026-11-10 定版）：
+     小窗模式下侧板是 top/bottom 双定位的 absolute 元素，
+     此时再给 height:100% 会让浏览器**忽略 bottom**，
+     侧板底部超出容器 10px 被 overflow:hidden 裁掉 ——
+     表现为输入框贴死小窗底边（用户截图）。
+     flex 父级里用 align-self:stretch 即可撑满，absolute 时让 top/bottom 生效。 */
+  align-self: stretch;
+  min-height: 0;
+  overflow: hidden;
+  border-left: none;
+  /* 留白由父级 padding 提供，不是子元素 margin（2026-11-10 修正）：
+     抽屉同时有 width:420px 内联宽 + margin:10px → 总占 440px，
+     超出侧板 420px → 右侧被 overflow:hidden 裁掉（× 按钮消失）。
+     现在：侧板 box-sizing:border-box + padding:10px，
+     抽屉 width:100% 不再超界。 */
+  box-sizing: border-box;
+  padding: 10px;
+  background: var(--terminal-background, var(--shell, #0a0a0a));
+}
+
+/* 最小化态：侧板收缩到 0 宽度，只留悬浮球。
+   用 :has() 探测内部是否有 .tai-orb（现代 Chromium 均支持）。 */
+/* 最小化：侧栏收缩为 0 宽（2026-11-10 第三次修正）
+   历史问题：
+     ① 只用 :has(.tai-orb) → 球改成 portal 渲染到 body 后，选择器再也命中不到，
+        侧栏仍占 420px，终端右边一大片空白（用户截图）。
+     ② 改 display:none → 球在 portal 里不受影响，但组件卸载会丢失对话状态。
+   现在：父组件 TerminalWorkspace 用 aiMinimized 状态给 aside 加 .is-minimized，
+        宽度归零 + 边框背景全去。组件始终挂载，对话状态不丢。 */
+/* 用 !important 兜底：宽度规则分散在 align-s5-terminal.css（420/min320/max720）
+   与 theme-modern-v2.css（420）两处，加载顺序可能晚于本文件。
+   不加 !important 时会被它们压回去，侧栏仍占宽（用户截图的问题）。 */
+.theme-modern .terminal-side-panel.is-minimized {
+  flex: 0 0 0 !important;
+  width: 0 !important;
+  min-width: 0 !important;
+  max-width: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  background: transparent !important;
+  overflow: visible;
+  transition: flex-basis 0.18s ease, width 0.18s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .theme-modern .tai-dropdown {
+    animation: none !important;
+  }
+  .theme-modern .terminal-side-panel {
+    transition: none !important;
+  }
 }
