@@ -951,15 +951,26 @@
 .theme-modern .workspace-session-tab-close.ghost-button.icon-button {
   position: absolute;
   right: 4px;
-  top: 50%;
-  transform: translateY(-50%);
+  /* 垂直居中（2026-11-12 终版）：用 inset-block:0 + margin-block:auto，
+     不用 top:50%+translateY —— 页签有 border-bottom:2px，百分比相对 padding-box
+     计算会恒定偏 1~2px（Boss 两轮截图都是 X 与文字不齐）。
+     auto margin 按可用空间平分，与边框、盒模型、加载时序全部无关。 */
+  top: 0;
+  bottom: 0;
+  inset-block: 0;
+  margin-block: auto;
+  transform: none;
   width: 18px;
   height: 18px;
   min-width: 18px;
   min-height: 18px;
-  margin: 0;
+  max-height: 18px;
+  margin-left: 0;
+  margin-right: 0;
   padding: 0;
   border-radius: 4px;
+  line-height: 1;
+  box-sizing: border-box;
   color: var(--ink-soft);
   background: transparent;
   box-shadow: none;

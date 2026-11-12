@@ -360,12 +360,19 @@
   color: #1e40af;
 }
 
+/* X 按钮（2026-11-12 修复下坠）
+   定位完全交给 theme-modern-v2.css:950（position:absolute / right:4px / top:50% /
+   translateY(-50%)，那里也写了「不占布局、页签右侧预留 24px」）。
+   本文件只管尺寸与外观 —— 之前两边都写定位且互相打架：
+   我加的 bottom:0 与 v2 的 top:50% 同时生效，margin-auto 失效；
+   又因 tab 有 border-bottom:2px，top:50% 相对 padding-box 算出 16px，
+   使 X 恒定偏下/偏上 2px。统一到单一来源后不再冲突。 */
 .workspace-session-tab-close {
-  width: 20px;
-  height: 20px;
-  min-width: 20px;
-  min-height: 20px;
-  margin-right: 2px;
+  width: 18px;
+  height: 18px;
+  min-width: 18px;
+  min-height: 18px;
+  margin: 0;
   border: 0;
   background: transparent;
   color: var(--ink-muted);
@@ -377,11 +384,13 @@
   flex-shrink: 0;
   opacity: 0;
   padding: 0;
+  line-height: 0;
   box-shadow: none;
   filter: none;
-  transform: none;
   transition: opacity 140ms ease, background-color 140ms ease, color 140ms ease;
 }
+.workspace-session-tab-close > svg,
+.workspace-session-tab-close > * { display: block; flex: none; }
 
 .workspace-session-tab:hover .workspace-session-tab-close,
 .workspace-session-tab-active .workspace-session-tab-close {

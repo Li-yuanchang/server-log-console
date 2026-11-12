@@ -1,7 +1,7 @@
 import { PlugZap, MousePointerClick } from "lucide-react";
 import type { SettingsWorkspaceView } from "./ConnectionSettingsWorkspace.js";
 import { localServiceBase } from "./api.js";
-import { LogEmptyState, StageMarkRack } from "./LogEmptyState.js";
+import { LogEmptyState, SlcWatermark } from "./LogEmptyState.js";
 
 export type WorkspaceStartupCardsProps = {
   showServiceCheckingState: boolean;
@@ -34,7 +34,7 @@ export function WorkspaceStartupCards(props: WorkspaceStartupCardsProps) {
         icon={<PlugZap />}
         live
         align="ed"
-        watermark={<StageMarkRack />}
+        watermark={<SlcWatermark />}
         liveBar
         title="正在连接本地服务"
         sub="启动页结束后服务仍在就绪中；就绪后自动刷新服务器与目录状态，无需手动操作。"
@@ -50,7 +50,7 @@ export function WorkspaceStartupCards(props: WorkspaceStartupCardsProps) {
         icon={<PlugZap />}
         live
         align="ed"
-        watermark={<StageMarkRack />}
+        watermark={<SlcWatermark />}
         title="连接服务离线"
         sub={isElectron
           ? "内置连接服务未响应，恢复后会自动刷新服务器与目录状态，无需手动重试。"
@@ -69,7 +69,7 @@ export function WorkspaceStartupCards(props: WorkspaceStartupCardsProps) {
       <LogEmptyState
         icon={<MousePointerClick />}
         align="ed"
-        watermark={<StageMarkRack />}
+        watermark={<SlcWatermark />}
         title="还没有服务器"
         sub="从 FinalShell 一键导入连接，或手动新增；导入后左侧自动生成分组列表。"
         acts={[

@@ -45,12 +45,15 @@ export type LogEmptyStateProps = {
   liveBar?: boolean;
   /** 快捷键键帽：紧贴主按钮右侧（就近提示，如 ⌘K / Ctrl K） */
   kbdHint?: string;
+  /** 情境侧栏（2026-11-12）：editorial 大面积留白的右侧填充——真实数据面板，由调用方传入 */
+  aside?: ReactNode;
 };
 
 export function LogEmptyState(props: LogEmptyStateProps) {
-  const { icon, title, sub, acts, chip, live = false, bars = false, steps, extra, className, align, watermark, liveBar, kbdHint } = props;
+  const { icon, title, sub, acts, chip, live = false, bars = false, steps, extra, className, align, watermark, liveBar, kbdHint, aside } = props;
   return (
     <div className={`lp3${align === "ed" ? " ed" : ""}${className ? ` ${className}` : ""}`} role="status">
+      {aside}
       {watermark}
       <div className="lp3-inner">
         <span className="lp3-icwrap" aria-hidden="true">
@@ -122,83 +125,35 @@ export function LogoLoader({ small = false }: { small?: boolean }) {
 }
 
 /* ============================================================
-   功能区水印线稿（editorial 变体右下角装饰，原型 empty-states-full-8 的 stagemark）
-   · 语义随情境：日志窗 / 目录树 / 服务器机架 / 终端提示符；色 = var(--accent) 由 CSS 控制
-   · 2026-11-12 统一刻度：圆角收敛（rx 9/6，Boss：大圆角不好看）、
-     内部构图统一占满 220×170 视窗（此前机架/目录树偏小，四稿有大有小）
-   · 纯装饰 aria-hidden，定位与尺寸由 .lp3-mark 承担
+   SLC 字标水印（2026-11-12 Boss 定稿：E 电路板单线 v3）
+   原型：docs/prototypes/slc-watermark-deformed.html（E 款）
+   · 一笔走线贯穿 S、L、C，skewX(-8) 斜切，纯单线 —— 终端工具的本命语言
+   · v3 已删焊盘 / 分支圆点 / 中段横连线（Boss：连接点莫名其妙、横线像横杠）
+   · 全部尺寸用 cqw，随容器宽度等比缩放，任何窗口都不裁切
+   · 纯装饰 aria-hidden，pointer-events:none
+   注意：带数码屏统计面板的空态不加水印（与面板冲突，见 no-server-facade-lcd.html）
    ============================================================ */
-export function StageMarkLog() {
+export function SlcWatermark() {
   return (
-    <svg className="lp3-mark" viewBox="0 0 220 170" fill="none" aria-hidden="true">
-      <rect x="4" y="4" width="212" height="162" rx="9" stroke="currentColor" strokeWidth="1.5" />
-      <circle cx="24" cy="24" r="4" fill="currentColor" opacity=".5" />
-      <circle cx="38" cy="24" r="4" fill="currentColor" opacity=".32" />
-      <circle cx="52" cy="24" r="4" fill="currentColor" opacity=".18" />
-      <line x1="4" y1="38" x2="216" y2="38" stroke="currentColor" strokeWidth="1.5" opacity=".8" />
-      <circle cx="26" cy="62" r="3.5" fill="currentColor" opacity=".45" />
-      <rect x="38" y="58" width="112" height="8" rx="4" fill="currentColor" opacity=".26" />
-      <circle cx="26" cy="86" r="3.5" fill="currentColor" opacity=".36" />
-      <rect x="38" y="82" width="74" height="8" rx="4" fill="currentColor" opacity=".18" />
-      <circle cx="26" cy="110" r="3.5" fill="currentColor" opacity=".42" />
-      <rect x="38" y="106" width="94" height="8" rx="4" fill="currentColor" opacity=".22" />
-      <rect x="38" y="130" width="9" height="14" rx="2.5" fill="currentColor" opacity=".5" />
-      <rect x="51" y="133" width="62" height="8" rx="4" fill="currentColor" opacity=".14" />
-    </svg>
-  );
-}
-
-export function StageMarkFolder() {
-  return (
-    <svg className="lp3-mark" viewBox="0 0 220 170" fill="none" aria-hidden="true">
-      {/* 等比放大 1.22（描边不缩放，vector-effect 锁 1.5px），与日志窗/机架同视觉量级 */}
-      <g transform="translate(110,85) scale(1.22) translate(-110,-85)">
-        <path d="M18 138V52a10 10 0 0 1 10-10h40l14 14h84a10 10 0 0 1 10 10v72a10 10 0 0 1-10 10H28a10 10 0 0 1-10-10Z" stroke="currentColor" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
-        <circle cx="40" cy="86" r="3.5" fill="currentColor" opacity=".5" />
-        <rect x="50" y="82" width="96" height="8" rx="4" fill="currentColor" opacity=".26" />
-        <circle cx="40" cy="106" r="3.5" fill="currentColor" opacity=".36" />
-        <rect x="50" y="102" width="70" height="8" rx="4" fill="currentColor" opacity=".18" />
-        <rect x="150" y="34" width="52" height="64" rx="6" stroke="currentColor" strokeWidth="1.5" vectorEffect="non-scaling-stroke" opacity=".7" />
-        <rect x="158" y="46" width="36" height="6" rx="3" fill="currentColor" opacity=".22" />
-        <rect x="158" y="58" width="28" height="6" rx="3" fill="currentColor" opacity=".16" />
-        <rect x="158" y="70" width="32" height="6" rx="3" fill="currentColor" opacity=".2" />
-        <rect x="120" y="146" width="72" height="10" rx="5" fill="currentColor" opacity=".12" />
-        <rect x="30" y="146" width="72" height="10" rx="5" fill="currentColor" opacity=".1" />
-      </g>
-    </svg>
-  );
-}
-
-export function StageMarkRack() {
-  return (
-    <svg className="lp3-mark" viewBox="0 0 220 170" fill="none" aria-hidden="true">
-      {/* 2026-11-12 重绘：外框 196×158 铺满视窗（原 172×154 偏小），圆角收敛 rx 9/6 */}
-      <rect x="12" y="6" width="196" height="158" rx="9" stroke="currentColor" strokeWidth="1.5" />
-      <rect x="28" y="22" width="164" height="34" rx="6" stroke="currentColor" strokeWidth="1.5" />
-      <circle cx="44" cy="39" r="4.5" fill="currentColor" opacity=".5" />
-      <rect x="58" y="35" width="86" height="7" rx="3" fill="currentColor" opacity=".24" />
-      <rect x="58" y="46" width="50" height="5" rx="2.5" fill="currentColor" opacity=".14" />
-      <rect x="28" y="68" width="164" height="34" rx="6" stroke="currentColor" strokeWidth="1.5" />
-      <circle cx="44" cy="85" r="4.5" fill="currentColor" opacity=".34" />
-      <rect x="58" y="81" width="98" height="7" rx="3" fill="currentColor" opacity=".2" />
-      <rect x="58" y="92" width="56" height="5" rx="2.5" fill="currentColor" opacity=".12" />
-      <rect x="28" y="114" width="164" height="34" rx="6" stroke="currentColor" strokeWidth="1.5" />
-      <circle cx="44" cy="131" r="4.5" fill="currentColor" opacity=".42" />
-      <rect x="58" y="127" width="72" height="7" rx="3" fill="currentColor" opacity=".22" />
-      <rect x="58" y="138" width="44" height="5" rx="2.5" fill="currentColor" opacity=".13" />
-    </svg>
-  );
-}
-
-export function StageMarkTerminal() {
-  return (
-    <svg className="lp3-mark" viewBox="0 0 220 170" fill="none" aria-hidden="true">
-      <rect x="4" y="4" width="212" height="162" rx="9" stroke="currentColor" strokeWidth="1.5" />
-      <path d="M24 58l14 12-14 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity=".55" />
-      <rect x="48" y="62" width="11" height="15" rx="3" fill="currentColor" opacity=".5" />
-      <rect x="26" y="92" width="118" height="8" rx="4" fill="currentColor" opacity=".2" />
-      <rect x="26" y="112" width="82" height="8" rx="4" fill="currentColor" opacity=".14" />
-      <rect x="26" y="132" width="96" height="8" rx="4" fill="currentColor" opacity=".17" />
-    </svg>
+    <div className="slc-wm" aria-hidden="true">
+      <svg viewBox="0 0 260 120" fill="none" focusable="false">
+        <g
+          transform="skewX(-8)"
+          stroke="currentColor"
+          strokeWidth="9"
+          strokeLinejoin="round"
+          strokeLinecap="round"
+          fill="none"
+        >
+          {/* S */}
+          <path d="M60 8H14V52H58V96H14" />
+          {/* L */}
+          <path d="M96 8V96H140" />
+          {/* C */}
+          <path d="M216 8H176V96H216" />
+        </g>
+      </svg>
+      <span className="slc-wm-word">SERVER LOG CONSOLE</span>
+    </div>
   );
 }

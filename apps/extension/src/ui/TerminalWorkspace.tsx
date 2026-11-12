@@ -20,7 +20,7 @@ import { TerminalSplitView, type FocusedPaneSnapshot, type PaneStateSnapshot } f
 import { useBrowserTerminalPip } from "./useBrowserTerminalPip.js";
 import { TerminalAI } from "./TerminalAI.js";
 import { PipExpandIcon } from "./PipExpandIcon.js";
-import { LogEmptyState, StageMarkTerminal } from "./LogEmptyState.js";
+import { LogEmptyState, SlcWatermark } from "./LogEmptyState.js";
 import { formatKeyHint } from "./key-hints.js";
 import type { TerminalTabState } from "./types.js";
 
@@ -1046,7 +1046,7 @@ export function TerminalPanel(props: TerminalPanelProps) {
                     live={!activePaneState.connected}
                     liveBar
                     bars
-                    watermark={<StageMarkTerminal />}
+                    watermark={<SlcWatermark />}
                     icon={<TerminalIcon />}
                     title={activePaneState.phase === "reconnecting"
                       ? `连接已断开，正在重试（第 ${activePaneState.retryCount} 次）`

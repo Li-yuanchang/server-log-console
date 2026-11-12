@@ -116,7 +116,30 @@ html[data-splash] .lg-unit{animation:none !important}
 /* 水印（功能区线稿）：完整可见、不出血 —— 大面积区域上出血裁切只剩怪圆角（2026-11-12 实测），
    收进右下角内侧；透明度 13%（Boss：8% 在浅底上清晰度不够）；
    尺寸取中档（Boss 裁定：180/24% 太小没存在感，260/36% 太大喧宾夺主） */
-.lp3-mark{position:absolute;right:32px;bottom:24px;width:clamp(220px,28%,380px);color:var(--accent);opacity:.13;transform:rotate(-6deg);pointer-events:none;z-index:0}
+/* SLC 字标水印（2026-11-12 Boss 定稿 E 款 · 原型 slc-watermark-deformed.html）
+   替代旧 StageMark 具象线稿四件套 —— 旧版各画各的具象物，圆角/描边/占比全不同。
+   此版：一笔走线穿过 SLC + skewX(-8)，尺寸全用 cqw 随容器等比缩放，永不裁切。 */
+/* 尺寸（2026-11-12 实装翻车修正）：
+   原型 56cqw 是相对 672px 的演示 tile；实装里 .lp3 没有 container-type，
+   cqw 一路解析到 .app-shell(1280px) → 56cqw = 717px，水印放大近 2 倍反客为主。
+   改为固定区间 + 随容器百分比收敛：大屏封顶 260px，小屏按 16% 缩。 */
+.slc-wm{
+  position:absolute; right:4%; bottom:5%; width:clamp(150px, 16%, 260px);
+  pointer-events:none; user-select:none; z-index:0;
+  color:color-mix(in srgb, var(--accent) 15%, transparent);
+  display:flex; flex-direction:column; align-items:flex-end; gap:6px;
+}
+.slc-wm svg{ width:100%; height:auto; display:block; }
+.slc-wm-word{
+  font-family:var(--mono);
+  font-size:8px;
+  letter-spacing:.3em;
+  color:var(--ink-muted);
+  white-space:nowrap; opacity:.5;
+}
+/* 暗色主题：字标提亮半档，与 term-dark 下的旧水印同一处理 */
+.lp3.term-dark .slc-wm{ color:color-mix(in srgb, var(--accent) 30%, transparent); }
+/* 旧 StageMark 规则退役（.lp3-mark 无引用） */
 /* livebar：细进度线（进行中空态 ③⑨ 的 loading 语言，退役 spinner） */
 .lp3-livebar{display:block;margin-top:20px;width:min(300px,80%);height:5px;border-radius:999px;background:color-mix(in srgb,var(--ink) 5.5%,transparent);overflow:hidden;position:relative}
 .lp3-livebar i{position:absolute;top:0;bottom:0;left:0;width:42%;border-radius:999px;background:var(--accent);animation:lg-slide 1.4s ease-in-out infinite}
@@ -128,6 +151,78 @@ html[data-splash] .lg-unit{animation:none !important}
 .lp3-last{margin-left:2px;font-size:9px;font-weight:600;color:var(--accent-strong);flex:none;
   background:color-mix(in srgb,var(--accent) 9%,transparent);
   border:1px solid color-mix(in srgb,var(--accent) 28%,transparent);border-radius:999px;padding:1px 7px}
+/* 快捷列表尾行：查看全部（真实总数，点击打开检索） */
+.lp3-qall{display:flex;align-items:center;gap:10px;width:100%;height:31px;padding:0 12px;font-size:11px;
+  color:var(--ink-muted);font-family:var(--mono);cursor:pointer;border-radius:6px;border:none;background:transparent;text-align:left;margin-top:2px}
+.lp3-qall:hover{background:var(--accent-soft);color:var(--ink)}
+.lp3-qall .qact{margin-left:auto;flex:none;font-size:11px;font-weight:600;color:var(--accent-strong)}
+/* 情境侧栏（2026-11-12 Boss：editorial 大面积右侧留白太空）：真实数据面板，宽屏显示 */
+/* ============================================================================
+   数码屏数据面板（2026-11-12 v2 · 按原型 no-server-facade-lcd.html .lcd）
+   v1 实装翻车点（Boss 截图）：内层 .lcd-cell 重复套边框 → 数字外多出方框；
+     .seg line-height:.9 裁掉字形上下缘；左列嵌套两层 cell → 框套框。
+   v2：去掉所有内层边框（分隔线只由 .lcd-grid 的两条竖线 + 左列一条横线承担），
+     line-height 放到 1，数字上下留足呼吸，字体舒展。
+   ============================================================================ */
+.lp3-aside.lcd{
+  position:absolute; right:clamp(32px,5%,72px); top:44px; width:330px; z-index:2;
+  background:var(--panel); border:1px solid var(--line); border-radius:10px;
+  box-shadow:0 1px 2px rgba(28,30,26,.04);
+  padding:14px 18px 14px;
+  display:block; box-sizing:border-box;
+}
+
+/* 表头 */
+.lcd-head{display:flex;align-items:center;justify-content:space-between;padding:2px 2px 12px;border-bottom:1px solid var(--line)}
+.lcd-head-t{display:flex;align-items:center;gap:8px}
+.lcd-led{width:6px;height:6px;border-radius:999px;background:var(--accent);flex:none;animation:lcd-pulse 2.4s ease-in-out infinite}
+@keyframes lcd-pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.lcd-head b{font-size:13px;font-weight:600;letter-spacing:.02em;color:var(--ink)}
+.lcd-eyebrow{font-family:var(--mono);font-size:8.5px;letter-spacing:.14em;color:var(--ink-muted)}
+
+/* 网格：左列（服务器/分组，上下两格）+ 右列（最近使用，跨两行） */
+.lcd-grid{display:grid;grid-template-columns:1fr 1.15fr;margin-top:4px}
+.lcd-col{display:flex;flex-direction:column;border-right:1px solid var(--line)}
+.lcd-col > .lcd-cell + .lcd-cell{border-top:1px solid var(--line)}
+
+/* 单元格本身无任何边框 —— 分隔只来自 .lcd-col 的右边线与内部横线 */
+.lcd-cell{display:flex;flex-direction:column;gap:6px;padding:14px 12px 12px 2px}
+.lcd-cell-big{padding:14px 2px 12px 16px;align-items:center;justify-content:center}
+
+.lcd-label{font-size:10px;color:var(--ink-soft);letter-spacing:.04em;display:flex;align-items:center;gap:6px;white-space:nowrap}
+.lcd-bar{display:inline-block;width:4px;height:10px;flex:none;border-radius:1px;
+  background:linear-gradient(180deg,var(--accent),color-mix(in srgb,var(--accent) 40%,transparent))}
+
+/* 数字容器：给足上下呼吸，不裁切 */
+.lcd-num{display:flex;align-items:baseline;line-height:1;min-height:0}
+
+/* 七段码数字（原型 .seg：DSEG7 + 斜体 + .06em 字距）
+   line-height 从 .9 提到 1.12 —— .9 会把字形上下缘切掉（Boss 截图） */
+.lcd-num .lcd-seg{
+  font-family:"DSEG7",var(--mono);
+  font-weight:700; font-style:italic; letter-spacing:.06em;
+  line-height:1.12;
+  color:var(--ink);
+  font-variant-numeric:normal;
+  display:inline-block;
+  padding-bottom:2px;
+}
+
+.lcd-unit{font-size:10px;color:var(--ink-soft);font-family:var(--mono);
+  font-style:normal;font-weight:500;letter-spacing:.02em;white-space:nowrap;line-height:1.4}
+
+.lcd-sub{font-family:var(--mono);font-size:9.5px;color:var(--ink-muted);text-align:center;
+  letter-spacing:.05em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;line-height:1.6}
+
+.lcd-foot{margin-top:12px;padding:10px 2px 0;border-top:1px solid var(--line);
+  display:flex;justify-content:space-between;align-items:baseline}
+.lcd-foot span{font-family:var(--mono);font-size:9px;letter-spacing:.08em;color:var(--ink-muted)}
+
+/* 窄屏让位（原型同规则） */
+@container slc-viewer (max-width: 1080px){
+  .lp3-aside.lcd{display:none}
+  .lp3-aside{display:none}
+}
 
 
 /* 查看区内的空态/加载态底色对齐日志正文（用户反馈 2026-11-09：日志预览区上下左右
@@ -285,3 +380,62 @@ html[data-splash] .lg-unit{animation:none !important}
 .restart-splash-livebar{margin-top:16px;width:220px;height:5px;border-radius:999px;background:color-mix(in srgb,var(--ink) 8%,transparent);overflow:hidden;position:relative}
 .restart-splash-livebar i{position:absolute;top:0;bottom:0;left:0;width:42%;border-radius:999px;background:var(--accent);animation:lg-slide 1.4s ease-in-out infinite}
 @media (prefers-reduced-motion:reduce){.restart-splash-livebar i{animation:none}}
+
+/* ============================================================================
+   目录加载中的同构骨架行（2026-11-12 重做；此前用 connect-spinner 旧语言）
+   语言：不是「转圈 + 一句话」，而是画出文件表即将出现的形状 —— 复选框 + 文件图标
+   + 名称条 + 大小/时间/类型三列短条，与真实行同构；行内微光错峰呼吸表示进行中。
+   ============================================================================ */
+.dir-skel{display:flex;flex-direction:column;padding:6px 0}
+.dir-skel-row{
+  display:grid;
+  grid-template-columns:26px 18px minmax(0,1fr) 70px 92px 56px;
+  align-items:center; gap:12px;
+  height:34px; padding:0 14px;
+  border-bottom:1px solid var(--hairline, #e7e8e1);
+}
+.dir-skel-row:last-child{border-bottom:none}
+.dir-skel-box{
+  width:14px;height:14px;border-radius:3px;border:1.5px solid var(--line);
+  background:var(--panel);justify-self:center;flex:none;
+}
+.dir-skel-ico{width:14px;height:14px;border-radius:3px;background:var(--panel-muted);justify-self:center}
+.dir-skel-bar{
+  height:8px;border-radius:4px;
+  background:linear-gradient(90deg,
+    color-mix(in srgb,var(--ink) 7%,transparent) 0%,
+    color-mix(in srgb,var(--ink) 13%,transparent) 50%,
+    color-mix(in srgb,var(--ink) 7%,transparent) 100%);
+  background-size:200% 100%;
+  animation:dir-skel-shimmer 1.6s ease-in-out infinite;
+}
+.dir-skel-bar.short{width:60%}
+.dir-skel-bar.mid{width:78%}
+/* 错峰：每行延迟 120ms，形成一条向下流动的呼吸 */
+.dir-skel-row:nth-child(2) .dir-skel-bar{animation-delay:.12s}
+.dir-skel-row:nth-child(3) .dir-skel-bar{animation-delay:.24s}
+.dir-skel-row:nth-child(4) .dir-skel-bar{animation-delay:.36s}
+.dir-skel-row:nth-child(5) .dir-skel-bar{animation-delay:.48s}
+.dir-skel-row:nth-child(6) .dir-skel-bar{animation-delay:.6s}
+.dir-skel-row:nth-child(7) .dir-skel-bar{animation-delay:.72s}
+.dir-skel-row:nth-child(8) .dir-skel-bar{animation-delay:.84s}
+@keyframes dir-skel-shimmer{
+  0%{background-position:150% 0}
+  100%{background-position:-50% 0}
+}
+/* 骨架底部状态行（带上真实进度文案，不丢信息） */
+.dir-skel-note{
+  display:flex;align-items:center;gap:7px;
+  padding:10px 14px 4px;font-size:11px;color:var(--ink-muted);
+}
+.dir-skel-note .dots{display:inline-flex;gap:3px}
+.dir-skel-note .dots i{
+  width:4px;height:4px;border-radius:50%;background:var(--ink-muted);
+  animation:dir-skel-dot 1.2s ease-in-out infinite;
+}
+.dir-skel-note .dots i:nth-child(2){animation-delay:.15s}
+.dir-skel-note .dots i:nth-child(3){animation-delay:.3s}
+@keyframes dir-skel-dot{0%,100%{opacity:.25}50%{opacity:.9}}
+@media (prefers-reduced-motion:reduce){
+  .dir-skel-bar,.dir-skel-note .dots i{animation:none}
+}

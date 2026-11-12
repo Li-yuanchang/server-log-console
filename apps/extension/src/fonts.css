@@ -15,3 +15,14 @@
   font-style: normal;
   font-display: swap;
 }
+
+/* DSEG7 七段码（MIT 协议，dseg@0.46.0）—— 数码屏统计面板的七段数字
+   原型 no-server-facade-lcd.html 用的就是这款字体的 CDN 版；
+   这里改为本地打包（Electron 离线环境不能依赖 CDN）。 */
+@font-face {
+  font-family: "DSEG7";
+  src: url("/fonts/DSEG7Classic-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}

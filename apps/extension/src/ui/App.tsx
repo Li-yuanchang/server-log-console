@@ -5,6 +5,7 @@ import { useServerMonitorPool, type ServerMonitorEntry } from "./useServerMonito
 import { FileContextMenu, type FileContextMenuState } from "./FileContextMenu.js";
 import { ContextMenuShell } from "./ContextMenuShell.js";
 import { FileBrowserActions } from "./FileBrowserActions.js";
+import { DirSkeleton } from "./DirSkeleton.js";
 import { FileBrowserContentColumn } from "./FileBrowserContentColumn.js";
 import { FileBrowserGrid } from "./FileBrowserGrid.js";
 import { FileBrowserHistoryDropdown } from "./FileBrowserHistoryDropdown.js";
@@ -100,7 +101,7 @@ import { WorkspaceTabContextMenu, type WorkspaceTabMenuState } from "./Workspace
 import { WorkspaceSessionTabs } from "./WorkspaceSessionTabs.js";
 import { SettingsModalOverlay } from "./SettingsModalOverlay.js";
 import { WorkspaceStartupCards } from "./WorkspaceStartupCards.js";
-import { LogEmptyState, LogoLoader, StageMarkLog, StageMarkFolder, StageMarkRack } from "./LogEmptyState.js";
+import { LogEmptyState, LogoLoader, SlcWatermark } from "./LogEmptyState.js";
 import { CommandPalette } from "./CommandPalette.js";
 import { ImmediateTooltip } from "./ImmediateTooltip.js";
 import { DialogOverlays } from "./DialogOverlays.js";
@@ -2822,12 +2823,97 @@ export function App() {
   const recentServerMap = readRecentServerMap();
   /* 「先选一台服务器」门面空态（2026-11-12 抽成复用变量）：
      文件目录（L2.1a）与日志预览（顶部服务器 tab 全部关闭后）共用同一界面，
-     此前日志预览在全关后会错误落到「暂无日志内容」教学位 */
+     此前日志预览在全关后会错误落到「暂无日志内容」教学位。
+     2026-11-12 填白升级（Boss：右侧/下方太空）：aside 真实数据概览（宽屏显示）
+     + 快捷列表扩到 6 行 + 「查看全部」尾行。水印 = 连接星图（机架稿已退役）。 */
+  const noServerGroups = new Set(servers.flatMap((s) => (s.groupPath?.[0] ? [s.groupPath[0]] : []))).size;
+  const noServerLastId = Object.entries(recentServerMap).sort((a, b) => b[1] - a[1])[0]?.[0];
+  const noServerLast = noServerLastId ? servers.find((s) => s.id === noServerLastId) : undefined;
+  const noServerLastRel = (() => {
+    const ts = noServerLastId ? recentServerMap[noServerLastId] : 0;
+    if (!ts) return "";
+    const mins = Math.floor((Date.now() - ts) / 60000);
+    if (mins < 1) return "刚刚";
+    if (mins < 60) return `${mins} 分钟前`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours} 小时前`;
+    return `${Math.floor(hours / 24)} 天前`;
+  })();
+  /* 数码屏「最近使用」大数字（原型 no-server-facade-lcd.html：显示 4，副行「小时前 · 2.111」）
+     —— 时间数值单独提出来给七段码显示，正文说明走 .lcd-sub */
+  const noServerRecentCount = (() => {
+    const ts = noServerLastId ? recentServerMap[noServerLastId] : 0;
+    if (!ts) return "0";
+    const mins = Math.floor((Date.now() - ts) / 60000);
+    if (mins < 60) return String(Math.max(mins, 1));
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return String(hours);
+    return String(Math.floor(hours / 24));
+  })();
+  const noServerRecentUnit = (() => {
+    const ts = noServerLastId ? recentServerMap[noServerLastId] : 0;
+    if (!ts) return "";
+    const mins = Math.floor((Date.now() - ts) / 60000);
+    if (mins < 60) return "分钟前";
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return "小时前";
+    return "天前";
+  })();
   const noServerEmptyState = (
     <LogEmptyState
       icon={<Folder />}
       align="ed"
-      watermark={<StageMarkRack />}
+      watermark={<SlcWatermark />}
+      aside={
+        /* 数码屏数据面板（2026-11-12 按原型 no-server-facade-lcd.html 重建）
+           原型：单张 330px 面板 + 表头 LED 呼吸点 + 2 列网格 + 七段码大数字 + 底部 SYNC 戳。
+           此前实装是三个独立普通卡片（无 LED / 无网格 / 数字是普通 mono）—— 与原型完全两回事。
+           七段码用 SegmentNumber 手绘 SVG（DSEG7 网络字体离线不可用）。 */
+        <aside className="lp3-aside lcd" aria-hidden="true">
+          <div className="lcd-head">
+            <span className="lcd-head-t">
+              <i className="lcd-led" />
+              <b>全局概览</b>
+            </span>
+            <span className="lcd-eyebrow">OVERVIEW</span>
+          </div>
+          <div className="lcd-grid">
+            <div className="lcd-col">
+              <div className="lcd-cell">
+                <div className="lcd-label"><i className="lcd-bar" />服务器</div>
+                <div className="lcd-num">
+                  <b className="lcd-seg" style={{ fontSize: 38 }}>{servers.length}</b>
+                </div>
+                <div className="lcd-unit">台已登记</div>
+              </div>
+              <div className="lcd-cell">
+                <div className="lcd-label"><i className="lcd-bar" />分组</div>
+                <div className="lcd-num">
+                  <b className="lcd-seg" style={{ fontSize: 38 }}>{noServerGroups}</b>
+                </div>
+                <div className="lcd-unit">个</div>
+              </div>
+            </div>
+            <div className="lcd-cell lcd-cell-big">
+              <div className="lcd-label"><i className="lcd-bar" />最近使用</div>
+              <div className="lcd-num">
+                {noServerLast ? (
+                  <b className="lcd-seg" style={{ fontSize: 48, color: "var(--accent)" }}>{noServerRecentCount}</b>
+                ) : (
+                  <b className="lcd-seg" style={{ fontSize: 48, color: "var(--ink-muted)" }}>--</b>
+                )}
+              </div>
+              <div className="lcd-sub">
+                {noServerLast ? `${noServerRecentUnit} · ${noServerLast.name}` : "尚无记录"}
+              </div>
+            </div>
+          </div>
+          <div className="lcd-foot">
+            <span>{noServerLast ? "LOCAL · READY" : "LOCAL · IDLE"}</span>
+            <span>{servers.length} 台</span>
+          </div>
+        </aside>
+      }
       title="先选一台服务器"
       sub="选好后就能浏览远程目录、上传文件、打开日志。"
       acts={[{ label: "打开检索", kind: "pri", onClick: () => setPaletteOpen(true) }]}
@@ -2836,10 +2922,11 @@ export function App() {
       extra={
         <div className="lp3-qlist">
           {/* chrome v1 2026-11-03：最近使用优先（未用过的按登记序兜底），
-              原为 servers.slice(0,4) 纯登记序，与使用习惯无关（用户质疑） */}
+              原为 servers.slice(0,4) 纯登记序，与使用习惯无关（用户质疑）。
+              2026-11-12 扩到 6 行（Boss：下方留白太空）+ 尾行「查看全部」。 */}
           {[...servers]
             .sort((a, b) => (recentServerMap[b.id] ?? 0) - (recentServerMap[a.id] ?? 0))
-            .slice(0, 4)
+            .slice(0, 6)
             .map((server, index) => (
               <button key={server.id} type="button" className="lp3-qrow" onClick={() => selectServerById(server.id)}>
                 <span className="lp3-qdot" aria-hidden="true" />
@@ -2851,6 +2938,12 @@ export function App() {
                 <span className="qact">连接</span>
               </button>
             ))}
+          {/* 底行改纯统计（2026-11-12 Boss：与左上「打开检索」主按钮重复）——
+              不再放检索入口；总数 + 分组数，补一条信息而不是再给一个按钮 */}
+          <div className="lp3-qall lp3-qstat">
+            <span>共 {servers.length} 台已登记</span>
+            <span className="qmeta">{noServerGroups} 个分组</span>
+          </div>
         </div>
       }
     />
@@ -4167,12 +4260,14 @@ export function App() {
                   终端
                 </button>
               </div>
-              {isFileMode && !terminalAsWorkspaceView ? (
+              {isFileMode && !terminalAsWorkspaceView && !!serverId ? (
                 /* 文件模式：原型 tbar 一行式 —— seg 之后紧跟目录层级（面包屑），
                    过滤框 + 图标组靠右；检索/LIVE 等日志工具不显示（用户反馈 2026-09-30）。
                    容器复用 .file-browser-workbench 作用域以继承面包屑紧凑等既有规则。
                    终端视图不渲染（一套策略：终端有自己的动作栏/会话条，
-                   视图切换 seg 保留在命令栏——所有宿主/档位都有路可回，2026-10-04）。 */
+                   视图切换 seg 保留在命令栏——所有宿主/档位都有路可回，2026-10-04）。
+                   2026-11-12 Boss：未选服务器时整组隐藏 —— 面包屑会只剩一个「/」、
+                   「过滤当前目录」输入框也没有可过滤的对象，显示出来点不动很怪。 */
                 <div className={`file-tools-inline file-browser-workbench${isConnectingWorkspace ? " is-idle" : ""}`}>
                   <FileBrowserPathbar
                     mode={pathbarMode}
@@ -4238,6 +4333,10 @@ export function App() {
               {/* chrome v1 定稿（2026-11-02）：检索组上移进命令栏单行 —— 行序 =
                   视图切换 → 检索组 → 动作组；检索钮删除（回车检索），summary 行并入
                   viewer-actions-strip（由 viewer-strip 唯一承载）。 */}
+              {/* 未选服务器时整组检索 UI 隐藏（2026-11-12 Boss：不能点还显示很怪异）
+                   —— 原先只是 disabled，输入框 / LIVE / 高级筛选仍占位。
+                   选择服务器后自动出现，与上方视图切换按钮的 disabled 语义一致。 */}
+              {serverId ? (
               <SearchQueryPanel
                 showKeywordBar={showKeywordBar}
                 showQueryAdvanced={showQueryAdvanced}
@@ -4291,6 +4390,8 @@ export function App() {
                   ? `${formatBytes(searchTask.scannedBytes)}/${formatBytes(searchTask.totalBytes)}`
                   : ""}
               />
+              ) : null}
+              {serverId ? (
               <SearchToolbarActions
                 uiTheme={uiTheme}
                 isElectron={isElectron}
@@ -4319,6 +4420,7 @@ export function App() {
                   setShowQueryAdvanced((current) => !current);
                 }}
               />
+              ) : null}
               </>
               ) : null}
             </div>
@@ -4897,7 +4999,7 @@ export function App() {
                   <LogEmptyState
                     icon={<Search />}
                     align="ed"
-                    watermark={<StageMarkLog />}
+                    watermark={<SlcWatermark />}
                     title="没有匹配的日志"
                     sub={`「${keywordInput.trim() || activeResultTab?.label || "关键字"}」在 ${activeResultTab?.sourceLabel ?? "当前范围"} 中 0 命中。试试更短的关键字，或缩小检索范围。`}
                     acts={[{ label: "重新检索", kind: "pri", onClick: () => { void runSearch(); } }]}
@@ -5109,7 +5211,7 @@ export function App() {
                   <LogEmptyState
                     icon={<FileText />}
                     align="ed"
-                    watermark={<StageMarkLog />}
+                    watermark={<SlcWatermark />}
                     title="文件当前为空"
                     sub={liveFollowEnabled
                       ? "实时跟随已连接，程序写入后会自动显示在这里。"
@@ -5127,7 +5229,7 @@ export function App() {
                     icon={<Search />}
                     live
                     align="ed"
-                    watermark={<StageMarkLog />}
+                    watermark={<SlcWatermark />}
                     liveBar
                     title="检索中"
                     sub="正在按关键字扫描，完成后自动打开结果页签，期间可继续浏览当前文件。"
@@ -5140,7 +5242,7 @@ export function App() {
                     icon={<Activity />}
                     live
                     align="ed"
-                    watermark={<StageMarkLog />}
+                    watermark={<SlcWatermark />}
                     liveBar
                     title="等待新日志写入"
                     sub="实时跟随已开启，程序写入后会自动滚动到这里，无需手动刷新。"
@@ -5152,7 +5254,7 @@ export function App() {
                   <LogEmptyState
                     icon={<FileText />}
                     align="ed"
-                    watermark={<StageMarkLog />}
+                    watermark={<SlcWatermark />}
                     title="文件内容暂未加载"
                     sub={`${selectedFileName || "文件"} 实际大小 ${activeFileMeta?.filePath === filePath ? formatBytes(activeFileMeta.size) : "--"}，但当前没有读到内容，多为读取失败或上次会话残留。重新加载即可恢复。`}
                     acts={[
@@ -5168,7 +5270,7 @@ export function App() {
                   <LogEmptyState
                     icon={<Search />}
                     align="ed"
-                    watermark={<StageMarkLog />}
+                    watermark={<SlcWatermark />}
                     title="暂无日志内容"
                     sub="输入关键字回车开始检索，或打开文件目录选择一份日志文件。"
                     acts={[
@@ -5200,7 +5302,7 @@ export function App() {
                       icon={<Folder />}
                       live
                       align="ed"
-                      watermark={<StageMarkRack />}
+                      watermark={<SlcWatermark />}
                       liveBar
                       title={`正在连接 ${selectedServer.name}`}
                       sub="通常 2 秒内完成，连上后自动打开目录。"
@@ -5216,7 +5318,7 @@ export function App() {
                   <LogEmptyState
                     icon={<ServerOff />}
                     align="ed"
-                    watermark={<StageMarkRack />}
+                    watermark={<SlcWatermark />}
                     title="连接失败"
                     sub={connectionTestStatus?.message || "无法连接到服务器，请检查网络、凭证或服务器状态。"}
                     acts={[
@@ -5350,11 +5452,7 @@ export function App() {
                       </>}
                     >
                       {isDirectoryContentLoading && !tableEntries.length ? (
-                        <div className="directory-loading-state table-empty-large">
-                          <span className="connect-spinner" aria-hidden="true" />
-                          <strong>正在加载目录内容</strong>
-                          <span>{actionStatus || "正在读取远程目录，请稍候..."}</span>
-                        </div>
+                        <DirSkeleton rows={9} note={actionStatus || "正在读取远程目录"} />
                       ) : (
                         <FileBrowserTableRows
                           entries={tableEntries}
@@ -5441,18 +5539,14 @@ export function App() {
                       </>}
                     >
                       {isDirectoryContentLoading ? (
-                        <div className="directory-loading-state table-empty-large">
-                          <span className="connect-spinner" aria-hidden="true" />
-                          <strong>正在加载目录内容</strong>
-                          <span>{actionStatus || "正在读取远程目录，请稍候..."}</span>
-                        </div>
+                        <DirSkeleton rows={9} note={actionStatus || "正在读取远程目录"} />
                       ) : (
                         /* S12 目录空态 → editorial 实装（2026-11-12，原型 ②）：
                            目录树水印 + 极光舞台 + 主按钮「返回上一级」+ 路径 chip */
                         <LogEmptyState
                           icon={<Folder />}
                           align="ed"
-                          watermark={<StageMarkFolder />}
+                          watermark={<SlcWatermark />}
                           title="目录为空"
                           sub="回到上一级，或切换其他服务器。虚线时间轴标出了文件即将出现的位置。"
                           acts={[{ label: "返回上一级", kind: "pri", onClick: () => { void browseParentDirectory(); }, disabled: isBusy }]}

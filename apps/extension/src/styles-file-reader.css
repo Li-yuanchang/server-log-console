@@ -820,31 +820,7 @@
   min-height: 180px;
 }
 
-.directory-loading-state {
-  display: grid;
-  place-items: center;
-  align-content: center;
-  gap: 7px;
-  width: 100%;
-  color: var(--ink-muted);
-  border: 1px dashed var(--line);
-  border-radius: 8px;
-  background: linear-gradient(180deg, color-mix(in srgb, var(--panel) 86%, transparent), color-mix(in srgb, var(--panel) 72%, transparent));
-}
-
-.directory-loading-state strong {
-  font-size: var(--fs-xs);
-  font-weight: 600;
-  color: var(--ink);
-}
-
-.directory-loading-state span:last-child {
-  max-width: min(420px, 80%);
-  font-size: var(--fs-2xs);
-  line-height: 1.5;
-  text-align: center;
-  color: var(--ink-muted);
-}
+/* .directory-loading-state 已删除（2026-11-12）：目录加载改用同构骨架行 DirSkeleton */
 
 .file-tools-panel {
   grid-template-columns: repeat(4, minmax(0, 1fr));
