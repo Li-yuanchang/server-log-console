@@ -728,6 +728,8 @@ export function UpdateCenterPanel(props: UpdateCenterPanelProps) {
             <div className="restart-splash-word">日志控制台</div>
             <div className="restart-splash-ver">正在应用更新 {nextVersion || ""}</div>
             <div className="restart-splash-status">{restartStalled ? "重启被阻塞，可手动完成" : "即将自动重启"}</div>
+            {/* 2026-11-12 对接启动页语言：livebar 细进度线（不定态扫动） */}
+            <span className="restart-splash-livebar" aria-hidden="true"><i /></span>
             {/* 正常重启时无需说明（状态行已表达）；仅在重启被阻塞时给出人工操作指引 */}
             {restartStalled ? (
               <div className="restart-splash-restore">请从托盘菜单退出客户端，重新打开即可完成安装</div>

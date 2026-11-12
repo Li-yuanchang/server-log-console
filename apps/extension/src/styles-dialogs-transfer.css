@@ -2974,19 +2974,44 @@ button.class-outline-row {
 .diag-title { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .diag-title b { font-size: var(--fs-lg); line-height: 1.3; font-weight: 600; color: var(--ink); }
 .diag-sub { font-size: 10px; color: var(--ink-muted); }
+/* 体检结果态副标题（红圈 2，2026-11-12）—— 严格按原型 .dg-title .v：
+   11.5px / 常规字重 / --ink-muted + 6px 红点 + 结论文字用对应严重度色。
+   原先复用了系统 .diag-sub（10px 纯灰、无点），比原型弱一档。 */
+.diag-flow .diag-title .sub-verdict {
+  margin-top: 3px;
+  display: flex; align-items: center; gap: 5px;
+  font-size: 11.5px; font-weight: 400; color: var(--ink-muted); line-height: 1.4;
+}
+.diag-flow .diag-title .sub-verdict .dot {
+  width: 6px; height: 6px; border-radius: 50%; flex: none;
+}
+.diag-flow .diag-title .sub-verdict em {
+  font-style: normal; font-weight: 400; font-size: 11.5px;
+}
+.diag-flow .diag-title .sub-verdict.r .dot { background: var(--red); }
+.diag-flow .diag-title .sub-verdict.r em { color: var(--red); }
+.diag-flow .diag-title .sub-verdict.a .dot { background: var(--amber); }
+.diag-flow .diag-title .sub-verdict.a em { color: var(--amber); }
+.diag-flow .diag-title .sub-verdict.g .dot { background: var(--green); }
+.diag-flow .diag-title .sub-verdict.g em { color: var(--green); }
 
 /* 右侧分组：汇总色块 + 关闭按钮整体贴右 —— 体检中（无汇总块）时 × 也不会飘到中间 */
 .diag-head-right { margin-left: auto; display: inline-flex; align-items: center; gap: 10px; flex: none; }
 .diag-sum { display: inline-flex; align-items: center; gap: 4px; }
-.diag-sum .chip {
+/* 汇总 chip —— 严格按原型 .dg-sum .chip：
+   min-width 18 / mono 10px / weight 600 / radius 4 / padding 2px 6px / 12-14-12% 底色。
+   ⚠ 必须带 .diag-flow 前缀提权：全局 .theme-modern .chip（theme-modern-v2.css:172）
+     同样 0,2,0 特异性且后定义，会把这里改成 999px 胶囊 + 1px 8px（2026-11-12 实测翻车） */
+.diag-flow .diag-sum .chip {
   min-width: 18px; text-align: center;
+  display: inline-flex; align-items: center; justify-content: center;
   font-family: var(--mono, ui-monospace, Menlo, monospace);
-  font-size: 10px; font-weight: 650; font-style: normal;
-  border-radius: 4px; padding: 2px 6px;
+  font-size: 10px; font-weight: 600; font-style: normal; line-height: 1.5;
+  border: none; border-radius: 4px; padding: 2px 6px;
 }
-.diag-sum .chip.g { color: var(--green); background: color-mix(in srgb, var(--green) 14%, transparent); }
-.diag-sum .chip.a { color: var(--amber); background: color-mix(in srgb, var(--amber) 16%, transparent); }
-.diag-sum .chip.r { color: var(--red); background: color-mix(in srgb, var(--red) 14%, transparent); }
+.diag-flow .diag-sum .chip.g { color: var(--green); background: color-mix(in srgb, var(--green) 12%, transparent); }
+.diag-flow .diag-sum .chip.a { color: var(--amber); background: color-mix(in srgb, var(--amber) 14%, transparent); }
+.diag-flow .diag-sum .chip.r { color: var(--red); background: color-mix(in srgb, var(--red) 12%, transparent); }
 .diag-sum em {
   font-style: normal; margin-left: 4px;
   font-family: var(--mono, ui-monospace, Menlo, monospace);
@@ -3009,6 +3034,13 @@ button.class-outline-row {
 }
 
 .diag-warn { flex: none; margin: 10px 0 0; font-size: 10px; color: var(--amber); line-height: 1.6; }
+/* 采集降级脚注（2026-11-12）：lsof 未安装属环境常态，不是体检结论 ——
+   弱化为普通灰字，放在通过项之后，不与真正的检查结果抢注意力 */
+.diag-degrade-note {
+  margin: 10px 0 0; padding-top: 8px;
+  border-top: 1px solid var(--line);
+  font-size: 10.5px; line-height: 1.65; color: var(--ink-muted);
+}
 .diag-err { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--red); line-height: 1.7; padding: 12px 0; }
 .diag-err span { word-break: break-all; }
 
@@ -3056,13 +3088,225 @@ button.class-outline-row {
   padding-top: 12px;
   border-top: 1px solid var(--line);
 }
-.diag-rerun {
-  height: 28px; padding: 0 14px;
-  border: 1px solid var(--line); border-radius: 7px;
-  font-size: 11px; color: var(--ink-soft); background: var(--panel); cursor: pointer;
+
+/* ============================================================================
+   体检弹窗 v2（2026-11-12 原型 diag-dialog-redesign 定稿）
+   —— 分数环 + 一行式问题条目（点开才展开）+ 通过项收纳
+   颜色只出现在 分数环/图标/徽章 上；字重限 400/500/600（项目字重规范）
+   ============================================================================ */
+
+/* 头部左侧分数环：40px，数字 12.5px/500 */
+.diag-health-ring { position: relative; flex: none; width: 40px; height: 40px; }
+.diag-health-ring svg { display: block; transform: rotate(-90deg); }
+.diag-health-ring .ring-bg { fill: none; stroke: var(--line); stroke-width: 3.5; }
+.diag-health-ring .ring-val { fill: none; stroke-width: 3.5; stroke-linecap: round; transition: stroke-dashoffset .5s cubic-bezier(.4, 0, .2, 1); }
+.diag-health-ring i {
+  position: absolute; inset: 0; display: grid; place-items: center;
+  font-family: var(--mono, ui-monospace, Menlo, monospace);
+  font-size: 12.5px; font-weight: 500; font-style: normal;
+  font-variant-numeric: tabular-nums;
 }
-.diag-rerun:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
-.diag-rerun:disabled { opacity: 0.55; cursor: default; }
+.diag-health-ring.s-bad .ring-val { stroke: var(--red); }   .diag-health-ring.s-bad i { color: var(--red); }
+.diag-health-ring.s-warn .ring-val { stroke: var(--amber); } .diag-health-ring.s-warn i { color: var(--amber); }
+.diag-health-ring.s-ok .ring-val { stroke: var(--green); }  .diag-health-ring.s-ok i { color: var(--green); }
+
+/* 展开/收起不抖（2026-11-12）：.confirm-backdrop 是 align-items:center，
+   弹窗高度一变就整块重新居中 —— 实测展开时上边缘位移 82.6px。
+   体检弹窗改为「顶部对齐 + 固定上边距」：展开只向下长，上边缘不动。
+   用 :has 精确命中本弹窗，不影响其他 confirm-dialog 的居中惯例。 */
+.confirm-backdrop:has(.diag-flow) {
+  align-items: flex-start;
+  padding-top: 8vh;
+  padding-bottom: 8vh;
+}
+/* 弹窗本身限高并用内部滚动承载展开内容，避免越长越出屏幕 */
+.diag-flow {
+  max-height: 84vh;
+}
+/* 滚动容器（2026-11-12）：只允许纵向滚动。
+   ⚠ overflow-y:auto 会让 overflow-x 从 visible 变 auto（CSS 规范），
+     展开瞬间出现滚动条 → 内容宽度被挤 → 文字重排 → 滚动条又消失（用户看到的「闪现」）。
+   三件套：overflow-x: hidden 明确关掉横向 + scrollbar-gutter 预留槽位 + 稳定宽度。 */
+.diag-flow .diag-flow-body {
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
+}
+
+/* 头部与主体：头部不再用 diag-head 的底边（主体自有分隔） */
+.diag-flow .diag-head { border-bottom: 1px solid var(--line); padding-bottom: 12px; }
+/* 运行态行与结果态问题行同高（眼睛不用重新找节奏） */
+.diag-flow .diag-check { padding: 9px 2px; }
+.diag-flow .diag-check .head { min-height: 19px; }
+.diag-flow-body { padding: 2px 0 6px; }
+
+/* 运行态（2026-11-12）：对齐原型 v4 —— 64px 旋转扫描光环 + 当前项 + 3px 推进条。
+   扫描束用 conic-gradient 旋转，裁在圆形容器内（overflow:hidden + 圆角） */
+.diag-run { display: flex; flex-direction: column; align-items: center; gap: 0; padding: 24px 2px 22px; }
+
+.diag-scan { position: relative; width: 64px; height: 64px; flex: none; margin-bottom: 14px; }
+/* 扫描束：方形 conic 必须裁圆，否则四角漏出（用户截图反馈） */
+.diag-scan-beam {
+  position: absolute; inset: 0; border-radius: 50%; overflow: hidden;
+}
+.diag-scan-beam::after {
+  content: ""; position: absolute; inset: -6px; border-radius: 50%;
+  background: conic-gradient(from 0deg, transparent 0deg,
+    color-mix(in srgb, var(--accent) 26%, transparent) 45deg, transparent 92deg);
+  animation: diag-scan-rot 1.35s linear infinite;
+}
+@keyframes diag-scan-rot { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+.diag-scan svg { display: block; position: relative; transform: rotate(-90deg); }
+.diag-scan .scan-track { fill: none; stroke: var(--line); stroke-width: 3; }
+
+.diag-run-title { font-size: var(--fs-sm); font-weight: 500; color: var(--ink); line-height: 1.3; }
+/* .diag-run-name 已删除（2026-11-12）：不再显示假的「当前检查项」 */
+.diag-run-bar {
+  margin-top: 12px; width: 180px; max-width: 100%; height: 3px; border-radius: 2px;
+  background: var(--panel-muted, #f1f2ee); overflow: hidden;
+}
+/* 不确定进度：一条光带循环滑动，不表示百分比
+   —— 原实现按定时器算宽度（假进度），且轮播假的「当前项」诱导用户误读（2026-11-12） */
+.diag-run-bar.indeterminate i {
+  display: block; height: 100%; width: 38%; border-radius: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  animation: diag-run-sweep 1.25s ease-in-out infinite;
+}
+@keyframes diag-run-sweep {
+  0%   { transform: translateX(-120%); }
+  100% { transform: translateX(340%); }
+}
+.diag-run-note { margin: 10px 0 0; font-size: 10.5px; line-height: 1.6; color: var(--ink-muted); }
+
+/* 问题条目：一行 summary + 展开体（独占整行） */
+.diag-issue { border-bottom: 1px solid var(--line); }
+/* 双线修复（2026-11-12 实测）：:last-of-type / :last-child 都不命中 ——
+   .diag-passed 也是 <details>（抢走 last-of-type），而 body 里还有 .diag-warn 等兄弟（抢走 last-child）。
+   只用一条真相：紧邻 .diag-passed 的那条问题行，去掉自己的底线，让 passed 的顶线当唯一分隔。 */
+.diag-flow-body .diag-issue:has(+ .diag-passed) { border-bottom: none; }
+
+.diag-issue > summary {
+  list-style: none; display: flex; align-items: center; gap: 9px;
+  padding: 10px 2px; cursor: pointer; user-select: none;
+}
+/* 图标与文字垂直居中：svg 是 inline 元素会带基线间隙，统一 flex + block */
+.diag-issue > summary svg,
+.diag-passed > summary svg,
+.diag-flow .diag-copyall svg,
+.diag-flow .diag-rerun svg { display: block; flex: none; }
+.diag-issue > summary::-webkit-details-marker { display: none; }
+.diag-issue .mk { flex: none; display: grid; place-items: center; line-height: 0; }
+.diag-issue .mk.r { color: var(--red); }
+.diag-issue .mk.a { color: var(--amber); }
+.diag-issue .ttl {
+  flex: 1; min-width: 0; font-size: var(--fs-2xs); color: var(--ink-soft);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.diag-issue > summary:hover .ttl { color: var(--ink); }
+.diag-issue .chev { flex: none; display: grid; place-items: center; color: var(--ink-muted); transition: transform .14s; }
+.diag-issue[open] .chev { transform: rotate(90deg); }
+/* 徽章统一走 .smp-chip 规格（监控面板既有 chip 语言，2026-11-12）：
+   20px 高 / radius 5 / padding 0 7px / 主题 soft 变量 —— 原先 1px 7px 只有 16px 高，
+   扁而圆，与卡内其他 chip 不在一个刻度上 */
+/* 行内 tag —— 严格按原型 .issue .badge：
+   10px / radius 4 / padding 1px 7px / weight 500 / letter-spacing .01em
+   （上一版我擅自改成 20px 高 + radius 5 + 11px，比原型臃肿一圈） */
+.diag-issue .badge {
+  margin-left: auto; flex: none;
+  font-size: 10px; font-weight: 500; line-height: 1.5;
+  border-radius: 4px; padding: 1px 7px;
+  white-space: nowrap; letter-spacing: .01em;
+}
+/* 底色浓度对齐系统 .diag-check .badge（红 14% / 琥珀 16%）
+   —— 之前压到 9%/11% 导致浅底上看不出底色，只剩一圈大字（用户反馈"tag 样式不对"） */
+/* 底色用主题的 *-soft 变量（每个主题各自定义过，暗色也随主题走），
+   不写死 color-mix 百分比 —— 否则换主题时浓度与系统 chip 不一致 */
+.diag-issue .badge.r { color: var(--red); background: var(--red-soft); }
+.diag-issue .badge.a { color: var(--amber); background: var(--amber-soft); }
+.diag-issue .badge.g { color: var(--green); background: color-mix(in srgb, var(--green) 12%, transparent); }
+.diag-issue .body { padding: 0 2px 11px 23px; }
+
+/* 命令块：直接复用 .diag-check .cmd 的规范（9.5px mono / 浅底 / 圆角 6 / 点击复制）
+   —— 之前 .diag-issue .cmd 完全没有规则，字号继承到 14px、无背景，与「复制」标签重叠 */
+.diag-issue .cmd {
+  margin-top: 7px;
+  display: flex; align-items: flex-start; gap: 6px;
+  font-family: var(--mono, ui-monospace, Menlo, monospace); font-size: 9.5px;
+  color: var(--ink-muted); background: var(--panel-muted, #f1f2ee); border-radius: 6px;
+  padding: 6px 9px; line-height: 1.7; word-break: break-all;
+  cursor: pointer; user-select: none;
+}
+.diag-issue .cmd:hover { color: var(--ink-soft); outline: 1px solid var(--accent); }
+.diag-issue .cmd:hover .tip { color: var(--accent); opacity: 1; }
+.diag-issue .cmd .c { flex: none; color: var(--ink-muted); }
+.diag-issue .cmd .ln { flex: 1; min-width: 0; }
+.diag-issue .cmd .tip {
+  flex: none; display: inline-flex; align-items: center; gap: 3px;
+  font-size: 9.5px; color: var(--ink-muted); opacity: 0.75; padding-top: 1px;
+}
+.diag-issue .cmd .tip.ok { color: var(--green); opacity: 1; }
+.diag-issue .cmd .tip svg { display: block; }
+.diag-issue .more-finds { display: flex; flex-direction: column; gap: 4px; margin-bottom: 6px; }
+.diag-issue .f { display: flex; gap: 7px; font-size: var(--fs-2xs); line-height: 1.65; color: var(--ink-soft); }
+.diag-issue .f .mk { width: 10px; font-size: 10px; }
+.diag-issue .f .mk.r { color: var(--red); } .diag-issue .f .mk.a { color: var(--amber); }
+.diag-issue .f .mk.g { color: var(--green); } .diag-issue .f .mk.dim { color: var(--ink-muted); }
+.diag-issue .sug { font-size: var(--fs-2xs); line-height: 1.65; color: var(--accent); }
+
+/* 通过项收纳（border-top 由上方「双线修复」段统一决定，此处不重复声明） */
+.diag-passed { margin-top: 4px; padding-top: 8px; }
+.diag-passed > summary {
+  list-style: none; display: flex; align-items: center; gap: 6px;
+  font-size: var(--fs-2xs); line-height: 1; color: var(--ink-muted); cursor: pointer; user-select: none;
+}
+.diag-passed > summary::-webkit-details-marker { display: none; }
+.diag-passed > summary:hover { color: var(--ink-soft); }
+.diag-passed > summary svg { transition: transform .14s; }
+.diag-passed[open] > summary svg { transform: rotate(90deg); }
+.diag-passed .p-list { margin-top: 7px; display: flex; flex-direction: column; gap: 6px; }
+.diag-passed .p-item { display: flex; align-items: baseline; gap: 7px; font-size: var(--fs-2xs); color: var(--ink-soft); }
+.diag-passed .p-item .nm { white-space: nowrap; }
+.diag-passed .p-item .ok { flex: none; display: grid; place-items: center; color: var(--green); line-height: 0; position: relative; top: 1px; }
+.diag-passed .p-item .nm { flex: none; }
+/* 通过项的状态串：中等长度截断并给 title（原先 max-width:60% 在窄弹窗里必截断） */
+.diag-passed .p-item .st {
+  margin-left: auto; text-align: right; font-size: 10px; color: var(--ink-muted);
+  font-family: var(--mono, ui-monospace, Menlo, monospace);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 58%;
+}
+
+/* 底部主行动（与 .diag-rerun 并排，右对齐 —— 对齐 .diag-actions 布局） */
+/* 主按钮（底部操作区，与「重新体检」并排）
+   注意：全局 :where(.theme-modern) button:hover 会把 background 改成 --panel-muted，
+   导致白底白字（2026-11-12 实况反馈）。这里用 .diag-dialog 前缀提高特异性压住它。 */
+.diag-flow .diag-copyall {
+  margin-left: 8px; height: 28px; padding: 0 13px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+  border: 1px solid var(--accent); border-radius: 7px;
+  font-size: var(--fs-2xs); font-weight: 500; line-height: 1;
+  background: linear-gradient(180deg, var(--accent), var(--accent));
+  color: var(--on-accent, #fff); cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+.diag-flow .diag-copyall:hover:not(:disabled) {
+  border-color: var(--accent-strong);
+  background: linear-gradient(180deg, var(--accent), var(--accent-strong));
+  color: var(--on-accent, #fff);
+}
+.diag-flow .diag-copyall.ok,
+.diag-flow .diag-copyall.ok:hover:not(:disabled) {
+  border-color: var(--green); background: var(--green); color: #fff;
+}
+.diag-copyall svg { flex: none; }
+.diag-flow .diag-rerun {
+  height: 28px; padding: 0 14px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+  border: 1px solid var(--line); border-radius: 7px;
+  font-size: 11px; line-height: 1; color: var(--ink-soft); background: var(--panel); cursor: pointer;
+}
+.diag-flow .diag-rerun:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+.diag-flow .diag-rerun:disabled { opacity: 0.55; cursor: default; background: var(--panel); color: var(--ink-soft); border-color: var(--line); }
 
 /* 体检进行中的异步状态：头部下不确定进度线 + 逐项旋转（2026-11-08） */
 .diag-progress {
@@ -3079,5 +3323,9 @@ button.class-outline-row {
   0% { transform: translateX(-110%); }
   100% { transform: translateX(360%); }
 }
-.diag-check .diag-run-ic { flex: none; color: var(--accent); }
-.diag-check .diag-run-text { margin-left: auto; font-size: 10px; color: var(--ink-muted); }
+/* 运行态图标/文字：svg 是 inline 元素会带基线间隙 —— 统一 block + 容器 align-items:center */
+.diag-flow .diag-check .head > svg { display: block; flex: none; }
+.diag-flow .diag-run-ic { flex: none; display: block; color: var(--accent); }
+.diag-flow .diag-run-text { margin-left: auto; font-size: 10px; line-height: 1; color: var(--ink-muted); }
+/* 运行态的行标题与结果态保持同一字号节奏 */
+.diag-flow .diag-check .head b { color: var(--ink-soft); font-weight: 500; }
