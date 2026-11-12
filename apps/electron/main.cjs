@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, Tray, nativeImage, ipcMain, shell, dialog, screen } = require("electron");
+const { app, BrowserWindow, Menu, Tray, nativeImage, nativeTheme, ipcMain, shell, dialog, screen } = require("electron");
 const { spawn } = require("child_process");
 const fs = require("fs");
 const path = require("path");
@@ -834,6 +834,16 @@ ipcMain.on("slc:transfer:control", (_event, action) => {
   }
 });
 
+/* 2026-11-12 深色主题白闪修复：渲染进程按解析后的主题同步窗口原生底色
+   （splash 防闪烁脚本算出主题值后立即上报，主窗口/PiP 统一 setBackgroundColor） */
+ipcMain.on("slc:window-bg", (event, color) => {
+  if (typeof color !== "string" || !/^#[0-9a-fA-F]{6}$/.test(color)) return;
+  const win = BrowserWindow.fromWebContents(event.sender);
+  try {
+    win?.setBackgroundColor(color);
+  } catch { /* 无害：个别窗口类型不支持时忽略 */ }
+});
+
 ipcMain.handle("slc:gateway-token", () => {
   try {
     return ensureGatewayToken();
@@ -1368,7 +1378,11 @@ function createWindow() {
     minHeight: Math.min(600, Math.max(400, workArea.height - 120)),
     title: "",
     show: false,
-    backgroundColor: "#fafafa",
+    /* 2026-11-12 深色主题白闪修复：窗口原生底色不再写死 #fafafa ——
+       按 system 深浅给初始值，随后由渲染进程经 slc:window-bg 按真实主题
+       （ui-tone-mode 解析结果）同步。写死浅色时，深色主题下任何窗口底色
+       露出的瞬间（splash 交接/透明遮罩）都是白→黑强转。 */
+    backgroundColor: nativeTheme.shouldUseDarkColors ? "#121411" : "#fafafa",
     /* 标题栏（2026-10-24 方案 B：Windows 自绘）：
        - macOS：hiddenInset + 红绿灯位置，内容延伸到标题栏下方（不变）。
        - Windows：frame:false（真正无边框）+ 网页自绘三枚按钮

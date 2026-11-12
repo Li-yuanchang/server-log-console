@@ -24,6 +24,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
   /** 网关访问令牌（桌面端自动注入，用户无需配置） */
   getGatewayToken: () => ipcRenderer.invoke("slc:gateway-token"),
 
+  /* ---------- 窗口原生底色同步（2026-11-12 深色主题白闪修复） ----------
+     渲染进程解析主题后立即上报，主进程 setBackgroundColor ——
+     窗口底色不再写死浅色，深色主题下 splash 交接/透明遮罩不再露白 */
+  setWindowBackground: (color) => ipcRenderer.send("slc:window-bg", color),
+
   /* ---------- 上传进度小窗 ---------- */
   /** 打开上传进度小窗（只在 Electron 可用；浏览器形态无此入口） */
   openTransferPip: (config) => ipcRenderer.invoke("open-pip-window", { ...config, mode: "transfer" }),

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-splash="1">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -58,6 +58,10 @@
         __st.setProperty('--sk-ink-soft',__s[5]);
         __st.setProperty('--sk-ink-muted',__s[6]);
         __st.setProperty('--sk-accent',__s[7]);
+        /* 2026-11-12 深色主题白闪修复：把解析后的主题底色同步给窗口原生背景
+           （窗口 backgroundColor 原写死 #fafafa，深色主题下 splash 交接瞬间露白）。
+           浏览器形态无 electronAPI，静默跳过。 */
+        try{ window.electronAPI && window.electronAPI.setWindowBackground(__s[0]); }catch(e){}
       }catch(e){}
     </script>
     <style>
@@ -80,7 +84,13 @@
       }
       #app-loading{
         position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;
-        background:var(--sk-bg);color:var(--sk-ink-muted);
+        /* 2026-11-12 实装极光舞台底（原型 empty-states-full-8 ⑤⑦）：
+           两团 accent 辉光 + 纵向天光渐变 —— 与主区空态同一舞台语言，启动→工作台零跳变 */
+        background:
+          radial-gradient(1200px 620px at 14% -14%, color-mix(in srgb,var(--sk-accent) 12%,transparent), transparent 70%),
+          radial-gradient(1000px 580px at 100% 116%, color-mix(in srgb,var(--sk-accent) 6%,transparent), transparent 66%),
+          linear-gradient(180deg, color-mix(in srgb,var(--sk-panel) 70%,var(--sk-bg)) 0%, var(--sk-bg) 62%);
+        color:var(--sk-ink-muted);
         font-family:-apple-system,BlinkMacSystemFont,'Geist Sans','PingFang SC',sans-serif;
         transition:opacity .25s ease;
       }
@@ -109,6 +119,11 @@
       .splash-word{font-size:15px;font-weight:650;letter-spacing:-.01em;color:var(--sk-ink)}
       .splash-sub{margin-top:2px;font-size:10.5px;font-family:'Geist Mono',ui-monospace,monospace;letter-spacing:.08em;color:var(--sk-ink-muted)}
       .splash-status{margin-top:18px;font-size:12px;color:var(--sk-ink-muted)}
+      /* livebar 细进度线（原型 ⑤⑦ 同款）：不定态扫动，替代纯文案等待 */
+      .splash-livebar{margin-top:16px;width:220px;height:5px;border-radius:999px;background:color-mix(in srgb,var(--sk-ink) 8%,transparent);overflow:hidden;position:relative}
+      .splash-livebar i{position:absolute;top:0;bottom:0;left:0;width:42%;border-radius:999px;background:var(--sk-accent);animation:splash-slide 1.4s ease-in-out infinite}
+      @keyframes splash-slide{0%{transform:translateX(-100%)}100%{transform:translateX(340%)}}
+      @media (prefers-reduced-motion:reduce){.splash-livebar i{animation:none}}
       html[data-slc-electron="1"] .splash{transform:translateY(14px)}
       html[data-slc-pip="1"] #app-loading{--sk-bg:#0a0a0a;--sk-panel:#111111;--sk-muted:rgba(126,200,227,.14);--sk-line:rgba(126,200,227,.08);--sk-ink:rgba(255,255,255,.92);--sk-ink-soft:rgba(195,208,224,.72);--sk-ink-muted:rgba(195,208,224,.6);--sk-accent:#7ec8e3}
     </style>
@@ -129,6 +144,7 @@
         <div class="splash-word">日志控制台</div>
         <div class="splash-sub">SERVER LOG CONSOLE</div>
         <div class="splash-status">正在连接服务…</div>
+        <span class="splash-livebar" aria-hidden="true"><i></i></span>
       </div>
     </div>
     <div id="root"></div>
