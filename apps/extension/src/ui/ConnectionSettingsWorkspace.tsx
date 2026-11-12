@@ -6,7 +6,7 @@ import { looksLikeJumpServer } from "./terminal-utils.js";
 import { readDirectoryHistory } from "./storage.js";
 import { apiGetCredentialSecret, apiTestConnection, apiTestDraftConnection } from "./api.js";
 import { ThemedSelect } from "./ThemedSelect.js";
-import { TERMINAL_TEXTURES, TERMINAL_BACKDROPS, TERMINAL_LOOK_PRESETS, buildTextureBackground, buildBackdropBackground, buildBackdropPreview, type TerminalBackdrop, type TerminalTexture } from "./semantic-tokens.js";
+import { TERMINAL_BACKDROPS, TERMINAL_LOOK_PRESETS, buildBackdropBackground, buildBackdropPreview, type TerminalBackdrop } from "./semantic-tokens.js";
 import type { SlcDesktopUpdateState } from "../types/desktop-update.js";
 import { UpdateCenterPanel, type DesktopUpdateCheckLogEntry } from "./UpdateCenterPanel.js";
 import { SecuritySettingsView } from "./SecuritySettingsView.js";
@@ -120,21 +120,20 @@ interface Props {
     onUiThemePresetChange: (preset: UiThemePreset) => void;
     onUiToneModeChange: (mode: UiToneMode) => void;
     onUiBackgroundChange: (layer: UiBackgroundLayer) => void;
+    /** 空态舞台氛围（2026-11-12）：solid 默认 / paper 细纸纹 / aurora 流动极光（实验） */
+    uiEmptyStage: "solid" | "paper" | "aurora";
+    onUiEmptyStageChange: (value: "solid" | "paper" | "aurora") => void;
     onUiImgOverlayChange: (value: number) => void;
     onUiImgBlurChange: (value: number) => void;
     onCustomBackgroundImageChange: (value: string) => void;
     onUiTerminalSchemeChange: (scheme: TerminalColorSchemeId) => void;
-    /** 终端背景纹理与强度（2026-10-27） */
-    terminalTexture: "none" | "grid" | "dots" | "double";
-    terminalTextureIntensity: number;
+    /* 背景纹理已退役（2026-11-12）：props 一并移除 */
     terminalBackdrop: TerminalBackdrop;
     terminalBackdropIntensity: number;
     onTerminalBackdropChange: (value: TerminalBackdrop) => void;
     onTerminalBackdropIntensityChange: (value: number) => void;
-    /** 一键套用外观组合预设（同时改配色/背景图/纹理/强度） */
+    /** 一键套用外观组合预设（同时改配色/背景图/强度） */
     onApplyLookPreset: (presetId: string) => void;
-    onTerminalTextureChange: (value: "none" | "grid" | "dots" | "double") => void;
-    onTerminalTextureIntensityChange: (value: number) => void;
     onUiAccentOverrideChange: (accent: string | null) => void;
     onUiFontFamilyChange: (fontFamily: UiFontFamily) => void;
     onUiFontSizeChange: (size: number) => void;
@@ -1852,6 +1851,22 @@ export function ConnectionSettingsWorkspace(props: Props) {
                     />
                   </span>
                 </div>
+                <div className="settings-pref-row">
+                  <span className="settings-pref-label"><strong>空态舞台</strong><span>空态页的氛围底；纸纹不规则不抢戏，终端等深色统一界面不受影响</span></span>
+                  {/* 2026-11-12：三档氛围 opt-in，默认 solid 与界面同底零色差 */}
+                  <span className="settings-pref-value">
+                    <ThemedSelect
+                      value={props.preferenceSection.uiEmptyStage}
+                      onChange={(value) => props.preferenceSection.onUiEmptyStageChange(value as "solid" | "paper" | "aurora")}
+                      ariaLabel="空态舞台"
+                      options={[
+                        { value: "solid", label: "纯色（默认）" },
+                        { value: "paper", label: "细纸纹" },
+                        { value: "aurora", label: "流动极光" }
+                      ]}
+                    />
+                  </span>
+                </div>
                 {props.preferenceSection.uiBackground === "image" ? (
                   <div className="settings-pref-row settings-pref-row-wide settings-theme-customizer">
                     <div className="settings-theme-customizer-head">
@@ -2193,13 +2208,13 @@ export function ConnectionSettingsWorkspace(props: Props) {
               <div className="settings-pref-card">
                 {/* 2026-10-24 重设计：终端设置全部归位本区 —— 字体 / 字号从「外观 → 字体矩阵」
                     移入（与矩阵时代的去重决策相反：分散在各区更贴合上下文，原型已确认）。 */}
-                {/* 快速搭配（2026-10-27）：用户反馈自由组合（如极光+方格）容易踩坑。
-                    这里给经过搭配的 6 套组合，一键同时设定配色/背景图/纹理，
-                    下面的单项控件仍可继续微调。 */}
+                {/* 快速搭配（2026-10-27）：用户反馈自由组合容易踩坑。
+                    这里给经过搭配的组合，一键同时设定配色/背景图，
+                    下面的单项控件仍可继续微调。（纹理已退役 2026-11-12） */}
                 <div className="settings-pref-row settings-pref-row-wide">
                   <span className="settings-pref-label">
                     <strong>快速搭配</strong>
-                    <span>经过搭配的组合，避免背景图与纹理互相干扰</span>
+                    <span>经过搭配的组合，配色与光效一次到位</span>
                   </span>
                   <div className="slc-look-grid" role="group" aria-label="外观组合预设">
                     {TERMINAL_LOOK_PRESETS.map((preset) => (
@@ -2214,28 +2229,16 @@ export function ConnectionSettingsWorkspace(props: Props) {
                           className="slc-look-pv"
                           style={{
                             /* 2026-10-28 修正：底色必须取「该预设自己的配色」，
-                               不能一律用 follow 预览色 —— 否则 6 张缩略图底色全是同一个色，
+                               不能一律用 follow 预览色 —— 否则缩略图底色全是同一个色，
                                看不出每套组合的配色差异（用户反馈「预览都一个样」）。 */
                             backgroundColor:
                               props.preferenceSection.terminalSchemeOptions.find((x) => x.id === preset.scheme)
                                 ?.theme.background ?? props.preferenceSection.terminalFollowPreview.background,
-                            backgroundImage: (() => {
-                              const bd = preset.backdrop === "none" ? "none" : buildBackdropPreview(preset.backdrop);
-                              const tex = preset.texture === "none"
-                                ? "none"
-                                : buildTextureBackground(preset.texture, preset.textureIntensity).image
-                                    .replace(/32px/g, "14px").replace(/160px/g, "42px");
-                              if (bd !== "none" && tex !== "none") return `${tex}, ${bd}`;
-                              return bd !== "none" ? bd : tex;
-                            })(),
+                            backgroundImage:
+                              preset.backdrop === "none" ? "none" : buildBackdropPreview(preset.backdrop),
                             /* 图片类背景必须 cover 才有意义（auto 会按原图 1600px 平铺，
                                缩略图里只剩一小块暗角，看着像没设）。 */
-                            backgroundSize:
-                              preset.texture !== "none"
-                                ? "cover, cover"
-                                : preset.backdrop === "none"
-                                  ? "auto"
-                                  : "cover",
+                            backgroundSize: preset.backdrop === "none" ? "auto" : "cover",
                           }}
                         />
                         <span className="slc-look-name">{preset.name}</span>
@@ -2467,77 +2470,8 @@ export function ConnectionSettingsWorkspace(props: Props) {
                   </div>
                 ) : null}
 
-<div className="settings-pref-row settings-pref-row-wide">
-                  <span className="settings-pref-label">
-                    <strong>背景纹理</strong>
-                    <span>终端背景的技术感纹理，默认关闭</span>
-                  </span>
-                  <div className="slc-tex-grid" role="radiogroup" aria-label="终端背景纹理">
-                    {TERMINAL_TEXTURES.map((tex) => {
-                      const active = props.preferenceSection.terminalTexture === tex.id;
-                      return (
-                        <button
-                          key={tex.id}
-                          type="button"
-                          role="radio"
-                          aria-checked={active}
-                          title={tex.desc}
-                          className={active ? "slc-tex-btn slc-tex-btn-active" : "slc-tex-btn"}
-                          onClick={() => props.preferenceSection.onTerminalTextureChange(tex.id)}
-                        >
-                          <span
-                            className="slc-tex-preview"
-                            style={{
-                              /* 2026-10-28 同背景图：固定 #171a1e 而非近黑主题色，
-                                 否则纹理线在缩略图里完全看不见（用户反馈「远看没纹路」）。 */
-                              backgroundColor: "#2e343a",
-                              /* 缩略图示意：实际间距 32px 在 44px 高的预览里只能显示 1 格，
-                                 这里按 1/2 缩放展示图案特征（方格/点阵的密度观感），
-                                 真实终端里是 32px。 */
-                              ...(tex.id === "none"
-                                ? {}
-                                : {
-                                    /* 2026-10-29 缩略图专用增亮：buildTextureBackground 的 alpha 上限
-                                       0.14 是给真实终端用的（须若隐若现）。缩略图仅 44px 高，
-                                       14% 的线几乎不可见 —— 缩略图目的是「辨识」而非「还原」。
-                                       这里改成自建高浓度版本，仅作用于缩略图。 */
-                                    backgroundImage: buildTextureThumbImage(tex.id)
-                                  }),
-                              backgroundSize: tex.id === "none"
-                                ? "auto"
-                                : buildTextureBackground(tex.id, 100).size
-                                    .replace(/32px/g, "14px")
-                                    .replace(/160px/g, "42px"),
-                            }}
-                          />
-                          <span className="slc-tex-name">{tex.name}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {props.preferenceSection.terminalTexture !== "none" ? (
-                  <div className="settings-pref-row settings-pref-row-wide">
-                    <span className="settings-pref-label">
-                      <strong>纹理强度</strong>
-                      <span>越高越明显，建议不超过 70%</span>
-                    </span>
-                    <span className="settings-pref-value" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <input
-                        type="range"
-                        min={0}
-                        max={100}
-                        step={5}
-                        value={props.preferenceSection.terminalTextureIntensity}
-                        onChange={(event) => props.preferenceSection.onTerminalTextureIntensityChange(Number(event.target.value))}
-                        style={{ width: 120, accentColor: "var(--accent)" }}
-                        aria-label="纹理强度"
-                      />
-                      <span style={{ minWidth: 34, textAlign: "right" }}>{props.preferenceSection.terminalTextureIntensity}%</span>
-                    </span>
-                  </div>
-                ) : null}
+                {/* 背景纹理整组已退役（2026-11-12 Boss 裁决）：方格/点阵/双层全部删除。
+                    终端底 = 纯色 + 背景图光效，就这两层。 */}
               </div>
             </section>
 
@@ -2831,34 +2765,3 @@ function FloatingPrefPreview(props: {
   );
 }
 
-/* ============================================================
-   纹理缩略图专用生成（2026-10-29）
-   ------------------------------------------------------------
-   为什么需要单独一套：
-   buildTextureBackground 的 alpha 上限是 0.14 —— 那是给**真实终端**用的，
-   必须若隐若现、不能抢正文。但设置页的缩略图只有 44px 高，
-   14% 的线在里面几乎不可见（用户反馈「看不清、跟没有一样」）。
-
-   缩略图的目的是「让你一眼分辨四种纹理的差别」，不是「还原终端观感」，
-   所以这里用更高的线浓度（0.30–0.42）+ 更亮的衬底（#2e343a），
-   只作用于缩略图，真实终端不受影响。
-   ============================================================ */
-function buildTextureThumbImage(texture: TerminalTexture): string {
-  if (texture === "none") return "none";
-  const a = 0.34;   /* 缩略图固定的线浓度，比终端的 0.08–0.14 明显 */
-  const c = "rgba(150,205,240,";   /* 略偏亮的蓝，在 #2e343a 上有足够对比 */
-  switch (texture) {
-    case "grid":
-      return `linear-gradient(${c}${a}) 1px,transparent 1px),` +
-             `linear-gradient(90deg,${c}${a}) 1px,transparent 1px)`;
-    case "dots":
-      return `radial-gradient(circle at 1px 1px, ${c}${a}) 1.2px, transparent 0)`;
-    case "double":
-      return `linear-gradient(${c}${(a * 0.6).toFixed(2)}) 1px,transparent 1px),` +
-             `linear-gradient(90deg,${c}${(a * 0.6).toFixed(2)}) 1px,transparent 1px),` +
-             `linear-gradient(${c}${a}) 1px,transparent 1px),` +
-             `linear-gradient(90deg,${c}${a}) 1px,transparent 1px)`;
-    default:
-      return "none";
-  }
-}

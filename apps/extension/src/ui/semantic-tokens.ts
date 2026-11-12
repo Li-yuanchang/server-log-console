@@ -69,19 +69,9 @@ export function logColor(kind: SemanticKind): string {
   return SEMANTIC_COLORS[kind].log;
 }
 
-/**
- * 背景纹理类型。
- * 纹理是背景层的最低优先级：默认强度压在「几乎无感」档，
- * 只提供空间感，不与内容争注意力。
- */
-export type TerminalTexture = "none" | "grid" | "dots" | "double";
-
-export const TERMINAL_TEXTURES: Array<{ id: TerminalTexture; name: string; desc: string }> = [
-  { id: "none", name: "无", desc: "纯色背景，最不干扰" },
-  { id: "grid", name: "方格", desc: "32px 细线 · 疏朗不眼晕" },
-  { id: "dots", name: "点阵", desc: "22px 圆点 · 比线更柔和" },
-  { id: "double", name: "双层", desc: "32px + 160px 主次刻度 · 工程感" }
-];
+/* 背景纹理已退役（2026-11-12 Boss 裁决）：网格系纹理与终端文字行结构同类叠加必然打架，
+   不可见=白背 / 可见=眼晕，四轮调参无解；成熟终端（iTerm/Warp/VS Code）均无此选项。
+   终端底 = 纯色 + 背景图光效，就这两层。 */
 
 /**
  * 背景图预设（2026-10-27，2026-10-28 扩图）。
@@ -244,58 +234,6 @@ export function buildBackdropBackground(
 }
 
 /**
- * 生成纹理的 CSS 背景（强度 0~100，映射到透明度）。
- *
- * 2026-10-27 提高可见度：原基线 5.5% 在深色底上几乎不可见
- * （用户反馈「格子都不明显」）。现基线提到 12%，并随强度线性增长；
- * 强度 100 时约 22%，肉眼清晰但不抢文字。
- */
-export function buildTextureBackground(
-  texture: TerminalTexture,
-  intensity: number
-): { image: string; size: string } {
-  const k = Math.max(0, Math.min(100, intensity)) / 100;
-  /* 2026-10-27 二次调整：
-     ① 间距放疏 —— 16px 在正常字号的终端里约每 1.5 个字符一格，密集到眼晕；
-        改成 32px（约 4 字符），视线不会被连续的十字路口拉扯。
-     ② 线更细更淡 —— 1px 实线叠在 16px 间距上形成「套格子」观感，
-        改成 1px + 更低透明度，只作若隐若现的底纹。
-     ③ 强度基线 8%，上限 14%（原来 12~22% 偏亮）。 */
-  /* 2026-10-29 回退（用户反馈「碳纤维/星云都不是深色背景了，变成灰白色」）：
-     上一版把 alpha 提到 0.20–0.42，叠在 #0a0a0a 上算出 rgb(56,81,98)、
-     亮度 76.9（原 0.08 时仅 23.2）—— 等于把深色背景整体糊成了灰蓝。
-     纹理是「若隐若现的底纹」，不是背景色本身，必须保持低透明度。
-     恢复 0.08–0.14：只提供空间感，不改变背景明暗。 */
-  const alpha = (0.08 + 0.06 * k).toFixed(3);
-  switch (texture) {
-    case "grid":
-      return {
-        image:
-          `linear-gradient(rgba(120,180,220,${alpha}) 1px,transparent 1px),` +
-          `linear-gradient(90deg,rgba(120,180,220,${alpha}) 1px,transparent 1px)`,
-        size: "32px 32px"
-      };
-    case "dots":
-      return {
-        image: `radial-gradient(circle at 1px 1px, rgba(130,200,235,${(parseFloat(alpha) * 1.5).toFixed(3)}) 1px, transparent 0)`,
-        size: "22px 22px"
-      };
-    case "double":
-      /* 双层：32px 细线 + 160px 主刻度（5 倍关系，主次分明） */
-      return {
-        image:
-          `linear-gradient(rgba(120,180,220,${(parseFloat(alpha) * 0.5).toFixed(3)}) 1px,transparent 1px),` +
-          `linear-gradient(90deg,rgba(120,180,220,${(parseFloat(alpha) * 0.5).toFixed(3)}) 1px,transparent 1px),` +
-          `linear-gradient(rgba(120,180,220,${alpha}) 1px,transparent 1px),` +
-          `linear-gradient(90deg,rgba(120,180,220,${alpha}) 1px,transparent 1px)`,
-        size: "32px 32px,32px 32px,160px 160px,160px 160px"
-      };
-    default:
-      return { image: "none", size: "auto" };
-  }
-}
-
-/**
  * 缩略图专用背景光效（2026-10-27）
  *
  * 为什么需要单独一套：正常版按终端全屏尺寸设计（光斑在 -15% / 125% 等处），
@@ -337,9 +275,8 @@ export function buildBackdropPreview(backdrop: TerminalBackdrop): string {
  * 这里给出经过挑选的稳定组合，一键套用，避免用户踩到冲突搭配。
  *
  * 设计原则：
- * - 有背景光效时不再叠纹理（两者都是「大面积图案」，叠加会互相干扰）
- * - 纹理只配纯色底（纹理本身就是底纹，加光效等于两层图案）
  * - 每个组合都有明确的场景定位，不是随机拼色
+ * - 背景纹理已退役（2026-11-12）：预设不再携带纹理字段
  */
 export interface TerminalLookPreset {
   id: string;
@@ -349,57 +286,42 @@ export interface TerminalLookPreset {
   scheme: string;
   backdrop: TerminalBackdrop;
   backdropIntensity: number;
-  texture: TerminalTexture;
-  textureIntensity: number;
 }
 
 export const TERMINAL_LOOK_PRESETS: TerminalLookPreset[] = [
   {
     id: "plain",
     name: "纯色克制",
-    desc: "无背景图无纹理，只靠配色区分。长时间排障首选",
+    desc: "无背景图，只靠配色区分。长时间排障首选",
     scheme: "sage",
-    backdrop: "none", backdropIntensity: 60,
-    texture: "none", textureIntensity: 55
+    backdrop: "none", backdropIntensity: 60
   },
   {
     id: "aurora-clean",
     name: "极光净底",
-    desc: "极光光效 + 无纹理。氛围明确且不干扰文字",
+    desc: "极光光效。氛围明确且不干扰文字",
     scheme: "aurora",
-    backdrop: "aurora", backdropIntensity: 55,
-    texture: "none", textureIntensity: 55
+    backdrop: "aurora", backdropIntensity: 55
   },
   {
     id: "nebula-deep",
     name: "星云深空",
     desc: "星云渐层 + 深空蓝配色。适合夜间长盯",
     scheme: "space",
-    backdrop: "nebula", backdropIntensity: 50,
-    texture: "none", textureIntensity: 55
-  },
-  {
-    id: "grid-tech",
-    name: "方格工程",
-    desc: "方格底纹 + 炭黑配色。纯技术感，无光效干扰",
-    scheme: "charcoal",
-    backdrop: "none", backdropIntensity: 60,
-    texture: "grid", textureIntensity: 45
+    backdrop: "nebula", backdropIntensity: 50
   },
   {
     id: "carbon-dark",
     name: "碳纤暗调",
     desc: "碳纤维斜纹 + 石墨青。低调质感，几乎不抢注意力",
     scheme: "sage",
-    backdrop: "carbon", backdropIntensity: 45,
-    texture: "none", textureIntensity: 55
+    backdrop: "carbon", backdropIntensity: 45
   },
   {
     id: "wave-calm",
     name: "波纹静水",
     desc: "底部波纹 + 墨绿护眼。最柔和的一套",
     scheme: "moss",
-    backdrop: "wave", backdropIntensity: 45,
-    texture: "none", textureIntensity: 55
+    backdrop: "wave", backdropIntensity: 45
   }
 ];

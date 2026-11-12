@@ -7,7 +7,128 @@
    ============================================================ */
 
 /* ---------- 空态 · A3 无卡光晕 ---------- */
-.lp3{flex:1 1 0%;min-height:0;display:flex;align-items:center;justify-content:center;background:var(--bg);overflow:hidden}
+.lp3{flex:1 1 0%;min-height:0;display:flex;align-items:center;justify-content:center;background:var(--bg);overflow:hidden;position:relative}
+/* 启动页淡出期间抑制空态入场动画（2026-11-12 Boss：初始 loading 抖动）：
+   内容在 splash 底下静态呈现，splash 移除（html data-splash 摘除）后 softin 才播一次，
+   消除「splash 淡出 + 内容上浮」双重运动叠加 */
+html[data-splash] .lp3-inner,
+html[data-splash] .lg-unit{animation:none !important}
+/* 文件目录内容列：.file-table-body 是滚动容器（非 flex），.lp3 的 flex:1 在此失效，
+   必须显式撑满，否则空态舞台只裹住内容、下方露一截白（2026-11-12 实测） */
+.file-table-body > .lp3{min-height:100%}
+
+
+/* ============================================================
+   editorial 变体（2026-11-12 实装 docs/prototypes/empty-states-full-8-2026-11.html）
+   左对齐 editorial 内容列 + 功能区水印。
+   ⚠️ 彩色舞台（流动极光）已在真实应用退役（2026-11-12 Boss 两轮裁决：
+   色差严重 / UI 不成整体）—— 大面积舞台贴白色侧栏/顶栏，任何有色 wash
+   都是第三种白。舞台 = 与周围完全同底，设计感全部交给排版与水印。
+   极光仅存在于原型文件，作氛围选项备查。
+   ============================================================ */
+.lp3.ed{align-items:stretch;justify-content:flex-start;background:var(--bg)}
+
+/* ---------- 空态舞台氛围 opt-in（2026-11-12，外观可配） ----------
+   solid（默认）= 与界面同底零色差；aurora = 流动极光（实验）。
+   性能（2026-11-12 Boss：改极光很卡）：光斑**预烘焙进径向渐变**，
+   不用 filter:blur —— blur 的大面积元素每帧动画都重栅格化，是卡顿根源；
+   纯渐变 + transform 动画走合成器，近乎零成本。
+   布局（2026-11-12 Boss：空白边）：舞台提升到三个工作台根节点
+   （日志预览 / 文件目录「厂」字区 / 启动态主区），内衬面退底，
+   白边（工具行沟槽 / 表格 padding / 滚动条槽）在舞台下自然消失。 */
+.ui-empty-stage-aurora{
+  --lp3-aurora-img:
+    radial-gradient(42% 34% at 22% 20%, color-mix(in srgb,var(--accent) 13%,transparent), transparent 72%),
+    radial-gradient(30% 26% at 56% 36%, color-mix(in srgb,#7ea8c9 7%,transparent), transparent 70%),
+    radial-gradient(26% 24% at 38% 58%, color-mix(in srgb,#d8c9a3 5%,transparent), transparent 68%),
+    radial-gradient(38% 30% at 74% 78%, color-mix(in srgb,var(--accent) 10%,transparent), transparent 72%);
+  --lp3-stage-bg:
+    radial-gradient(1200px 620px at 14% -14%, color-mix(in srgb,var(--accent) 6%,transparent), transparent 70%),
+    radial-gradient(1000px 580px at 100% 116%, color-mix(in srgb,var(--accent) 3%,transparent), transparent 66%),
+    linear-gradient(180deg, color-mix(in srgb,var(--panel) 55%,var(--bg)) 0%, var(--bg) 62%);
+  --lp3-wash-img:
+    url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300"><filter id="g"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" stitchTiles="stitch"/><feColorMatrix type="saturate" values="0"/></filter><rect width="300" height="300" filter="url(%23g)" opacity="0.045"/></svg>'),
+    linear-gradient(180deg, color-mix(in srgb,var(--panel) 30%,transparent) 0%, transparent 30%, color-mix(in srgb,var(--bg) 45%,transparent) 100%);
+}
+/* 三个工作台根节点 = 舞台（有对应空态时） */
+.ui-empty-stage-aurora .viewer-workbench:has(.lp3.ed:not(.in-terminal)),
+.ui-empty-stage-aurora .file-browser-workbench:has(.browser-file-column-body > .lp3.ed),
+.ui-empty-stage-aurora .workspace-panel:has(> .lp3.ed){
+  position:relative;
+  background:var(--lp3-stage-bg);
+}
+.ui-empty-stage-aurora .viewer-workbench:has(.lp3.ed:not(.in-terminal))::before,
+.ui-empty-stage-aurora .file-browser-workbench:has(.browser-file-column-body > .lp3.ed)::before,
+.ui-empty-stage-aurora .workspace-panel:has(> .lp3.ed)::before{
+  content:"";position:absolute;inset:-12%;
+  background-image:var(--lp3-aurora-img);
+  transform:rotate(-6deg);
+  animation:lp3-aurora 18s ease-in-out infinite alternate;
+  will-change:transform;pointer-events:none}
+@keyframes lp3-aurora{0%{transform:rotate(-6deg) translateY(-1.2%)}100%{transform:rotate(-6deg) translateY(1.2%) scale(1.04)}}
+.ui-empty-stage-aurora .viewer-workbench:has(.lp3.ed:not(.in-terminal))::after,
+.ui-empty-stage-aurora .file-browser-workbench:has(.browser-file-column-body > .lp3.ed)::after,
+.ui-empty-stage-aurora .workspace-panel:has(> .lp3.ed)::after{
+  content:"";position:absolute;inset:0;pointer-events:none;
+  background:var(--lp3-wash-img)}
+/* 内衬面退底：沟槽、工具行、表格 padding、滚动条槽全部让舞台透上来 */
+.ui-empty-stage-aurora .viewer-workbench:has(.lp3.ed:not(.in-terminal)) :is(.viewer-shell,.viewer-toolbar-row,.viewer-actions-strip,.result-tab-strip,.viewer-empty-gutter){background:transparent}
+.ui-empty-stage-aurora .file-browser-workbench:has(.browser-file-column-body > .lp3.ed) :is(.browser-column,.browser-column-head,.file-table,.file-table-head,.tree-list){background:transparent}
+/* 内容列里的 lp3 退为透明容器（舞台已在工作台层），避免双层极光叠灰 */
+.ui-empty-stage-aurora .viewer-workbench:has(.lp3.ed:not(.in-terminal)) .lp3.ed,
+.ui-empty-stage-aurora .file-browser-workbench:has(.browser-file-column-body > .lp3.ed) .lp3.ed{background:transparent}
+.ui-empty-stage-aurora .viewer-workbench:has(.lp3.ed:not(.in-terminal)) .lp3.ed::before,
+.ui-empty-stage-aurora .viewer-workbench:has(.lp3.ed:not(.in-terminal)) .lp3.ed::after,
+.ui-empty-stage-aurora .file-browser-workbench:has(.browser-file-column-body > .lp3.ed) .lp3.ed::before,
+.ui-empty-stage-aurora .file-browser-workbench:has(.browser-file-column-body > .lp3.ed) .lp3.ed::after{content:none}
+
+/* ---------- 空态舞台 · 细纸纹（2026-11-12 第三选项） ----------
+   不规则噪声纹理（原型「细纸纹」同款 SVG turbulence），静态零动画零成本；
+   与极光同策略：舞台提升到工作台根节点，内衬面退底，白边不出现 */
+.ui-empty-stage-paper{
+  --lp3-paper-img:
+    url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="560" height="560"><filter id="f"><feTurbulence type="fractalNoise" baseFrequency="0.55" numOctaves="2" seed="11" stitchTiles="stitch"/><feColorMatrix type="saturate" values="0"/></filter><filter id="m"><feTurbulence type="fractalNoise" baseFrequency="0.012" numOctaves="3" seed="4" stitchTiles="stitch"/><feColorMatrix type="saturate" values="0"/></filter><rect width="560" height="560" filter="url(%23f)" opacity="0.11"/><rect width="560" height="560" filter="url(%23m)" opacity="0.14"/></svg>');
+}
+/* 终端覆盖层豁免（in-terminal 自带不透明深底，见 term-dark）—— 纸纹不进终端 */
+.ui-empty-stage-paper .lp3.ed:not(.in-terminal){background-color:var(--bg);background-image:var(--lp3-paper-img)}
+.ui-empty-stage-paper .viewer-workbench:has(.lp3.ed:not(.in-terminal)),
+.ui-empty-stage-paper .file-browser-workbench:has(.browser-file-column-body > .lp3.ed),
+.ui-empty-stage-paper .workspace-panel:has(> .lp3.ed){
+  position:relative;
+  background-color:var(--bg);
+  background-image:var(--lp3-paper-img)}
+.ui-empty-stage-paper .viewer-workbench:has(.lp3.ed:not(.in-terminal)) :is(.viewer-shell,.viewer-toolbar-row,.viewer-actions-strip,.result-tab-strip),
+.ui-empty-stage-paper .file-browser-workbench:has(.browser-file-column-body > .lp3.ed) :is(.browser-column,.browser-column-head,.file-table,.file-table-head,.tree-list){background:transparent}
+.ui-empty-stage-paper .viewer-workbench:has(.lp3.ed:not(.in-terminal)) .lp3.ed,
+.ui-empty-stage-paper .file-browser-workbench:has(.browser-file-column-body > .lp3.ed) .lp3.ed{background-color:transparent;background-image:none}
+
+
+/* editorial 内容列：左对齐顶排，水印层级之上；圆徽章退役（editorial 语言无图标位） */
+.lp3.ed .lp3-icwrap{display:none}
+.lp3.ed .lp3-inner{align-items:flex-start;text-align:left;width:min(680px,100%);max-width:100%;padding:44px clamp(24px,8%,96px) 36px 8%;transform:none;position:relative;z-index:1;justify-content:flex-start}
+.lp3.ed .lp3-title{font-size:26px;font-weight:650;letter-spacing:-.022em;line-height:1.25}
+.lp3.ed .lp3-sub{font-size:12.5px;color:var(--ink-soft);line-height:1.8;margin-top:9px;max-width:44em}
+.lp3.ed .lp3-acts{margin-top:20px}
+.lp3.ed .lp3-steps{margin-top:18px}
+.lp3.ed .lp3-fade{align-items:flex-start;margin-top:26px}
+.lp3.ed .lp3-sub{max-width:44em}
+.lp3.ed .lp3-acts,.lp3.ed .lp3-steps{justify-content:flex-start}
+/* 水印（功能区线稿）：完整可见、不出血 —— 大面积区域上出血裁切只剩怪圆角（2026-11-12 实测），
+   收进右下角内侧；透明度 13%（Boss：8% 在浅底上清晰度不够）；
+   尺寸取中档（Boss 裁定：180/24% 太小没存在感，260/36% 太大喧宾夺主） */
+.lp3-mark{position:absolute;right:32px;bottom:24px;width:clamp(220px,28%,380px);color:var(--accent);opacity:.13;transform:rotate(-6deg);pointer-events:none;z-index:0}
+/* livebar：细进度线（进行中空态 ③⑨ 的 loading 语言，退役 spinner） */
+.lp3-livebar{display:block;margin-top:20px;width:min(300px,80%);height:5px;border-radius:999px;background:color-mix(in srgb,var(--ink) 5.5%,transparent);overflow:hidden;position:relative}
+.lp3-livebar i{position:absolute;top:0;bottom:0;left:0;width:42%;border-radius:999px;background:var(--accent);animation:lg-slide 1.4s ease-in-out infinite}
+/* 快捷键键帽（⌘K / Ctrl K 就近提示，紧贴主按钮） */
+.lp3-kbd{display:inline-flex;align-items:center;height:30px;padding:0 11px;border-radius:999px;
+  border:1px dashed color-mix(in srgb,var(--ink) 20%,transparent);
+  font-family:var(--mono);font-size:10.5px;color:var(--ink-soft);flex:none;cursor:pointer}
+/* 「上次使用」徽标 + 状态点（门面 ⑥ 快捷连接行） */
+.lp3-last{margin-left:2px;font-size:9px;font-weight:600;color:var(--accent-strong);flex:none;
+  background:color-mix(in srgb,var(--accent) 9%,transparent);
+  border:1px solid color-mix(in srgb,var(--accent) 28%,transparent);border-radius:999px;padding:1px 7px}
+
 
 /* 查看区内的空态/加载态底色对齐日志正文（用户反馈 2026-11-09：日志预览区上下左右
    padding 空隙的底色与内容区不一致，四周露出一圈深灰接缝）。
@@ -66,7 +187,25 @@
 .lp3-qrow:hover .qact{text-decoration:underline;text-underline-offset:2px}
 .lp3-qdot{width:5px;height:5px;border-radius:999px;background:var(--dot-idle);flex:none}
 /* 终端容器内：绝对定位铺满（沿用旧 .in-terminal 约定） */
-.lp3.in-terminal{position:absolute;inset:0;height:auto}
+.lp3.in-terminal{position:absolute;inset:0;height:auto;z-index:6}
+/* 终端连接态深色作用域（2026-11-12 对接原型 ④）：
+   覆盖层**自带不透明终端底 #101410**（2026-11-12 Boss：纸纹侵入根治）——
+   自给自足，无论背后是什么舞台（solid/paper/aurora）都不透；
+   文案写死浅色（铁则），不吃主题 token */
+.lp3.term-dark{background:#101410;color:#e6ebe4}
+.lp3.term-dark .lp3-title{color:#e6ebe4}
+.lp3.term-dark .lp3-sub{color:#9fb0a4}
+.lp3.term-dark .lp3-chip{background:rgba(230,235,228,.05);border-color:rgba(230,235,228,.14);color:#9fb0a4}
+.lp3.term-dark .lp3-livebar{background:rgba(230,235,228,.08)}
+.lp3.term-dark .lp3-fade i{background:rgba(230,235,228,.1)}
+.lp3.term-dark .lp3-mark{color:#7ea88f;opacity:.1}
+/* 连接 loading 位置：垂直居中（2026-11-12 Boss）——顶部 44px 是 banner 打印区，
+   原左上排版在淡出瞬间与首行输出重叠；居中后淡出交棒无文字碰撞 */
+.lp3.in-terminal.term-dark .lp3-inner{justify-content:center;padding-top:0;padding-bottom:0}
+/* 退场过渡（2026-11-12 Boss：连接 loading 生硬消失）：常驻挂载 + 透明度淡出，
+   渐变里露出底下画布；pointer-events 放行不挡终端交互 */
+.lp3.term-dark{opacity:1;transition:opacity .28s ease}
+.lp3.term-dark.lp3-leave{opacity:0;pointer-events:none}
 /* ⑦ PiP / 独立小窗（720×420 起，chrome 定稿 2026-11-02）：halo 复用窄档形态，
    压缩光晕半径与上移量，避免小窗内光晕溢出裁切 */
 .pip-viewer-root .lp3-icwrap::before{inset:-40px}
@@ -132,9 +271,17 @@
 }
 
 @media (prefers-reduced-motion:reduce){
-  .lp3-inner,.lp3-ic-live,.lp3-ring,.lp3-dot,.lg-row,.lg-ring,.lg-unit,.lg-progress i{animation:none !important}
+  .lp3-inner,.lp3-ic-live,.lp3-ring,.lp3-dot,.lg-row,.lg-ring,.lg-unit,.lg-progress i,.ui-empty-stage-aurora .lp3.ed::before{animation:none !important}
 }
 
 /* L4.2 重启遮罩：LogoLoader 与既有 .restart-splash 结构的间距衔接 */
 .restart-splash .lg-rip{margin-bottom:14px}
 .restart-splash .restart-splash-status{margin-top:16px}
+/* 重启遮罩舞台语言与启动页对齐（2026-11-12）：accent 辉光 + livebar 细进度线 */
+.settings-update-restart-overlay{background:
+  radial-gradient(1200px 620px at 14% -14%, color-mix(in srgb,var(--accent) 12%,transparent), transparent 70%),
+  radial-gradient(1000px 580px at 100% 116%, color-mix(in srgb,var(--accent) 6%,transparent), transparent 66%),
+  linear-gradient(180deg, color-mix(in srgb,var(--panel) 70%,var(--bg)) 0%, var(--bg) 62%)}
+.restart-splash-livebar{margin-top:16px;width:220px;height:5px;border-radius:999px;background:color-mix(in srgb,var(--ink) 8%,transparent);overflow:hidden;position:relative}
+.restart-splash-livebar i{position:absolute;top:0;bottom:0;left:0;width:42%;border-radius:999px;background:var(--accent);animation:lg-slide 1.4s ease-in-out infinite}
+@media (prefers-reduced-motion:reduce){.restart-splash-livebar i{animation:none}}

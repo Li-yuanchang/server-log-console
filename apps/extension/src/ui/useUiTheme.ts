@@ -290,6 +290,9 @@ export type UiThemeAPI = {
   /** 背景层（独立于主题） */
   uiBackground: UiBackgroundLayer;
   setUiBackground: (layer: UiBackgroundLayer) => void;
+  /** 空态舞台氛围（2026-11-12）：solid=与界面同底（默认）；paper=细纸纹；aurora=流动极光（实验） */
+  uiEmptyStage: "solid" | "paper" | "aurora";
+  setUiEmptyStage: (value: "solid" | "paper" | "aurora") => void;
   /** 图片背景层的遮罩亮度(%) 与模糊(px) */
   uiImgOverlay: number;
   setUiImgOverlay: (value: number) => void;
@@ -303,17 +306,12 @@ export type UiThemeAPI = {
   setUiTerminalScheme: (scheme: TerminalColorSchemeId) => void;
   /** 终端行高倍率（1.0~2.4，xterm lineHeight）。参考 VRC「行高」步进器。 */
   terminalLineHeight: number;
-  /** 终端背景纹理（2026-10-27）：none/grid/dots/double */
-  terminalTexture: "none" | "grid" | "dots" | "double";
-  /** 纹理强度 0~100，映射到纹理线透明度 */
-  terminalTextureIntensity: number;
+  /* 背景纹理已退役（2026-11-12）：状态与持久化一并移除 */
   /** 背景图预设（2026-10-27）：纯 CSS 生成的氛围光效 */
   terminalBackdrop: TerminalBackdrop;
   /** 背景图强度 0~100 */
   terminalBackdropIntensity: number;
   setTerminalLineHeight: (value: number) => void;
-  setTerminalTexture: (value: "none" | "grid" | "dots" | "double") => void;
-  setTerminalTextureIntensity: (value: number) => void;
   setTerminalBackdrop: (value: TerminalBackdrop) => void;
   setTerminalBackdropIntensity: (value: number) => void;
   /** 终端光标样式（xterm cursorStyle）。参考 VRC「光标样式」三档。 */
@@ -511,6 +509,12 @@ export function useUiTheme(): UiThemeAPI {
     if (!migrated && value === "aurora") return DEFAULT_UI_BACKGROUND;
     return value as UiBackgroundLayer;
   });
+  /* 空态舞台氛围（2026-11-12）：默认 solid —— 极光作为 opt-in 实验项，
+     用户显式选中才生效（大面积有色 wash 与白 chrome 的色差问题已由默认值规避） */
+  const [uiEmptyStage, setUiEmptyStage] = useState<"solid" | "paper" | "aurora">(() => {
+    const value = readLocalStorageValue("ui-empty-stage");
+    return value === "aurora" || value === "paper" ? value : "solid";
+  });
   const [uiImgOverlay, setUiImgOverlay] = useState(() => {
     return readStoredNumber("custom-image-overlay", DEFAULT_UI_IMG_OVERLAY, 0, 90);
   });
@@ -564,15 +568,8 @@ export function useUiTheme(): UiThemeAPI {
     if (!migrated && stored === 180) return DEFAULT_TERMINAL_LINE_HEIGHT;
     return stored / 100;
   });
-  /* 终端背景纹理与强度（2026-10-27）：默认 none，
-     纹理是背景层最低优先级，只提供空间感不与内容争。 */
-  const [terminalTexture, setTerminalTexture] = useState<"none" | "grid" | "dots" | "double">(() => {
-    const v = readLocalStorageValue("terminal-texture");
-    return v === "grid" || v === "dots" || v === "double" ? v : "none";
-  });
-  const [terminalTextureIntensity, setTerminalTextureIntensity] = useState(() => {
-    return readStoredNumber("terminal-texture-intensity", 55, 0, 100);
-  });
+  /* 背景纹理已退役（2026-11-12）：localStorage 里残留的
+     terminal-texture / terminal-texture-intensity 两个 key 不再读取，留置无害 */
   /* 背景图预设（2026-10-27）：纯 CSS 光效，默认 none */
   const [terminalBackdrop, setTerminalBackdrop] = useState<TerminalBackdrop>(() => {
     const v = readLocalStorageValue("terminal-backdrop");
@@ -697,6 +694,10 @@ export function useUiTheme(): UiThemeAPI {
   }, [uiToneMode]);
 
   useEffect(() => {
+    persistLocalStorageValue("ui-empty-stage", uiEmptyStage);
+  }, [uiEmptyStage]);
+
+  useEffect(() => {
     persistLocalStorageValue("ui-bg-layer", uiBackground);
     /* 迁移标记：写过值即视为完成迁移，避免下次启动把用户主动选的 aurora 又改掉 */
     persistLocalStorageValue("ui-bg-layer-migrated", "1");
@@ -739,14 +740,6 @@ export function useUiTheme(): UiThemeAPI {
     /* 迁移标记：一旦写过值即视为已完成迁移，避免下次启动把用户手调的值又改掉 */
     persistLocalStorageValue("terminal-line-height-migrated", "1");
   }, [terminalLineHeight]);
-
-  useEffect(() => {
-    persistLocalStorageValue("terminal-texture", terminalTexture);
-  }, [terminalTexture]);
-
-  useEffect(() => {
-    persistLocalStorageValue("terminal-texture-intensity", String(terminalTextureIntensity));
-  }, [terminalTextureIntensity]);
 
   useEffect(() => {
     persistLocalStorageValue("terminal-backdrop", terminalBackdrop);
@@ -852,6 +845,8 @@ export function useUiTheme(): UiThemeAPI {
     resolvedTheme,
     uiBackground,
     setUiBackground,
+    uiEmptyStage,
+    setUiEmptyStage,
     uiImgOverlay,
     setUiImgOverlay,
     uiImgBlur,
@@ -870,10 +865,6 @@ export function useUiTheme(): UiThemeAPI {
     setTerminalFontSize,
     terminalLineHeight,
     setTerminalLineHeight,
-    terminalTexture,
-    setTerminalTexture,
-    terminalTextureIntensity,
-    setTerminalTextureIntensity,
     terminalBackdrop,
     setTerminalBackdrop,
     terminalBackdropIntensity,

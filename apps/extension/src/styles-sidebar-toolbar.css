@@ -1142,7 +1142,37 @@ body.is-win32 .theme-modern.pip-standalone .terminal-panel-bar-standalone {
 .smc-srow b.hot { color: var(--red); }
 .smc-srow b.warm { color: var(--amber); }
 
-.smc-sec { margin-top: 9px; padding: 8px 0 2px; font-size: 9px; letter-spacing: .14em; color: var(--ink-muted); }
+/* 方案 E 行（2026-11-11 原型 server-monitor-card-2026-11 定稿）：
+   行 1 = 标签 + 容量串（超阈值追加琥珀/红「剩 x」）+ %，行 2 = 满幅轨。
+   200px 侧栏下 12 段轨从 78px 加宽到全幅；长容量串省略号 + title 兜底 */
+.smc-e-top {
+  border-bottom: none; padding: 7px 0 3px; align-items: baseline;
+  /* 容量串跨行对齐成一列（2026-11-12 用户反馈「左侧对齐，不是紧跟左边」）：
+     标签列固定 38px（最长标签 /home≈33px 刚好放下），各行容量串共享同一左边缘；
+     短标签（内存 20px）后留 18px 列沟 —— 是对齐的代价，不是居中 */
+  grid-template-columns: 38px minmax(0, 1fr) auto; column-gap: 4px;
+}
+.smc-e-top b { min-width: 0; }
+.smc-e-cap {
+  min-width: 0;
+  font-family: var(--mono, ui-monospace, Menlo, monospace); font-size: 9.5px;
+  color: var(--ink-muted); font-variant-numeric: tabular-nums;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.smc-e-cap i { font-style: normal; color: var(--ink-soft, #5b6470); }
+.smc-e-cap i.risk { color: var(--amber); font-weight: 500; }
+.smc-e-cap i.hot { color: var(--red); font-weight: 500; }
+.smc-e-track { display: block; padding: 0 0 7px; border-bottom: 1px solid var(--hairline, #e7e8e1); }
+/* 轨基样式必须整组带上（.smc-srow .track 的作用域不含 e-track）：缺 position:relative 时
+   segbar 的 absolute inset:0 会锚到窗口级祖先 —— 12 段半透明色块铺满整窗（2026-11-12 事故）。
+   底纹 hatch 不带：满幅轨一段约 12px，8px 发丝线会从半透明段里透出来和段缝拼成「双竖线」，
+   刻度感由段缝本身承担（2026-11-12 用户反馈） */
+.smc-e-track .track {
+  display: block; height: 10px; border-radius: 2px; position: relative; overflow: hidden;
+}
+
+.smc-sec { display: flex; align-items: baseline; gap: 6px; margin-top: 9px; padding: 8px 0 2px; font-size: 9px; letter-spacing: .14em; color: var(--ink-muted); }
+.smc-sec-total { margin-left: auto; font-family: var(--mono, ui-monospace, Menlo, monospace); letter-spacing: 0; font-variant-numeric: tabular-nums; }
 
 .smc-prow {
   display: flex; align-items: center; gap: 10px; padding: 6px 0;
@@ -1157,12 +1187,26 @@ body.is-win32 .theme-modern.pip-standalone .terminal-panel-bar-standalone {
 .smc-prow b.hot { color: var(--red); }
 
 .smc-foot {
-  display: flex; gap: 10px; padding: 9px 0 0; margin-top: 2px;
+  display: flex; flex-wrap: wrap; gap: 10px; padding: 9px 0 0; margin-top: 2px;
   font-family: var(--mono, ui-monospace, Menlo, monospace); font-size: 9.5px;
   color: var(--ink-muted); font-variant-numeric: tabular-nums;
 }
-.smc-foot .sp { flex: 1; }
 .smc-foot b { color: var(--ink-soft); font-weight: 600; }
+/* load 三值（2026-11-12 二次收敛）：200px 一行装不下「全标注 load + 网速 + 体检按钮」，
+   键位 1/5/15m 收进 title、首个数由 hero 行「load 1m」锚定，footer 单行 = load + 网速 */
+.smc-nets { display: inline-flex; gap: 8px; white-space: nowrap; }
+
+/* 体检入口（2026-11-12 从 footer 上移到身份行状态徽章右侧）：图标 chip */
+.smc-diag-btn {
+  flex: none; margin-left: 2px; width: 24px; height: 20px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 6px; border: none; padding: 0;
+  color: var(--ink-soft); background: var(--panel-muted, #f1f2ee);
+  cursor: pointer;
+}
+.smc-diag-btn svg { flex: none; }
+.smc-diag-btn:hover { color: var(--accent); background: var(--accent-soft); }
+.smc-diag-btn.running { color: var(--accent); background: var(--accent-soft); }
 
 .smc-detail-btn {
   margin: 10px 16px 0; width: calc(100% - 32px); height: 26px; border: 1px solid var(--hairline-strong, #d6d9d0);
@@ -1170,24 +1214,9 @@ body.is-win32 .theme-modern.pip-standalone .terminal-panel-bar-standalone {
 }
 .smc-detail-btn:hover { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
 
-.smc-stale-hint {
-  margin: 8px 0 0; display: flex; align-items: center; gap: 5px; padding: 4px 8px;
-  font-size: 9px; color: var(--amber); background: var(--amber-soft, rgba(180, 83, 9, 0.12)); border-radius: 6px;
-}
+/* .smc-stale-hint 已删除（2026-11-12）：底部延迟提示条退役 —— 时不时闪出像"幻觉"，
+   延迟状态只由头部徽章体现，留痕改走 console.warn */
 .smc-idle { margin-top: 10px; font-size: 10.5px; color: var(--ink-muted); line-height: 1.7; padding: 10px 12px; background: var(--panel-muted, #f1f2ee); border-radius: 8px; }
-
-/* foot 里与 load/网速同排的「体检」入口（2026-11-08）：chip 形态 —— 图标 + 文字 + 浅底，
-   明确是一个可点动作而非数据文字；体检中变 accent + 旋转指示 */
-.smc-foot-link {
-  flex: none; display: inline-flex; align-items: center; gap: 4px;
-  height: 20px; padding: 0 9px; border-radius: 6px; border: none;
-  font-family: var(--mono, ui-monospace, Menlo, monospace); font-size: 9.5px;
-  color: var(--ink-soft); background: var(--panel-muted, #f1f2ee);
-  cursor: pointer; white-space: nowrap; font-variant-numeric: tabular-nums;
-}
-.smc-foot-link svg { flex: none; }
-.smc-foot-link:hover { color: var(--accent); background: var(--accent-soft); }
-.smc-foot-link.running { color: var(--accent); background: var(--accent-soft); }
 
 
 /* ============================================================

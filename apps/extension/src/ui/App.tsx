@@ -18,7 +18,7 @@ import { ImportPreviewDialog } from "./ImportPreviewDialog.js";
 import { UploadConflictDialog } from "./UploadConflictDialog.js";
 import { TransferPipWindow } from "./TransferPipWindow.js";
 import { useTransferPip } from "./useTransferPip.js";
-import { SEMANTIC_COLORS, TERMINAL_LOOK_PRESETS, buildTextureBackground, buildBackdropBackground } from "./semantic-tokens.js";
+import { SEMANTIC_COLORS, TERMINAL_LOOK_PRESETS, buildBackdropBackground } from "./semantic-tokens.js";
 import { ConnectionSettingsWorkspace, WatermarkOverlay, type GatewayTestState, type ManualServerDraft, type SettingsWorkspaceView } from "./ConnectionSettingsWorkspace.js";
 import { useDesktopUpdate } from "./UpdateCenterPanel.js";
 import { SearchQueryPanel } from "./SearchQueryPanel.js";
@@ -100,7 +100,7 @@ import { WorkspaceTabContextMenu, type WorkspaceTabMenuState } from "./Workspace
 import { WorkspaceSessionTabs } from "./WorkspaceSessionTabs.js";
 import { SettingsModalOverlay } from "./SettingsModalOverlay.js";
 import { WorkspaceStartupCards } from "./WorkspaceStartupCards.js";
-import { LogEmptyState, LogoLoader } from "./LogEmptyState.js";
+import { LogEmptyState, LogoLoader, StageMarkLog, StageMarkFolder, StageMarkRack } from "./LogEmptyState.js";
 import { CommandPalette } from "./CommandPalette.js";
 import { ImmediateTooltip } from "./ImmediateTooltip.js";
 import { DialogOverlays } from "./DialogOverlays.js";
@@ -166,6 +166,8 @@ const pipMode = pipUrlParams.get("pip") ?? "";
 const isStandaloneViewerWindow = pipMode === "viewer";
 const isStandaloneTerminalWindow = pipMode === "terminal";
 const isStandaloneUtilityWindow = pipMode === "utility";
+/* 快捷键键帽按平台渲染（2026-11-12 门面实装）：macOS ⌘K / Windows·Linux Ctrl K */
+const IS_MAC_KEYBOARD = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 /* 上传进度小窗：只读监视 + 暂停/取消，不接受拖放 */
 const isStandaloneTransferWindow = pipMode === "transfer";
 const isStandalonePipWindow = isStandaloneViewerWindow || isStandaloneTerminalWindow || isStandaloneUtilityWindow || isStandaloneTransferWindow;
@@ -489,6 +491,8 @@ export function App() {
     resolvedTheme,
     uiBackground,
     setUiBackground,
+    uiEmptyStage,
+    setUiEmptyStage,
     uiImgOverlay,
     setUiImgOverlay,
     uiImgBlur,
@@ -507,15 +511,10 @@ export function App() {
     setTerminalFontSize,
     terminalLineHeight,
     setTerminalLineHeight,
-    terminalTexture,
-    setTerminalTexture,
-    terminalTextureIntensity,
-    setTerminalTextureIntensity,
     terminalBackdrop,
     setTerminalBackdrop,
     terminalBackdropIntensity,
-    setTerminalBackdropIntensity,
-    terminalCursorStyle,
+    setTerminalBackdropIntensity,    terminalCursorStyle,
     setTerminalCursorStyle,
     terminalCursorBlink,
     setTerminalCursorBlink,
@@ -1075,7 +1074,12 @@ export function App() {
       const remaining = Math.max(0, 700 - (Date.now() - shownAt));
       window.setTimeout(() => {
         splash.style.opacity = "0";
-        window.setTimeout(() => splash.remove(), 350);
+        window.setTimeout(() => {
+          splash.remove();
+          /* 2026-11-12 抖动修复：splash 在场时抑制 lp3 入场动画（html[data-splash]），
+             移除 splash 后才放行 —— 消除「淡出 + 内容上浮」双重运动叠加 */
+          document.documentElement.removeAttribute("data-splash");
+        }, 350);
       }, remaining);
     };
     if (localServiceState === "checking") {
@@ -2816,6 +2820,41 @@ export function App() {
   /* chrome v1 2026-11-03：快速连接「最近使用优先」——会话切换服务器时记录时间戳（storage），
      未使用过的按登记序兜底。此态本身低频，localStorage 每渲染读一次可接受。 */
   const recentServerMap = readRecentServerMap();
+  /* 「先选一台服务器」门面空态（2026-11-12 抽成复用变量）：
+     文件目录（L2.1a）与日志预览（顶部服务器 tab 全部关闭后）共用同一界面，
+     此前日志预览在全关后会错误落到「暂无日志内容」教学位 */
+  const noServerEmptyState = (
+    <LogEmptyState
+      icon={<Folder />}
+      align="ed"
+      watermark={<StageMarkRack />}
+      title="先选一台服务器"
+      sub="选好后就能浏览远程目录、上传文件、打开日志。"
+      acts={[{ label: "打开检索", kind: "pri", onClick: () => setPaletteOpen(true) }]}
+      kbdHint={IS_MAC_KEYBOARD ? "⌘K" : "Ctrl K"}
+      steps={[{ t: "选择服务器", cur: true }, { t: "浏览目录" }, { t: "查看日志" }]}
+      extra={
+        <div className="lp3-qlist">
+          {/* chrome v1 2026-11-03：最近使用优先（未用过的按登记序兜底），
+              原为 servers.slice(0,4) 纯登记序，与使用习惯无关（用户质疑） */}
+          {[...servers]
+            .sort((a, b) => (recentServerMap[b.id] ?? 0) - (recentServerMap[a.id] ?? 0))
+            .slice(0, 4)
+            .map((server, index) => (
+              <button key={server.id} type="button" className="lp3-qrow" onClick={() => selectServerById(server.id)}>
+                <span className="lp3-qdot" aria-hidden="true" />
+                <b>{server.name}</b>
+                {index === 0 && recentServerMap[server.id] ? (
+                  <span className="lp3-last">上次使用</span>
+                ) : null}
+                <span className="qmeta">{server.username}@{server.host}:{server.port}</span>
+                <span className="qact">连接</span>
+              </button>
+            ))}
+        </div>
+      }
+    />
+  );
   // 空态兜底：文件已选中但内容尚未加载（sliceData 为空 / HMR 状态残留 / live ws 断开）时，
   // 不再渲染空 console 黑洞，显示空态提示。
   const showViewerEmptyState = activeLogView === "search" && !hasSearchContent && !resultTabs.length && !fileLoadingName
@@ -3773,7 +3812,7 @@ export function App() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [selectedFilePaths.length, clearSelectedFiles, confirmDialog, renameDialog, moveDialog, batchMoveDialog, mkdirDialog, previewDialog, contextMenu, workspaceTabMenu, blankContextMenu, showViewerDebugPanel, paletteOpen, showConnectionSettings, setActionStatus]);
 
-  const appShellClassName = `app-shell${uiTheme === "modern" ? " theme-modern" : ""} ui-density-${uiDensity} ui-theme-${resolvedTheme.id} ui-bg-${uiBackground}${uiBackground !== "solid" ? " ui-bg-fancy" : ""} ui-motion-${motionMode}${dynamicBackground && motionMode !== "reduced" ? " ui-dynamic-background" : ""}${isElectron ? " electron-immersive" : ""}${isElectron && isMacOS ? " electron-macos-immersive" : ""}${hasWinControls ? " has-win-controls" : ""}${hasWinControls && windowMaximized ? " win-maximized" : ""}`;
+  const appShellClassName = `app-shell${uiTheme === "modern" ? " theme-modern" : ""} ui-density-${uiDensity} ui-theme-${resolvedTheme.id} ui-bg-${uiBackground}${uiBackground !== "solid" ? " ui-bg-fancy" : ""} ui-motion-${motionMode}${dynamicBackground && motionMode !== "reduced" ? " ui-dynamic-background" : ""}${uiEmptyStage === "aurora" ? " ui-empty-stage-aurora" : ""}${uiEmptyStage === "paper" ? " ui-empty-stage-paper" : ""}${isElectron ? " electron-immersive" : ""}${isElectron && isMacOS ? " electron-macos-immersive" : ""}${hasWinControls ? " has-win-controls" : ""}${hasWinControls && windowMaximized ? " win-maximized" : ""}`;
 
   /* 终端配色（独立槽位）：背景与 ITheme 都来自所选方案。
      follow = 「跟随主题」卡：底色/文字取主题 shell，ANSI 用默认控制台色。
@@ -3788,15 +3827,10 @@ export function App() {
     ? resolvedTheme.v.shell
     : terminalScheme.theme.background;
 
-  /* 终端背景纹理（2026-10-27）：默认 none，只在用户显式选择时注入。
-     强度映射到透明度（见 semantic-tokens.buildTextureBackground）。 */
-  const terminalTextureBackground = useMemo(
-    () => buildTextureBackground(terminalTexture, terminalTextureIntensity),
-    [terminalTexture, terminalTextureIntensity]
-  );
+  /* 背景纹理已退役（2026-11-12）：--terminal-texture-* 变量不再注入，
+     CSS 消费方的 var(--terminal-texture-image, none) 回退值为 none，行为不变。 */
 
-  /* 背景图（2026-10-27）：与纹理叠乘 —— 先氛围光效、再纹理线，
-     两者都用背景图实现，按顺序拼成 background-image 列表。 */
+  /* 背景图（2026-10-27）：氛围光效背景层。 */
   const terminalBackdropImage = useMemo(
     () => buildBackdropBackground(terminalBackdrop, terminalBackdropIntensity),
     [terminalBackdrop, terminalBackdropIntensity]
@@ -3849,35 +3883,19 @@ export function App() {
           "--log-exception": terminalScheme.logSurface?.exception ?? SEMANTIC_COLORS.exception.log,
           "--log-fatal": terminalScheme.logSurface?.fatal ?? SEMANTIC_COLORS.fatal.log,
         }),
-    /* 终端背景纹理（2026-10-27）：纹理是背景层最低优先级，
-       默认 none；选了才注入，且强度由 texIntensity 控制。 */
-    /* 背景图 + 纹理合并：background-image 支持多层，前者在下后者在上。
-       顺序：氛围光效（大范围）→ 纹理线（细节）。 */
     /* 2026-10-29 终端容器底色：**永远是主题深色**，不做条件分支。
        走过的弯路记一下，避免再改错：
        ① 先设成 transparent 想「让背景图透出」→ 没背景图时透出浅色页面底，终端变白；
        ② 改成「有背景图才 transparent」→ 但碳纤维/极光这类是**半透明 CSS 条纹**，
           不是不透明图片，透明容器照样透出浅色页面底 → 还是白底 + 稀疏灰线。
-       正确模型：深色底是**基底**，图片/纹理永远叠加在它之上（background-image 在上层）。
+       正确模型：深色底是**基底**，背景图永远叠加在它之上（background-image 在上层）。
        所以这里只给深色，不判断有没有背景图。 */
     "--terminal-surface": terminalBackgroundColor,
-    "--terminal-texture-image":
-      terminalBackdropImage !== "none" && terminalTextureBackground.image !== "none"
-        ? `${terminalTextureBackground.image}, ${terminalBackdropImage}`
-        : terminalBackdropImage !== "none"
-          ? terminalBackdropImage
-          : terminalTextureBackground.image,
-    /* 2026-10-28 修复「选了背景图终端没变化」：
-       原来背景图那一层一律给 auto —— 1600×900 的图片按原始尺寸平铺，
-       在 355px 宽的终端里只露出左上角一小块暗部，看起来就像没生效。
-       现在：图片/CSS 光效用 cover 铺满；纹理仍按自身周期（不用 cover，
-       否则重复条纹会被拉伸成竖条）。 */
-    "--terminal-texture-size":
-      terminalBackdropImage !== "none" && terminalTextureBackground.image !== "none"
-        ? `${terminalTextureBackground.size}, cover`
-        : terminalBackdropImage !== "none"
-          ? "cover"
-          : terminalTextureBackground.size,
+    /* 背景纹理已退役（2026-11-12）：只注入背景图层。
+       2026-10-28 修复「选了背景图终端没变化」的历史经验仍然有效：
+       图片/CSS 光效用 cover 铺满，避免 1600×900 图按原始尺寸平铺只露左上角。 */
+    "--terminal-texture-image": terminalBackdropImage,
+    "--terminal-texture-size": terminalBackdropImage !== "none" ? "cover" : "auto",
     "--custom-background-image": toCssImageUrl(customBackgroundImage),
     /* 背景层图片模式：遮罩亮度 / 模糊由设置滑杆驱动（原型 T1）。
        只注入 -alpha（0..1，供 CSS calc 使用）与 blur；旧的百分比版
@@ -4868,12 +4886,18 @@ export function App() {
                   </div>
                 ) : null}
 
-                {activeResultZeroHit ? (
+                {!selectedServer ? (
+                  /* 顶部服务器 tab 全部关闭后：路由到「先选一台服务器」门面，
+                     不再错误落到「暂无日志内容」教学位（2026-11-12 Boss） */
+                  noServerEmptyState
+                ) : activeResultZeroHit ? (
                   /* ⑥ 结果页签 0 命中（v4.1 定稿）：chip 只显示「命中 0 · 范围」（F2，
                      扫描量/耗时不随页签存，不展示）；单按钮「重新检索」（F3 已裁决删除
                      「清除时间限定」）。回车检索聚焦 = handleViewerEmptyPrimary 现有行为。 */
                   <LogEmptyState
                     icon={<Search />}
+                    align="ed"
+                    watermark={<StageMarkLog />}
                     title="没有匹配的日志"
                     sub={`「${keywordInput.trim() || activeResultTab?.label || "关键字"}」在 ${activeResultTab?.sourceLabel ?? "当前范围"} 中 0 命中。试试更短的关键字，或缩小检索范围。`}
                     acts={[{ label: "重新检索", kind: "pri", onClick: () => { void runSearch(); } }]}
@@ -5084,6 +5108,8 @@ export function App() {
                      主行动按实时跟随开关切换，次行动退到文件目录。 */
                   <LogEmptyState
                     icon={<FileText />}
+                    align="ed"
+                    watermark={<StageMarkLog />}
                     title="文件当前为空"
                     sub={liveFollowEnabled
                       ? "实时跟随已连接，程序写入后会自动显示在这里。"
@@ -5100,6 +5126,9 @@ export function App() {
                   <LogEmptyState
                     icon={<Search />}
                     live
+                    align="ed"
+                    watermark={<StageMarkLog />}
+                    liveBar
                     title="检索中"
                     sub="正在按关键字扫描，完成后自动打开结果页签，期间可继续浏览当前文件。"
                     chip={<>{searchTask && searchTask.totalBytes > 0 ? `${formatBytes(searchTask.scannedBytes)}/${formatBytes(searchTask.totalBytes)}` : "正在扫描"}<span className="lp3-sep">·</span>已用时 {searchElapsedLabel || "0 秒"}<i className="lp3-ellip" aria-hidden="true" /></>}
@@ -5110,6 +5139,9 @@ export function App() {
                   <LogEmptyState
                     icon={<Activity />}
                     live
+                    align="ed"
+                    watermark={<StageMarkLog />}
+                    liveBar
                     title="等待新日志写入"
                     sub="实时跟随已开启，程序写入后会自动滚动到这里，无需手动刷新。"
                     chip={<><span className="lp3-dot" aria-hidden="true" />tail -F {selectedFileName || filePath.trim()}<span className="lp3-sep">·</span>{liveFollowConnected ? "已连接 · 自动重连" : liveFollowRetryCount > 0 ? `重连中 ${liveFollowRetryCount}` : "连接中"}<i className="lp3-ellip" aria-hidden="true" /></>}
@@ -5119,6 +5151,8 @@ export function App() {
                      不教「输入关键字」，给重新加载 + 退路。 */
                   <LogEmptyState
                     icon={<FileText />}
+                    align="ed"
+                    watermark={<StageMarkLog />}
                     title="文件内容暂未加载"
                     sub={`${selectedFileName || "文件"} 实际大小 ${activeFileMeta?.filePath === filePath ? formatBytes(activeFileMeta.size) : "--"}，但当前没有读到内容，多为读取失败或上次会话残留。重新加载即可恢复。`}
                     acts={[
@@ -5129,9 +5163,12 @@ export function App() {
                   />
                 ) : (
                   /* ① 未选文件 · 未检索（v4.1 定稿主态）：幽灵行是全族唯一装饰位；
-                     「聚焦检索框」= handleViewerEmptyPrimary（F5：原「查看示例」名不副实已裁）。 */
+                     「聚焦检索框」= handleViewerEmptyPrimary（F5：原「查看示例」名不副实已裁）。
+                     2026-11-12 实装 editorial：左对齐 + 极光舞台 + 日志窗水印。 */
                   <LogEmptyState
                     icon={<Search />}
+                    align="ed"
+                    watermark={<StageMarkLog />}
                     title="暂无日志内容"
                     sub="输入关键字回车开始检索，或打开文件目录选择一份日志文件。"
                     acts={[
@@ -5158,48 +5195,28 @@ export function App() {
                 {isConnectingWorkspace ? (
                   selectedServer ? (
                     /* L2.1b 连接中（v4.1 06 页）：live 徽章 = 唯一 loading（步骤① spinner 退役）；
-                       actionStatus 实时并入 chip 打点。 */
+                       actionStatus 实时并入 chip 打点。2026-11-12 实装 editorial + livebar。 */
                     <LogEmptyState
                       icon={<Folder />}
                       live
+                      align="ed"
+                      watermark={<StageMarkRack />}
+                      liveBar
                       title={`正在连接 ${selectedServer.name}`}
                       sub="通常 2 秒内完成，连上后自动打开目录。"
                       chip={<>{connectingStatusText}<i className="lp3-ellip" aria-hidden="true" /></>}
                     />
                   ) : (
-                    /* L2.1a 未选服务器（v4.1 06 页）：快速连接面板 → 结构化行列表（真实前 4 台）；
-                       ⌘K 收进 chip。 */
-                    <LogEmptyState
-                      icon={<Folder />}
-                      title="先选一台服务器"
-                      sub="选好后就能浏览远程目录、上传文件、打开日志。"
-                      acts={[{ label: "打开检索", kind: "pri", onClick: () => setPaletteOpen(true) }]}
-                      steps={[{ t: "选择服务器", cur: true }, { t: "浏览目录" }, { t: "查看日志" }]}
-                      extra={
-                        <div className="lp3-qlist">
-                          {/* chrome v1 2026-11-03：最近使用优先（未用过的按登记序兜底），
-                              原为 servers.slice(0,4) 纯登记序，与使用习惯无关（用户质疑） */}
-                          {[...servers]
-                            .sort((a, b) => (recentServerMap[b.id] ?? 0) - (recentServerMap[a.id] ?? 0))
-                            .slice(0, 4)
-                            .map((server) => (
-                              <button key={server.id} type="button" className="lp3-qrow" onClick={() => selectServerById(server.id)}>
-                                <span className="lp3-qdot" aria-hidden="true" />
-                                <b>{server.name}</b>
-                                <span className="qmeta">{server.username}@{server.host}:{server.port}</span>
-                                <span className="qact">连接</span>
-                              </button>
-                            ))}
-                        </div>
-                      }
-                      chip={<>⌘K 检索全部 {servers.length} 台</>}
-                    />
+                    /* L2.1a 未选服务器：与日志预览共用 noServerEmptyState（2026-11-12 抽取） */
+                    noServerEmptyState
                   )
                 ) : hasDirectoryConnectionError ? (
                   /* 连接失败 = 空占位（用户 2026-11-02：关掉弹窗后应见失败态，而非「目录为空」）。
                      常驻横幅已删（与弹窗重复）；此处 halo 承载失败态，动作 = 重连 / 连接设置。 */
                   <LogEmptyState
                     icon={<ServerOff />}
+                    align="ed"
+                    watermark={<StageMarkRack />}
                     title="连接失败"
                     sub={connectionTestStatus?.message || "无法连接到服务器，请检查网络、凭证或服务器状态。"}
                     acts={[
@@ -5430,22 +5447,17 @@ export function App() {
                           <span>{actionStatus || "正在读取远程目录，请稍候..."}</span>
                         </div>
                       ) : (
-                        /* S12 原型 1039 行目录空态：图标 + 「目录为空」+ 副文案 + 主按钮「返回上一级」 */
-                        <div className="empty-box table-empty table-empty-large empty-state-template">
-                          <span className="empty-box-icon" aria-hidden="true">
-                            <Folder size={18} strokeWidth={1.8} />
-                          </span>
-                          <strong className="empty-box-title">目录为空</strong>
-                          <span className="empty-box-hint">回到上一级，或切换其他服务器</span>
-                          <button
-                            type="button"
-                            className="ghost-button"
-                            onClick={() => { void browseParentDirectory(); }}
-                            disabled={isBusy}
-                          >
-                            返回上一级
-                          </button>
-                        </div>
+                        /* S12 目录空态 → editorial 实装（2026-11-12，原型 ②）：
+                           目录树水印 + 极光舞台 + 主按钮「返回上一级」+ 路径 chip */
+                        <LogEmptyState
+                          icon={<Folder />}
+                          align="ed"
+                          watermark={<StageMarkFolder />}
+                          title="目录为空"
+                          sub="回到上一级，或切换其他服务器。虚线时间轴标出了文件即将出现的位置。"
+                          acts={[{ label: "返回上一级", kind: "pri", onClick: () => { void browseParentDirectory(); }, disabled: isBusy }]}
+                          chip={directoryPath.trim() || undefined}
+                        />
                       )}
                     </FileBrowserContentColumn>
                   </FileBrowserGrid>
@@ -5552,27 +5564,23 @@ export function App() {
                 onUiThemePresetChange: setUiThemePreset,
                 onUiToneModeChange: setUiToneMode,
                 onUiBackgroundChange: setUiBackground,
+                uiEmptyStage,
+                onUiEmptyStageChange: setUiEmptyStage,
                 onUiImgOverlayChange: setUiImgOverlay,
                 onUiImgBlurChange: setUiImgBlur,
                 onCustomBackgroundImageChange: setCustomBackgroundImage,
                 onUiTerminalSchemeChange: setUiTerminalScheme,
-                terminalTexture,
-                terminalTextureIntensity,
-                onTerminalTextureChange: setTerminalTexture,
-                onTerminalTextureIntensityChange: setTerminalTextureIntensity,
                 terminalBackdrop,
                 terminalBackdropIntensity,
                 onTerminalBackdropChange: setTerminalBackdrop,
                 onTerminalBackdropIntensityChange: setTerminalBackdropIntensity,
-                /* 一键套用组合预设：同时改配色、背景图、纹理与各自强度 */
+                /* 一键套用组合预设：同时改配色、背景图与强度（纹理已退役） */
                 onApplyLookPreset: (presetId: string) => {
                   const preset = TERMINAL_LOOK_PRESETS.find((p) => p.id === presetId);
                   if (!preset) return;
                   setUiTerminalScheme(preset.scheme as any);
                   setTerminalBackdrop(preset.backdrop);
                   setTerminalBackdropIntensity(preset.backdropIntensity);
-                  setTerminalTexture(preset.texture);
-                  setTerminalTextureIntensity(preset.textureIntensity);
                   setActionStatus(`已套用外观组合：${preset.name}`);
                 },
                 onUiAccentOverrideChange: setUiAccentOverride,
