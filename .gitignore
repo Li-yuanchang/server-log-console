@@ -19,6 +19,9 @@ Thumbs.db
 # Windsurf（工作流提示词也不再入库）
 .windsurf/
 
+# AI 工具本地记忆缓存（WorkBuddy）
+.workbuddy/
+
 # 本地设计/过程文档（方案、原型、走查笔记等，不上传）
 docs/
 
