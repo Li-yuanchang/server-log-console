@@ -66,7 +66,21 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
+          /* Vite 的 preload helper（\0vite/preload-helper）必须单独成块（2026-11-16）。
+             背景：开启动态 import 后，入口 chunk 需要这个 helper 来按需加载子 chunk。
+             Rollup 默认把它并进「最先处理到」的 chunk，实测落进了 vendor-monaco ——
+             于是入口 chunk 静态 import 了 vendor-monaco 只为取这个几十字节的 helper，
+             连带把 4.2MB 的 monaco 拉回首屏，懒加载等于白做（实测复现）。
+             固定给它一个小 chunk，入口就只依赖这几十字节。 */
+          if (id.includes("vite/preload-helper")) return "vendor-preload";
           if (!id.includes("node_modules")) return;
+          /* monaco 必须排在 react 规则之前（2026-11-16）。
+             历史 bug：`@monaco-editor/react` 的路径含 `/react/`，会被下一条
+             react 规则抢先命中并归入 vendor-react，于是 vendor-react 反向静态
+             import 了整个 monaco chunk。以前 monaco 本来就在首屏，症状被掩盖；
+             改成懒加载后这条反向边会把 4.2MB monaco 重新拽回首屏（实测复现）。
+             先判 monaco，才能让 vendor-react 保持干净。 */
+          if (id.includes("/monaco-editor/") || id.includes("/@monaco-editor/")) return "vendor-monaco";
           if (id.includes("/react/") || id.includes("/react-dom/")) return "vendor-react";
           if (id.includes("/@codemirror/lang-")) {
             const match = id.match(/\/node_modules\/(@codemirror\/lang-[^/]+)/);
@@ -76,7 +90,6 @@ export default defineConfig({
           if (id.includes("/@xterm/")) return "vendor-xterm";
           if (id.includes("/lucide-react/")) return "vendor-lucide";
           if (id.includes("/react-virtuoso/")) return "vendor-virtuoso";
-          if (id.includes("/monaco-editor/") || id.includes("/@monaco-editor/")) return "vendor-monaco";
         }
       },
       input: {

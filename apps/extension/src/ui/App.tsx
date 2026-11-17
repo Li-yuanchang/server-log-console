@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { FeedbackOverlays, type DownloadProgressState, type UploadProgressState } from "./FeedbackOverlays.js";
 import { useServerMonitorPool, type ServerMonitorEntry } from "./useServerMonitorPool.js";
@@ -27,7 +27,6 @@ import { SearchToolbarActions } from "./SearchToolbarActions.js";
 import { SshTunnelPanel } from "./SshTunnelPanel.js";
 import { BatchCommandPanel } from "./BatchCommandPanel.js";
 import { ToolDrawer } from "./ToolDrawer.js";
-import { DiffComparePanel } from "./DiffComparePanel.js";
 import { ServerStatusPanel } from "./ServerStatusPanel.js";
 import type { UtilityPanelType } from "./ToolDrawer.js";
 import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, WheelEvent as ReactWheelEvent } from "react";
@@ -46,7 +45,7 @@ import type {
   ServerSummary
 } from "@server-log-console/shared";
 import { ArrowDown, ArrowLeft, Settings, Download, Copy, Bug, Bookmark, X, AlertTriangle, Search, Folder, ServerOff, FolderSearch, FileText, Activity, ArrowDownToLine, ArrowUpToLine } from "lucide-react";
-import { TerminalPanel, type TerminalPaneSessionState } from "./TerminalWorkspace.js";
+import type { TerminalPaneSessionState } from "./TerminalWorkspace.js";
 import { ToolIcon } from "./ToolIcon.js";
 import { PipExpandIcon } from "./PipExpandIcon.js";
 import { ThemedSelect } from "./ThemedSelect.js";
@@ -241,6 +240,36 @@ function fontFamilyValue(value: string): string {
   if (value === "simsun") return "\"Songti SC\", \"SimSun\", serif";
   if (value === "system") return "-apple-system, BlinkMacSystemFont, \"SF Pro Text\", \"PingFang SC\", sans-serif";
   return "\"Geist\", \"Inter\", -apple-system, \"SF Pro Text\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", sans-serif";
+}
+
+/* 首屏关键路径瘦身（2026-11-16）：下面三个组件各自会把重量级依赖拖进入口 chunk ——
+   TerminalPanel → @xterm（~370KB）、DiffComparePanel → monaco-editor（~4.2MB）、
+   FilePreviewDialog → @codemirror（~356KB）。它们都不参与首屏（终端要用户点开、
+   对比是工具抽屉里的面板、预览要打开文件才出现），却因为同步 import 被静态打进
+   入口，启动时必须先解析执行完才轮到 React 挂载 —— 实测 CPU 降频 10x 下仅这一步
+   就多 1.9s。改为 React.lazy 后它们各自成为独立 chunk，首次真正渲染时才拉取。
+   注意：这里只改「加载时机」，组件 props / 内部状态语义完全不变。 */
+const LazyTerminalPanel = lazy(() =>
+  import("./TerminalWorkspace.js").then((m) => ({ default: m.TerminalPanel }))
+);
+const LazyDiffComparePanel = lazy(() =>
+  import("./DiffComparePanel.js").then((m) => ({ default: m.DiffComparePanel }))
+);
+const LazyFilePreviewDialog = lazy(() =>
+  import("./FilePreviewDialog.js").then((m) => ({ default: m.FilePreviewDialog }))
+);
+
+/* 懒加载组件的兜底占位：与启动页/读文件遮罩同一套 lg-* 加载语言，
+   避免 chunk 到位前出现空白块。终端面板与对比面板铺满其容器，预览弹窗只占遮罩层。 */
+function LazyFallback({ label }: { label: string }) {
+  return (
+    <div className="lazy-panel-fallback" role="status" aria-live="polite">
+      <div className="lg-unit">
+        <LogoLoader small />
+        <div className="lg-note"><b>{label}</b></div>
+      </div>
+    </div>
+  );
 }
 
 export function App() {
@@ -622,6 +651,10 @@ export function App() {
   const [showBookmarkPanel, setShowBookmarkPanel] = useState(false);
   const [showUtilityWorkspace, setShowUtilityWorkspace] = useState(false);
   const [activeUtilityPanel, setActiveUtilityPanel] = useState<UtilityPanelType>("compare");
+  /* 对比面板是否曾被打开过。它原先是常挂载（靠 visible 显隐）以保住本地文件选择与
+     diff 状态；改成 lazy 后必须「首次打开才挂载」，否则组件一渲染就会立刻去拉
+     monaco（4.2MB），等于把优化又抵消掉。挂载后即长留，语义与改动前一致。 */
+  const [compareEverOpened, setCompareEverOpened] = useState(false);
   const [serverSystemProfile, setServerSystemProfile] = useState<ServerSystemProfileResponse | null>(null);
   const [serverSystemProfileLoading, setServerSystemProfileLoading] = useState(false);
   const [serverSystemProfileError, setServerSystemProfileError] = useState("");
@@ -719,7 +752,7 @@ export function App() {
     liveFollowEnabled, liveFollowConnected, liveFollowContent,
     liveFollowRetryCount, liveFollowPaused, viewerNotAtBottom, viewerJumping,
     setLiveFollowPaused, setLiveFollowContent,
-    startLiveFollow, stopLiveFollow,
+    startLiveFollow, stopLiveFollow, clearLiveContent,
     handleViewerNearBottomChange, scrollViewerToBottom,
   } = liveFollow;
 
@@ -1602,6 +1635,7 @@ export function App() {
       setIsBusy,
       stopLiveFollow,
       startLiveFollow,
+      clearLiveContent,
       scrollViewerToBottom,
       resetFileReaderState,
       cacheSlicePayload,
@@ -2119,11 +2153,12 @@ export function App() {
     }
   });
   /* 监控行「详情」：先切目标服务器，再打开既有状态面板（面板的 10s 轮询
-     effect 会因 serverId 变化自动取新服务器的 profile，无需在此重复取数） */
+     effect 会因 serverId 变化自动取新服务器的 profile，无需在此重复取数）
+     2026-11-16 同 openServerStatusPanel：工具抽屉下线，此处不再打开抽屉。
+     注意只去掉「开抽屉」这一步，切服务器行为原样保留 —— 该回调还被左栏监控卡
+     引用（SidebarPanel 的 monitor.openDetail），切换语义不能丢。 */
   const openMonitorDetail = useCallback((targetServerId: string) => {
     if (targetServerId !== serverId) selectServerById(targetServerId);
-    setActiveUtilityPanel("status");
-    setShowUtilityWorkspace(true);
   }, [selectServerById, serverId]);
 
   // S6：传输列非常驻——**当前目录内**存在活动上传/下载时才显示该列。
@@ -3085,6 +3120,15 @@ export function App() {
     setActiveUtilityPanel(availableUtilityPanels[0]);
   }, [activeUtilityPanel, availableUtilityPanels]);
 
+  /* 对比面板首次被选中时才允许渲染（见 compareEverOpened 注释）。
+     放在这里是因为「打开工具抽屉 + 切到 compare」两条路径最终都会让
+     activeUtilityPanel === "compare"，一处判断即可覆盖。 */
+  useEffect(() => {
+    if (showUtilityWorkspace && activeUtilityPanel === "compare") {
+      setCompareEverOpened(true);
+    }
+  }, [showUtilityWorkspace, activeUtilityPanel]);
+
   const refreshServerSystemProfile = useCallback(async () => {
     if (!serverId) {
       setServerSystemProfile(null);
@@ -3112,18 +3156,12 @@ export function App() {
     }
   }, [effectiveServerStatusContext.path, serverId]);
 
+  /* 2026-11-16 停用工具抽屉（用户决定下线）：开启入口统一在此空实现。
+     抽屉本体与四个面板的代码原样保留、不做删改 —— 保留函数签名是为了不动
+     其他调用点的结构与依赖数组；将来要恢复，把原实现填回即可。 */
   const openServerStatusPanel = useCallback(() => {
-    if (!serverId) {
-      setActionStatus("请先选择服务器。");
-      return;
-    }
-    setActiveUtilityPanel("status");
-    setShowUtilityWorkspace(true);
-    setActionStatus("正在打开服务器状态...");
-    if (!serverSystemProfile || serverSystemProfile.serverId !== serverId) {
-      void refreshServerSystemProfile();
-    }
-  }, [refreshServerSystemProfile, serverId, serverSystemProfile, setActionStatus]);
+    /* 抽屉已停用，不再打开。 */
+  }, []);
 
 
   useEffect(() => {
@@ -3242,14 +3280,21 @@ export function App() {
   const canToolbarLive = Boolean(serverId && filePath.trim() && activeLogView === "search");
   const toggleToolbarLive = useCallback(() => {
     if (liveFollowEnabled) {
-      stopLiveFollow();
+      /* 关闭实时必须保留已接收的内容（2026-11-16 用户反馈「取消实时就不知道日志跑哪里去了，
+         也不是关闭那一刻的最新日志」）：
+         旧实现走 stopLiveFollow() 默认分支 → setLiveFollowContent("")，实时缓冲整段丢弃，
+         currentFileContent 回落到 sliceData.content，即**打开文件那一刻**抓的尾部切片。
+         文件在跟随期间持续增长，回退后的内容与滚动位置都停在几小时前，看起来就是"日志丢了"。
+         keepContent: true 把缓冲冻结在原地：内容不换、Virtuoso 不重排、视口不动。 */
+      stopLiveFollow({ keepContent: true });
+      setActionStatus("已关闭实时跟随，当前内容保留；回到底部可重新读取最新日志。");
       return;
     }
     if (filePath.trim()) {
       // 开启时带上 rtools 过滤框中的关键字（与原型「过滤框 + LIVE」同一语义）
       startLiveFollow(filePath, selectedFileName || filePath, { keyword: liveFilterInput.trim() || undefined });
     }
-  }, [liveFollowEnabled, filePath, selectedFileName, liveFilterInput, startLiveFollow, stopLiveFollow]);
+  }, [liveFollowEnabled, filePath, selectedFileName, liveFilterInput, startLiveFollow, stopLiveFollow, setActionStatus]);
   // S4 实时状态带（原型 536-546）：过滤框变更时以关键字重启实时跟随（网关 buildTailCommand 支持 keyword）
   const applyLiveFilter = useCallback((nextKeyword: string) => {
     setLiveFilterInput(nextKeyword);
@@ -3282,7 +3327,7 @@ export function App() {
       { id: "cmd-settings", group: "命令", icon: "gear" as const, title: "打开设置中心", hint: "⌘,", run: () => { openSettingsWorkspace("connections"); close(); } },
       { id: "cmd-pref", group: "命令", icon: "gear" as const, title: "偏好设置", run: () => { openSettingsWorkspace("preferences"); close(); } },
       { id: "cmd-transfer", group: "命令", icon: "file" as const, title: "传输记录", run: () => { setShowTransferHistory(true); close(); } },
-      { id: "cmd-tools", group: "命令", icon: "plug" as const, title: "工具抽屉（隧道 / 批量 / 监控 / 对比）", run: () => { openServerStatusPanel(); close(); } },
+      /* 2026-11-16 工具抽屉下线：命令面板不再列出该入口（避免点了没反应）。 */
       { id: "cmd-terminal", group: "命令", icon: "term" as const, title: "打开终端", run: () => { openTerminalView(); close(); } },
       { id: "cmd-live", group: "命令", icon: "zap" as const, title: liveFollowEnabled ? "断开实时追踪" : "开启实时追踪", hint: filePath ? undefined : "先选择日志文件", run: () => { toggleToolbarLive(); close(); } },
     ];
@@ -4021,8 +4066,11 @@ export function App() {
     return (
       <main className={`${appShellClassName} pip-standalone pip-terminal-standalone`} style={appShellStyle}>
         <section className="main-panel-terminal-standalone">
-          {/* T7 独立终端窗：由 URL 的 terminalSessionId 构造单标签；分屏/弹出按钮在 standalone 隐藏 */}
-          <TerminalPanel
+          {/* T7 独立终端窗：由 URL 的 terminalSessionId 构造单标签；分屏/弹出按钮在 standalone 隐藏。
+              本窗口里终端就是全部内容，但仍走 lazy —— 静态 import 会把 @xterm 重新绑回入口
+              chunk，主窗口首屏跟着变重。此处用 Suspense 包住，chunk 到位前显示加载占位。 */}
+          <Suspense fallback={<LazyFallback label="正在加载终端" />}>
+          <LazyTerminalPanel
             popupMode="standalone"
             server={selectedServer}
             serverId={serverId}
@@ -4052,6 +4100,7 @@ export function App() {
             detached={false}
             onSessionState={handleTerminalPaneSessionState}
           />
+          </Suspense>
         </section>
         {/* Windows 自绘窗口控制：必须排在所有 drag 元素之后，与主窗口同理。 */}
         {hasWinControls ? <WindowControls /> : null}
@@ -4099,12 +4148,19 @@ export function App() {
           onClose={() => setShowUtilityWorkspace(false)}
         />
       ) : null}
-      <DiffComparePanel
-        visible={activeUtilityPanel === "compare"}
-        remoteContent={currentLogContent}
-        remoteLabel={activeCompareLabel}
-        onClose={() => setShowUtilityWorkspace(false)}
-      />
+      {/* 对比面板原为常挂载、靠 visible 控制显隐（保留本地文件选择与 diff 状态）。
+          现在 lazy 之后改成「首次打开才挂载，之后保持挂载」：既不在启动时拉 monaco，
+          也不改变用户再次打开时状态丢失的体验。 */}
+      {compareEverOpened ? (
+        <Suspense fallback={<LazyFallback label="正在加载对比工具" />}>
+          <LazyDiffComparePanel
+            visible={activeUtilityPanel === "compare"}
+            remoteContent={currentLogContent}
+            remoteLabel={activeCompareLabel}
+            onClose={() => setShowUtilityWorkspace(false)}
+          />
+        </Suspense>
+      ) : null}
     </ToolDrawer>
   ) : null;
 
@@ -4493,7 +4549,8 @@ export function App() {
               /* 终端工作台（五段式容器）：标签组 / 分屏 / 查找 / 菜单 / 状态栏均在容器内；
                  分屏双轨（terminal-workarea-split 顶条 + TerminalSplitView 直挂）已拆除 */
               <>
-              <TerminalPanel
+              <Suspense fallback={<LazyFallback label="正在加载终端" />}>
+              <LazyTerminalPanel
                 popupMode="embedded"
                 server={selectedServer}
                 serverId={serverId}
@@ -4533,6 +4590,7 @@ export function App() {
                 onOpenSettings={() => openSettingsWorkspace("preferences")}
                 onUploadFiles={handleTerminalUploadFiles}
               />
+              </Suspense>
               {/* 终端区水印（2026-10-21 补齐）：此前 WatermarkOverlay 只挂在日志内容区
                   与全局层，终端视图内完全没有水印 —— 用户反馈「水印有效吗」。
                   作用范围=日志/预览区时同样覆盖终端，与日志区行为一致。
@@ -4881,7 +4939,7 @@ export function App() {
                       title={atFileTail ? "回到文件开头" : "跳到文件末尾"}
                       aria-label={atFileTail ? "回到文件开头" : "跳到文件末尾"}
                     >
-                      {/* 窄档只留图标（styles/align-s4-s6.css 按 viewer 容器宽度隐藏文字）：
+                      {/* 窄档只留图标（theme-modern-v2.css §36 收编节 按 viewer 容器宽度隐藏文字）：
                           文字版在中等宽度下会把整条 log-view-bar 撑溢出。 */}
                       {atFileTail
                         ? <ArrowUpToLine size={13} strokeWidth={1.8} aria-hidden="true" />

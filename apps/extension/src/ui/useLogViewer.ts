@@ -109,6 +109,8 @@ export type LogViewerCallbacks = {
   setIsBusy: (b: boolean) => void;
   stopLiveFollow: (options?: { keepContent?: boolean }) => void;
   startLiveFollow: (filePath: string, fileName: string, options?: { isReconnect?: boolean }) => void;
+  /** 清空实时累积内容：关闭实时后用户再翻页/跳尾部时，新切片才能顶掉冻结的实时缓冲 */
+  clearLiveContent: () => void;
   scrollViewerToBottom: (options?: { optimisticHide?: boolean; manual?: boolean }) => void;
   resetFileReaderState: () => void;
   cacheSlicePayload: (payload: LogSliceResponse, offset: number, length: number) => void;
@@ -327,6 +329,15 @@ export function useLogViewer(params: LogViewerParams): LogViewerAPI {
     setters.setSliceData({ ...payload });
     setters.setActiveLogView("search");
     setters.setActiveViewerTabId("file");
+    /* 实时**已关闭**时的主动换切片（翻页 / 跳头部 / 跳尾部 / 比例跳转）意味着
+       「以这份切片为准」：必须同时丢掉上一轮实时跟随冻结的缓冲。
+       currentFileContent 里 liveFollowContent 的优先级高于 sliceData.content，
+       若不清空，关闭实时后翻页会"点不动"（内容永远是被冻结的实时缓冲）。
+       实时仍在进行时不清 —— 那时缓冲是活的，翻页只是临时暂停跟随，
+       保留它才能保证「回到底部 / 继续」接得上前文。 */
+    if (!state.liveFollowEnabled) {
+      callbacks.clearLiveContent();
+    }
     if (options?.status) callbacks.setActionStatus(options.status);
     if (options?.activity) callbacks.pushActivity(options.activity);
   }

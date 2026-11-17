@@ -1,9 +1,19 @@
+import { lazy, Suspense, useEffect, useState } from "react";
 import type { LogFileEntry } from "@server-log-console/shared";
 import { TextInputDialog, ConfirmDialog, type ConfirmDialogState } from "./ModalDialogs.js";
-import { FilePreviewDialog, type PreviewDialogState } from "./FilePreviewDialog.js";
+import type { PreviewDialogState } from "./FilePreviewDialog.js";
 import { TransferHistoryDrawer } from "./TransferHistoryDrawer.js";
 import type { DownloadProgressState, UploadProgressState } from "./FeedbackOverlays.js";
 import type { TransferHistoryEntry } from "./storage.js";
+
+/* 首屏关键路径瘦身（2026-11-16）：FilePreviewDialog 静态引了 @codemirror（~356KB），
+   而预览弹窗只在用户点开文件时才出现，不该占用启动时的解析时间。
+   改 lazy 后 codemirror 及其 10 个语言包成为独立 chunk，按需拉取。
+   注意与 DialogOverlays 内的「首次打开才挂载」配合：组件本身 dialog 为空时返回 null，
+   但 lazy 的 chunk 在组件「渲染」那一刻就会被请求，所以光改 import 不够。 */
+const LazyFilePreviewDialog = lazy(() =>
+  import("./FilePreviewDialog.js").then((m) => ({ default: m.FilePreviewDialog }))
+);
 
 export type DialogOverlaysProps = {
   uiTheme: "classic" | "modern";
@@ -128,6 +138,16 @@ export function DialogOverlays(props: DialogOverlaysProps) {
     uploadFileQueue,
   } = props;
 
+  /* 预览弹窗改为懒加载后的挂载开关：首次出现预览内容时才挂载（进而才去拉 codemirror
+     chunk），之后保持挂载 —— FilePreviewDialog 自身在 dialog 为空时 return null，
+     同时它把编辑器字号等状态放在内部，保持挂载等于保持原有「再次打开还记住字号」的行为。 */
+  const [previewEverOpened, setPreviewEverOpened] = useState(false);
+  useEffect(() => {
+    if (previewDialog) {
+      setPreviewEverOpened(true);
+    }
+  }, [previewDialog]);
+
   return (
     <>
       <TextInputDialog
@@ -212,16 +232,20 @@ export function DialogOverlays(props: DialogOverlaysProps) {
         onClose={onCompressDialogClose}
       />
 
-      <FilePreviewDialog
-        dialog={previewDialog}
-        theme={uiTheme}
-        onChange={onPreviewDialogChange}
-        onDownload={onPreviewDialogDownload}
-        onSave={onPreviewDialogSave}
-        onPreviewArchiveEntry={onPreviewArchiveEntry}
-        onToggleMaximize={onPreviewDialogToggleMaximize}
-        onClose={onPreviewDialogClose}
-      />
+      {previewEverOpened ? (
+        <Suspense fallback={null}>
+          <LazyFilePreviewDialog
+            dialog={previewDialog}
+            theme={uiTheme}
+            onChange={onPreviewDialogChange}
+            onDownload={onPreviewDialogDownload}
+            onSave={onPreviewDialogSave}
+            onPreviewArchiveEntry={onPreviewArchiveEntry}
+            onToggleMaximize={onPreviewDialogToggleMaximize}
+            onClose={onPreviewDialogClose}
+          />
+        </Suspense>
+      ) : null}
 
       <TransferHistoryDrawer
         open={showTransferHistory}
