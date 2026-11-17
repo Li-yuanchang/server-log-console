@@ -47,7 +47,7 @@ button, input, select, textarea, a,
 .workspace-panel,
 .advanced-panel {
   border: 1px solid var(--line-strong);
-  border-radius: 8px;
+  border-radius: var(--r-m);
   background: var(--panel);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
@@ -68,7 +68,7 @@ button, input, select, textarea, a,
 .app-shell.ui-density-comfortable .toolbar-panel,
 .app-shell.ui-density-comfortable .workspace-panel,
 .app-shell.ui-density-comfortable .advanced-panel {
-  border-radius: 10px;
+  border-radius: var(--r-l);
 }
 
 .app-shell.ui-density-comfortable .sidebar-panel {

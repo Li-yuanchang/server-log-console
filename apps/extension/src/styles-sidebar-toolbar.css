@@ -254,7 +254,7 @@
 .result-tab-strip {
   padding: 2px;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--r-l);
   background: linear-gradient(180deg, var(--panel-muted), var(--panel-muted));
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
 }
@@ -266,7 +266,7 @@
   gap: 4px;
   padding: 0 10px;
   font-size: var(--fs-2xs);
-  border-radius: 6px;
+  border-radius: var(--r-s);
   border-color: var(--line);
   background: linear-gradient(180deg, var(--panel), var(--panel-muted));
   box-shadow: 0 1px 2px rgba(31, 42, 55, 0.06);
@@ -318,7 +318,7 @@
   gap: 8px;
   padding: 8px;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--r-s);
   background: linear-gradient(180deg, var(--panel), var(--panel-muted));
   min-width: 0;
 }
@@ -353,7 +353,7 @@
   height: 28px;
   padding: 0 8px;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--r-s);
   background: var(--panel);
   color: var(--ink);
 }
@@ -405,7 +405,7 @@ textarea {
 button {
   appearance: none;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--r-s);
   padding: 4px 10px;
   background: var(--panel);
   color: var(--ink);
@@ -471,7 +471,7 @@ button:disabled {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 3px 8px;
   padding: 6px 8px;
-  border-radius: 6px;
+  border-radius: var(--r-s);
   background: var(--panel-strong);
   border: 1px solid var(--line);
   color: var(--ink-muted);
@@ -553,7 +553,7 @@ button:disabled {
   justify-content: space-between;
   gap: 6px;
   padding: 5px 8px;
-  border-radius: 6px;
+  border-radius: var(--r-s);
   border: 1px solid var(--line);
   background: var(--panel-strong);
   color: var(--ink);
@@ -590,7 +590,7 @@ button:disabled {
 .server-item-mini-action {
   min-height: 24px;
   padding: 0 6px;
-  border-radius: 6px;
+  border-radius: var(--r-s);
   border: 1px solid var(--line);
   background: var(--panel-strong);
   color: var(--ink-soft);
@@ -741,7 +741,7 @@ button:disabled {
 .status-card,
 .empty-box {
   padding: 6px 8px;
-  border-radius: 6px;
+  border-radius: var(--r-s);
   background: var(--panel-strong);
   border: 1px solid var(--line);
   color: var(--ink-muted);
@@ -842,7 +842,7 @@ button:disabled {
   min-width: 140px;
   padding: 4px 0;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--r-s);
   background: var(--panel);
   box-shadow: 0 8px 24px rgba(15, 23, 42, 0.16);
 }
@@ -1065,10 +1065,10 @@ body.is-win32 .theme-modern.pip-standalone .terminal-panel-bar-standalone {
 
 /* 连体分段（2026-11-08 定稿）：整体一条 muted 底座、激活段白底微浮起；
    左右呼吸 16px —— 与搜索框/树行底色/监控卡同一条基准线，切换零抖动 */
-.sidebar-tabs { display: flex; gap: 2px; margin: 8px 16px 0px; padding: 2px; background: var(--panel-muted, #f1f2ee); border-radius: 8px; }
+.sidebar-tabs { display: flex; gap: 2px; margin: 8px 16px 0px; padding: 2px; background: var(--panel-muted, #f1f2ee); border-radius: var(--r-m); }
 .sidebar-tabs button {
-  flex: 1; height: 24px; border: none; border-radius: 6px;
-  font-size: 11px; color: var(--ink-muted); background: transparent;
+  flex: 1; height: 24px; border: none; border-radius: var(--r-s);
+  font-size: var(--fs-2xs); color: var(--ink-muted); background: transparent;
   display: inline-flex; align-items: center; justify-content: center; gap: 5px; cursor: pointer;
   transition: background-color .12s ease, color .12s ease;
 }
@@ -1078,8 +1078,8 @@ body.is-win32 .theme-modern.pip-standalone .terminal-panel-bar-standalone {
 /* 连体分段（2026-11-08 二次反馈：梯形盖子在浅色侧栏里突兀）——
    整体一条 muted 底座、激活段白底微浮起，iOS 分段控件语言，同色系无跳色 */
 .sidebar-tabs button {
-  flex: 1; height: 24px; border: none; border-radius: 6px;
-  font-size: 11px; color: var(--ink-muted); background: transparent;
+  flex: 1; height: 24px; border: none; border-radius: var(--r-s);
+  font-size: var(--fs-2xs); color: var(--ink-muted); background: transparent;
   display: inline-flex; align-items: center; justify-content: center; gap: 5px; cursor: pointer;
   transition: background-color .12s ease, color .12s ease;
 }
@@ -1098,7 +1098,7 @@ body.is-win32 .theme-modern.pip-standalone .terminal-panel-bar-standalone {
 .smv-card.stale .track, .smv-card.stale .smc-os { opacity: .55; }
 
 .smc-id { display: flex; align-items: center; gap: 7px; padding: 2px 0 0; }
-.smc-id b { font-size: 13px; font-weight: 650; }
+.smc-id b { font-size: var(--fs-sm); font-weight: 650; }
 .smc-id em { font-style: normal; font-size: 9px; color: var(--ink-muted); background: var(--panel-muted, #f1f2ee); border-radius: 4px; padding: 1px 6px; }
 .smc-st { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; font-size: 9.5px; color: var(--green); white-space: nowrap; }
 .smc-st i { width: 6px; height: 6px; border-radius: 50%; background: var(--green); flex: none; }
@@ -1114,7 +1114,7 @@ body.is-win32 .theme-modern.pip-standalone .terminal-panel-bar-standalone {
   letter-spacing: -.04em; line-height: 1; font-variant-numeric: tabular-nums;
   flex: none; width: 84px;
 }
-.smc-hero-num small { font-size: 15px; font-weight: 600; color: var(--ink-muted); letter-spacing: 0; margin-left: 3px; }
+.smc-hero-num small { font-size: var(--fs-md); font-weight: 600; color: var(--ink-muted); letter-spacing: 0; margin-left: 3px; }
 .smc-hero-num.hot { color: var(--red); }
 .smc-hero-num.warm { color: var(--amber); }
 .smc-hero-label { font-size: 11.5px; font-weight: 600; color: var(--ink-soft, #5b6470); }
@@ -1134,7 +1134,7 @@ body.is-win32 .theme-modern.pip-standalone .terminal-panel-bar-standalone {
 .smm-segbar { position: absolute; inset: 0; display: flex; gap: 1.5px; align-items: stretch; }
 .smm-seg { flex: 1 1 0; border-radius: 1px; }
 .smc-srow b {
-  font-family: var(--mono, ui-monospace, Menlo, monospace); font-size: 13px; font-weight: 650;
+  font-family: var(--mono, ui-monospace, Menlo, monospace); font-size: var(--fs-sm); font-weight: 650;
   font-variant-numeric: tabular-nums; flex: none; min-width: 44px; text-align: right; color: var(--ink);
 }
 .smc-srow b small { font-size: 9px; font-weight: 600; color: var(--ink-muted); display: inline; margin-left: 2px; }
@@ -1200,7 +1200,7 @@ body.is-win32 .theme-modern.pip-standalone .terminal-panel-bar-standalone {
 .smc-diag-btn {
   flex: none; margin-left: 2px; width: 24px; height: 20px;
   display: inline-flex; align-items: center; justify-content: center;
-  border-radius: 6px; border: none; padding: 0;
+  border-radius: var(--r-s); border: none; padding: 0;
   color: var(--ink-soft); background: var(--panel-muted, #f1f2ee);
   cursor: pointer;
 }
@@ -1210,13 +1210,13 @@ body.is-win32 .theme-modern.pip-standalone .terminal-panel-bar-standalone {
 
 .smc-detail-btn {
   margin: 10px 16px 0; width: calc(100% - 32px); height: 26px; border: 1px solid var(--hairline-strong, #d6d9d0);
-  border-radius: 7px; font-size: 11px; color: var(--ink-soft); background: transparent; cursor: pointer;
+  border-radius: 7px; font-size: var(--fs-2xs); color: var(--ink-soft); background: transparent; cursor: pointer;
 }
 .smc-detail-btn:hover { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
 
 /* .smc-stale-hint 已删除（2026-11-12）：底部延迟提示条退役 —— 时不时闪出像"幻觉"，
    延迟状态只由头部徽章体现，留痕改走 console.warn */
-.smc-idle { margin-top: 10px; font-size: 10.5px; color: var(--ink-muted); line-height: 1.7; padding: 10px 12px; background: var(--panel-muted, #f1f2ee); border-radius: 8px; }
+.smc-idle { margin-top: 10px; font-size: 10.5px; color: var(--ink-muted); line-height: 1.7; padding: 10px 12px; background: var(--panel-muted, #f1f2ee); border-radius: var(--r-m); }
 
 
 /* ============================================================
@@ -1263,7 +1263,7 @@ html.is-win32:has(.has-win-controls) #app-loading {
 }
 
 body.is-win32:has(.has-win-controls) .app-shell:not(.pip-standalone) {
-  border-radius: 10px;
+  border-radius: var(--r-l);
   overflow: hidden;
   /* 经典主题下 .app-shell 有 padding:4px（styles-layout.css 基础层，
      theme-modern 才归零）。窗口透明后这 4px 会露出桌面、形成一圈缝，

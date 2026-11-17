@@ -1,0 +1,422 @@
+/* ============================================================================
+   styles-unify.css — 统一工作台（2026-11-17）
+   ----------------------------------------------------------------------------
+   【为什么有这个文件】
+   实测（1440×900，theme-modern.ui-theme-sage）全站控件的几何语言是分裂的：
+     · 高度   24 / 26 / 28 / 30 / 22(小窗) 五档并存
+     · 圆角   4px(全站按钮 v2:80) / 6px(侧栏 Tab) / 7px(搜索框 theme-modern:634)
+              / 8px(分段容器) / 999px(空态 .btn2)
+     · 字号   10.5 / 11 / 11.5 / 12 / 14 混用
+   同一行里并排的两个按钮来自不同的类族（.ghost-button / .btn2 / .confirm-btn /
+   .tpw-btn / .terminal-findbar-btn），各自带着自己的高度与圆角 —— 这才是
+   「按钮、搜索效果不好」的根因，不是颜色问题。
+
+   另有外框问题：.app-shell 有 4px padding 且底色 --bg，而内部面板是 --panel，
+   于是窗口最外圈出现一条异色带，「厂」字框与 body 像两层贴上去的东西。
+
+   【做法】
+   不改那 20+ 个历史文件（它们彼此靠 !important 和加载顺序互相压制，逐个改必炸），
+   改为在级联最末尾加这一层「几何收口」：只统一尺寸/圆角/字号/焦点/动效，
+   颜色一律走既有 token，不引入任何字面色（样式预算 literalColors 不得上涨）。
+
+   【口径】
+   · 所有字号走 --fs-* token（裸 font-size 保持 0）
+   · 所有颜色走 token / color-mix，无 hex、无 rgb()
+   · 胶囊（.kbd 键帽、状态点、徽标、live-back-to-bottom）明确排除，不压成方角
+   ========================================================================= */
+
+/* ---------------------------------------------------------------------------
+   § 1 控件几何 token
+   三档高度覆盖全部场景：紧凑(小窗/密集工具条) / 标准(绝大多数) / 大(主操作、空态)。
+   圆角取 --r-s(6px) 作为控件基准 —— 4px 偏硬、999px 过软，6px 与既有
+   容器圆角 8px 构成「控件 6 / 容器 8 / 面板 10」的三级梯度。
+------------------------------------------------------------------------------ */
+:root {
+  --ctl-h-sm: 24px;
+  --ctl-h: 28px;
+  --ctl-h-lg: 32px;
+  --ctl-r: var(--r-s);
+  --ctl-r-lg: var(--r-m);
+  --ctl-px: 10px;
+  --ctl-px-lg: 14px;
+  --ctl-gap: 6px;
+  --ctl-icon: 28px;
+  --ctl-icon-sm: 24px;
+
+  /* 统一动效：所有控件同一条缓动曲线与时长，避免「这个快那个慢」的廉价感 */
+  --ease-ui: cubic-bezier(0.2, 0.6, 0.2, 1);
+  --dur-ui: 140ms;
+  --tr-ui: background var(--dur-ui) var(--ease-ui),
+           border-color var(--dur-ui) var(--ease-ui),
+           color var(--dur-ui) var(--ease-ui),
+           box-shadow var(--dur-ui) var(--ease-ui);
+
+  /* 统一焦点环：全站只有这一种焦点表达（原有 dashed outline / 2px solid 混用） */
+  --ring: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+
+  /* 工作区内凹底色：比 --panel 暗一档，让「厂」字框读作同一块面板，
+     内容区读作嵌进去的凹槽。用 color-mix 而非字面色，自动跟随所有主题。 */
+  --workbench-recess: color-mix(in srgb, var(--bg) 46%, var(--line) 54%);
+}
+
+.app-shell.ui-density-comfortable {
+  --ctl-h-sm: 28px;
+  --ctl-h: 32px;
+  --ctl-h-lg: 36px;
+  --ctl-icon: 32px;
+  --ctl-icon-sm: 28px;
+}
+
+/* ---------------------------------------------------------------------------
+   § 2 外壳：连续的「厂」字框 + 内凹工作区
+   原 .app-shell 的 4px padding 把 --bg 露在最外圈（面板是 --panel）→ 异色带。
+   这里归零，让侧栏与顶栏直接贴到窗口边缘，两者连成一块完整 chrome；
+   工作区则靠 margin + 内凹底色 + 描边，读作嵌在框里的内容面。
+   ⚠ 小窗形态（.pip-standalone / .pip-terminal-standalone）自有布局，整节排除。
+------------------------------------------------------------------------------ */
+.app-shell:not(.pip-standalone):not(.pip-terminal-standalone) {
+  padding: 0;
+}
+
+.app-shell:not(.pip-standalone):not(.pip-terminal-standalone) .shell-layout {
+  gap: 0;
+  height: 100vh;
+}
+
+/* 侧栏 = 「厂」的竖笔画：只留右侧一道分隔线，不再是一块独立悬浮卡片 */
+.app-shell:not(.pip-standalone):not(.pip-terminal-standalone) .sidebar-panel {
+  border-width: 0 1px 0 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: var(--panel);
+}
+
+/* 顶栏 = 「厂」的横笔画 */
+.app-shell:not(.pip-standalone):not(.pip-terminal-standalone) .toolbar-panel {
+  border-width: 0 0 1px 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: var(--panel);
+}
+
+.app-shell:not(.pip-standalone):not(.pip-terminal-standalone) .main-panel {
+  gap: 0;
+  background: var(--panel);
+}
+
+/* 工作区 = 嵌进框里的内容面。左边距与顶栏 12px 内边距对齐，
+   视觉上内容起始线贯通顶栏与正文，这是「框与 body 是一个整体」的关键。 */
+.app-shell:not(.pip-standalone):not(.pip-terminal-standalone) .workspace-panel,
+.app-shell:not(.pip-standalone):not(.pip-terminal-standalone) .advanced-panel {
+  margin: 10px 12px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--ctl-r-lg);
+  background: var(--workbench-recess);
+  box-shadow: none;
+}
+
+/* 终端与工作区同时在场时，两者共用同一条左右基线，不各自缩进 */
+.app-shell:not(.pip-standalone):not(.pip-terminal-standalone)
+  .main-panel-with-terminal .workspace-panel {
+  margin-bottom: 0;
+}
+
+/* ---------------------------------------------------------------------------
+   § 3 按钮：五个类族收敛成一套几何
+   .ghost-button(主干) / .btn2(空态) / .confirm-btn(对话框) / .tpw-btn(传输小窗)
+   / .terminal-findbar-btn(终端查找) —— 颜色各自保留，只统一高度、圆角、字号、
+   内边距、动效。
+   ⚠ v2:92 用 `border-radius: 4px !important` 压过全站按钮，故此处必须同样
+   !important 才能接管（同特异性、本文件后加载 → 本层生效）。
+------------------------------------------------------------------------------ */
+.theme-modern button.ghost-button:not(.kbd):not(.live-back-to-bottom),
+.theme-modern .ghost-button.icon-button:not(.kbd),
+.theme-modern .toolbar-action-button,
+.theme-modern .btn2,
+.theme-modern .confirm-btn,
+.theme-modern .tpw-btn,
+.theme-modern .terminal-findbar-btn {
+  border-radius: var(--ctl-r) !important;
+}
+
+.theme-modern button.ghost-button:not(.kbd):not(.live-back-to-bottom):not(.icon-button),
+.theme-modern .btn2,
+.theme-modern .confirm-btn,
+.theme-modern .terminal-findbar-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--ctl-gap);
+  height: var(--ctl-h);
+  min-height: var(--ctl-h);
+  padding: 0 var(--ctl-px);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  transition: var(--tr-ui);
+}
+
+/* 图标按钮：正方形，与文字按钮同高 —— 原来 26×28 差 2px，同一行里肉眼可见地歪 */
+.theme-modern .ghost-button.icon-button:not(.kbd) {
+  width: var(--ctl-icon);
+  height: var(--ctl-icon);
+  min-height: var(--ctl-icon);
+  padding: 0;
+  flex: none;
+}
+
+/* 主操作：靠实底 accent 表达层级，不加发光阴影（空态 .btn2-pri 原有 glow 与
+   全站「安静按钮」语言冲突，且只在空态出现一次 → 更显突兀） */
+.theme-modern .btn2-pri,
+.theme-modern .confirm-btn-primary,
+.theme-modern .ghost-button.primary-action,
+.theme-modern button.search-run-button {
+  box-shadow: none;
+}
+
+/* 对话框按钮原为 linear-gradient 渐变底，主干按钮是纯色 —— 统一成纯色 */
+.theme-modern .confirm-btn {
+  background: var(--panel);
+  box-shadow: none;
+}
+
+.theme-modern .confirm-btn:hover:not(:disabled) {
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 26%, transparent);
+}
+
+.theme-modern .confirm-btn-primary,
+.theme-modern .confirm-btn-primary:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.theme-modern .confirm-btn-primary:hover:not(:disabled) {
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+}
+
+/* 禁用态：全站一个口径（原有 .48 / .45 / .52 三个值） */
+.theme-modern button:disabled,
+.theme-modern .confirm-btn-disabled,
+.theme-modern .btn2:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ---------------------------------------------------------------------------
+   § 4 输入与搜索
+   搜索框原为 28px 高 / 7px 圆角 / !important 描边，与按钮的 4px 不成套。
+   统一到控件几何后，搜索框与同行按钮高度、圆角、焦点表达完全一致。
+------------------------------------------------------------------------------ */
+.theme-modern .search-wrap,
+.theme-modern .pane-section .search-wrap {
+  height: var(--ctl-h) !important;
+  padding: 0 var(--ctl-px) !important;
+  border-radius: var(--ctl-r) !important;
+  background: var(--panel-muted) !important;
+  border-color: var(--line) !important;
+  transition: var(--tr-ui);
+}
+
+.theme-modern .search-wrap:focus-within,
+.theme-modern .pane-section .search-wrap:focus-within {
+  border-color: var(--accent) !important;
+  background: var(--panel) !important;
+  box-shadow: var(--ring) !important;
+}
+
+.theme-modern .search-wrap input,
+.theme-modern .pane-section .search-wrap input {
+  height: auto !important;
+  font-size: var(--fs-xs);
+}
+
+.theme-modern input[type="text"]:not(.search-wrap input),
+.theme-modern input[type="search"]:not(.search-wrap input),
+.theme-modern input[type="password"],
+.theme-modern input[type="number"],
+.theme-modern select,
+.theme-modern .themed-select-trigger {
+  min-height: var(--ctl-h);
+  border-radius: var(--ctl-r);
+  font-size: var(--fs-xs);
+  transition: var(--tr-ui);
+}
+
+/* ---------------------------------------------------------------------------
+   § 5 分段控件（侧栏 服务器/监控、顶栏 日志预览/文件目录/终端）
+   原为容器 8px + 内项 6px / 外层 28px + 内项 24px，两套嵌套圆角对不齐。
+   统一：容器用 --ctl-r-lg，内项用 --ctl-r，内外差恰好等于容器内边距 2px。
+------------------------------------------------------------------------------ */
+.theme-modern .sidebar-tabs,
+.theme-modern .toolbar-view-switch,
+.theme-modern .seg {
+  height: var(--ctl-h);
+  padding: 2px;
+  border-radius: var(--ctl-r-lg);
+  background: var(--panel-muted);
+}
+
+/* ⚠ 必须带上 `+ 相邻兄弟` 这一支：v2:669 用
+   `.toolbar-view-switch-btn + .toolbar-view-switch-btn`（0,3,0）压了 4px，
+   只写 `.theme-modern .toolbar-view-switch-btn`（0,2,0）会输 —— 实测现象是
+   分段控件里第一个按钮 6px、后两个仍 4px。 */
+.theme-modern .sidebar-tabs > button,
+.theme-modern .toolbar-view-switch-btn,
+.theme-modern .toolbar-view-switch-btn + .toolbar-view-switch-btn,
+.theme-modern .seg > button,
+.theme-modern .seg > button + button {
+  height: calc(var(--ctl-h) - 4px);
+  min-height: 0;
+  padding: 0 var(--ctl-px);
+  border-radius: var(--ctl-r) !important;
+  font-size: var(--fs-xs);
+  transition: var(--tr-ui);
+}
+
+/* 选中项：实底卡片浮起，与未选中项拉开一档，不靠加粗 */
+.theme-modern .sidebar-tabs > button.on,
+.theme-modern .toolbar-view-switch-btn.is-active,
+.theme-modern .seg > button.on {
+  background: var(--panel);
+  color: var(--ink);
+  font-weight: 500;
+}
+
+/* ---------------------------------------------------------------------------
+   § 5.1 胶囊族与列表行
+   胶囊（.pill 暂停/继续、.fchip 过滤片）是**有意**的异形，不压成方角 ——
+   它们表达「可开关的标记」，与「执行动作的按钮」本就该是两种形状。
+   但两者高度原为 22 / 24 两档，这是无意义的分裂，统一到 24px。
+   .server-item 的 7px 圆角则是孤值（全站只此一处），并入控件基准 6px。
+------------------------------------------------------------------------------ */
+.theme-modern .pill,
+.theme-modern .fchip {
+  height: var(--ctl-h-sm);
+  min-height: var(--ctl-h-sm);
+  display: inline-flex;
+  align-items: center;
+  font-size: var(--fs-2xs);
+  transition: var(--tr-ui);
+}
+
+.theme-modern .server-item {
+  border-radius: var(--ctl-r);
+  transition: var(--tr-ui);
+}
+
+/* ---------------------------------------------------------------------------
+   § 6 焦点：全站唯一一种焦点环
+   原有 2px dashed(v2:1198) / 2px solid(v2:2570) / outline:none 三种并存。
+   统一为「描边转 accent + 柔和外环」，且只在键盘焦点(:focus-visible)出现 ——
+   鼠标点击不弹环，这是「丝滑」的关键细节。
+------------------------------------------------------------------------------ */
+.theme-modern :focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--ring);
+}
+
+/* 鼠标点击不留环（但键盘焦点仍然可见，不牺牲可达性） */
+.theme-modern :focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* ---------------------------------------------------------------------------
+   § 7 浮层：对话框 / 抽屉 / 菜单
+   统一容器圆角与投影层级，让「小窗」和主界面看起来出自同一套系统。
+------------------------------------------------------------------------------ */
+.theme-modern .confirm-dialog,
+.theme-modern .xdrawer,
+.theme-modern .themed-select-menu {
+  border-radius: var(--ctl-r-lg);
+  box-shadow: 0 12px 32px color-mix(in srgb, var(--ink) 16%, transparent);
+}
+
+.theme-modern .xdrawer-head,
+.theme-modern .confirm-title {
+  font-size: var(--fs-sm);
+  font-weight: 550;
+}
+
+.theme-modern .xdrawer-close {
+  width: var(--ctl-icon-sm);
+  height: var(--ctl-icon-sm);
+  min-height: 0;
+}
+
+/* ---------------------------------------------------------------------------
+   § 8 弹出小窗（传输 / 终端 PiP）
+   小窗原本自成一套：22px 高、10.5px 字、4px 圆角 —— 比主界面密一档，
+   看着像另一个应用。改为复用紧凑档，与主界面同源但更密，而非另起炉灶。
+------------------------------------------------------------------------------ */
+.tpw-btn {
+  height: var(--ctl-h-sm);
+  padding: 0 var(--ctl-px);
+  border-radius: var(--ctl-r);
+  font-size: var(--fs-2xs);
+  transition: var(--tr-ui);
+}
+
+.tpw-btn:hover:not(:disabled) {
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 26%, transparent);
+}
+
+.tpw-root {
+  --ctl-h: var(--ctl-h-sm);
+  --ctl-icon: var(--ctl-icon-sm);
+}
+
+/* ---------------------------------------------------------------------------
+   § 9 终端 chrome
+   终端标签、状态栏、查找条与主界面控件对齐到同一几何，终端正文区保持深色不动。
+------------------------------------------------------------------------------ */
+.theme-modern .terminal-findbar-btn,
+.theme-modern .terminal-findbar-toggle {
+  height: var(--ctl-h-sm);
+  min-height: var(--ctl-h-sm);
+  padding: 0 var(--ctl-px);
+  border-radius: var(--ctl-r) !important;
+  font-size: var(--fs-2xs);
+  transition: var(--tr-ui);
+}
+
+.theme-modern .terminal-findbar-input {
+  height: var(--ctl-h-sm);
+  border-radius: var(--ctl-r);
+  font-size: var(--fs-2xs);
+}
+
+/* ---------------------------------------------------------------------------
+   § 10 滚动条
+   全站一套细滚动条：常态几乎隐形，hover 才显形，避免粗灰条切断版面。
+------------------------------------------------------------------------------ */
+.theme-modern *::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.theme-modern *::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.theme-modern *::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-clip: content-box;
+  background-color: color-mix(in srgb, var(--ink) 18%, transparent);
+}
+
+.theme-modern *::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in srgb, var(--ink) 32%, transparent);
+}
+
+.theme-modern *::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* 降噪档（ui-motion-reduced 已在 styles-layout.css 压掉时长，这里只需保证
+   本文件新增的 transition 同样走那条规则 —— 变量化后自动继承，无需重复声明） */

@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<!-- ============================================================================
+     specimen.html — 样式标本页（样式标本 / CSS 重构 computed-style diff 验证用）
+     ----------------------------------------------------------------------------
+     用途：把应用各核心组件的「真实 DOM 结构」铺在一页上，并挂载与主应用完全
+     相同的 CSS 级联，供离线空态下不可见区域（终端分屏栏、日志行、监控卡等）
+     做逐元素 computed-style 对比验证。探针见文件底部脚本：
+       · window.__specimenDump()  —— 全量导出所有 [data-spec] 元素的固定属性子集
+                                    + 主题 token 解析值（{ specId, __tokens } 纯 JSON）
+       · window.__specimenProbe(sel) —— 按选择器抽查任意元素
+
+     ⚠️ 级联顺序维护提醒：下方 9 个 <link> 的顺序 = src/main.tsx 的
+     import 顺序。将来 main.tsx 增删 CSS 文件时，必须同步增删这里的 link，
+     否则本页的层叠结果与真实应用不一致，diff 结论作废。
+
+     约束：本页不引入任何作用于标本元素的样式 —— 页面底部的 <style> 只负责
+     「分区标题 / 区块排布 / 源码标注」这类导航外观；所有带 data-spec 的元素
+     样式 100% 来自真实 CSS 文件（图标为 lucide 简化占位，不影响按钮级联）。
+     壳类组合 = 主应用实际壳（App.tsx:3908 appShellClassName 的常用分支）：
+     app-shell theme-modern ui-density-compact ui-theme-sage ui-bg-solid ui-motion-normal。
+     ============================================================================ -->
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>样式标本 · server-log-console</title>
+  <!-- ↓↓↓ 级联顺序必须与 src/main.tsx:5-25 保持一致（见顶部维护提醒） ↓↓↓ -->
+  <link rel="stylesheet" href="/src/fonts.css" />
+  <link rel="stylesheet" href="/src/styles.css" /><!-- 内部 @import 15 个基础文件，不用展开 -->
+  <link rel="stylesheet" href="/src/theme-modern.css" />
+  <link rel="stylesheet" href="/src/theme-modern-v2.css" />
+  <link rel="stylesheet" href="/src/styles-server-monitor.css" />
+  <!-- 2026-11-16：原型 1:1 对齐补丁 8 文件（日志区浅色 / 选中态 / 控件统一 / S7·S8 预览与传输 /
+       S9 监控抽屉 / S4·S6 切片条与文件浏览 / S5 终端工作台 / S10 设置中心·S12 空态·S14 外观
+       主题）已全部收编进 theme-modern-v2.css §31-38（文件末尾、按原批次加载顺序保序），
+       link 相应删除，align-*.css 至此全部退役清零 -->
+  <link rel="stylesheet" href="/src/styles-empty-workbench.css" />
+  <link rel="stylesheet" href="/src/styles-empty-state.css" />
+  <link rel="stylesheet" href="/src/styles-sidepanel.css" />
+  <link rel="stylesheet" href="/src/styles-multi-node.css" />
+  <!-- 2026-11-17 统一工作台：控件几何收口层（高度/圆角/字号/焦点/动效），
+       必须排在最后，与 main.tsx 的 import 顺序保持一致 -->
+  <link rel="stylesheet" href="/src/styles-unify.css" />
+  <style>
+    /* ---- 仅页面骨架外观（分区标题/排布/标注），绝不作用于 [data-spec] 元素 ---- */
+    body { margin: 0; }
+    .spec-page { max-width: 1080px; margin: 0 auto; padding: 20px 20px 200px; }
+    .spec-title { font: 650 18px/1.4 var(--font-ui, system-ui); color: var(--ink, #171717); margin: 14px 0 4px; }
+    .spec-desc { font: 400 11.5px/1.6 var(--font-ui, system-ui); color: var(--ink-muted, #8f8f8f); margin: 0 0 18px; }
+    .spec-block { margin: 0 0 46px; }
+    .spec-block > h2 {
+      font: 600 13px/1.5 var(--font-ui, system-ui);
+      color: var(--ink-soft, #666);
+      border-top: 1px solid var(--line, #eaeaea);
+      padding: 12px 0 6px;
+      margin: 0;
+    }
+    .spec-src { display: block; font: 400 10px/1.5 ui-monospace, Menlo, monospace; color: var(--ink-muted, #8f8f8f); padding-bottom: 8px; }
+    .spec-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 0 0 8px; }
+    .spec-note { font: 400 10.5px/1.6 var(--font-ui, system-ui); color: var(--ink-muted, #8f8f8f); margin: 6px 0 0; }
+  </style>
+</head>
+<body>
+<main
+  class="app-shell theme-modern ui-density-compact ui-theme-sage ui-bg-solid ui-motion-normal"
+  data-spec="shell.main"
+  style="height:auto;min-height:100vh;overflow:visible"
+>
+  <div class="spec-page">
+    <h1 class="spec-title">样式标本 · server-log-console</h1>
+    <p class="spec-desc">
+      级联 = src/main.tsx 的 9 个 CSS（顺序一致）。壳类 = 主应用实际组合（App.tsx:3908）。
+      main 上内联 height:auto / overflow:visible 仅为本页可纵向滚动（真实 app-shell 是
+      100vh 固定视口壳，见 styles-layout.css:1-7）；壳类组合不变，token 作用域与真实应用一致。
+    </p>
+
+    <!-- ══════════════════════ 1. 按钮系统 ══════════════════════ -->
+    <section class="spec-block">
+      <h2>1 · 按钮系统（.ghost-button / .btn / .pill / .fchip / .chip / .seg / .kbd）</h2>
+      <span class="spec-src">源：theme-modern-v2.css §1:35-167、§1b:172-241、§3:575-703 · ui/App.tsx:4914-4927（pill） · ui/SearchQueryPanel.tsx:289（fchip） · ui/WorkspaceSessionTabs.tsx:81（chip）</span>
+
+      <div class="spec-row">
+        <button type="button" class="ghost-button" data-spec="buttons.ghost">常规按钮</button>
+        <button type="button" class="ghost-button primary-action" data-spec="buttons.ghost-primary">主按钮 primary-action</button>
+        <button type="button" class="ghost-button danger-button" data-spec="buttons.ghost-danger">危险 danger-button</button>
+        <button type="button" class="ghost-button slim-button" data-spec="buttons.ghost-slim">紧凑 slim-button</button>
+        <button type="button" class="btn" data-spec="buttons.btn-proto">.btn 原型类</button>
+        <button type="button" class="ghost-button" disabled data-spec="buttons.ghost-disabled">禁用按钮</button>
+      </div>
+      <p class="spec-note">
+        说明：级联中没有 .ghost-button.sm 变体（v2 §1 注释登记的是原型 .btn.sm，落地为
+        --ctl-h-sm token）；全站真实紧凑档 = .slim-button（theme-modern.css:1202），故以它代表 sm 刻度。
+        .btn 原型类在级联中无专属规则，此处探测它命中的全局 button 基础规则（styles-base.css）。
+      </p>
+
+      <div class="spec-row">
+        <button type="button" class="pill" data-spec="buttons.pill">
+          <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><rect x="14" y="4" width="4" height="16" rx="1" /><rect x="6" y="4" width="4" height="16" rx="1" /></svg>
+          暂停
+        </button>
+        <button type="button" class="pill on" data-spec="buttons.pill-on">
+          <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><rect x="14" y="4" width="4" height="16" rx="1" /><rect x="6" y="4" width="4" height="16" rx="1" /></svg>
+          继续
+        </button>
+        <button type="button" class="pill" disabled data-spec="buttons.pill-disabled">暂停（disabled）</button>
+        <button type="button" class="fchip" data-spec="buttons.fchip">fchip 常规</button>
+        <button type="button" class="fchip fchip-on" data-spec="buttons.fchip-on">fchip 选中</button>
+        <span class="chip" data-spec="buttons.chip">chip 常规</span>
+        <span class="chip grn" data-spec="buttons.chip-grn">chip grn</span>
+        <span class="chip red" data-spec="buttons.chip-red">chip red</span>
+        <span class="chip amb" data-spec="buttons.chip-amb">chip amb</span>
+        <span class="kbd" data-spec="buttons.kbd">⌘K</span>
+      </div>
+      <p class="spec-note">
+        .pill 为 button（App.tsx:4914-4927 实时暂停钮，真实 DOM 含 svg）；.fchip 为 button
+        （SearchQueryPanel.tsx:289 检索预设）；.chip 为 span（WorkspaceSessionTabs.tsx:81 分组徽标）。
+        .kbd（theme-modern-v2.css:149 原型键帽）当前 TSX 无直接消费点，按 v2 类规则挂载以保留级联探测。
+      </p>
+
+      <div class="spec-row">
+        <div class="seg" data-spec="buttons.seg">
+          <button type="button" data-spec="buttons.seg-normal">seg 常规</button>
+          <button type="button" class="on" data-spec="buttons.seg-on">seg 选中(.on)</button>
+          <button type="button" disabled data-spec="buttons.seg-disabled">seg 禁用</button>
+        </div>
+        <div class="seg lite" data-spec="buttons.seg-lite">
+          <button type="button" class="on" data-spec="buttons.seg-lite-on">seg.lite 选中</button>
+        </div>
+        <button type="button" class="toolbar-view-switch-btn is-active" data-spec="buttons.viewswitch-active">视图切换 is-active</button>
+        <button type="button" class="toolbar-view-switch-btn" disabled data-spec="buttons.viewswitch-disabled">视图切换 disabled</button>
+      </div>
+    </section>
+
+    <!-- ══════════════════════ 2. 侧栏 ══════════════════════ -->
+    <section class="spec-block">
+      <h2>2 · 侧栏（head 行 / 左栏 Tabs / 搜索框 / 服务器行三态 / side-foot）</h2>
+      <span class="spec-src">源：ui/SidebarPanel.tsx:94-171 · ui/SidepanelMobile.tsx:44-125（服务器行） · theme-modern-v2.css §2:244-345 · styles-empty-workbench.css §1:22-206（sidebar-status） · theme-modern-v2.css:394-426</span>
+
+      <!-- shell-layout = 真实父容器（styles-layout.css:30），给侧栏 200px 真实列宽 -->
+      <div class="shell-layout">
+        <aside class="sidebar-panel">
+          <div class="sidebar-head">
+            <div class="sidebar-head-row">
+              <div class="sidebar-head-title">
+                <h1 class="topbar-title" data-spec="sidebar.title">
+                  服务器<span class="sidebar-head-count" data-spec="sidebar.head-count">27 台</span>
+                </h1>
+              </div>
+              <div class="sidebar-head-buttons">
+                <button class="ghost-button icon-button" data-spec="sidebar.head-btn-cmd" title="命令面板">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3" /></svg>
+                </button>
+                <button class="ghost-button icon-button settings-gear-button" data-spec="sidebar.head-btn-gear" title="打开设置中心">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3" /></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="sidebar-tabs" role="tablist" aria-label="左栏视图">
+            <button type="button" role="tab" class="on" data-spec="sidebar.tab-on">服务器</button>
+            <button type="button" role="tab" data-spec="sidebar.tab">监控</button>
+          </div>
+
+          <section class="pane-section">
+            <div class="search-wrap">
+              <span class="search-wrap-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>
+              </span>
+              <input value="" placeholder="输入名称、分组或地址" data-spec="sidebar.search-input" />
+            </div>
+          </section>
+
+          <div class="server-groups pane-section">
+            <section class="server-group">
+              <div class="server-group-title" data-spec="sidebar.group-title">测试<span class="server-group-count">3</span></div>
+              <div class="server-list">
+                <!-- 状态点三态来自 SidepanelMobile.tsx:62：dot-idle / dot-pending / dot-connected -->
+                <div class="server-item-wrap">
+                  <button type="button" class="server-item" data-spec="sidebar.row-normal">
+                    <span class="server-status-dot dot-idle" data-spec="sidebar.row-dot-idle"></span>
+                    <span class="server-item-main">
+                      <strong data-spec="sidebar.row-name">web-prod-01</strong>
+                      <span data-spec="sidebar.row-host">root@10.0.0.11</span>
+                    </span>
+                    <span class="server-item-meta" data-spec="sidebar.row-meta">22</span>
+                  </button>
+                  <div class="server-item-quick-actions">
+                    <button type="button" class="server-item-mini-action" data-spec="sidebar.row-mini" title="更多操作">
+                      <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden="true"><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /><circle cx="5" cy="12" r="1" /></svg>
+                    </button>
+                  </div>
+                </div>
+                <div class="server-item-wrap server-item-wrap-active">
+                  <button type="button" class="server-item server-item-active" data-spec="sidebar.row-active">
+                    <span class="server-status-dot dot-connected" data-spec="sidebar.row-dot-connected"></span>
+                    <span class="server-item-main">
+                      <strong>db-master</strong>
+                      <span>root@10.0.0.12</span>
+                    </span>
+                    <span class="server-item-meta">22</span>
+                  </button>
+                  <div class="server-item-quick-actions">
+                    <button type="button" class="server-item-mini-action" title="更多操作">
+                      <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden="true"><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /><circle cx="5" cy="12" r="1" /></svg>
+                    </button>
+                  </div>
+                </div>
+                <div class="server-item-wrap">
+                  <button type="button" class="server-item" data-spec="sidebar.row-pending">
+                    <span class="server-status-dot dot-pending" data-spec="sidebar.row-dot-pending"></span>
+                    <span class="server-item-main">
+                      <strong>offline-host</strong>
+                      <span>root@10.0.0.13</span>
+                    </span>
+                    <span class="server-item-meta">22</span>
+                  </button>
+                  <div class="server-item-quick-actions">
+                    <button type="button" class="server-item-mini-action" title="更多操作">
+                      <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden="true"><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /><circle cx="5" cy="12" r="1" /></svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <!-- .side-foot（原型）在本仓库落地为 .sidebar-status（theme-modern-v2.css:394 注释）。
+               ⚠️ SidebarPanel.tsx:225-241：左下状态卡已于 2026-10-25 从 TSX 移除，
+               但级联规则仍然存活（theme-modern-v2.css:394-426 + styles-empty-workbench.css:22-262）。
+               此处 DOM 按 CSS 选择器结构重建（st-l1/st-dot/st-word/st-obj/st-chev），保证这些
+               退役中的规则在 CSS 重构 diff 里仍有探测点。 -->
+          <div class="sidebar-status st-ok" data-spec="sidebar.side-foot">
+            <div class="st-l1" data-spec="sidebar.side-foot-l1">
+              <span class="st-dot" data-spec="sidebar.side-foot-dot"></span>
+              <span class="st-word" data-spec="sidebar.side-foot-word">已连接</span>
+              <span class="st-obj" data-spec="sidebar.side-foot-obj">db-master</span>
+              <span class="st-chev" data-spec="sidebar.side-foot-chev">▾</span>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- ══════════════════════ 3. 工具栏 ══════════════════════ -->
+    <section class="spec-block">
+      <h2>3 · 工具栏（命令栏 / 视图切换 / 检索组 / 动作组）</h2>
+      <span class="spec-src">源：ui/App.tsx:4220-4262（commandbar + 视图切换） · ui/SearchQueryPanel.tsx:72-108（检索组） · ui/SearchToolbarActions.tsx:32-90（LIVE/多窗格/录制） · theme-modern-v2.css §33（2026-11-16 收编：检索│LIVE 分隔线 ::before + 一体式检索组）</span>
+
+      <section class="toolbar-panel">
+        <div class="toolbar-commandbar" data-spec="toolbar.commandbar">
+          <div class="toolbar-view-switch" data-spec="toolbar.view-switch">
+            <button type="button" class="toolbar-view-switch-btn is-active" data-spec="toolbar.view-log">日志预览</button>
+            <button type="button" class="toolbar-view-switch-btn" disabled data-spec="toolbar.view-files">文件目录</button>
+            <button type="button" class="toolbar-view-switch-btn" data-spec="toolbar.view-term">终端</button>
+          </div>
+          <div class="toolbar-search-row" data-spec="toolbar.search-row">
+            <div class="keyword-shell">
+              <span class="keyword-input-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>
+              </span>
+              <input type="search" autoComplete="off" enterKeyHint="search" class="command-input command-input-keyword" value="ERROR" placeholder="输入关键字，或直接用 /关键字 后回车" data-spec="toolbar.search-input" />
+              <button type="button" class="keyword-input-clear" data-spec="toolbar.search-clear" title="清空">
+                <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
+              </button>
+            </div>
+          </div>
+          <div class="toolbar-inline toolbar-search-actions" data-spec="toolbar.actions">
+            <button class="ghost-button toolbar-action-button toolbar-live-button" data-spec="toolbar.live" title="开启实时追踪 (tail -F)">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><circle cx="12" cy="12" r="2" /><path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9" /><path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5" /><circle cx="12" cy="12" r="10" /><path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5" /><path d="M19.1 4.9C23 8.8 23 15.2 19.1 19.1" /></svg>
+              <span>LIVE</span>
+            </button>
+            <button class="ghost-button toolbar-action-button toolbar-live-button toolbar-live-on" data-spec="toolbar.live-on" title="断开实时追踪">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" class="live-pulse" aria-hidden="true"><circle cx="12" cy="12" r="2" /><path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9" /><path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5" /><circle cx="12" cy="12" r="10" /><path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5" /><path d="M19.1 4.9C23 8.8 23 15.2 19.1 19.1" /></svg>
+              <span>LIVE</span>
+            </button>
+            <button class="ghost-button toolbar-action-button btn-wall-on" data-spec="toolbar.wall" title="多窗格实时（视墙）">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><rect width="7" height="7" x="3" y="3" rx="1" /><rect width="7" height="7" x="14" y="3" rx="1" /><rect width="7" height="7" x="14" y="14" rx="1" /><rect width="7" height="7" x="3" y="14" rx="1" /></svg>
+              <span class="btn-recording-count" data-spec="toolbar.wall-count">2</span>
+            </button>
+            <button class="ghost-button toolbar-action-button btn-recording-active" data-spec="toolbar.record" title="停止全部录制">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><circle cx="12" cy="12" r="10" /><circle cx="12" cy="12" r="4" fill="currentColor" stroke="none" /></svg>
+              <span class="btn-recording-count" data-spec="toolbar.record-count">3</span>
+            </button>
+            <button class="ghost-button icon-button toolbar-action-button" data-spec="toolbar.more" disabled title="更多条件">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /><circle cx="5" cy="12" r="1" /></svg>
+            </button>
+          </div>
+        </div>
+      </section>
+      <p class="spec-note">
+        theme-modern-v2.css §33 的「检索│LIVE」1px 竖线是 .toolbar-search-actions 的 ::before
+        （min-width:1181px 媒体查询内）——把浏览器窗口拉宽到 ≥1181px 后 __specimenDump 才会看到
+        分隔线参与布局。置顶按钮是 isElectron 条件渲染（SearchToolbarActions.tsx:72-81），此处省略。
+      </p>
+    </section>
+
+    <!-- ══════════════════════ 4. 终端分屏栏 ══════════════════════ -->
+    <section class="spec-block">
+      <h2>4 · 终端分屏栏（深色表面 + pane-bar + actions）</h2>
+      <span class="spec-src">源：ui/TerminalPane.tsx:145-181（terminal-pane 全结构） · ui/TerminalSplitView.tsx:412-429（split 包装链） · ui/TerminalWorkspace.tsx:858-981（terminal-bottom-panel / body-slot / main-shell / tab-panes） · styles-terminal-workspace.css:617-680 · theme-modern-v2.css §33（2026-11-16 收编：深色表面按钮护栏）</span>
+
+      <section class="terminal-bottom-panel" data-spec="terminal.bottom-panel">
+        <div class="terminal-body-slot">
+          <div class="terminal-body-layout">
+            <div class="terminal-main-shell">
+              <div class="terminal-tab-panes">
+                <div class="terminal-split-root">
+                  <div class="terminal-split-row" style="display: flex; flex: 1; flex-direction: row;">
+                    <div class="terminal-split-child terminal-split-child-row" style="display: flex; flex-direction: column; flex: 1;">
+                      <div class="terminal-pane" data-spec="terminal.pane">
+                        <div class="terminal-pane-bar" data-spec="terminal.pane-bar">
+                          <span class="terminal-status-dot terminal-status-dot-connected" data-spec="terminal.dot"></span>
+                          <span class="terminal-pane-label" data-spec="terminal.label">db-master</span>
+                          <div class="terminal-pane-bar-actions" data-spec="terminal.actions">
+                            <button type="button" data-spec="terminal.btn-h" title="水平分屏">H</button>
+                            <button type="button" data-spec="terminal.btn-v" title="垂直分屏">V</button>
+                            <button type="button" data-spec="terminal.btn-close" title="关闭">
+                              <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+                            </button>
+                          </div>
+                        </div>
+                        <div class="terminal-pane-body">
+                          <div class="xterm-container"></div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </section>
+
+    <!-- ══════════════════════ 5. 日志查看器 ══════════════════════ -->
+    <section class="spec-block">
+      <h2>5 · 日志查看器（pip-viewer-wrap + console-block + 5 条日志行）</h2>
+      <span class="spec-src">源：ui/App.tsx:4566-4579（viewer-workbench / pip-viewer-wrap） · ui/App.tsx:5062-5093（viewer-content-shell + console-block.viewer-console.viewer-console-markup） · ui/VirtualLogViewer.tsx:6-10、446-576、824-858（行渲染 baseClass / log-line-time / log-line-body / virtuoso scroller） · theme-modern-v2.css §31（2026-11-16 收编：内嵌浅色 + 级别色）</span>
+
+      <section class="workspace-panel">
+        <div class="viewer-workbench">
+          <div>
+            <!-- 真实级联：.workspace-panel > div > .pip-viewer-wrap 命中 display:contents
+                （styles-pip-toast.css:449-451），故保留这层 plain div 以复现该规则 -->
+            <div class="pip-viewer-wrap" data-spec="viewer.wrap">
+              <div class="viewer-content-shell" data-spec="viewer.content-shell">
+                <div class="console-block viewer-console viewer-console-markup" data-spec="viewer.console">
+                  <div class="virtuoso-scroller" data-virtuoso-scroller="true" data-spec="viewer.scroller">
+                    <div class="virtuoso-item-list">
+                      <!-- 行 class 组合来自 VirtualLogViewer.tsx:470-477 baseClass；
+                          级别 class 的真实词表 = error / warning / exception / fatal
+                          （theme-modern-v2.css §31 级别色，2026-11-16 收编），info 行 = 无级别 class 的基础行 -->
+                      <div data-item-index="0">
+                        <div class="log-line log-line-ts" data-line-index="0" data-spec="viewer.line-info">
+                          <span class="log-line-time" data-spec="viewer.line-time">2026-11-15 09:00:01.102</span>
+                          <span class="log-line-body" data-spec="viewer.line-body">INFO  server started on :8080</span>
+                        </div>
+                      </div>
+                      <div data-item-index="1">
+                        <div class="log-line log-line-ts log-line-level-warning" data-line-index="1" data-spec="viewer.line-warn">
+                          <span class="log-line-time">2026-11-15 09:00:02.330</span>
+                          <span class="log-line-body">WARN  slow query detected: 1.7s</span>
+                        </div>
+                      </div>
+                      <div data-item-index="2">
+                        <div class="log-line log-line-ts log-line-level-error" data-line-index="2" data-spec="viewer.line-error">
+                          <span class="log-line-time">2026-11-15 09:00:03.881</span>
+                          <span class="log-line-body">ERROR connection refused (111)</span>
+                        </div>
+                      </div>
+                      <div data-item-index="3">
+                        <div class="log-line log-line-ts log-line-level-fatal" data-line-index="3" data-spec="viewer.line-fatal">
+                          <span class="log-line-time">2026-11-15 09:00:04.010</span>
+                          <span class="log-line-body">FATAL out of memory, killing worker</span>
+                        </div>
+                      </div>
+                      <div data-item-index="4">
+                        <div class="log-line log-line-ts log-line-hit" data-line-index="4" data-spec="viewer.line-hit">
+                          <span class="log-line-time">2026-11-15 09:00:05.442</span>
+                          <span class="log-line-body">ERROR retry <mark class="log-highlight" data-spec="viewer.line-mark">timeout</mark> after 3 attempts</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <p class="spec-note">
+        命中行 <mark class="log-highlight"> 来自 VirtualLogViewer.tsx:540-544（highlightReplace 的
+        mark.log-highlight 结构）。exception 级（log-line-level-exception）如需探测，复制
+        line-warn 行改 class 即可。
+      </p>
+    </section>
+
+    <!-- ══════════════════════ 6. 工作区页签 ══════════════════════ -->
+    <section class="spec-block">
+      <h2>6 · 工作区页签（原型 .wtab → 实现 .workspace-session-tab）</h2>
+      <span class="spec-src">源：ui/WorkspaceSessionTabs.tsx:38-108 · theme-modern-v2.css §3:433-520（.workspace-session-tab 即原型 .wtab，480 行注释） · theme-modern-v2.css §32（2026-11-16 收编：选中态 accent-soft 药丸底）</span>
+
+      <div class="workspace-session-strip" data-spec="tabs.strip">
+        <div class="workspace-session-tabs-shell">
+          <div class="workspace-session-tabs">
+            <div class="workspace-session-tab" data-spec="tabs.tab">
+              <button class="workspace-session-tab-trigger" type="button" data-spec="tabs.tab-trigger">
+                <span class="workspace-session-tab-label" data-spec="tabs.tab-label">web-prod-01</span>
+              </button>
+              <button class="ghost-button icon-button workspace-session-tab-close" type="button" data-spec="tabs.tab-close" aria-label="关闭 web-prod-01">
+                <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+              </button>
+            </div>
+            <div class="workspace-session-tab workspace-session-tab-active" data-spec="tabs.tab-active">
+              <button class="workspace-session-tab-trigger" type="button">
+                <span class="workspace-session-tab-label">db-master</span>
+                <span class="chip workspace-session-tab-group" data-spec="tabs.tab-group">生产</span>
+              </button>
+              <button class="ghost-button icon-button workspace-session-tab-close" type="button" aria-label="关闭 db-master">
+                <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+              </button>
+            </div>
+          </div>
+          <button type="button" class="workspace-session-add" data-spec="tabs.add" title="打开服务器" aria-label="新建会话">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12h14" /><path d="M12 5v14" /></svg>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════ 7. 监控卡 ══════════════════════ -->
+    <section class="spec-block">
+      <h2>7 · 监控卡（smv-card 身份行 + 状态点 + CPU 主读数 + 次级行 + foot）</h2>
+      <span class="spec-src">源：ui/ServerMonitorCard.tsx:461-590（smv-card / smc-id / smc-st / smc-os / smc-hero / smc-srow / smc-foot） · ui/SidebarPanel.tsx:174-190（真实宿主 pane-section.smm-section） · styles-sidebar-toolbar.css:1095-1195（smc 规则） · styles-server-monitor.css（smp 前缀新代，本卡仍走 smv/smc）</span>
+
+      <div class="shell-layout">
+        <aside class="sidebar-panel">
+          <section class="pane-section smm-section">
+            <div class="smv-card" data-spec="monitor.card">
+              <div class="smc-id" data-spec="monitor.id">
+                <b data-spec="monitor.id-name">db-master</b>
+                <em data-spec="monitor.id-group">生产</em>
+                <span class="smc-st" data-spec="monitor.st">
+                  <i data-spec="monitor.st-dot"></i>正常
+                </span>
+                <button type="button" class="smc-diag-btn" data-spec="monitor.diag-btn" title="五项只读体检">
+                  <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4.8 2.3A.3.3 0 1 0 5 2H4a2 2 0 0 0-2 2v5a6 6 0 0 0 6 6 6 6 0 0 0 6-6V4a2 2 0 0 0-2-2h-1a.2.2 0 1 0 .3.3" /><path d="M8 15v1a6 6 0 0 0 6 6 6 6 0 0 0 6-6v-4" /><circle cx="20" cy="10" r="2" /></svg>
+                </button>
+              </div>
+              <div class="smc-os" data-spec="monitor.os">Linux 5.15 · 4 核 · 运行 12 天</div>
+              <div class="smc-hero" data-spec="monitor.hero">
+                <div class="smc-hero-num" data-spec="monitor.hero-num">37<small>%</small></div>
+                <div class="smc-hero-label" data-spec="monitor.hero-label">CPU 利用率</div>
+              </div>
+              <div class="smc-hero-meta" data-spec="monitor.hero-meta">
+                <span class="cap-ok" data-spec="monitor.cap-ok">真实口径 /proc/stat 差分</span>
+                <span class="cap-load" data-spec="monitor.cap-load">load 1m <b>0.8</b> · 负载正常</span>
+              </div>
+              <!-- CapacityRow 方案 E 两行结构（ServerMonitorCard.tsx:155-172） -->
+              <div class="smc-srow smc-e-top" data-spec="monitor.row-mem">
+                <span class="lbl">内存</span>
+                <span class="smc-e-cap">5.2 GB / 8.0 GB</span>
+                <b>65<small>%</small></b>
+              </div>
+              <div class="smc-e-track" data-spec="monitor.row-mem-track">
+                <span class="track">
+                  <span class="smm-segbar">
+                    <span class="smm-seg"></span><span class="smm-seg"></span><span class="smm-seg"></span>
+                    <span class="smm-seg"></span><span class="smm-seg"></span><span class="smm-seg"></span>
+                    <span class="smm-seg"></span><span class="smm-seg"></span><span class="smm-seg"></span>
+                    <span class="smm-seg"></span><span class="smm-seg"></span><span class="smm-seg"></span>
+                  </span>
+                </span>
+              </div>
+              <!-- 网络行 = 旧单行（ServerMonitorCard.tsx:532-541） -->
+              <div class="smc-srow" data-spec="monitor.row-net">
+                <span class="lbl">网络下行</span>
+                <span class="track" aria-hidden="true"></span>
+                <b>1.2<small>M</small></b>
+              </div>
+              <div class="smc-foot" data-spec="monitor.foot">
+                <span class="smc-load-tri" data-spec="monitor.load-tri">load <b>0.8·0.6·0.5</b></span>
+                <span class="smc-nets" data-spec="monitor.nets">
+                  <span>↓ 1.2M</span>
+                  <span>↑ 220K</span>
+                </span>
+              </div>
+            </div>
+          </section>
+        </aside>
+      </div>
+    </section>
+
+    <!-- ══════════════════════ 8. 空态 ══════════════════════ -->
+    <section class="spec-block">
+      <h2>8 · 空态（lp3.ed · LogEmptyState editorial 变体）</h2>
+      <span class="spec-src">源：ui/LogEmptyState.tsx:52-107（lp3 全结构） · ui/LogEmptyState.tsx:136-159（SlcWatermark） · ui/WorkspaceStartupCards.tsx:47-64（服务离线空态实参） · styles-empty-state.css:10-293（lp3 / btn2 / lp3-chip / slc-wm）</span>
+
+      <section class="workspace-panel">
+        <div class="lp3 ed" role="status" data-spec="empty.root">
+          <div class="slc-wm" aria-hidden="true" data-spec="empty.watermark">
+            <svg viewBox="0 0 260 120" fill="none" focusable="false">
+              <g transform="skewX(-8)" stroke="currentColor" strokeWidth="9" strokeLinejoin="round" strokeLinecap="round" fill="none">
+                <path d="M60 8H14V52H58V96H14" />
+                <path d="M96 8V96H140" />
+                <path d="M216 8H176V96H216" />
+              </g>
+            </svg>
+            <span class="slc-wm-word">SERVER LOG CONSOLE</span>
+          </div>
+          <div class="lp3-inner" data-spec="empty.inner">
+            <span class="lp3-icwrap" aria-hidden="true" data-spec="empty.icwrap">
+              <span class="lp3-ic lp3-ic-live" data-spec="empty.ic">
+                <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4.8 2.3A.3.3 0 1 0 5 2H4a2 2 0 0 0-2 2v5a6 6 0 0 0 6 6 6 6 0 0 0 6-6V4a2 2 0 0 0-2-2h-1a.2.2 0 1 0 .3.3" /><path d="M8 15v1a6 6 0 0 0 6 6 6 6 0 0 0 6-6v-4" /><circle cx="20" cy="10" r="2" /></svg>
+              </span>
+              <span class="lp3-ring"></span>
+            </span>
+            <div class="lp3-title" data-spec="empty.title">连接服务离线</div>
+            <p class="lp3-sub" data-spec="empty.sub">连接服务未在本地端口运行；启动后导入 FinalShell 或手动添加服务器。</p>
+            <div class="lp3-acts" data-spec="empty.acts">
+              <button type="button" class="btn2" data-spec="empty.btn">连接服务设置</button>
+              <button type="button" class="btn2 btn2-pri" data-spec="empty.btn-pri">检查服务</button>
+            </div>
+            <div class="lp3-steps" data-spec="empty.steps">
+              <span class="lp3-step lp3-step-cur" data-spec="empty.step-cur"><i>1</i>导入连接</span>
+              <span class="lp3-step" data-spec="empty.step"><i>2</i>浏览目录</span>
+            </div>
+            <span class="lp3-chip" data-spec="empty.chip">
+              <span class="lp3-chip-t">127.0.0.1:8377<span class="lp3-sep">·</span>未响应 · 自动重试中<i class="lp3-ellip" aria-hidden="true"></i></span>
+            </span>
+          </div>
+        </div>
+      </section>
+    </section>
+
+    <!-- ══════════════════════ 9. 抽屉 ══════════════════════ -->
+    <section class="spec-block">
+      <h2>9 · 抽屉（xdrawer，静态摆出）</h2>
+      <span class="spec-src">源：ui/Drawer.tsx:59-85（xdrawer / xdrawer-head / xdrawer-title / xdrawer-close / xdrawer-body / xdrawer-foot） · ui/SearchQueryPanel.tsx:190-208（foot 内两颗 slim-button 真实用法） · theme-modern.css:5177-5214（xdrawer 基础规则） · theme-modern-v2.css:922-930（v2 覆盖）</span>
+
+      <p class="spec-note">
+        ⚠️ 真实抽屉 position:fixed 铺满视口右缘（theme-modern.css:5177-5189）、经 ThemePortal
+        挂到 body（Drawer.tsx:60）。本页按「静态摆出」要求直接放流内 —— .xdrawer 的
+        position:fixed 生效后会固定在视口右侧（宽 420px），这是真实级联的产物；探针读到的
+        position/top/right 值即真实应用打开抽屉时的值。宽高内联值（width:420px;z-index:8600）
+        来自 Drawer.tsx:65 的真实内联样式。
+      </p>
+      <div class="xdrawer" data-spec="drawer.root" style="width: 420px; z-index: 8600;">
+        <div class="xdrawer-head" data-spec="drawer.head">
+          <span class="xdrawer-title" data-spec="drawer.title">高级检索条件</span>
+          <button type="button" class="ghost-button icon-button xdrawer-close" data-spec="drawer.close" title="关闭" aria-label="关闭">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+          </button>
+        </div>
+        <div class="xdrawer-body" data-spec="drawer.body">
+          <div class="advanced-strip advanced-strip-drawer">
+            <div class="advanced-row advanced-row-main">
+              <label>匹配<input type="text" value="精确包含" data-spec="drawer.match-input" /></label>
+              <button type="button" class="ghost-button regex-pill" data-spec="drawer.regex-pill">正则</button>
+            </div>
+          </div>
+        </div>
+        <div class="xdrawer-foot" data-spec="drawer.foot">
+          <button type="button" class="ghost-button slim-button" data-spec="drawer.btn-reset">重置</button>
+          <button type="button" class="ghost-button slim-button primary-action advanced-apply-button" data-spec="drawer.btn-apply">应用条件并检索</button>
+        </div>
+      </div>
+    </section>
+
+  </div>
+</main>
+
+<script>
+/* ============================================================================
+   探针脚本 —— 供 CSS 重构验证使用
+   · window.__specimenDump():  遍历全部 [data-spec]，导出固定 computed-style
+     属性子集 + 主题 token 解析值，返回纯 JSON（{ specId: {...}, __tokens: {...} }）。
+   · window.__specimenProbe(sel): 按选择器探测任意元素（抽查用），返回同一属性子集；
+     找不到元素时返回 null。
+   属性子集 = display / position / height / minHeight / padding / margin /
+     borderTopWidth / borderColor / borderRadius / backgroundColor / color /
+     fontSize / fontWeight / fontFamily / lineHeight / boxShadow / gap /
+     letterSpacing / width
+   token 取自 .app-shell（= .theme-modern.ui-theme-sage 作用域解析后的实际值），
+   覆盖 :root 级（--fs-2xs / --r-s / --ctl-h 等字号、圆角、控件刻度）与
+   .theme-modern 级（--panel / --ink / --accent 等主题色板）。
+   ============================================================================ */
+(function () {
+  "use strict";
+
+  /* 属性子集：键 = 输出名（camelCase），值 = getPropertyValue 所需的 kebab-case。
+     ⚠️ getPropertyValue 只认连字符写法（"background-color"），
+     传 camelCase 会静默返回空串 —— 故两套名字都要写。 */
+  var PROPS = [
+    ["display", "display"], ["position", "position"],
+    ["height", "height"], ["minHeight", "min-height"],
+    ["padding", "padding"], ["margin", "margin"],
+    ["borderTopWidth", "border-top-width"], ["borderColor", "border-color"],
+    ["borderRadius", "border-radius"], ["backgroundColor", "background-color"],
+    ["color", "color"], ["fontSize", "font-size"], ["fontWeight", "font-weight"],
+    ["fontFamily", "font-family"], ["lineHeight", "line-height"],
+    ["boxShadow", "box-shadow"], ["gap", "gap"],
+    ["letterSpacing", "letter-spacing"], ["width", "width"]
+  ];
+
+  /* token 子集：任务要求的 --panel/--ink/--accent/--line/--r-s/--ctl-h/--fs-base
+     之外，补齐同族关键 token（主题/字号/控件刻度），便于整组 diff */
+  var TOKENS = [
+    "--panel", "--panel-muted", "--panel-strong",
+    "--ink", "--ink-soft", "--ink-muted",
+    "--accent", "--accent-strong", "--accent-soft", "--on-accent",
+    "--line", "--line-strong", "--bg",
+    "--red", "--amber", "--green", "--green-dot",
+    "--r-s", "--r-m", "--r-l", "--ctl-h", "--ctl-h-sm", "--ctl-radius",
+    "--fs-2xs", "--fs-xs", "--fs-sm", "--fs-base",
+    "--mono", "--shell", "--shell-ink", "--shadow-sm"
+  ];
+
+  function dumpEl(el) {
+    var cs = window.getComputedStyle(el);
+    var out = {};
+    for (var i = 0; i < PROPS.length; i++) {
+      var pair = PROPS[i];
+      try { out[pair[0]] = cs.getPropertyValue(pair[1]); } catch (e) { out[pair[0]] = null; }
+    }
+    return out;
+  }
+
+  function dumpTokens() {
+    var shell = document.querySelector(".app-shell");
+    if (!shell) return null;
+    var cs = window.getComputedStyle(shell);
+    var out = {};
+    for (var i = 0; i < TOKENS.length; i++) {
+      var t = TOKENS[i];
+      var v = cs.getPropertyValue(t).trim();
+      out[t] = v === "" ? null : v;
+    }
+    return out;
+  }
+
+  window.__specimenDump = function () {
+    var out = {};
+    var els = document.querySelectorAll("[data-spec]");
+    for (var i = 0; i < els.length; i++) {
+      var el = els[i];
+      out[el.getAttribute("data-spec")] = dumpEl(el);
+    }
+    out.__tokens = dumpTokens();
+    return out;
+  };
+
+  window.__specimenProbe = function (sel) {
+    var el = document.querySelector(sel);
+    return el ? dumpEl(el) : null;
+  };
+})();
+</script>
+</body>
+</html>

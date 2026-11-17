@@ -3,7 +3,7 @@
    依据：docs/prototypes/empty-states-a-v2.html（方案 A 定稿 10 屏）
    实施方案：docs/ui-redesign-2026-09/空状态与状态条实施方案-2026-10-04.md
 
-   加载位置（main.tsx）：align-controls.css 之后、styles-sidepanel.css 之前
+   加载位置（main.tsx）：theme-modern-v2.css §33 收编节 之后、styles-sidepanel.css 之前
    —— 覆盖 theme-modern-v2.css 的旧状态条规则，且不压过侧栏环境层。
    颜色只用 token（--ink/--line/--accent/--red/--amber/--green-dot…），
    8 套主题自动跟随；窄档自适应走容器查询 slc-sp（≤799.9px）。
@@ -47,7 +47,7 @@
 .theme-modern .sidebar-status.sidebar-status-open {
   margin: 4px 10px 8px;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--r-l);
 }
 
 .sidebar-status .st-progress {
@@ -440,7 +440,7 @@
   margin-top: 14px;
   padding: 6px 11px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--r-m);
   background: var(--panel);
   font-family: var(--mono-font-family);
   font-size: 10.5px;
@@ -585,7 +585,7 @@
   color: var(--ink);
 }
 .empty-wb-step-tx span {
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   color: var(--ink-muted);
   line-height: 1.5;
 }
@@ -604,7 +604,7 @@
   margin-left: auto;
   flex: none;
   color: var(--ink-muted);
-  font-size: 12px;
+  font-size: var(--fs-xs);
 }
 
 /* 键位行（触屏容器隐藏，见窄档规则） */
@@ -616,7 +616,7 @@
   margin-top: 16px;
   padding-top: 12px;
   border-top: 1px solid var(--line);
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   color: var(--ink-soft);
 }
 /* 每项内部：键帽与文字垂直居中对齐（2026-10-16 用户反馈「内容与 icon 未垂直居中」）。
@@ -655,7 +655,7 @@
   justify-content: space-between;
   padding: 9px 12px;
   border-bottom: 1px solid var(--line);
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   font-weight: 600;
   color: var(--ink-soft);
 }
@@ -720,7 +720,7 @@
 }
 .empty-wb-row .row-act {
   flex: none;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   color: var(--accent);
   opacity: 0;
   transform: translateX(-3px);
@@ -750,7 +750,7 @@
   width: 24px;
   height: 24px;
   flex: none;
-  border-radius: 8px;
+  border-radius: var(--r-m);
   background: var(--accent-soft);
   color: var(--accent);
   display: grid;
@@ -792,7 +792,7 @@
   padding: 0 10px;
   border: 1px solid var(--line);
   border-radius: 999px;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   background: var(--panel);
   display: inline-flex;
   align-items: center;
@@ -883,7 +883,7 @@
   width: 26px;
   height: 26px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--r-m);
   display: grid;
   place-items: center;
   color: var(--ink-soft);
@@ -891,7 +891,7 @@
   margin-bottom: 2px;
 }
 .mini-empty b {
-  font-size: 12px;
+  font-size: var(--fs-xs);
   font-weight: 600;
   color: var(--ink);
 }

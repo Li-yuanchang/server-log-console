@@ -727,7 +727,7 @@
 
 .theme-modern .server-item {
   border: none;
-  border-radius: 8px;
+  border-radius: var(--r-m);
   background: transparent;
   padding: 8px 12px 8px 24px;
   gap: 4px;
@@ -750,7 +750,7 @@
   right: 8px;
   padding-left: 18px;
   background: linear-gradient(90deg, transparent, var(--panel-muted) 26%, var(--panel-muted));
-  border-radius: 8px;
+  border-radius: var(--r-m);
 }
 
 .theme-modern .server-item-mini-action {
@@ -926,7 +926,7 @@
   gap: 0;
   min-height: 0;
   overflow-y: auto;
-  border-radius: 6px;
+  border-radius: var(--r-s);
   background: rgba(0, 0, 0, 0.02);
   border: 1px solid var(--line);
   padding: 4px 0;
@@ -1255,7 +1255,7 @@
   position: relative;
   z-index: 3;
   padding: 3px;
-  border-radius: 10px;
+  border-radius: var(--r-l);
   background: var(--panel-muted);
   pointer-events: auto;
 }
@@ -1269,7 +1269,7 @@
   min-height: 26px;
   padding: 0 10px;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--r-m);
   background: transparent;
   color: var(--ink-soft);
   font-size: var(--fs-xs);
@@ -1440,7 +1440,7 @@
   min-height: 28px;
   padding: 2px 10px;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--r-s);
   background: var(--panel);
   box-shadow: none;
   color: var(--ink-soft);
@@ -1490,7 +1490,7 @@
   background: var(--panel);
   color: var(--ink-soft);
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--r-s);
   box-shadow: none;
 }
 
@@ -1500,7 +1500,7 @@
 
 /* --- 11. 标签页 --- */
 .theme-modern .result-tab-chip {
-  border-radius: 8px;
+  border-radius: var(--r-m);
   border: 1px solid color-mix(in srgb, var(--line) 82%, #ffffff 18%);
   background: color-mix(in srgb, var(--panel) 88%, #ffffff 12%);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
@@ -1518,7 +1518,7 @@
   font-size: var(--fs-xs);
   font-weight: 500;
   color: var(--ink-muted);
-  border-radius: 8px;
+  border-radius: var(--r-m);
   cursor: pointer;
   transform: none;
   transition: none;
@@ -1536,7 +1536,7 @@
 .theme-modern .result-tab-close {
   width: 22px;
   height: 22px;
-  border-radius: 6px;
+  border-radius: var(--r-s);
   font-size: var(--fs-2xs);
   cursor: pointer;
   transform: none;
@@ -1709,7 +1709,7 @@
 }
 
 .theme-modern .reader-preview-floating {
-  border-radius: 8px;
+  border-radius: var(--r-m);
   border: 1px solid var(--line);
   background: var(--panel);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
@@ -1805,7 +1805,7 @@
 }
 
 .theme-modern .meta-list {
-  border-radius: 6px;
+  border-radius: var(--r-s);
   border: 1px solid var(--line);
   background: var(--panel-muted);
   padding: 6px 10px;
@@ -1929,7 +1929,7 @@
 /* --- 17. 状态卡片 --- */
 .theme-modern .status-card,
 .theme-modern .empty-box {
-  border-radius: 8px;
+  border-radius: var(--r-m);
   border: 1px solid var(--line);
   background: var(--panel);
   padding: 8px 12px;
@@ -1981,7 +1981,7 @@
 
 .theme-modern .drawer-section {
   padding: 10px;
-  border-radius: 8px;
+  border-radius: var(--r-m);
   background: var(--panel);
   border: 1px solid var(--line);
   gap: 8px;
@@ -1996,7 +1996,7 @@
   background: var(--panel);
   border: 1px solid var(--line);
   color: var(--ink);
-  border-radius: 6px;
+  border-radius: var(--r-s);
 }
 
 .theme-modern .settings-drawer input:focus {
@@ -2008,7 +2008,7 @@
   background: var(--panel);
   border: 1px solid var(--line);
   color: var(--ink);
-  border-radius: 6px;
+  border-radius: var(--r-s);
 }
 
 .theme-modern .settings-drawer .inline-actions { gap: 6px; }
@@ -2034,7 +2034,7 @@
 .theme-modern .path-history-dropdown {
   background: var(--panel) !important;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--r-s);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
   margin: 4px 10px;
   padding: 2px 0;
@@ -2143,7 +2143,7 @@
   min-height: 32px;
   padding: 0 12px;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--r-m);
   background: var(--panel-muted);
 }
 
@@ -2464,7 +2464,7 @@ body.is-resizing-tree .theme-modern .browser-resizer::after {
 .theme-modern .file-action-icon {
   background: transparent !important;
   color: var(--accent);
-  border-radius: 6px;
+  border-radius: var(--r-s);
   box-shadow: none !important;
 }
 
@@ -2535,7 +2535,7 @@ body.is-resizing-tree .theme-modern .browser-resizer::after {
 }
 
 .theme-modern .file-select-cell {
-  border-radius: 8px;
+  border-radius: var(--r-m);
 }
 
 .theme-modern .file-select-cell:hover {
@@ -2702,7 +2702,7 @@ body.is-resizing-tree .theme-modern .browser-resizer::after {
   min-height: 28px;
   padding: 0;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--r-m);
   background: rgba(15, 23, 42, 0.06);
   color: #334155;
   box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.24);
@@ -3057,7 +3057,7 @@ body.is-resizing-tree .theme-modern .browser-resizer::after {
 /* --- 21. 空状态 --- */
 .theme-modern .viewer-empty-state {
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--r-l);
   background: var(--panel);
   padding: 32px 24px;
   gap: 10px;
@@ -3077,7 +3077,7 @@ body.is-resizing-tree .theme-modern .browser-resizer::after {
 
 .theme-modern .workspace-placeholder {
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--r-l);
   background: var(--panel);
   margin: 16px;
   padding: 32px 24px;
@@ -3136,7 +3136,7 @@ body.is-resizing-tree .theme-modern .browser-resizer::after {
 /* --- 23. 搜索匹配列表 --- */
 .theme-modern .search-match-item {
   border: none;
-  border-radius: 6px;
+  border-radius: var(--r-s);
   background: var(--panel);
   padding: 6px 10px;
   gap: 8px;
@@ -3162,7 +3162,7 @@ body.is-resizing-tree .theme-modern .browser-resizer::after {
 /* --- 24. Reader Preview --- */
 .theme-modern .reader-preview-card {
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--r-m);
   background: var(--panel);
   padding: 8px 10px;
   gap: 6px;
@@ -3178,7 +3178,7 @@ body.is-resizing-tree .theme-modern .browser-resizer::after {
 }
 
 .theme-modern .reader-preview-body {
-  border-radius: 6px;
+  border-radius: var(--r-s);
   background: var(--panel-muted);
   padding: 6px 8px;
   font-size: var(--fs-2xs);
@@ -3248,7 +3248,7 @@ body.is-resizing-tree .theme-modern .browser-resizer::after {
   width: 100%;
   height: 30px;
   font-size: var(--fs-xs);
-  border-radius: 6px;
+  border-radius: var(--r-s);
   border: 1px solid var(--line);
   background: var(--panel);
   color: var(--ink);
@@ -3307,7 +3307,7 @@ body.is-resizing-tree .theme-modern .browser-resizer::after {
 
 .theme-modern .reader-position-card {
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--r-s);
   background: var(--panel-muted);
   padding: 4px 8px;
   box-shadow: none;
@@ -3345,7 +3345,7 @@ body.is-resizing-tree .theme-modern .browser-resizer::after {
 /* --- 27. 跳板机资产 --- */
 .theme-modern .jumpserver-asset-item {
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--r-s);
   background: var(--panel);
   padding: 6px 10px;
   gap: 4px;
@@ -3371,7 +3371,7 @@ body.is-resizing-tree .theme-modern .browser-resizer::after {
 
 /* --- 28. Checkbox, Spinner & Regex Pill --- */
 .theme-modern .checkbox-inline {
-  border-radius: 6px;
+  border-radius: var(--r-s);
   border: 1px solid var(--line);
   padding: 6px 10px;
   gap: 6px;
@@ -3414,7 +3414,7 @@ body.is-resizing-tree .theme-modern .browser-resizer::after {
 /* --- 29. 工作区启动卡片 --- */
 .theme-modern .workspace-startup-card {
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--r-m);
   background: var(--panel);
   padding: 12px 16px;
   margin: 8px 12px;
@@ -3431,7 +3431,7 @@ body.is-resizing-tree .theme-modern .browser-resizer::after {
 
 /* --- 30. 跳板机终端 --- */
 .theme-modern .jump-terminal-surface {
-  border-radius: 8px;
+  border-radius: var(--r-m);
   border: none;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   overflow: hidden;
@@ -3592,7 +3592,7 @@ body.is-resizing-tree .theme-modern .browser-resizer::after {
 }
 
 .theme-modern .utility-workspace-tab {
-  border-radius: 8px;
+  border-radius: var(--r-m);
   background: rgba(255, 255, 255, 0.96);
   color: var(--ink-soft);
   border: 1px solid var(--line);
@@ -3689,7 +3689,7 @@ body.is-resizing-tree .theme-modern .browser-resizer::after {
 .theme-modern .context-menu {
   background: var(--panel) !important;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--r-m);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
 }
 
@@ -3723,7 +3723,7 @@ body.is-resizing-tree .theme-modern .browser-resizer::after {
 .theme-modern .confirm-dialog {
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--r-l);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.22);
 }
 
@@ -3743,7 +3743,7 @@ body.is-resizing-tree .theme-modern .browser-resizer::after {
   min-width: 56px;
   padding: 0 14px;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--r-s);
   font-family: var(--font-ui);
   font-size: var(--fs-xs);
   font-weight: 500;
@@ -4428,7 +4428,7 @@ body.is-electron .settings-exclusive-head input {
   color: var(--ink);
   background: var(--panel-strong);
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--r-s);
   cursor: pointer;
   transition: background 0.12s, border-color 0.12s;
 }
@@ -4493,7 +4493,7 @@ body.is-electron .settings-exclusive-head input {
   text-align: left;
   font-size: var(--fs-sm);
   color: var(--ink-soft);
-  border-radius: 6px;
+  border-radius: var(--r-s);
   cursor: pointer;
   transition: background 0.12s, color 0.12s;
 }
@@ -4732,7 +4732,7 @@ body.is-electron .settings-exclusive-head input {
      现在改成标准卡片：1px 全周边框 + 8px 圆角 + panel-strong 底。 */
   border: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--r-m);
   background: var(--panel-strong, var(--panel));
   padding: 0;
 }
@@ -4825,7 +4825,7 @@ body.is-electron .settings-exclusive-head input {
   text-align: left;
   padding: 8px 10px;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--r-s);
   background: var(--panel-strong);
   color: var(--ink);
   cursor: pointer;
@@ -4846,7 +4846,7 @@ body.is-electron .settings-exclusive-head input {
   padding: 5px 11px;
   font-size: var(--fs-xs);
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--r-s);
   background: var(--panel-strong);
   color: var(--ink);
   cursor: pointer;
@@ -4945,7 +4945,7 @@ body.is-electron .settings-exclusive-head input {
 .settings-pref-card {
   /* 2026-10-28 统一为 Figma 规范：1px 边框 / 8px 圆角 / panel-strong 底 */
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--r-m);
   background: var(--panel-strong, var(--panel));
   overflow: hidden;
 }
@@ -5356,7 +5356,7 @@ button.settings-pref-row + button.settings-pref-row,
   flex: 0 0 26px;
   width: 26px;
   height: 26px;
-  border-radius: 6px;
+  border-radius: var(--r-s);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -5453,7 +5453,7 @@ button.settings-pref-row + button.settings-pref-row,
   z-index: 60;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--r-m);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.14);
   padding: 5px;
   max-height: 300px;
@@ -5513,7 +5513,7 @@ button.settings-pref-row + button.settings-pref-row,
 .toolbar-summary .summary-nav .ghost-button { width: 20px; height: 20px; padding: 0; font-size: var(--fs-2xs); color: var(--ink-muted); border: none; background: none; }
 .toolbar-summary .summary-nav .ghost-button:hover { color: var(--ink); background: var(--panel-muted); }
 .toolbar-summary .summary-nav-count { font-family: var(--mono-font-family); font-size: var(--fs-2xs); color: var(--ink); min-width: 36px; text-align: center; }
-.summary-seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.summary-seg { display: inline-flex; border: 1px solid var(--line); border-radius: var(--r-s); overflow: hidden; }
 .summary-seg button {
   height: 22px;
   padding: 0 10px;
@@ -5919,7 +5919,7 @@ button.settings-pref-row + button.settings-pref-row,
   display: inline-flex;
   align-items: center;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--r-m);
   overflow: hidden;
   background: var(--panel);
   flex: none;
@@ -6221,7 +6221,7 @@ button.settings-pref-row + button.settings-pref-row,
   padding: 8px 10px;
   border: none;
   background: none;
-  border-radius: 6px;
+  border-radius: var(--r-s);
   font: inherit;
   font-size: var(--fs-sm);
   color: var(--ink);
@@ -6688,7 +6688,7 @@ button.settings-pref-row + button.settings-pref-row,
      原来它比同页其它卡片圆角大 2px、底色深一档，看起来「不像同一组」。
      另加 margin-top：展开区上方与上一张卡留 14px，避免视觉上贴住。 */
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--r-m);
   background: var(--panel-strong, var(--panel));
   margin: 14px 0;
 }

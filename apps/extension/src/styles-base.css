@@ -79,7 +79,7 @@ html:has(.pip-terminal-standalone) #root {
   z-index: 9999;
   max-width: min(360px, calc(100vw - 24px));
   padding: 6px 9px;
-  border-radius: 6px;
+  border-radius: var(--r-s);
   background: var(--panel, #ffffff);
   color: var(--ink, #1f2a37);
   font-size: var(--fs-2xs, 11px);
