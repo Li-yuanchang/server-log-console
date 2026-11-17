@@ -6,21 +6,14 @@ import "./fonts.css";
 import "./styles.css";
 import "./theme-modern.css";
 import "./theme-modern-v2.css";
-// 原型 1:1 对齐批次（隔离文件，最后加载以覆盖旧规则）
-import "./align-s5-terminal.css";
-import "./align-s7-s8.css";
-import "./align-s9-monitor.css";
-import "./align-s4-s6.css";
-import "./align-s10-s14.css";
 // 服务器性能监控面板（B 骨架 + A 磁盘块，2026-10 重设计）：
-// smp- 前缀 + container query 响应式，须在 align-s9-monitor 之后加载以接管旧 server-status-* 的视觉
+// smp- 前缀 + container query 响应式，须在 theme-modern-v2.css（其 §35 已收编旧
+// server-status-* 对齐规则）之后加载以接管旧 server-status-* 的视觉
 import "./styles-server-monitor.css";
-// 内嵌日志/切片查看区改浅色（对齐原型 S1/S3/S4；勿影响 S7 弹窗/终端/PiP 的深色）
-import "./align-log-light.css";
-// 选中态统一：tab/分段/胶囊 = 无实底 + accent 文字（用户决策 2026-09-30）
-import "./align-selected.css";
-// 控件统一：深色表面按钮护栏 + 「检索│LIVE」竖线（用户决策 2026-09-30）
-import "./align-controls.css";
+// 注：原型 1:1 对齐补丁 8 文件（内嵌日志浅色 / 选中态统一 / 控件统一 / S7·S8 预览与传输 /
+// S9 监控抽屉 / S4·S6 切片条与文件浏览 / S5 终端工作台 / S10 设置中心·S12 空态·S14 外观
+// 主题）已于 2026-11-16 全部收编进 theme-modern-v2.css §31-38（文件末尾、按原批次加载
+// 顺序保序），规则与决策注释原样搬迁；align-*.css 至此全部退役清零。
 // 空状态工作台 + 侧栏底部五态状态条（方案 A 定稿 2026-10-04，
 // 原型 empty-states-a-v2.html；须在 theme-modern-v2 之后、styles-sidepanel 之前）
 import "./styles-empty-workbench.css";
@@ -30,6 +23,10 @@ import "./styles-empty-state.css";
 import "./styles-sidepanel.css";
 // 批量日志（多节点）：批量录制面板 / 多窗格实时视墙 / 结果条（2026-11-04）
 import "./styles-multi-node.css";
+// 统一工作台（2026-11-17）：控件几何收口层 —— 高度/圆角/字号/焦点/动效一套口径，
+// 外加「厂」字框与内凹工作区。必须最后加载：它要接管前面各文件用 !important
+// 压下来的历史几何（见文件头说明），颜色仍全部走既有 token。
+import "./styles-unify.css";
 
 /** 最小 ErrorBoundary：渲染期未捕获错误（含 PiP 搬迁等 DOM 失配引发的 reconcile 崩溃）
     时显示可见降级页（错误摘要 + 刷新按钮），而不是整页白屏。 */
