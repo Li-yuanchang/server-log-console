@@ -21,11 +21,15 @@
  *   node scripts/audit-color-tokens.mjs --json      # 机器可读
  *   node scripts/audit-color-tokens.mjs --apply     # 就地替换（生成 .bak）
  *   node scripts/audit-color-tokens.mjs --apply --only=vrc   # 只替换 VRC 色板
+ *
+ * 2026-11 重构说明：扫描核心抽成了导出纯函数 scanColorLiterals()，
+ * 供 scripts/style-budget.mjs 复用；CLI 行为与输出保持不变
+ * （仅当本文件被 node 直接执行时才进入命令行模式，被 import 时只暴露函数）。
  */
 
 import { readFileSync, writeFileSync, readdirSync, copyFileSync } from "node:fs";
 import { join, dirname, basename } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const SRC = join(ROOT, "apps", "extension", "src");
@@ -196,199 +200,228 @@ function findPropKind(line, hexToken) {
   return lastKind ?? "bg";
 }
 
-const files = readdirSync(SRC).filter((f) => f.endsWith(".css") && !SKIP_FILES.has(f));
+/**
+ * 扫描核心（导出纯函数）：
+ * 遍历 srcDir 下不在 SKIP_FILES 里的 *.css，统计「没走 token 的字面色」。
+ * 不打印、不写任何文件，返回：
+ *   { files, hits, unknown, fallbackCount }
+ *   - hits:   色板（VRC/tailwind）命中的字面色明细（hex 与 rgba 各一类，rawKind 区分）
+ *   - unknown: Map<hex, 次数>，不在色板里的字面色（无法给出替换建议，只计数）
+ *   - fallbackCount: var(--token, #hex) 兜底值出现次数（已走 token，不计入字面色）
+ */
+export function scanColorLiterals(srcDir = SRC) {
+  const files = readdirSync(srcDir).filter((f) => f.endsWith(".css") && !SKIP_FILES.has(f));
 
-const hits = [];
-const unknown = new Map();
-let fallbackCount = 0;
+  const hits = [];
+  const unknown = new Map();
+  let fallbackCount = 0;
 
-for (const file of files) {
-  const lines = readFileSync(join(SRC, file), "utf8").split("\n");
-  lines.forEach((line, i) => {
-    const trimmed = line.trim();
-    if (trimmed.startsWith("*") || trimmed.startsWith("/*") || trimmed.startsWith("//")) return;
-
-    // 保护 var() fallback，不把它们当硬编码也不替换
-    let scanLine = line;
-    for (const m of line.matchAll(VAR_FALLBACK_RE)) {
-      fallbackCount += 1;
-      scanLine = scanLine.replace(m[0], "__VAR__");
-    }
-
-    for (const m of scanLine.matchAll(HEX_RE)) {
-      const hex = expandShortHex(m[0].toLowerCase());
-      const vrc = VRC_SAGE[hex];
-      const tw = TAILWIND[hex];
-      const table = vrc ? VRC_SAGE : tw ? TAILWIND : null;
-      if (!table) {
-        unknown.set(hex, (unknown.get(hex) ?? 0) + 1);
-        continue;
-      }
-      const kind = findPropKind(scanLine, m[0]);
-      const token = table[hex][kind] ?? table[hex].bg ?? table[hex].fg ?? table[hex].border;
-      if (!token) {
-        unknown.set(hex, (unknown.get(hex) ?? 0) + 1);
-        continue;
-      }
-      hits.push({
-        file, line: i + 1, hex: m[0], norm: hex, kind, token,
-        palette: vrc ? "VRC-sage" : "tailwind",
-        rawKind: "hex",
-        source: line.trim(),
-      });
-    }
-
-    // rgba 里的三元组：只报告，不自动替换（透明度语义需人工判断）
-    for (const m of scanLine.matchAll(RGBA_RE)) {
-      const hex = rgbToHex(m[1], m[2], m[3]);
-      const vrc = VRC_SAGE[hex];
-      const tw = TAILWIND[hex];
-      if (!vrc && !tw) continue;
-      const table = vrc ? VRC_SAGE : TAILWIND;
-      const kind = findPropKind(scanLine, hex);
-      hits.push({
-        file, line: i + 1, hex, norm: hex, kind, token: table[hex][kind] ?? table[hex].bg,
-        palette: vrc ? "VRC-sage" : "tailwind",
-        rawKind: "rgba",
-        source: line.trim(),
-      });
-    }
-  });
-}
-
-const args = process.argv.slice(2);
-const asJson = args.includes("--json");
-const apply = args.includes("--apply");
-const onlyArg = args.find((a) => a.startsWith("--only="));
-const onlyPalette = onlyArg ? onlyArg.split("=")[1] : null;
-
-if (asJson) {
-  console.log(JSON.stringify({ hits, unknown: Object.fromEntries(unknown) }, null, 2));
-  process.exit(0);
-}
-
-/* ---------- 报告 ---------- */
-
-const hexOnly = hits.filter((h) => h.rawKind === "hex");
-const rgbaOnly = hits.filter((h) => h.rawKind === "rgba");
-const byPalette = { "VRC-sage": [], tailwind: [] };
-for (const h of hexOnly) (byPalette[h.palette] ??= []).push(h);
-
-console.log("=".repeat(78));
-console.log("色板审计：未走 token 的字面色（已按属性语义分类）");
-console.log("=".repeat(78));
-console.log(`扫描 apps/extension/src/*.css，排除 ${[...SKIP_FILES].join(", ")}`);
-console.log(`可自动替换（裸 hex）：${hexOnly.length} 处   |   VRC-sage ${(byPalette["VRC-sage"] ?? []).length}  |  tailwind ${(byPalette.tailwind ?? []).length}`);
-console.log(`需人工判断（rgba 半透明）：${rgbaOnly.length} 处`);
-console.log(`var() fallback 兜底值（已走 token，不动）：${fallbackCount} 处`);
-console.log(`未归类色：${unknown.size} 种`);
-console.log("");
-
-for (const palette of ["VRC-sage", "tailwind"]) {
-  const list = byPalette[palette] ?? [];
-  if (!list.length) continue;
-  console.log("-".repeat(78));
-  console.log(palette === "VRC-sage"
-    ? "③ VRC sage/olive 色板（与本项目色温冲突，优先清理）"
-    : "② Tailwind slate/blue 色板（与本项目 geist 灰重复，收敛到 token）");
-  console.log("-".repeat(78));
-
-  const byFile = new Map();
-  for (const h of list) {
-    if (!byFile.has(h.file)) byFile.set(h.file, []);
-    byFile.get(h.file).push(h);
-  }
-  for (const [file, items] of [...byFile.entries()].sort((a, b) => b[1].length - a[1].length)) {
-    console.log(`\n${file}  (${items.length} 处)`);
-    for (const h of items) {
-      console.log(`  ${String(h.line).padStart(5)}  ${h.hex.padEnd(8)} [${h.kind}] → var(${h.token})`);
-      console.log(`         ${h.source.slice(0, 96)}`);
-    }
-  }
-  console.log("");
-}
-
-if (rgbaOnly.length) {
-  console.log("-".repeat(78));
-  console.log("rgba 半透明色（需人工决定透明度语义，脚本不自动改）");
-  console.log("-".repeat(78));
-  const byHex = new Map();
-  for (const h of rgbaOnly) {
-    const k = h.norm;
-    if (!byHex.has(k)) byHex.set(k, []);
-    byHex.get(k).push(h);
-  }
-  for (const [hex, items] of [...byHex.entries()].sort((a, b) => b[1].length - a[1].length)) {
-    console.log(`  ${hex}  ${items.length} 处   建议改 color-mix(in srgb, var(${items[0].token}) N%, transparent)`);
-    for (const h of items.slice(0, 4)) {
-      console.log(`      ${h.file}:${h.line}  ${h.source.slice(0, 84)}`);
-    }
-    if (items.length > 4) console.log(`      … 另 ${items.length - 4} 处`);
-  }
-  console.log("");
-}
-
-if (unknown.size) {
-  console.log("-".repeat(78));
-  console.log("未归类色（项目自有 / 一次性色，需人工确认）");
-  console.log("-".repeat(78));
-  for (const [hex, c] of [...unknown.entries()].sort((a, b) => b[1] - a[1]).slice(0, 30)) {
-    console.log(`  ${hex.padEnd(10)} × ${c}`);
-  }
-  console.log("");
-}
-
-/* ---------- 替换 ---------- */
-
-if (apply) {
-  console.log("=".repeat(78));
-  console.log(`开始就地替换${onlyPalette ? `（仅 ${onlyPalette}）` : ""}`);
-  console.log("=".repeat(78));
-
-  const targets = hexOnly.filter((h) => !onlyPalette || h.palette === onlyPalette);
-
-  // file → Map(小写hex → token)；同一文件里同一 hex 可能有不同属性语义，
-  // 所以键用 "hex|kind"
-  const perFile = new Map();
-  for (const h of targets) {
-    if (!perFile.has(h.file)) perFile.set(h.file, new Map());
-    perFile.get(h.file).set(`${h.norm}|${h.kind}`, h.token);
-  }
-
-  let grandTotal = 0;
-  for (const [file, map] of perFile) {
-    const path = join(SRC, file);
-    copyFileSync(path, `${path}.bak`);
-    const lines = readFileSync(path, "utf8").split("\n");
-    let count = 0;
-
-    const out = lines.map((line) => {
+  for (const file of files) {
+    const lines = readFileSync(join(srcDir, file), "utf8").split("\n");
+    lines.forEach((line, i) => {
       const trimmed = line.trim();
-      if (trimmed.startsWith("*") || trimmed.startsWith("/*") || trimmed.startsWith("//")) return line;
+      if (trimmed.startsWith("*") || trimmed.startsWith("/*") || trimmed.startsWith("//")) return;
 
-      // 先把 var() fallback 藏起来
-      const slots = [];
-      let protectedLine = line.replace(VAR_FALLBACK_RE, (m) => {
-        slots.push(m);
-        return `__FB${slots.length - 1}__`;
-      });
+      // 保护 var() fallback，不把它们当硬编码也不替换
+      let scanLine = line;
+      for (const m of line.matchAll(VAR_FALLBACK_RE)) {
+        fallbackCount += 1;
+        scanLine = scanLine.replace(m[0], "__VAR__");
+      }
 
-      const replacedLine = protectedLine.replace(HEX_RE, (m) => {
-        const norm = expandShortHex(m.toLowerCase());
-        const kind = findPropKind(protectedLine, m);
-        const token = map.get(`${norm}|${kind}`) ?? map.get(`${norm}|bg`);
-        if (!token) return m;
-        count += 1;
-        return `var(${token})`;
-      });
+      for (const m of scanLine.matchAll(HEX_RE)) {
+        const hex = expandShortHex(m[0].toLowerCase());
+        const vrc = VRC_SAGE[hex];
+        const tw = TAILWIND[hex];
+        const table = vrc ? VRC_SAGE : tw ? TAILWIND : null;
+        if (!table) {
+          unknown.set(hex, (unknown.get(hex) ?? 0) + 1);
+          continue;
+        }
+        const kind = findPropKind(scanLine, m[0]);
+        const token = table[hex][kind] ?? table[hex].bg ?? table[hex].fg ?? table[hex].border;
+        if (!token) {
+          unknown.set(hex, (unknown.get(hex) ?? 0) + 1);
+          continue;
+        }
+        hits.push({
+          file, line: i + 1, hex: m[0], norm: hex, kind, token,
+          palette: vrc ? "VRC-sage" : "tailwind",
+          rawKind: "hex",
+          source: line.trim(),
+        });
+      }
 
-      // 还原 fallback
-      return replacedLine.replace(/__FB(\d+)__/g, (_, idx) => slots[Number(idx)]);
+      // rgba 里的三元组：只报告，不自动替换（透明度语义需人工判断）
+      for (const m of scanLine.matchAll(RGBA_RE)) {
+        const hex = rgbToHex(m[1], m[2], m[3]);
+        const vrc = VRC_SAGE[hex];
+        const tw = TAILWIND[hex];
+        if (!vrc && !tw) continue;
+        const table = vrc ? VRC_SAGE : TAILWIND;
+        const kind = findPropKind(scanLine, hex);
+        hits.push({
+          file, line: i + 1, hex, norm: hex, kind, token: table[hex][kind] ?? table[hex].bg,
+          palette: vrc ? "VRC-sage" : "tailwind",
+          rawKind: "rgba",
+          source: line.trim(),
+        });
+      }
     });
-
-    writeFileSync(path, out.join("\n"));
-    grandTotal += count;
-    console.log(`  ${file.padEnd(32)} ${String(count).padStart(4)} 处`);
   }
-  console.log(`\n合计替换 ${grandTotal} 处。备份为 *.bak，回退：for f in apps/extension/src/*.bak; do mv "$f" "\${f%.bak}"; done`);
+
+  return { files, hits, unknown, fallbackCount };
+}
+
+export { SKIP_FILES };
+
+/* ============================================================
+   CLI（仅直接执行本文件时运行；被 import 时不执行任何扫描）
+   ============================================================ */
+
+function main() {
+  const { hits, unknown, fallbackCount } = scanColorLiterals(SRC);
+
+  const args = process.argv.slice(2);
+  const asJson = args.includes("--json");
+  const apply = args.includes("--apply");
+  const onlyArg = args.find((a) => a.startsWith("--only="));
+  const onlyPalette = onlyArg ? onlyArg.split("=")[1] : null;
+
+  if (asJson) {
+    console.log(JSON.stringify({ hits, unknown: Object.fromEntries(unknown) }, null, 2));
+    process.exit(0);
+  }
+
+  /* ---------- 报告 ---------- */
+
+  const hexOnly = hits.filter((h) => h.rawKind === "hex");
+  const rgbaOnly = hits.filter((h) => h.rawKind === "rgba");
+  const byPalette = { "VRC-sage": [], tailwind: [] };
+  for (const h of hexOnly) (byPalette[h.palette] ??= []).push(h);
+
+  console.log("=".repeat(78));
+  console.log("色板审计：未走 token 的字面色（已按属性语义分类）");
+  console.log("=".repeat(78));
+  console.log(`扫描 apps/extension/src/*.css，排除 ${[...SKIP_FILES].join(", ")}`);
+  console.log(`可自动替换（裸 hex）：${hexOnly.length} 处   |   VRC-sage ${(byPalette["VRC-sage"] ?? []).length}  |  tailwind ${(byPalette.tailwind ?? []).length}`);
+  console.log(`需人工判断（rgba 半透明）：${rgbaOnly.length} 处`);
+  console.log(`var() fallback 兜底值（已走 token，不动）：${fallbackCount} 处`);
+  console.log(`未归类色：${unknown.size} 种`);
+  console.log("");
+
+  for (const palette of ["VRC-sage", "tailwind"]) {
+    const list = byPalette[palette] ?? [];
+    if (!list.length) continue;
+    console.log("-".repeat(78));
+    console.log(palette === "VRC-sage"
+      ? "③ VRC sage/olive 色板（与本项目色温冲突，优先清理）"
+      : "② Tailwind slate/blue 色板（与本项目 geist 灰重复，收敛到 token）");
+    console.log("-".repeat(78));
+
+    const byFile = new Map();
+    for (const h of list) {
+      if (!byFile.has(h.file)) byFile.set(h.file, []);
+      byFile.get(h.file).push(h);
+    }
+    for (const [file, items] of [...byFile.entries()].sort((a, b) => b[1].length - a[1].length)) {
+      console.log(`\n${file}  (${items.length} 处)`);
+      for (const h of items) {
+        console.log(`  ${String(h.line).padStart(5)}  ${h.hex.padEnd(8)} [${h.kind}] → var(${h.token})`);
+        console.log(`         ${h.source.slice(0, 96)}`);
+      }
+    }
+    console.log("");
+  }
+
+  if (rgbaOnly.length) {
+    console.log("-".repeat(78));
+    console.log("rgba 半透明色（需人工决定透明度语义，脚本不自动改）");
+    console.log("-".repeat(78));
+    const byHex = new Map();
+    for (const h of rgbaOnly) {
+      const k = h.norm;
+      if (!byHex.has(k)) byHex.set(k, []);
+      byHex.get(k).push(h);
+    }
+    for (const [hex, items] of [...byHex.entries()].sort((a, b) => b[1].length - a[1].length)) {
+      console.log(`  ${hex}  ${items.length} 处   建议改 color-mix(in srgb, var(${items[0].token}) N%, transparent)`);
+      for (const h of items.slice(0, 4)) {
+        console.log(`      ${h.file}:${h.line}  ${h.source.slice(0, 84)}`);
+      }
+      if (items.length > 4) console.log(`      … 另 ${items.length - 4} 处`);
+    }
+    console.log("");
+  }
+
+  if (unknown.size) {
+    console.log("-".repeat(78));
+    console.log("未归类色（项目自有 / 一次性色，需人工确认）");
+    console.log("-".repeat(78));
+    for (const [hex, c] of [...unknown.entries()].sort((a, b) => b[1] - a[1]).slice(0, 30)) {
+      console.log(`  ${hex.padEnd(10)} × ${c}`);
+    }
+    console.log("");
+  }
+
+  /* ---------- 替换 ---------- */
+
+  if (apply) {
+    console.log("=".repeat(78));
+    console.log(`开始就地替换${onlyPalette ? `（仅 ${onlyPalette}）` : ""}`);
+    console.log("=".repeat(78));
+
+    const targets = hexOnly.filter((h) => !onlyPalette || h.palette === onlyPalette);
+
+    // file → Map(小写hex → token)；同一文件里同一 hex 可能有不同属性语义，
+    // 所以键用 "hex|kind"
+    const perFile = new Map();
+    for (const h of targets) {
+      if (!perFile.has(h.file)) perFile.set(h.file, new Map());
+      perFile.get(h.file).set(`${h.norm}|${h.kind}`, h.token);
+    }
+
+    let grandTotal = 0;
+    for (const [file, map] of perFile) {
+      const path = join(SRC, file);
+      copyFileSync(path, `${path}.bak`);
+      const lines = readFileSync(path, "utf8").split("\n");
+      let count = 0;
+
+      const out = lines.map((line) => {
+        const trimmed = line.trim();
+        if (trimmed.startsWith("*") || trimmed.startsWith("/*") || trimmed.startsWith("//")) return line;
+
+        // 先把 var() fallback 藏起来
+        const slots = [];
+        let protectedLine = line.replace(VAR_FALLBACK_RE, (m) => {
+          slots.push(m);
+          return `__FB${slots.length - 1}__`;
+        });
+
+        const replacedLine = protectedLine.replace(HEX_RE, (m) => {
+          const norm = expandShortHex(m.toLowerCase());
+          const kind = findPropKind(protectedLine, m);
+          const token = map.get(`${norm}|${kind}`) ?? map.get(`${norm}|bg`);
+          if (!token) return m;
+          count += 1;
+          return `var(${token})`;
+        });
+
+        // 还原 fallback
+        return replacedLine.replace(/__FB(\d+)__/g, (_, idx) => slots[Number(idx)]);
+      });
+
+      writeFileSync(path, out.join("\n"));
+      grandTotal += count;
+      console.log(`  ${file.padEnd(32)} ${String(count).padStart(4)} 处`);
+    }
+    console.log(`\n合计替换 ${grandTotal} 处。备份为 *.bak，回退：for f in apps/extension/src/*.bak; do mv "$f" "\${f%.bak}"; done`);
+  }
+}
+
+// 直接执行检测：`node scripts/audit-color-tokens.mjs ...` 时 argv[1] 是本文件；
+// 被别的脚本 import 时 argv[1] 是调用方脚本，此时不进入 CLI。
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main();
 }

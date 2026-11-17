@@ -1,0 +1,89 @@
+{
+  "collectedAt": "2026-11-16",
+  "generator": "node scripts/style-budget.mjs --update-baseline",
+  "sourceDir": "apps/extension/src",
+  "notes": [
+    "预算原则：任一指标 current 不得超过 budget；budget 不高于 baseline（只许降不许升）。",
+    "align-* 是迁移期 1:1 对齐补丁批次，长期目标是折回主样式文件后清零（target 0）。",
+    "字面色口径 = CSS 规则体里非 token 定义行的 hex/rgb(a) 字面值；排除注释、",
+    "自定义属性定义行、var() 兜底值（hex 与 rgba），文件集与 audit-color-tokens 的 SKIP_FILES 同步。",
+    "裸 font-size：docs §10.3 团队口径应为 0，采集日实测尚有存量（后续新文件带回），只许降。",
+    "--v2-* 是待合并 token 家族（--v2-radius-* / --v2-shadow-pop / --v2-mono），迁移后预算归 0。"
+  ],
+  "metrics": {
+    "alignFiles": {
+      "label": "align-*.css 文件数",
+      "baseline": 0,
+      "budget": 0,
+      "target": 0,
+      "perFile": {}
+    },
+    "alignLines": {
+      "label": "align-*.css 总行数",
+      "baseline": 0,
+      "budget": 0,
+      "target": 0,
+      "perFile": {}
+    },
+    "literalColors": {
+      "label": "字面色总数（hex+rgb/rgba）",
+      "baseline": 769,
+      "budget": 769,
+      "perFile": {
+        "styles-base.css": 1,
+        "styles-dialogs-transfer.css": 209,
+        "styles-empty-state.css": 20,
+        "styles-file-reader.css": 69,
+        "styles-import-preview.css": 22,
+        "styles-layout.css": 1,
+        "styles-multi-node.css": 4,
+        "styles-pip-toast.css": 30,
+        "styles-responsive.css": 40,
+        "styles-security-settings.css": 14,
+        "styles-server-monitor.css": 1,
+        "styles-sidebar-toolbar.css": 29,
+        "styles-terminal-history.css": 4,
+        "styles-terminal-workspace.css": 34,
+        "styles-transfer-pip.css": 3,
+        "styles-tsc.css": 151,
+        "styles-upload-conflict.css": 7,
+        "styles-viewer-search.css": 130
+      }
+    },
+    "bareFontSize": {
+      "label": "裸 font-size 声明数",
+      "baseline": 194,
+      "budget": 194,
+      "target": 0,
+      "pxLiteral": 184,
+      "perFile": {
+        "styles-dialogs-transfer.css": 34,
+        "styles-empty-state.css": 19,
+        "styles-empty-workbench.css": 21,
+        "styles-file-reader.css": 1,
+        "styles-import-preview.css": 11,
+        "styles-pip-toast.css": 1,
+        "styles-responsive.css": 4,
+        "styles-security-settings.css": 5,
+        "styles-server-monitor.css": 15,
+        "styles-sidebar-toolbar.css": 16,
+        "styles-terminal-history.css": 5,
+        "styles-terminal-workspace.css": 2,
+        "styles-transfer-pip.css": 9,
+        "styles-tsc.css": 2,
+        "styles-upload-conflict.css": 10,
+        "styles-viewer-search.css": 1,
+        "theme-modern-v2.css": 35,
+        "theme-modern.css": 3
+      }
+    },
+    "v2TokenRefs": {
+      "label": "--v2-* 重复 token 引用数",
+      "baseline": 0,
+      "budget": 0,
+      "target": 0,
+      "definitions": 0,
+      "perFile": {}
+    }
+  }
+}

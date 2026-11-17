@@ -11,6 +11,7 @@
   ],
   "scripts": {
     "build:extension": "npm --prefix apps/extension run build",
-    "release:update": "node scripts/prepare-online-update-release.mjs"
+    "release:update": "node scripts/prepare-online-update-release.mjs",
+    "style:guard": "node scripts/style-budget.mjs"
   }
 }
