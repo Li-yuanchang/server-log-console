@@ -7,7 +7,7 @@ import { formatKeyHint } from "./key-hints.js";
              来自网关每 10s 采集，整组可点打开监控）；
         右 = UTF-8 · ⌘R 历史 · ⌘F 查找 提示。
    悬浮提示一律用原生 title 属性（ImmediateTooltip 会拦截 [title] 渲染即时提示），不另造 tooltip。
-   样式类前缀 terminal-statusbar-*，定义在 align-s5-terminal.css 第 9 节。 */
+   样式类前缀 terminal-statusbar-*，定义在 theme-modern-v2.css §37 收编节第 9 节。 */
 
 /** 已连接时长自刷间隔（ms）：只在时长组件内部 setInterval，避免状态栏整树高频重渲 */
 const CONNECTED_DURATION_REFRESH_MS = 30_000;

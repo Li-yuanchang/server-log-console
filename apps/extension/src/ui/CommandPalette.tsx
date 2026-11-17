@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { Command as CommandIcon, FileText, Folder, Plug, Terminal, Zap } from "lucide-react";
 import { formatKeyHint } from "./key-hints.js";
+import { ThemePortal } from "./ThemePortal.js";
 
 export type PaletteCommand = {
   id: string;
@@ -49,16 +49,9 @@ export function CommandPalette(props: { open: boolean; onClose: () => void; comm
   if (!props.open) return null;
 
   let lastGroup = "";
-  return createPortal(
-    // R1：portal 到 document.body 会落在 .theme-modern 之外，命令面板底色/选中色
-    // 回落经典主题。补 display:contents 的壳恢复令牌作用域；类名复制自主界面
-    // .app-shell，确保 ui-surface-paper 等皮肤令牌同步（否则 --panel 回落纯白）。
-    <div
-      className={typeof document !== "undefined"
-        ? document.querySelector(".app-shell")?.className ?? "theme-modern"
-        : "theme-modern"}
-      style={{ display: "contents" }}
-    >
+  return (
+    // R1 主题壳：portal 内容包 display:contents 壳恢复 .theme-modern 令牌作用域（见 ThemePortal）
+    <ThemePortal>
       <div className="palette-overlay" role="presentation" onClick={props.onClose}>
         <div className="palette-box" role="dialog" aria-label="命令面板" onClick={(e) => e.stopPropagation()}>
           <div className="palette-input-row">
@@ -120,7 +113,6 @@ export function CommandPalette(props: { open: boolean; onClose: () => void; comm
           </div>
         </div>
       </div>
-    </div>,
-    document.body
+    </ThemePortal>
   );
 }

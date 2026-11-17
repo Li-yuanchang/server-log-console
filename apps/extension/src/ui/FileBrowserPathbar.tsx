@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { RefObject } from "react";
+import { getPortalContainer } from "./ThemePortal.js";
 
 type BreadcrumbItem = { label: string; path: string };
 
@@ -162,9 +163,8 @@ export function FileBrowserPathbar(props: Props) {
   /* 被折进「…」的层级（不含首段，首段始终保留作定位锚点） */
   const hiddenItems = collapsed ? items.slice(1, tailStart) : [];
 
-  const portalTarget = typeof document !== "undefined"
-    ? (document.querySelector(".app-shell") as HTMLElement | null) ?? document.body
-    : null;
+  /* 「…」弹层直接挂进 .app-shell（主题容器），见 ThemePortal.getPortalContainer */
+  const portalTarget = getPortalContainer();
 
   return (
     <>

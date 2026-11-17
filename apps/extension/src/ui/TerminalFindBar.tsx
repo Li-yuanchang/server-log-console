@@ -9,7 +9,7 @@ interface TerminalFindBarProps {
   onInputKeyDown?: (e: KeyboardEvent<HTMLInputElement>) => void;
 }
 
-/** 终端悬浮查找条（对应原型 T3 悬浮查找条）：右上角白底浮层，样式见 align-s5-terminal.css 末节 */
+/** 终端悬浮查找条（对应原型 T3 悬浮查找条）：右上角白底浮层，样式见 theme-modern-v2.css §37 收编节（终端悬浮查找条） */
 export function TerminalFindBar({ search, onInputKeyDown }: TerminalFindBarProps) {
   // 无命中时显示 0/0；index 为 -1（超出高亮上限）时按 0 显示
   const countText = search.total > 0 ? `${search.index + 1}/${search.total}` : "0/0";

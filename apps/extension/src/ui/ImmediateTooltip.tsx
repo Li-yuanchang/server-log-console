@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { arrow, flip, offset, shift, useFloating } from "@floating-ui/react-dom";
+import { getPortalContainer } from "./ThemePortal.js";
 
 export function ImmediateTooltip({ ownerDocument }: { ownerDocument?: Document }) {
   const [tip, setTip] = useState<{ t: string; ref: HTMLElement } | null>(null);
@@ -80,8 +81,8 @@ export function ImmediateTooltip({ ownerDocument }: { ownerDocument?: Document }
   }, [ownerDocument]);
 
   const d = ownerDocument ?? document;
-  // 主题变量定义在 .app-shell（.theme-modern）上，portal 到 body 拿不到，需挂进主题容器
-  const portalTarget = (d.querySelector(".app-shell") as HTMLElement | null) ?? d.body;
+  // 主题变量定义在 .app-shell 上，直接挂进主题容器（可能是 PiP 独立 window 的 document），见 ThemePortal
+  const portalTarget = getPortalContainer(d);
   if (!tip || !portalTarget) return null;
   const arrowX = middlewareData.arrow?.x;
   const arrowY = middlewareData.arrow?.y;

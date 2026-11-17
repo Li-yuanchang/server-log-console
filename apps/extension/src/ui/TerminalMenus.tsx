@@ -2,7 +2,7 @@
  * TerminalMenus — 终端菜单组件族（对应原型 T3 工具行「更多」菜单 / T10 终端与标签页右键菜单）。
  *
  * 全部为纯受控组件：显隐由父级管理（父级条件渲染），定位由父级给 absolute 坐标
- * （组件渲染在终端容器内，外层 .terminal-menu-anchor 接收 style，见 align-s5-terminal.css §6）。
+ * （组件渲染在终端容器内，外层 .terminal-menu-anchor 接收 style，见 theme-modern-v2.css §37 收编节 §6）。
  * 点击菜单项后的关闭由父级负责（各项 onSelect 内自行调用 onClose）；组件内部只处理：
  *  - 菜单内的点击 / 右键不冒泡（避免触发终端自身的选中清除等处理）
  *  - 点击菜单外（document mousedown）/ Esc 关闭（通过 props.onClose 回调）

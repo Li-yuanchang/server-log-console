@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { createPortal } from "react-dom";
 import { Check, ChevronDown } from "lucide-react";
+import { ThemePortal } from "./ThemePortal.js";
 
 export type ThemedSelectOption<T extends string | number> = {
   value: T;
@@ -21,8 +21,8 @@ type Props<T extends string | number> = {
 };
 
 // 主题化下拉（原型 .input 形态 + 自绘菜单）：替代原生 <select>，
-// 菜单 portal 到 body 并 fixed 定位，避免被 overflow 容器裁剪；
-// 菜单壳复制 .app-shell 类名以继承皮肤令牌（与 Drawer 同理）。
+// 菜单经 ThemePortal portal 到 body 并 fixed 定位，避免被 overflow 容器裁剪、
+// 同时复制 .app-shell 类名以继承皮肤令牌。
 export function ThemedSelect<T extends string | number>(props: Props<T>) {
   const [open, setOpen] = useState(false);
   const [coords, setCoords] = useState<{ x: number; y: number; w: number } | null>(null);
@@ -81,10 +81,6 @@ export function ThemedSelect<T extends string | number>(props: Props<T>) {
     };
   }, [open]);
 
-  const shellClassName = typeof document !== "undefined"
-    ? document.querySelector(".app-shell")?.className ?? "theme-modern"
-    : "theme-modern";
-
   return (
     <>
       <button
@@ -101,8 +97,9 @@ export function ThemedSelect<T extends string | number>(props: Props<T>) {
         <span className="themed-select-value">{selected ? selected.label : "\u00a0"}</span>
         <ChevronDown size={13} strokeWidth={1.8} className="themed-select-chevron" aria-hidden="true" />
       </button>
-      {open && coords ? createPortal(
-        <div className={shellClassName} style={{ display: "contents" }}>
+      {open && coords ? (
+        /* R1 主题壳：portal 内容包 display:contents 壳恢复 .theme-modern 令牌作用域（见 ThemePortal） */
+        <ThemePortal>
           <div
             ref={menuRef}
             className="themed-select-menu"
@@ -142,8 +139,7 @@ export function ThemedSelect<T extends string | number>(props: Props<T>) {
               );
             })}
           </div>
-        </div>,
-        document.body,
+        </ThemePortal>
       ) : null}
     </>
   );

@@ -89,7 +89,7 @@ function buildTerminalTheme(schemeId: TerminalColorSchemeId | undefined, shellBg
     cursorAccent: shellBg || t.background,
     /* 选区色：xterm 6 的 DOM 渲染器会把该值预混合成不透明色再画
        （selectionBackgroundOpaque = blend(背景, 选区)，blend 丢弃 alpha），
-       单改这里的 rgba 并不能真的透出底图 —— 真正的透明化靠 align-s5-terminal.css
+       单改这里的 rgba 并不能真的透出底图 —— 真正的透明化靠 theme-modern-v2.css §37 收编节
        里对 .xterm-selection div 与选中 span 的 !important 覆盖。
        这里保留半透明值作为语义声明（方案色相：中性偏亮的蓝白，深色终端上清晰，
        不与红/绿/黄日志语义色混淆；若 xterm 未来尊重 alpha 则自动生效）。 */

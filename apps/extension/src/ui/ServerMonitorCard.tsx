@@ -1,10 +1,10 @@
 import { useState, useCallback, useEffect, useRef } from "react";
-import { createPortal } from "react-dom";
 import { AlertTriangle, Check, ChevronRight, Copy, Cpu, HardDrive, LoaderCircle, RefreshCw, Stethoscope, TrendingUp, X } from "lucide-react";
 import type { ServerDiagnosticsResponse, ServerSystemProfileResponse } from "@server-log-console/shared";
 import type { ServerMonitorEntry } from "./useServerMonitorPool.js";
 import { apiGetServerDiagnostics } from "./api.js";
 import { useEscapeToClose } from "./useEscapeToClose.js";
+import { getAppShellElement, ThemePortal, useShellThemeClass } from "./ThemePortal.js";
 import { copyText } from "./utils.js";
 
 /**
@@ -75,7 +75,7 @@ function fmtBytes(value: number): string {
  *  解析不到退回内置三色（与主题现代绿同源），不再硬编码配色。 */
 var THEME_RGB_CACHE: Record<string, RGB> = {};
 function themeHueRgb(hue: "green" | "amber" | "red"): RGB {
-  var shell = typeof document !== "undefined" ? document.querySelector(".app-shell") : null;
+  var shell = getAppShellElement();
   var themeKey = shell ? shell.className : "";
   var cacheKey = themeKey + "|" + hue;
   var hit = THEME_RGB_CACHE[cacheKey];
@@ -314,31 +314,9 @@ function buildDiagChecks(resp: ServerDiagnosticsResponse): DiagCheck[] {
   return checks;
 }
 
-/** 跟随宿主 .app-shell 的主题类（2026-11-12）：
- *  弹窗 portal 到 body，需要把 .app-shell 的类名复制到 portal 外层才能取到主题变量。
- *  但直接读 className 只在渲染时取一次 —— 用户切主题时弹窗不重渲染，会停在旧主题。
- *  这里用 MutationObserver 订阅 class 变化，主题切换即时生效。 */
-function useShellThemeClass(): string {
-  const read = function () {
-    return typeof document !== "undefined"
-      ? document.querySelector(".app-shell")?.className ?? "theme-modern"
-      : "theme-modern";
-  };
-  const [cls, setCls] = useState(read);
-  useEffect(function () {
-    if (typeof document === "undefined") return;
-    const shell = document.querySelector(".app-shell");
-    if (!shell) return;
-    setCls(shell.className);
-    const ob = new MutationObserver(function () { setCls(shell.className); });
-    ob.observe(shell, { attributes: true, attributeFilter: ["class"] });
-    return function () { ob.disconnect(); };
-  }, []);
-  return cls;
-}
-
 export function ServerMonitorCard(props: Props) {
   const { entry, serverId, serverName, groupTitle, staleSec, onRetry, contextPath } = props;
+  /* 响应式主题类（MutationObserver 订阅 .app-shell class）：切主题即时生效，见 ThemePortal */
   const shellThemeClass = useShellThemeClass();
   const [diagOpen, setDiagOpen] = useState(false);
   const [diagPhase, setDiagPhase] = useState<"idle" | "running" | "done" | "error">("idle");
@@ -385,6 +363,41 @@ export function ServerMonitorCard(props: Props) {
     }
   }, [serverId, contextPath]);
 
+  /* 体检结果 → 五项检查判定 + 严重度计数（done 后每次渲染重算，量级极小）。
+     这一段必须在下面「未采集」提前 return **之前**：其中含 copyAllDiag 这个 useCallback，
+     放到 return 之后会让 hook 数量随 entry.profile 有无而变 —— 采集从 collecting/error
+     翻到 ok（或反之）时 React 抛 error #310「Rendered more hooks than during the
+     previous render」，正是 2026-11-16 反馈「搜索即白屏」的根因。
+     这里只用 diag 自身的 state，不碰 entry/profile，挪上来无副作用。 */
+  const diagChecks = diagPhase === "done" && diagResult ? buildDiagChecks(diagResult) : null;
+  const diagSum = diagChecks
+    ? {
+        ok: diagChecks.filter(function (c) { return c.badge === "g"; }).length,
+        warn: diagChecks.filter(function (c) { return c.badge === "a"; }).length,
+        bad: diagChecks.filter(function (c) { return c.badge === "r"; }).length
+      }
+    : null;
+  /* 健康分（2026-11-12 原型 diag-dialog-redesign 定稿）：100 − 危险 12 / 注意 4，封底 0。
+     问题项按 危险→注意 排在前面，通过项收进折叠区 */
+  const diagScore = diagSum ? Math.max(0, 100 - diagSum.bad * 12 - diagSum.warn * 4) : 0;
+  const diagIssues = diagChecks
+    ? diagChecks.filter(function (c) { return c.badge !== "g"; })
+    : [];
+  const diagPassed = diagChecks
+    ? diagChecks.filter(function (c) { return c.badge === "g"; })
+    : [];
+  /* 全部问题命令拼成一段，供「复制全部修复命令」 */
+  const diagAllCmd = diagIssues.map(function (c) {
+    return "# " + c.name + "\n" + c.cmd;
+  }).join("\n\n");
+  const copyAllDiag = useCallback(function () {
+    void copyText(diagAllCmd).then(function () {
+      setAllCopied(true);
+      if (allCopiedTimerRef.current != null) window.clearTimeout(allCopiedTimerRef.current);
+      allCopiedTimerRef.current = window.setTimeout(function () { setAllCopied(false); }, 2000);
+    });
+  }, [diagAllCmd]);
+
   /* 未采集/采集失败：当前服务器未连接，或首次采集失败（显示原因 + 重试） */
   if (!entry || !entry.profile) {
     const collecting = entry != null && entry.status === "collecting";
@@ -427,36 +440,6 @@ export function ServerMonitorCard(props: Props) {
   const cores = profile.cpu.cores || 0;
   /* 方案 E：磁盘小节头展示全部挂载点容量合计 */
   const diskTotalBytes = (profile.disks || []).reduce(function (sum, d) { return sum + d.total; }, 0);
-
-  /* 体检结果 → 五项检查判定 + 严重度计数（done 后每次渲染重算，量级极小） */
-  const diagChecks = diagPhase === "done" && diagResult ? buildDiagChecks(diagResult) : null;
-  const diagSum = diagChecks
-    ? {
-        ok: diagChecks.filter(function (c) { return c.badge === "g"; }).length,
-        warn: diagChecks.filter(function (c) { return c.badge === "a"; }).length,
-        bad: diagChecks.filter(function (c) { return c.badge === "r"; }).length
-      }
-    : null;
-  /* 健康分（2026-11-12 原型 diag-dialog-redesign 定稿）：100 − 危险 12 / 注意 4，封底 0。
-     问题项按 危险→注意 排在前面，通过项收进折叠区 */
-  const diagScore = diagSum ? Math.max(0, 100 - diagSum.bad * 12 - diagSum.warn * 4) : 0;
-  const diagIssues = diagChecks
-    ? diagChecks.filter(function (c) { return c.badge !== "g"; })
-    : [];
-  const diagPassed = diagChecks
-    ? diagChecks.filter(function (c) { return c.badge === "g"; })
-    : [];
-  /* 全部问题命令拼成一段，供「复制全部修复命令」 */
-  const diagAllCmd = diagIssues.map(function (c) {
-    return "# " + c.name + "\n" + c.cmd;
-  }).join("\n\n");
-  const copyAllDiag = useCallback(function () {
-    void copyText(diagAllCmd).then(function () {
-      setAllCopied(true);
-      if (allCopiedTimerRef.current != null) window.clearTimeout(allCopiedTimerRef.current);
-      allCopiedTimerRef.current = window.setTimeout(function () { setAllCopied(false); }, 2000);
-    });
-  }, [diagAllCmd]);
 
   return (
     <>
@@ -589,10 +572,10 @@ export function ServerMonitorCard(props: Props) {
       </div>
     </div>
 
-    {/* 体检弹窗：portal 到 body —— 外层复制 .app-shell 的主题类，否则 --red/--amber 等主题变量
-        在 body 作用域下缺失，危险/注意徽章会掉色（与 CommandPalette 同一处理） */}
-    {diagOpen ? createPortal(
-      <div className={shellThemeClass} style={{ display: "contents" }}>
+    {/* 体检弹窗经 ThemePortal portal 到 body：外层复制 .app-shell 主题类，否则 --red/--amber
+        等主题变量在 body 作用域下缺失，危险/注意徽章会掉色 */}
+    {diagOpen ? (
+      <ThemePortal className={shellThemeClass}>
       <div className="confirm-backdrop" onClick={function () { setDiagOpen(false); }}>
         <div className="diag-dialog diag-flow" role="dialog" aria-modal="true" onClick={function (e) { e.stopPropagation(); }}>
           {/* 头部：小分数环 + 标题 + 汇总 chip（对齐 .diag-head / .diag-sum） */}
@@ -800,8 +783,7 @@ export function ServerMonitorCard(props: Props) {
           </div>
         </div>
       </div>
-      </div>,
-      document.body
+      </ThemePortal>
     ) : null}
     </>
   );
