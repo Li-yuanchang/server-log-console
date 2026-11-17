@@ -8,7 +8,7 @@
   display: grid;
   gap: 6px;
   padding: 8px;
-  border-radius: 8px;
+  border-radius: var(--r-m);
   background: var(--panel-muted);
   border: 1px solid var(--line-strong);
 }
@@ -68,7 +68,7 @@
   gap: 2px;
   padding: 6px 8px;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--r-s);
   background: var(--panel-strong);
   color: var(--ink);
   text-align: left;
@@ -167,7 +167,7 @@
   overflow-y: auto;
   overflow-x: hidden;
   padding: 5px 6px;
-  border-radius: 8px;
+  border-radius: var(--r-m);
   background: var(--log-viewer-background, linear-gradient(180deg, var(--shell), var(--shell-soft)));
   color: var(--shell-ink);
   border: 1px solid #15202b;
@@ -403,7 +403,7 @@
 }
 
 /* 选中文字配色（用户反馈 2026-10-08：选中后"颜色灰白"看不清）：
-   这里原写死 color:var(--panel)（近白），是日志区还是深色底时定的值；align-log-light.css
+   这里原写死 color:var(--panel)（近白），是日志区还是深色底时定的值；theme-modern-v2.css §31 收编节
    随后把内嵌日志区改成浅色底，却没同步改选中文字色 → 近白字配浅蓝底 = 灰白。
    改为 color:inherit：选中态沿用该行自身文字色（普通行 = --ink-soft 深灰、
    异常行 = 对应级别色），深浅主题下都保持可读。背景色维持原值不变。 */
@@ -561,7 +561,7 @@
   justify-content: center;
   width: 30px;
   height: 30px;
-  border-radius: 10px;
+  border-radius: var(--r-l);
   background: linear-gradient(180deg, #eff6ff, #dbeafe);
   color: var(--accent);
   border: 1px solid rgba(37, 99, 235, 0.18);
@@ -597,7 +597,7 @@
   gap: 8px;
   margin: 0 12px 10px;
   padding: 9px 10px;
-  border-radius: 10px;
+  border-radius: var(--r-l);
   border: 1px solid rgba(245, 158, 11, 0.26);
   background: rgba(255, 251, 235, 0.9);
   color: #92400e;
@@ -609,7 +609,7 @@
   margin: 8px 14px 4px;
   padding: 6px 10px;
   border: 1px solid rgba(148, 163, 184, 0.18);
-  border-radius: 10px;
+  border-radius: var(--r-l);
   background: color-mix(in srgb, var(--panel) 68%, transparent);
   color: #526174;
   font-size: var(--fs-2xs);
@@ -728,7 +728,7 @@
 
 .server-status-load-grid div {
   padding: 9px 7px;
-  border-radius: 10px;
+  border-radius: var(--r-l);
   background: var(--panel-muted);
   border: 1px solid rgba(226, 232, 240, 0.9);
   text-align: center;
@@ -828,7 +828,7 @@
   gap: 8px;
   align-items: center;
   padding: 8px;
-  border-radius: 10px;
+  border-radius: var(--r-l);
   background: var(--panel-muted);
   border: 1px solid rgba(226, 232, 240, 0.82);
 }
@@ -886,7 +886,7 @@
 .server-status-empty {
   margin: 0;
   padding: 10px;
-  border-radius: 10px;
+  border-radius: var(--r-l);
   background: var(--bg);
   color: var(--ink-muted);
   font-size: var(--fs-2xs);
@@ -901,7 +901,7 @@
 .server-status-warning-list span {
   display: block;
   padding: 8px 10px;
-  border-radius: 10px;
+  border-radius: var(--r-l);
   background: rgba(255, 251, 235, 0.86);
   color: #92400e;
   font-size: var(--fs-2xs);
@@ -1455,7 +1455,7 @@
   align-items: start;
   padding: 5px 8px;
   border: 1px solid #d8dee6;
-  border-radius: 6px;
+  border-radius: var(--r-s);
   background: var(--panel-muted);
   color: var(--ink);
   text-align: left;
@@ -1492,7 +1492,7 @@
   overflow-y: auto;
   min-height: 0;
   padding: 4px 8px;
-  border-radius: 6px;
+  border-radius: var(--r-s);
   background: var(--panel-muted) !important;
   color: var(--ink-soft) !important;
   border: 1px solid var(--line);
@@ -1611,7 +1611,7 @@ body.is-resizing-activity-panel {
   min-width: 0;
   padding: 0;
   border: 1px solid #d2dae4;
-  border-radius: 6px;
+  border-radius: var(--r-s);
   background: var(--panel);
   align-content: stretch;
   overflow: hidden;
@@ -1653,7 +1653,7 @@ body.is-resizing-activity-panel {
   place-items: center;
   width: 38px;
   height: 38px;
-  border-radius: 10px;
+  border-radius: var(--r-l);
   background: var(--accent);
   color: var(--on-accent);
   box-shadow: 0 4px 12px rgba(59, 130, 246, 0.30);
@@ -1665,7 +1665,7 @@ body.is-resizing-activity-panel {
   font-weight: 600;
   color: var(--accent);
   background: color-mix(in srgb, var(--panel) 90%, transparent);
-  border-radius: 6px;
+  border-radius: var(--r-s);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 

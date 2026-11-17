@@ -1,6 +1,6 @@
 /* styles-server-monitor.css — 服务器性能监控面板（B 骨架 + A 磁盘块，2026-10 重设计）
    隔离文件：只服务 ServerStatusPanel.tsx，类名统一 smp- 前缀，
-   与 align-s9-monitor.css 里的旧 server-status-* 规则完全解耦（旧规则自然失效，不做删除以免误伤）。
+   与 theme-modern-v2.css §35 收编节 里的旧 server-status-* 规则完全解耦（旧规则自然失效，不做删除以免误伤）。
    最后加载，故可安全覆盖 --pad-x / --gap 等同名局部变量。
 
    设计要点（对应本次用户反馈）：
@@ -250,7 +250,7 @@
   z-index: 5;
   padding: 5px 8px;
   border: 1px solid var(--line-strong);
-  border-radius: 6px;
+  border-radius: var(--r-s);
   background: var(--panel);
   box-shadow: 0 6px 18px rgba(15, 23, 42, 0.13);
   color: var(--ink);

@@ -16,7 +16,7 @@
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
+  border-radius: var(--r-m);
   box-shadow:
     0 8px 32px rgba(0, 0, 0, 0.42),
     0 6px 18px rgba(15, 23, 42, 0.32),
@@ -170,7 +170,7 @@
   padding: 10px 10px;
   margin-bottom: 8px;
   border: 1px solid rgba(245, 158, 11, 0.12);
-  border-radius: 10px;
+  border-radius: var(--r-l);
   background: rgba(255, 255, 255, 0.04);
   cursor: pointer;
   transition: border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
@@ -222,7 +222,7 @@
   padding: 10px;
   margin-bottom: 8px;
   border: 1px solid rgba(245, 158, 11, 0.16);
-  border-radius: 10px;
+  border-radius: var(--r-l);
   background: rgba(255, 255, 255, 0.04);
 }
 
@@ -275,7 +275,7 @@
   min-height: 38px;
   margin: 10px;
   border: 1px dashed rgba(245, 158, 11, 0.28) !important;
-  border-radius: 10px !important;
+  border-radius: var(--r-l) !important;
   color: var(--amber) !important;
   background: rgba(245, 158, 11, 0.08) !important;
   font-weight: 600;
@@ -424,7 +424,7 @@
   padding: 5px 8px;
   background: rgba(255,255,255,0.05);
   border: 1px solid rgba(129,140,248,0.14);
-  border-radius: 6px;
+  border-radius: var(--r-s);
   transition: border-color 100ms;
 }
 
@@ -531,7 +531,7 @@
   max-height: 72px;
   resize: none;
   border: 1px solid rgba(129,140,248,0.14);
-  border-radius: 8px;
+  border-radius: var(--r-m);
   background: rgba(15,23,42,0.22);
   color: rgba(248,250,252,0.9);
   font-size: var(--fs-xs);
@@ -561,7 +561,7 @@
   justify-content: center;
   width: 30px;
   height: 30px;
-  border-radius: 8px;
+  border-radius: var(--r-m);
   color: #c4b5fd;
   background: rgba(99,102,241,0.12);
   flex-shrink: 0;
@@ -651,7 +651,7 @@
   gap: 1px;
   padding: 6px 8px !important;
   border: 1px solid rgba(129,140,248,0.14) !important;
-  border-radius: 6px !important;
+  border-radius: var(--r-s) !important;
   transition: background 80ms ease, border-color 80ms ease, color 80ms ease, box-shadow 80ms ease;
   text-align: left;
   background: rgba(255,255,255,0.04);
@@ -691,7 +691,7 @@
 .tsc-btn-save {
   flex: 1;
   height: 28px;
-  border-radius: 6px;
+  border-radius: var(--r-s);
   background: rgba(99,102,241,0.2) !important;
   color: #ddd6fe;
   font-size: var(--fs-xs);
@@ -706,7 +706,7 @@
 .tsc-btn-cancel {
   flex: 1;
   height: 28px;
-  border-radius: 6px;
+  border-radius: var(--r-s);
   color: rgba(226,232,240,0.68);
   font-size: var(--fs-xs);
 }
@@ -736,7 +736,7 @@
      等浅色 token，形成「深壳套浅件」。改为纯 token 底，深色主题自动跟随。 */
   background: var(--panel, #ffffff);
   border: 1px solid var(--line-strong, #d4d4d4);
-  border-radius: 10px;
+  border-radius: var(--r-l);
   box-shadow:
     0 12px 32px rgba(0, 0, 0, 0.1),
     0 2px 6px rgba(0, 0, 0, 0.04);
@@ -806,7 +806,7 @@
   width: 26px;
   height: 26px;
   color: var(--ink-muted, #8f8f8f);
-  border-radius: 6px;
+  border-radius: var(--r-s);
   border: none;
   background: none;
 }
@@ -994,7 +994,7 @@
   padding: 5px 8px;
   background: var(--panel-muted, #f5f5f5);
   border: 1px solid rgba(59, 130, 246, 0.14);
-  border-radius: 6px;
+  border-radius: var(--r-s);
   transition: border-color 100ms;
 }
 
@@ -1100,7 +1100,7 @@
   max-height: 72px;
   resize: none;
   border: 1px solid rgba(59, 130, 246, 0.14);
-  border-radius: 8px;
+  border-radius: var(--r-m);
   background: rgba(15, 23, 42, 0.22);
   color: var(--ink, #171717);
   font-size: var(--fs-xs);
@@ -1130,7 +1130,7 @@
   justify-content: center;
   width: 30px;
   height: 30px;
-  border-radius: 8px;
+  border-radius: var(--r-m);
   color: var(--accent-soft);
   background: rgba(59, 130, 246, 0.12);
   flex-shrink: 0;
@@ -1221,7 +1221,7 @@
   gap: 1px;
   padding: 6px 8px !important;
   border: 1px solid rgba(59, 130, 246, 0.14) !important;
-  border-radius: 6px !important;
+  border-radius: var(--r-s) !important;
   transition: background 80ms ease, border-color 80ms ease, color 80ms ease, box-shadow 80ms ease;
   text-align: left;
   background: var(--panel-muted, #f5f5f5);
@@ -1261,7 +1261,7 @@
 .tai-btn-save {
   flex: 1;
   height: 28px;
-  border-radius: 6px;
+  border-radius: var(--r-s);
   background: rgba(59, 130, 246, 0.2) !important;
   color: #dbeafe;
   font-size: var(--fs-xs);
@@ -1276,7 +1276,7 @@
 .tai-btn-cancel {
   flex: 1;
   height: 28px;
-  border-radius: 6px;
+  border-radius: var(--r-s);
   color: var(--ink-soft, #666);
   font-size: var(--fs-xs);
 }

@@ -80,7 +80,7 @@
   min-height: 140px;
   padding: 20px 18px;
   border: 1px dashed #ccd6e1;
-  border-radius: 8px;
+  border-radius: var(--r-m);
   background: var(--panel);
   color: var(--ink-soft);
 }
@@ -201,7 +201,7 @@
   min-height: 56px;
   padding: 12px 14px;
   border: 1px solid #d8e0e8;
-  border-radius: 8px;
+  border-radius: var(--r-m);
   background: var(--panel);
 }
 
@@ -302,7 +302,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 10px;
+  border-radius: var(--r-l);
   background: rgba(100, 116, 139, 0.08);
 }
 .toast-icon-loading {
@@ -401,7 +401,7 @@
   padding: 20px 18px;
   min-height: 140px;
   border: 1px dashed #cfd8e2;
-  border-radius: 8px;
+  border-radius: var(--r-m);
   background: linear-gradient(180deg, #fafbfd, #f3f6f9);
   color: var(--ink-soft);
 }
@@ -452,7 +452,7 @@
 
 .pip-viewer-root {
   /* 用户决策 2026-09-30：不再自带深色令牌/深色底，直接继承 .app-shell 主题令牌，
-     日志亮色规则（align-log-light.css）同步作用于本容器 */
+     日志亮色规则（theme-modern-v2.css §31 收编节）同步作用于本容器 */
   display: flex;
   flex: 1;
   min-height: 0;
@@ -657,7 +657,11 @@
   border: 1px solid var(--line, #eaeaea);
   border-radius: var(--r-l, 10px);
   background: var(--panel, #ffffff);
-  box-shadow: var(--shadow-pop, 0 18px 40px rgba(15, 23, 42, 0.18));
+  /* 写字面值而非 var(--shadow-pop)：2026-11-16 旧 v2 悬浮层阴影别名归并改名后，
+     --shadow-pop 首次有了定义（悬浮层大阴影），而本浮层历史上一直走兜底值
+     「0 18px 40px …」（此前 --shadow-pop 并不存在）。若直接引用会让本浮层
+     阴影突变，违背「归一零视觉变化」；等本规则按 token 口径重新校准时再切。 */
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.18);
   z-index: 45;
   -webkit-app-region: no-drag;
 }
@@ -1088,7 +1092,7 @@
   padding: 4px;
   background: rgba(245, 247, 250, 0.96);
   border: 1px solid rgba(208, 216, 226, 0.92);
-  border-radius: 10px;
+  border-radius: var(--r-l);
   box-shadow: 0 8px 24px rgba(15, 23, 42, 0.22);
   transform: translateY(-100%) translateY(-8px);
   pointer-events: auto;
@@ -1104,7 +1108,7 @@
   min-width: 28px;
   padding: 0;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--r-s);
   background: rgba(15, 23, 42, 0.06);
   color: #333 !important;
   box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06);

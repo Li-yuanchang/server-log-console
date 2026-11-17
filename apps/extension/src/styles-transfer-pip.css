@@ -11,7 +11,7 @@
   background: var(--panel, #fbfbf7);
   color: var(--ink, #27302a);
   font-family: var(--font, -apple-system, "PingFang SC", sans-serif);
-  font-size: 12px;
+  font-size: var(--fs-xs);
   line-height: 1.5;
 }
 
@@ -26,7 +26,7 @@
 }
 
 .tpw-head strong {
-  font-size: 12px;
+  font-size: var(--fs-xs);
   font-weight: 600;
   flex: 1;
   min-width: 0;

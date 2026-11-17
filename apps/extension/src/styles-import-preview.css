@@ -58,7 +58,7 @@
 .ipd-head span {
   display: block;
   margin-top: 2px;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   color: var(--ink-muted, #92988d);
 }
 
@@ -84,10 +84,10 @@
   flex-direction: column;
   gap: 3px;
   padding: 10px 12px;
-  border-radius: 6px;
+  border-radius: var(--r-s);
   border: 1px solid rgba(165, 72, 61, 0.25);
   background: rgba(165, 72, 61, 0.07);
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   color: #8a3a31;
   line-height: 1.6;
 }
@@ -107,7 +107,7 @@
   display: flex;
   flex-direction: column;
   border: 1px solid var(--line, #d9ded0);
-  border-radius: 8px;
+  border-radius: var(--r-m);
   overflow: hidden;
 }
 
@@ -198,7 +198,7 @@
 }
 
 .ipd-main strong {
-  font-size: 12px;
+  font-size: var(--fs-xs);
   font-weight: 500;
   color: var(--ink, #27302a);
   white-space: nowrap;

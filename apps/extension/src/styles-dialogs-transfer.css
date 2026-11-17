@@ -53,7 +53,7 @@
   min-width: 56px;
   padding: 0 12px;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--r-s);
   cursor: pointer;
   background: linear-gradient(180deg, var(--panel), var(--panel-muted));
   color: var(--ink);
@@ -129,7 +129,7 @@
   min-height: 30px;
   padding: 0 10px;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--r-s);
   background: var(--panel);
   color: var(--ink);
 }
@@ -647,7 +647,7 @@ button.archive-preview-row:disabled {
   margin: 0 !important;
   padding: 0 11px !important;
   border: 1px solid #c7d5e6 !important;
-  border-radius: 8px;
+  border-radius: var(--r-m);
   background: var(--panel) !important;
   color: var(--ink) !important;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.9);
@@ -668,7 +668,7 @@ button.archive-preview-row:disabled {
   margin: 0 !important;
   padding: 0 !important;
   border: 1px solid #cfd9e6 !important;
-  border-radius: 8px;
+  border-radius: var(--r-m);
   background: linear-gradient(180deg, var(--panel) 0%, var(--panel-muted) 100%) !important;
   color: #243145 !important;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
@@ -774,7 +774,7 @@ button.archive-preview-row:disabled {
   flex: 0 0 auto;
   padding: 8px 10px;
   border: 1px solid rgba(217, 119, 6, 0.24);
-  border-radius: 8px;
+  border-radius: var(--r-m);
   background: var(--amber-soft);
   color: #9a5a06;
   font-size: var(--fs-xs);
@@ -796,7 +796,7 @@ button.archive-preview-row:disabled {
   justify-content: center;
   height: 30px;
   border: 1px solid #cfd8e3;
-  border-radius: 6px;
+  border-radius: var(--r-s);
   background: linear-gradient(180deg, var(--panel) 0%, var(--panel-muted) 100%);
   color: var(--ink-soft);
   font-size: var(--fs-xs);
@@ -836,7 +836,7 @@ button.archive-preview-row:disabled {
   height: 30px;
   padding: 0 10px;
   border: 1px solid #cfd8e3;
-  border-radius: 6px;
+  border-radius: var(--r-s);
   background: var(--panel);
   color: var(--ink-muted);
   font-size: var(--fs-xs);
@@ -876,7 +876,7 @@ button.archive-preview-row:disabled {
   min-height: 0;
   overflow: hidden;
   border: 1px solid var(--line-strong);
-  border-radius: 10px;
+  border-radius: var(--r-l);
   background: var(--panel);
   box-shadow: 0 8px 22px rgba(15, 23, 42, 0.06);
 }
@@ -903,7 +903,7 @@ button.archive-preview-row:disabled {
   min-height: 28px;
   padding: 0 7px;
   border: 1px solid transparent;
-  border-radius: 6px;
+  border-radius: var(--r-s);
   background: transparent;
   color: var(--ink-soft);
   box-shadow: none;
@@ -1125,7 +1125,7 @@ button.archive-preview-row:disabled {
 .archive-manager-preview .archive-entry-code-card {
   min-height: 0;
   max-height: none;
-  border-radius: 10px;
+  border-radius: var(--r-l);
   box-shadow: 0 8px 22px rgba(15, 23, 42, 0.06);
 }
 
@@ -1147,7 +1147,7 @@ button.archive-preview-row:disabled {
   min-height: 44px;
   padding: 6px 8px;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--r-l);
   background: var(--panel);
   box-shadow: 0 8px 22px rgba(15, 23, 42, 0.05);
 }
@@ -1191,7 +1191,7 @@ button.archive-preview-row:disabled {
   width: 24px;
   height: 24px;
   border: 1px solid #b7cbe0;
-  border-radius: 6px;
+  border-radius: var(--r-s);
   background: linear-gradient(180deg, #eef7ff 0%, #dbeaf8 100%);
   color: var(--accent);
   font-size: var(--fs-xs);
@@ -1240,7 +1240,7 @@ button.archive-preview-row:disabled {
   justify-content: flex-end;
   padding: 3px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--r-m);
   background: var(--panel-muted);
 }
 
@@ -1248,7 +1248,7 @@ button.archive-preview-row:disabled {
   min-height: 24px;
   padding: 0 10px;
   border: 1px solid transparent;
-  border-radius: 6px;
+  border-radius: var(--r-s);
   background: transparent;
   color: var(--ink-muted);
   box-shadow: none;
@@ -1283,7 +1283,7 @@ button.archive-preview-row:disabled {
   min-height: 0;
   overflow: hidden;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--r-l);
   background: var(--panel);
   box-shadow: 0 8px 22px rgba(15, 23, 42, 0.05);
 }
@@ -1321,7 +1321,7 @@ button.archive-preview-row:disabled {
   min-height: 28px;
   padding: 0 7px;
   border: 1px solid transparent;
-  border-radius: 6px;
+  border-radius: var(--r-s);
   background: transparent;
   color: var(--ink-soft);
   box-shadow: none;
@@ -1415,7 +1415,7 @@ button.class-outline-row {
 
 .class-ide-source {
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--r-l);
   box-shadow: none;
 }
 
@@ -1456,7 +1456,7 @@ button.class-outline-row {
   margin-bottom: 12px;
   padding: 10px 12px;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--r-l);
   background: var(--panel-muted);
 }
 
@@ -1846,7 +1846,7 @@ button.class-outline-row {
   margin: 0 !important;
   padding: 0 !important;
   border: 1px solid transparent !important;
-  border-radius: 8px;
+  border-radius: var(--r-m);
   background: transparent !important;
   color: #91a1b6 !important;
   font-size: var(--fs-xl) !important;
@@ -1903,7 +1903,7 @@ button.class-outline-row {
 .preview-dialog .preview-save-btn {
   min-height: 28px;
   padding: 0 12px;
-  border-radius: 8px;
+  border-radius: var(--r-m);
   background: var(--accent);
   color: var(--on-accent);
   font-size: var(--fs-xs);
@@ -1927,7 +1927,7 @@ button.class-outline-row {
   width: 30px;
   height: 30px;
   padding: 0;
-  border-radius: 8px;
+  border-radius: var(--r-m);
   background: transparent;
   color: var(--ink-muted);
 }
@@ -2234,7 +2234,7 @@ button.class-outline-row {
   min-height: 72px;
   padding: 10px 12px;
   border: 1px solid var(--line-strong);
-  border-radius: 10px;
+  border-radius: var(--r-l);
   background: var(--panel-strong);
 }
 
@@ -2250,7 +2250,7 @@ button.class-outline-row {
   justify-content: center;
   width: 26px;
   height: 26px;
-  border-radius: 8px;
+  border-radius: var(--r-m);
   background: var(--accent-soft);
   color: var(--accent-strong);
 }
@@ -2339,7 +2339,7 @@ button.class-outline-row {
   width: 100%;
   height: 32px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--r-m);
   background: var(--panel-strong);
   color: var(--ink);
   font-size: var(--fs-xs);
@@ -2359,7 +2359,7 @@ button.class-outline-row {
 .transfer-history-empty-panel {
   padding: 36px 16px;
   border: 1px dashed var(--line-strong);
-  border-radius: 10px;
+  border-radius: var(--r-l);
   text-align: center;
   font-size: var(--fs-xs);
   color: var(--ink-muted);
@@ -2371,7 +2371,7 @@ button.class-outline-row {
   gap: 8px;
   padding: 10px 12px;
   border: 1px solid var(--line-strong);
-  border-radius: 10px;
+  border-radius: var(--r-l);
   background: var(--panel-strong);
 }
 
@@ -2471,7 +2471,7 @@ button.class-outline-row {
   background: var(--panel-muted);
   border: 1px solid rgba(49, 95, 141, 0.1);
   padding: 7px 9px;
-  border-radius: 10px;
+  border-radius: var(--r-l);
 }
 
 .transfer-history-note {
@@ -2512,7 +2512,7 @@ button.class-outline-row {
      队列块再缩进一档，避免贴着区块底色边缘（原来 margin 上下有、左右无）。 */
   margin: 6px 8px 8px;
   border: 1px solid var(--line, #d9ded0);
-  border-radius: 6px;
+  border-radius: var(--r-s);
   overflow: hidden;
   background: var(--panel, #fbfbf7);
 }
@@ -2686,7 +2686,7 @@ button.class-outline-row {
   height: 22px;
   padding: 0 9px;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--r-s);
   font: inherit;
   font-size: 10.5px;
   color: var(--ink-soft);
@@ -2723,7 +2723,7 @@ button.class-outline-row {
   align-items: center;
   gap: 8px;
   padding: 4px 0;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   color: var(--ink-soft);
   border-top: 1px dashed color-mix(in srgb, var(--line-strong) 70%, transparent);
   min-width: 0;
@@ -2854,7 +2854,7 @@ button.class-outline-row {
 .conn-issue-hint {
   margin: 0;
   padding: 8px 10px;
-  border-radius: 6px;
+  border-radius: var(--r-s);
   background: var(--panel-muted);
   font-size: var(--fs-2xs);
   line-height: 1.6;
@@ -2875,7 +2875,7 @@ button.class-outline-row {
   display: flex;
   flex-direction: column;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--r-m);
   overflow: hidden;
 }
 
@@ -3020,7 +3020,7 @@ button.class-outline-row {
 /* 关闭按钮：对齐 .preview-close 规范 —— 30px 命中区 + hover 变红（× 不会缩成小点） */
 .diag-x {
   flex: none; display: inline-flex; align-items: center; justify-content: center;
-  width: 30px; height: 30px; padding: 0; border-radius: 8px;
+  width: 30px; height: 30px; padding: 0; border-radius: var(--r-m);
   color: var(--ink-muted); background: transparent; border: none; cursor: pointer;
 }
 .diag-x:hover { background: rgba(239, 68, 68, 0.12); color: #b91c1c; }
@@ -3041,21 +3041,21 @@ button.class-outline-row {
   border-top: 1px solid var(--line);
   font-size: 10.5px; line-height: 1.65; color: var(--ink-muted);
 }
-.diag-err { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--red); line-height: 1.7; padding: 12px 0; }
+.diag-err { display: flex; align-items: center; gap: 6px; font-size: var(--fs-2xs); color: var(--red); line-height: 1.7; padding: 12px 0; }
 .diag-err span { word-break: break-all; }
 
 .diag-checks { display: flex; flex-direction: column; }
 .diag-check { border-bottom: 1px solid var(--line); padding: 10px 0; }
 .diag-check:last-child { border-bottom: none; }
 .diag-check .head { display: flex; align-items: center; gap: 8px; }
-.diag-check .head b { font-size: 12px; font-weight: 600; color: var(--ink); }
+.diag-check .head b { font-size: var(--fs-xs); font-weight: 600; color: var(--ink); }
 .diag-check .badge { margin-left: auto; font-size: 10px; border-radius: 4px; padding: 1px 8px; font-weight: 600; white-space: nowrap; }
 .diag-check .badge.run { color: var(--ink-soft); background: var(--panel-muted, #f1f2ee); }
 .diag-check .badge.g { color: var(--green); background: color-mix(in srgb, var(--green) 14%, transparent); }
 .diag-check .badge.a { color: var(--amber); background: color-mix(in srgb, var(--amber) 16%, transparent); }
 .diag-check .badge.r { color: var(--red); background: color-mix(in srgb, var(--red) 14%, transparent); }
 .diag-check .findings { margin-top: 6px; display: flex; flex-direction: column; gap: 4px; }
-.diag-check .f { display: flex; gap: 7px; font-size: 11px; line-height: 1.65; color: var(--ink-soft); }
+.diag-check .f { display: flex; gap: 7px; font-size: var(--fs-2xs); line-height: 1.65; color: var(--ink-soft); }
 .diag-check .f .mk { flex: none; font-weight: 650; width: 10px; text-align: center; }
 .diag-check .f .mk.g { color: var(--green); }
 .diag-check .f .mk.a { color: var(--amber); }
@@ -3067,7 +3067,7 @@ button.class-outline-row {
   margin-top: 7px;
   display: flex; align-items: flex-start; gap: 6px;
   font-family: var(--mono, ui-monospace, Menlo, monospace); font-size: 9.5px;
-  color: var(--ink-muted); background: var(--panel-muted, #f1f2ee); border-radius: 6px;
+  color: var(--ink-muted); background: var(--panel-muted, #f1f2ee); border-radius: var(--r-s);
   padding: 6px 9px; line-height: 1.7; word-break: break-all;
   cursor: pointer; user-select: none;
 }
@@ -3233,7 +3233,7 @@ button.class-outline-row {
   margin-top: 7px;
   display: flex; align-items: flex-start; gap: 6px;
   font-family: var(--mono, ui-monospace, Menlo, monospace); font-size: 9.5px;
-  color: var(--ink-muted); background: var(--panel-muted, #f1f2ee); border-radius: 6px;
+  color: var(--ink-muted); background: var(--panel-muted, #f1f2ee); border-radius: var(--r-s);
   padding: 6px 9px; line-height: 1.7; word-break: break-all;
   cursor: pointer; user-select: none;
 }
@@ -3303,7 +3303,7 @@ button.class-outline-row {
   height: 28px; padding: 0 14px;
   display: inline-flex; align-items: center; justify-content: center; gap: 5px;
   border: 1px solid var(--line); border-radius: 7px;
-  font-size: 11px; line-height: 1; color: var(--ink-soft); background: var(--panel); cursor: pointer;
+  font-size: var(--fs-2xs); line-height: 1; color: var(--ink-soft); background: var(--panel); cursor: pointer;
 }
 .diag-flow .diag-rerun:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
 .diag-flow .diag-rerun:disabled { opacity: 0.55; cursor: default; background: var(--panel); color: var(--ink-soft); border-color: var(--line); }

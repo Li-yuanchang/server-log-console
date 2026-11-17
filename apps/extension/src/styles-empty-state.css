@@ -152,10 +152,10 @@ html[data-splash] .lg-unit{animation:none !important}
   background:color-mix(in srgb,var(--accent) 9%,transparent);
   border:1px solid color-mix(in srgb,var(--accent) 28%,transparent);border-radius:999px;padding:1px 7px}
 /* 快捷列表尾行：查看全部（真实总数，点击打开检索） */
-.lp3-qall{display:flex;align-items:center;gap:10px;width:100%;height:31px;padding:0 12px;font-size:11px;
-  color:var(--ink-muted);font-family:var(--mono);cursor:pointer;border-radius:6px;border:none;background:transparent;text-align:left;margin-top:2px}
+.lp3-qall{display:flex;align-items:center;gap:10px;width:100%;height:31px;padding:0 12px;font-size:var(--fs-2xs);
+  color:var(--ink-muted);font-family:var(--mono);cursor:pointer;border-radius:var(--r-s);border:none;background:transparent;text-align:left;margin-top:2px}
 .lp3-qall:hover{background:var(--accent-soft);color:var(--ink)}
-.lp3-qall .qact{margin-left:auto;flex:none;font-size:11px;font-weight:600;color:var(--accent-strong)}
+.lp3-qall .qact{margin-left:auto;flex:none;font-size:var(--fs-2xs);font-weight:600;color:var(--accent-strong)}
 /* 情境侧栏（2026-11-12 Boss：editorial 大面积右侧留白太空）：真实数据面板，宽屏显示 */
 /* ============================================================================
    数码屏数据面板（2026-11-12 v2 · 按原型 no-server-facade-lcd.html .lcd）
@@ -166,7 +166,7 @@ html[data-splash] .lg-unit{animation:none !important}
    ============================================================================ */
 .lp3-aside.lcd{
   position:absolute; right:clamp(32px,5%,72px); top:44px; width:330px; z-index:2;
-  background:var(--panel); border:1px solid var(--line); border-radius:10px;
+  background:var(--panel); border:1px solid var(--line); border-radius:var(--r-l);
   box-shadow:0 1px 2px rgba(28,30,26,.04);
   padding:14px 18px 14px;
   display:block; box-sizing:border-box;
@@ -177,7 +177,7 @@ html[data-splash] .lg-unit{animation:none !important}
 .lcd-head-t{display:flex;align-items:center;gap:8px}
 .lcd-led{width:6px;height:6px;border-radius:999px;background:var(--accent);flex:none;animation:lcd-pulse 2.4s ease-in-out infinite}
 @keyframes lcd-pulse{0%,100%{opacity:1}50%{opacity:.3}}
-.lcd-head b{font-size:13px;font-weight:600;letter-spacing:.02em;color:var(--ink)}
+.lcd-head b{font-size:var(--fs-sm);font-weight:600;letter-spacing:.02em;color:var(--ink)}
 .lcd-eyebrow{font-family:var(--mono);font-size:8.5px;letter-spacing:.14em;color:var(--ink-muted)}
 
 /* 网格：左列（服务器/分组，上下两格）+ 右列（最近使用，跨两行） */
@@ -230,7 +230,7 @@ html[data-splash] .lg-unit{animation:none !important}
    成因：`.viewer-shell` 用 16px 左右 padding + 8px 下 padding 做正文呼吸，沟槽透出
    的是 --panel；而空态 `.lp3` 自带一层 --bg（比 --panel 深一档），只铺在内容盒里，
    于是「沟槽浅、内容深」形成可见色差。有日志时不会暴露，因为正文 `.console-block`
-   本身也是 --panel（align-log-light.css），与沟槽同色。
+   本身也是 --panel（theme-modern-v2.css §31 收编节），与沟槽同色。
    这里把空态/加载态一并改成 --panel，让「有内容 / 无内容」两种状态完全同底色，
    切换时不再跳色。仅限查看区，终端与文件目录的空态维持原 --bg 层次。 */
 .theme-modern .pip-viewer-wrap .lp3,
@@ -254,7 +254,7 @@ html[data-splash] .lg-unit{animation:none !important}
 @keyframes lp3-icglow{0%,100%{box-shadow:0 1px 2px rgba(0,0,0,.03),0 14px 30px color-mix(in srgb,var(--accent) 8%,transparent)}50%{box-shadow:0 1px 2px rgba(0,0,0,.03),0 14px 34px color-mix(in srgb,var(--accent) 15%,transparent)}}
 .lp3-ring{position:absolute;inset:-2px;border-radius:999px;border:1.5px solid color-mix(in srgb,var(--accent) 32%,transparent);animation:lp3-ripple 2.6s ease-out infinite;pointer-events:none}
 @keyframes lp3-ripple{0%{transform:scale(1);opacity:.5}100%{transform:scale(1.42);opacity:0}}
-.lp3-title{font-size:15px;font-weight:600;letter-spacing:-.012em;color:var(--ink)}
+.lp3-title{font-size:var(--fs-md);font-weight:600;letter-spacing:-.012em;color:var(--ink)}
 .lp3-sub{font-size:11.5px;color:var(--ink-muted);line-height:1.75;margin-top:6px;max-width:28em}
 .lp3-acts{display:flex;gap:9px;margin-top:19px;flex-wrap:wrap;justify-content:center}
 .btn2{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:30px;padding:0 16px;font-size:11.5px;font-weight:550;
@@ -267,18 +267,18 @@ html[data-splash] .lg-unit{animation:none !important}
 .btn2-pri:hover:not(:disabled){background:var(--accent-strong);border-color:var(--accent-strong);color:var(--on-accent)}
 /* 流程性空态扩展：内联步骤行 + 情境列表（EmptyWorkbench 退役形态，06 页） */
 .lp3-steps{display:flex;gap:16px;margin-top:18px;flex-wrap:wrap;justify-content:center}
-.lp3-step{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--ink-muted)}
+.lp3-step{display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-2xs);color:var(--ink-muted)}
 .lp3-step i{font-style:normal;font-family:var(--mono);font-size:9.5px;width:16px;height:16px;border-radius:999px;border:1px solid var(--line);display:grid;place-items:center;background:var(--panel);color:var(--ink-soft);flex:none}
 .lp3-step-cur{color:var(--ink);font-weight:550}
 .lp3-step-cur i{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
 /* 情境列表（快速连接）：结构化行 —— 点 + 名称 + mono 地址 + 动作，细线分隔、整行可点 */
 .lp3-qlist{margin-top:14px;width:380px;max-width:100%}
-.lp3-qrow{display:flex;align-items:center;gap:10px;width:100%;height:31px;padding:0 12px;font-size:11.5px;color:var(--ink-soft);cursor:pointer;border-radius:6px;border:none;background:transparent;text-align:left}
+.lp3-qrow{display:flex;align-items:center;gap:10px;width:100%;height:31px;padding:0 12px;font-size:11.5px;color:var(--ink-soft);cursor:pointer;border-radius:var(--r-s);border:none;background:transparent;text-align:left}
 .lp3-qrow + .lp3-qrow{border-top:1px solid var(--line)}
 .lp3-qrow:hover{background:var(--accent-soft);color:var(--ink)}
 .lp3-qrow b{font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .lp3-qrow .qmeta{margin-left:auto;flex:0 1 auto;min-width:0;font-family:var(--mono);font-size:9.5px;color:var(--ink-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.lp3-qrow .qact{flex:none;margin-left:12px;font-size:11px;font-weight:600;color:var(--accent-strong);white-space:nowrap}
+.lp3-qrow .qact{flex:none;margin-left:12px;font-size:var(--fs-2xs);font-weight:600;color:var(--accent-strong);white-space:nowrap}
 .lp3-qrow:hover .qact{text-decoration:underline;text-underline-offset:2px}
 .lp3-qdot{width:5px;height:5px;border-radius:999px;background:var(--dot-idle);flex:none}
 /* 终端容器内：绝对定位铺满（沿用旧 .in-terminal 约定） */
@@ -358,6 +358,16 @@ html[data-splash] .lg-unit{animation:none !important}
 .lg-note b{color:var(--ink-soft);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .lg-note span{white-space:nowrap;flex:none}
 
+/* ---------- 懒加载面板兜底占位（2026-11-16） ----------
+   终端面板 / 对比面板 / 文件预览改为 React.lazy 后，chunk 到位前需要一块占位，
+   否则会出现空白块。这里复用 lg-* 加载语言（与启动页、读文件遮罩同源），
+   铺满父容器并居中；父容器本身已有定位/尺寸，故只做 inset 铺底。 */
+.lazy-panel-fallback{
+  position:absolute;inset:0;z-index:1;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--bg);
+}
+
 /* ---------- L3.0 打开文件加载：无卡浮层 ----------
    loading 与空占位互斥：本浮层仅在内容为空的加载期渲染（App.tsx 分支互斥）
    定位沿用 .file-loading-overlay 既有规则（styles-pip-toast.css 512），此处只覆盖底色 */
@@ -426,7 +436,7 @@ html[data-splash] .lg-unit{animation:none !important}
 /* 骨架底部状态行（带上真实进度文案，不丢信息） */
 .dir-skel-note{
   display:flex;align-items:center;gap:7px;
-  padding:10px 14px 4px;font-size:11px;color:var(--ink-muted);
+  padding:10px 14px 4px;font-size:var(--fs-2xs);color:var(--ink-muted);
 }
 .dir-skel-note .dots{display:inline-flex;gap:3px}
 .dir-skel-note .dots i{
