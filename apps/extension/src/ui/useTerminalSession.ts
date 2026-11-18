@@ -152,6 +152,31 @@ function rebuildSelectionFromBuffer(terminal: Terminal): string {
     }, "");
 }
 
+/* 终端「自动应答」序列（本次修复配套）：
+   xterm 解析 PTY 发来的查询序列（DA1/DA2 `CSI c`、CPR `CSI R`、DECRPM `CSI $y`、
+   OSC 颜色/标题查询、窗口尺寸 `CSI t`）会自动回包，回包经 onData 冒出。
+   它不是用户输入，绝不能转发给 PTY —— 否则远端 shell 会把残留文本当命令执行
+   （线上现象：`-bash: 2R11: 未找到命令`、`rgb:0000/0000/0000: 没有那个文件或目录`）。
+   注意：`Shift+F3` 恰好也是 `CSI 1;2R`，与 CPR 同形，所以不能无条件全局过滤，
+   只在「回放写入窗口」内启用（见 writeReplayChunk），避免误吞用户按键。 */
+const TERMINAL_REPLY_PATTERN = /^(?:\u001b\[[?>]?[0-9;]*(?:c|R|t)|\u001b\[[?>]?[0-9;]*\$y|\u001b\][0-9]+;[^\u0007\u001b]*(?:\u0007|\u001b\\))+$/;
+
+function isTerminalReplySequence(data: string) {
+  if (!data.startsWith("\u001b")) {
+    return false;
+  }
+  return TERMINAL_REPLY_PATTERN.test(data);
+}
+
+/* 输出侧「查询序列」识别：出现这些就说明 xterm 马上会自动应答（需要开回放/应答窗口）。
+   与上面的应答模式相对：这里是 PTY → 终端 的提问，上面是 终端 → PTY 的回包。
+   与网关 stripTerminalQueries 保持同一口径（含窗口尺寸查询 CSI 14/16/18 t）。 */
+const TERMINAL_QUERY_PATTERN = /\u001b(?:\[[?>]?[0-9;]*[cn]|\[1[468](?:;[0-9]*)?t|\[[?>]?[0-9;]*\$p|\]1[0-2];\?|\]4;[0-9]+;\?)/;
+
+function containsTerminalQuery(chunk: string) {
+  return TERMINAL_QUERY_PATTERN.test(chunk);
+}
+
 export function useTerminalSession(options: UseTerminalSessionOptions) {
   const [connected, setConnected] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
@@ -177,6 +202,10 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
   const terminalReadyRef = useRef(false);
   const pendingInputTimerRef = useRef<number | null>(null);
   const pendingInputChunksRef = useRef<string[]>([]);
+  /* 回放写入窗口：此刻正要交给 xterm 解析的是「历史输出」，其中可能含查询序列，
+     xterm 会立即自动应答；应答必须丢弃，不能当键盘输入回传 PTY。 */
+  const replayingOutputRef = useRef(false);
+  const replayTimerRef = useRef<number | null>(null);
 
   const canApplyTerminalFit = useCallback(() => {
     const container = containerRef.current;
@@ -245,6 +274,32 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
     }
     pendingInputChunksRef.current = [];
   }, []);
+
+  const clearReplayWindow = useCallback(() => {
+    if (replayTimerRef.current !== null) {
+      window.clearTimeout(replayTimerRef.current);
+      replayTimerRef.current = null;
+    }
+    replayingOutputRef.current = false;
+  }, []);
+
+  /* 回放历史输出（transcript / initialBuffer / resumed 重放）：
+     写入期间打开「回放窗口」，onData 里丢弃 xterm 的自动应答。
+     xterm 的 write 按行分片异步解析，所以用 write 回调精确关闭窗口；
+     另加 2s 兜底，防止回调因渲染重入丢失导致窗口永久打开。 */
+  const writeReplayChunk = useCallback((terminal: Terminal, chunk: string) => {
+    replayingOutputRef.current = true;
+    if (replayTimerRef.current !== null) {
+      window.clearTimeout(replayTimerRef.current);
+    }
+    replayTimerRef.current = window.setTimeout(() => {
+      replayTimerRef.current = null;
+      replayingOutputRef.current = false;
+    }, 2000);
+    terminal.write(chunk, () => {
+      clearReplayWindow();
+    });
+  }, [clearReplayWindow]);
 
   const updateFollowOutputState = useCallback(() => {
     const viewport = containerRef.current?.querySelector(".xterm-viewport") as HTMLDivElement | null;
@@ -446,8 +501,9 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
       clearOutputSettleTimer();
       clearDecorationScanTimer();
       clearPendingInput();
+      clearReplayWindow();
     };
-  }, [options.active, clearFitTimers, clearOutputSettleTimer, clearDecorationScanTimer, clearPendingInput, scheduleFit]);
+  }, [options.active, clearFitTimers, clearOutputSettleTimer, clearDecorationScanTimer, clearPendingInput, clearReplayWindow, scheduleFit]);
 
   useEffect(() => {
     if (!options.active || !options.serverId) {
@@ -468,6 +524,7 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
     clearOutputSettleTimer();
     clearDecorationScanTimer();
     clearPendingInput();
+    clearReplayWindow();
     stopTerminal({
       preserveSession: options.preserveSessionOnDispose,
       preserveSessionKey: options.preserveSessionOnDispose,
@@ -484,7 +541,7 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
     terminalRef.current = null;
     fitAddonRef.current = null;
     options.onTerminalInstanceChange?.(null);
-  }, [clearFitTimers, clearOutputSettleTimer, clearDecorationScanTimer, clearPendingInput, options.preserveSessionOnDispose]);
+  }, [clearFitTimers, clearOutputSettleTimer, clearDecorationScanTimer, clearPendingInput, clearReplayWindow, options.preserveSessionOnDispose]);
 
   function clearReconnectTimer() {
     if (reconnectTimerRef.current !== null) {
@@ -526,6 +583,8 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
     onDataDisposableRef.current = null;
     onResizeDisposableRef.current?.dispose();
     onResizeDisposableRef.current = null;
+    /* 会话停止/重连：关闭回放窗口，避免过滤标记延续到下一次连接 */
+    clearReplayWindow();
     const socket = socketRef.current;
     const activeSessionId = options.sessionId.trim();
     if (socket?.readyState === WebSocket.OPEN && activeSessionId) {
@@ -601,6 +660,14 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
     onDataDisposableRef.current?.dispose();
     commandBufferRef.current = new CommandLineBuffer();
     onDataDisposableRef.current = terminal.onData((data: string) => {
+      /* 自动应答过滤（2026-11-17）：仅在「回放窗口」内生效。
+         回放 transcript 时，里面残留的 DA/CPR/OSC 查询序列会让 xterm 立即自动应答，
+         应答经 onData 冒出；若照常转发，远端 shell 就把应答当命令执行 ——
+         线上现象正是 `-bash: 2R11: 未找到命令`、`rgb:0000/0000/0000: 没有那个文件或目录`。
+         窗口外不过滤：`Shift+F3` 也是 `CSI 1;2R`，与 CPR 同形，全局过滤会误吞按键。 */
+      if (replayingOutputRef.current && isTerminalReplySequence(data)) {
+        return;
+      }
       /* 命令历史采集：只累积用户键入的字符，遇到 Enter 提交一条。
          放在发送之前 —— 即使用户输入被远端忽略，本地记录仍反映真实意图。
          含方向键/Tab 的输入会被缓冲器整体放弃（宁可漏记也不要错记）。 */
@@ -706,7 +773,8 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
           }
           if (payload.chunk) {
             terminalReadyRef.current = true;
-            terminal.write(payload.chunk);
+            /* 回放历史（含 resumed 重放的 transcript）：走回放窗口，屏蔽自动应答回传 */
+            writeReplayChunk(terminal, payload.chunk);
             settleTerminalViewport();
           }
           options.onStatus(
@@ -723,7 +791,13 @@ export function useTerminalSession(options: UseTerminalSessionOptions) {
         }
 
         if (payload.chunk) {
-          terminal.write(payload.chunk);
+          /* 实时输出同样可能夹带查询序列（部分 shell/程序启动时会探测终端能力）。
+             仅在真正含查询时才开窗口：平铺输出照常直写，不引入额外延迟。 */
+          if (containsTerminalQuery(payload.chunk)) {
+            writeReplayChunk(terminal, payload.chunk);
+          } else {
+            terminal.write(payload.chunk);
+          }
           settleTerminalViewport();
           if (!connected) {
             setConnected(true);

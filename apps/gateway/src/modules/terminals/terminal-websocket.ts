@@ -11,6 +11,7 @@ import {
   getTerminalSession,
   resetTerminalKeepalive,
   sendTerminalMessage,
+  stripTerminalQueries,
   type TerminalSessionState,
 } from "./terminal-session-manager.js";
 
@@ -54,7 +55,9 @@ export function registerTerminalWebsocket(terminalWsServer: WebSocketServer, ssh
                 type: "ready",
                 sessionId: existing.sessionId,
                 resumed: true,
-                chunk: existing.transcript,
+                /* 出口再剔除一次：兼容本次修复前已入档的旧 transcript（含查询序列），
+                   否则重连回放仍会让 xterm 自动应答 */
+                chunk: stripTerminalQueries(existing.transcript),
                 timestamp: new Date().toISOString()
               });
               return;
@@ -95,7 +98,10 @@ export function registerTerminalWebsocket(terminalWsServer: WebSocketServer, ssh
             cleanup: () => connection.cleanup(),
             keepaliveTimer: null,
             detachTimer: null,
-            transcript: connection.initialBuffer || ""
+            /* initialBuffer 是登录横幅 + 注入 cd 的原始字节（见 ssh-executor 的
+               injectTerminalCwd），它会在本帧与新 socket 重连时被回放，同样要剔除
+               查询序列，否则 xterm 重放时会自动应答并把应答当命令发给远端 shell。 */
+            transcript: stripTerminalQueries(connection.initialBuffer || "")
           };
 
           createTerminalSession(sessionState);
