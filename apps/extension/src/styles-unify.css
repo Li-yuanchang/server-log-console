@@ -53,10 +53,6 @@
 
   /* 统一焦点环：全站只有这一种焦点表达（原有 dashed outline / 2px solid 混用） */
   --ring: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
-
-  /* 工作区内凹底色：比 --panel 暗一档，让「厂」字框读作同一块面板，
-     内容区读作嵌进去的凹槽。用 color-mix 而非字面色，自动跟随所有主题。 */
-  --workbench-recess: color-mix(in srgb, var(--bg) 46%, var(--line) 54%);
 }
 
 .app-shell.ui-density-comfortable {
@@ -68,10 +64,11 @@
 }
 
 /* ---------------------------------------------------------------------------
-   § 2 外壳：连续的「厂」字框 + 内凹工作区
+   § 2 外壳：连续的「厂」字框
    原 .app-shell 的 4px padding 把 --bg 露在最外圈（面板是 --panel）→ 异色带。
-   这里归零，让侧栏与顶栏直接贴到窗口边缘，两者连成一块完整 chrome；
-   工作区则靠 margin + 内凹底色 + 描边，读作嵌在框里的内容面。
+   这里归零，让侧栏与顶栏直接贴到窗口边缘，两者连成一块完整 chrome。
+   工作区取满幅（2026-11-18 撤掉原「margin + 内凹底色 + 描边」的内嵌做法，
+   见下方工作区规则注释）。
    ⚠ 小窗形态（.pip-standalone / .pip-terminal-standalone）自有布局，整节排除。
 ------------------------------------------------------------------------------ */
 .app-shell:not(.pip-standalone):not(.pip-terminal-standalone) {
@@ -104,14 +101,17 @@
   background: var(--panel);
 }
 
-/* 工作区 = 嵌进框里的内容面。左边距与顶栏 12px 内边距对齐，
-   视觉上内容起始线贯通顶栏与正文，这是「框与 body 是一个整体」的关键。 */
+/* 工作区 = 满幅铺满（2026-11-18 用户反馈「四周呼吸间距 + 内部 border」）。
+   本层原给工作区加了 margin 10/12 + 1px 描边 + 圆角 + 内凹底色，读作
+   「嵌进框里的内容面」；实测日志区四周多出一圈留白与一道内框线，
+   与侧栏/顶栏之间出现断层。现回归满幅：无外边距、无描边、无圆角。
+   ⚠ 侧栏与顶栏的「厂」字笔画连接由上面两条保留，不受本次改动影响。 */
 .app-shell:not(.pip-standalone):not(.pip-terminal-standalone) .workspace-panel,
 .app-shell:not(.pip-standalone):not(.pip-terminal-standalone) .advanced-panel {
-  margin: 10px 12px 12px;
-  border: 1px solid var(--line);
-  border-radius: var(--ctl-r-lg);
-  background: var(--workbench-recess);
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  background: var(--panel);
   box-shadow: none;
 }
 
@@ -390,33 +390,11 @@
   font-size: var(--fs-2xs);
 }
 
-/* ---------------------------------------------------------------------------
-   § 10 滚动条
-   全站一套细滚动条：常态几乎隐形，hover 才显形，避免粗灰条切断版面。
------------------------------------------------------------------------------- */
-.theme-modern *::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
-
-.theme-modern *::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.theme-modern *::-webkit-scrollbar-thumb {
-  border: 3px solid transparent;
-  border-radius: 999px;
-  background-clip: content-box;
-  background-color: color-mix(in srgb, var(--ink) 18%, transparent);
-}
-
-.theme-modern *::-webkit-scrollbar-thumb:hover {
-  background-color: color-mix(in srgb, var(--ink) 32%, transparent);
-}
-
-.theme-modern *::-webkit-scrollbar-corner {
-  background: transparent;
-}
+/* 滚动条不归本文件管（2026-11-18 移除 §10）：
+   本层在级联最末加载，若在此重复定义滚动条，会以同特异性压掉
+   theme-modern.css §31 的「6px + 默认隐藏 + 悬停显色」基准
+   （用户决策 2026-09-30），实测后果是滚动条常显且悬停变粗。
+   滚动条唯一权威：theme-modern.css §31。 */
 
 /* 降噪档（ui-motion-reduced 已在 styles-layout.css 压掉时长，这里只需保证
    本文件新增的 transition 同样走那条规则 —— 变量化后自动继承，无需重复声明） */
