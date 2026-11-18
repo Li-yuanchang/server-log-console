@@ -1,4 +1,11 @@
-import { Client, type ClientChannel, type SFTPWrapper } from "ssh2";
+import { Client, type ClientChannel, type ConnectConfig, type SFTPWrapper } from "ssh2";
+import * as SshAlgorithms from "ssh2/lib/protocol/constants.js";
+import type {
+  CipherAlgorithm as TypesCipher,
+  KexAlgorithm as TypesKex,
+  MacAlgorithm as TypesMac,
+  ServerHostKeyAlgorithm as TypesHostKey
+} from "ssh2";
 import type { JumpServerAssetOption } from "@server-log-console/shared";
 import { CredentialResolverService } from "../servers/credential-resolver.service.js";
 import { LocalConfigService } from "../servers/local-config.service.js";
@@ -48,6 +55,96 @@ function humanizeSshError(error: unknown, context: { username?: string; host?: s
   return humanizeSshErrorText(raw, context);
 }
 
+/**
+ * 老旧 sshd 算法兼容（XenServer 6.5 / CentOS 5 / RHEL 5 等）。
+ *
+ * 背景：ssh2 1.x 的默认算法列表只含 SHA-2 起步的现代算法
+ * （curve25519-sha256、ecdh-*、group14-sha256…）。XenServer 6.5 底层是
+ * OpenSSH_4.3，KEXINIT 只提供 group1 / group14 / group-exchange 的 **sha1** 变体
+ * 与 ssh-rsa 主机密钥，与默认列表零交集，连接直接以
+ * `Handshake failed: no matching key exchange algorithm` 失败。
+ * FinalShell 能连，是因为它自带老算法兜底；这里补上同样的兜底。
+ *
+ * 策略：先按 ssh2 默认列表连（现代算法优先，不让兼容档拉低所有机器的安全等级）；
+ * 只有当首轮失败于算法协商时，才追加「仅老服务器需要」的算法重试一次。
+ * 追加的是 ssh2 运行时 SUPPORTED_* 里、但不在 DEFAULT_* 里的算法，
+ * 全部在进程内取交集后使用——写死会命中「本机 OpenSSL 不支持该 cipher」
+ * 之类的二次失败（实测 blowfish-cbc / cast128-cbc 在 macOS 上不可用）。
+ */
+function pickLegacyAlgorithms<T>(supported: readonly T[], defaults: readonly T[], order: readonly T[]): T[] {
+  const supportedSet = new Set(supported);
+  const defaultSet = new Set(defaults);
+  return order.filter((item) => supportedSet.has(item) && !defaultSet.has(item));
+}
+
+const LEGACY_ALGORITHMS: NonNullable<ConnectConfig["algorithms"]> = {
+  kex: pickLegacyAlgorithms(
+    SshAlgorithms.SUPPORTED_KEX,
+    SshAlgorithms.DEFAULT_KEX,
+    [
+      "diffie-hellman-group-exchange-sha256",
+      "diffie-hellman-group-exchange-sha1",
+      "diffie-hellman-group14-sha1",
+      "diffie-hellman-group1-sha1"
+    ]
+  ),
+  serverHostKey: pickLegacyAlgorithms(
+    SshAlgorithms.SUPPORTED_SERVER_HOST_KEY,
+    SshAlgorithms.DEFAULT_SERVER_HOST_KEY,
+    ["ssh-rsa", "ssh-dss"]
+  ),
+  cipher: pickLegacyAlgorithms(
+    SshAlgorithms.SUPPORTED_CIPHER,
+    SshAlgorithms.DEFAULT_CIPHER,
+    [
+      "aes128-ctr",
+      "aes192-ctr",
+      "aes256-ctr",
+      "aes128-cbc",
+      "aes192-cbc",
+      "aes256-cbc",
+      "3des-cbc",
+      "blowfish-cbc",
+      "cast128-cbc"
+    ]
+  ),
+  hmac: pickLegacyAlgorithms(
+    SshAlgorithms.SUPPORTED_MAC,
+    SshAlgorithms.DEFAULT_MAC,
+    ["hmac-sha1", "hmac-sha1-96", "hmac-md5", "hmac-md5-96", "hmac-ripemd160"]
+  )
+};
+
+/** 首轮失败是否属于「算法协商无交集」——只有这类失败才值得用老算法重试 */
+function isAlgorithmNegotiationError(error: unknown): boolean {
+  const raw = error instanceof Error ? error.message : String(error);
+  return /no matching (key exchange|cipher|mac|host key|compression)|handshake failed|before handshake|kex|algorithm/i.test(raw);
+}
+
+/**
+ * @types/ssh2 把 algorithms 各字段声明为 `AlgorithmList<T> | T[]`，
+ * 其中 AlgorithmList 是 `{ append, prepend, remove }` 形式（不可迭代）。
+ * 我们只产出数组形态，非数组一律视为「未指定」。
+ */
+function toAlgorithmArray<T>(value: unknown): T[] {
+  return Array.isArray(value) ? (value as T[]) : [];
+}
+
+/** ssh2 的 cfg.algorithms 是「追加到默认列表之后」，不是替换：现代算法仍优先 */
+function withLegacyAlgorithms(config: ConnectConfig): ConnectConfig {
+  const base = (config.algorithms ?? {}) as Record<string, unknown>;
+  return {
+    ...config,
+    algorithms: {
+      ...base,
+      kex: [...toAlgorithmArray<TypesKex>(base.kex), ...toAlgorithmArray<TypesKex>(LEGACY_ALGORITHMS.kex)],
+      serverHostKey: [...toAlgorithmArray<TypesHostKey>(base.serverHostKey), ...toAlgorithmArray<TypesHostKey>(LEGACY_ALGORITHMS.serverHostKey)],
+      cipher: [...toAlgorithmArray<TypesCipher>(base.cipher), ...toAlgorithmArray<TypesCipher>(LEGACY_ALGORITHMS.cipher)],
+      hmac: [...toAlgorithmArray<TypesMac>(base.hmac), ...toAlgorithmArray<TypesMac>(LEGACY_ALGORITHMS.hmac)]
+    }
+  };
+}
+
 /** sshd 的 MaxSessions（默认 10）耗尽或连接半死时，新通道会被远端拒绝。
     识别这类错误以便上层踢掉整条连接重建，而不是在僵死连接上无限重试。 */
 function isChannelOpenFailureError(error: unknown): boolean {
@@ -75,6 +172,9 @@ function humanizeSshErrorText(raw: string, context: { username?: string; host?: 
   }
   if (/ECONNRESET|socket hang up|connection lost/i.test(raw)) {
     return `连接被重置 (${target})：远程主机关闭了连接`;
+  }
+  if (/no matching (key exchange|cipher|mac|host key|compression)/i.test(raw)) {
+    return `SSH 算法协商失败 (${target})：对方 sshd 过旧或已禁用老算法，与服务端无共同算法`;
   }
   if (/handshake failed|key exchange|before handshake/i.test(raw)) {
     return `SSH 握手失败 (${target})：目标端口可能不是 SSH 服务`;
@@ -300,7 +400,7 @@ export class SshExecutorService {
     const server = this.serverRegistry.getServer(serverId);
     const credentials = this.credentialResolver.resolve(server);
 
-    const { client, sftp } = await new Promise<{ client: Client; sftp: SFTPWrapper }>((resolve, reject) => {
+    const { client, sftp } = await this.connectWithLegacyFallback<{ client: Client; sftp: SFTPWrapper }>((extra) => new Promise<{ client: Client; sftp: SFTPWrapper }>((resolve, reject) => {
       const c = this.createSshClient(credentials.password);
       let settled = false;
 
@@ -338,9 +438,10 @@ export class SshExecutorService {
           tryKeyboard: true,
           readyTimeout: Math.min(timeoutMs, 20000),
           keepaliveInterval: 10000,
-          keepaliveCountMax: 60
+          keepaliveCountMax: 60,
+          ...extra
         });
-    }).catch((error) => {
+    })).catch((error) => {
       throw new Error(humanizeSshError(error, credentials));
     });
 
@@ -571,7 +672,7 @@ export class SshExecutorService {
     }
     const bastionCredentials = this.credentialResolver.resolve(bastion);
 
-    return new Promise<string>((resolve, reject) => {
+    return this.connectWithLegacyFallback<string>((extra) => new Promise<string>((resolve, reject) => {
       const client = this.createSshClient(bastionCredentials.password);
       let settled = false;
 
@@ -673,9 +774,10 @@ export class SshExecutorService {
           tryKeyboard: true,
           readyTimeout: Math.min(timeoutMs, 20000),
           keepaliveInterval: 10000,
-          keepaliveCountMax: 30
+          keepaliveCountMax: 30,
+          ...extra
         });
-    });
+    }));
   }
 
   async execWithManagedConnection(connection: ManagedSshConnection, command: string, timeoutMs = 45000): Promise<string> {
@@ -1161,9 +1263,9 @@ export class SshExecutorService {
     command: string,
     timeoutMs = 20000
   ): Promise<string> {
-    const client = this.createSshClient(credentials.password);
-
-    const connection = await new Promise<Client>((resolve, reject) => {
+    const connection = await this.connectWithLegacyFallback<Client>((extra) => {
+      const client = this.createSshClient(credentials.password);
+      return new Promise<Client>((resolve, reject) => {
       let settled = false;
       const timeout = setTimeout(() => {
         if (settled) return;
@@ -1193,8 +1295,10 @@ export class SshExecutorService {
           password: credentials.password,
           privateKey: credentials.privateKey,
           readyTimeout: Math.min(timeoutMs, 20000),
-          tryKeyboard: true
+          tryKeyboard: true,
+          ...extra
         });
+      });
     }).catch((error: unknown) => {
       throw new Error(humanizeSshError(error, credentials));
     });
@@ -1243,7 +1347,7 @@ export class SshExecutorService {
       return connection;
     }
 
-    return new Promise<ManagedSshConnection>((resolve, reject) => {
+    return this.connectWithLegacyFallback<ManagedSshConnection>((extra) => new Promise<ManagedSshConnection>((resolve, reject) => {
       const shellOpts: Record<string, unknown> = { term: "xterm", cols: 160, rows: 48 };
       connection.client.shell(shellOpts, async (error, stream) => {
         if (error) {
@@ -1267,7 +1371,7 @@ export class SshExecutorService {
           }
         });
       });
-    });
+    }));
   }
 
   /** Run command on a pooled Client (no cleanup — pool manages lifecycle). */
@@ -1551,11 +1655,34 @@ export class SshExecutorService {
     return client;
   }
 
+  /**
+   * 建连的统一入口：首轮用默认（现代）算法；若因为算法协商无交集失败，
+   * 再追加老算法重试一次（XenServer 6.5 / OpenSSH 4.3 这类机器）。
+   *
+   * `attempt` 必须是幂等的「造 client + connect + 返回 promise」函数：
+   * 失败时会整个重建，不复用上一轮已半死的 socket。
+   */
+  private async connectWithLegacyFallback<T>(
+    attempt: (config?: ConnectConfig) => Promise<T>
+  ): Promise<T> {
+    try {
+      return await attempt();
+    } catch (error) {
+      if (!isAlgorithmNegotiationError(error)) {
+        throw error;
+      }
+      console.warn(
+        `[ssh] 首轮算法协商失败（${formatErrorMessage(error)}），追加老算法（group*-sha1 / ssh-rsa / CBC）重试`
+      );
+      return await attempt(withLegacyAlgorithms({}));
+    }
+  }
+
   private connectManaged(serverId: string, timeoutMs: number): Promise<ManagedSshConnection> {
     const server = this.serverRegistry.getServer(serverId);
     const credentials = this.credentialResolver.resolve(server);
 
-    return new Promise<ManagedSshConnection>((resolve, reject) => {
+    return this.connectWithLegacyFallback<ManagedSshConnection>((extra) => new Promise<ManagedSshConnection>((resolve, reject) => {
       const client = this.createSshClient(credentials.password);
       let settled = false;
 
@@ -1592,9 +1719,10 @@ export class SshExecutorService {
           readyTimeout: Math.min(timeoutMs, 20000),
           tryKeyboard: true,
           keepaliveInterval: 10000,
-          keepaliveCountMax: 30
+          keepaliveCountMax: 30,
+          ...extra
         });
-    });
+    }));
   }
 
   private async connectManagedViaBastion(serverId: string, bastionId: string, timeoutMs: number): Promise<ManagedSshConnection> {
@@ -1608,7 +1736,7 @@ export class SshExecutorService {
     const targetCredentials = this.credentialResolver.resolve(targetServer);
     const bastionCredentials = this.credentialResolver.resolve(bastionServer);
 
-    return new Promise<ManagedSshConnection>((resolve, reject) => {
+    return this.connectWithLegacyFallback<ManagedSshConnection>((extra) => new Promise<ManagedSshConnection>((resolve, reject) => {
       const outer = this.createSshClient(bastionCredentials.password);
       const inner = this.createSshClient(targetCredentials.password);
       let settled = false;
@@ -1663,7 +1791,8 @@ export class SshExecutorService {
                 readyTimeout: Math.min(timeoutMs, 20000),
                 tryKeyboard: true,
                 keepaliveInterval: 10000,
-                keepaliveCountMax: 60
+                keepaliveCountMax: 60,
+                ...extra
               });
           });
         })
@@ -1682,9 +1811,10 @@ export class SshExecutorService {
           tryKeyboard: true,
           readyTimeout: Math.min(timeoutMs, 20000),
           keepaliveInterval: 10000,
-          keepaliveCountMax: 30
+          keepaliveCountMax: 30,
+          ...extra
         });
-    });
+    }));
   }
 
   private async connectManagedViaJumpServerShell(serverId: string, bastionId: string, timeoutMs: number): Promise<ManagedSshConnection> {
@@ -1693,7 +1823,7 @@ export class SshExecutorService {
     const bastionCredentials = this.credentialResolver.resolve(bastionServer);
     const route = this.localConfigService.getServerRoute(serverId);
 
-    return new Promise<ManagedSshConnection>((resolve, reject) => {
+    return this.connectWithLegacyFallback<ManagedSshConnection>((extra) => new Promise<ManagedSshConnection>((resolve, reject) => {
       const client = this.createSshClient(bastionCredentials.password);
       let settled = false;
 
@@ -1756,16 +1886,17 @@ export class SshExecutorService {
           tryKeyboard: true,
           readyTimeout: Math.min(timeoutMs, 20000),
           keepaliveInterval: 10000,
-          keepaliveCountMax: 30
+          keepaliveCountMax: 30,
+          ...extra
         });
-    });
+    }));
   }
 
   private openJumpServerShellManaged(serverId: string, timeoutMs: number): Promise<ManagedSshConnection> {
     const server = this.serverRegistry.getServer(serverId);
     const credentials = this.credentialResolver.resolve(server);
 
-    return new Promise<ManagedSshConnection>((resolve, reject) => {
+    return this.connectWithLegacyFallback<ManagedSshConnection>((extra) => new Promise<ManagedSshConnection>((resolve, reject) => {
       const client = this.createSshClient(credentials.password);
       let settled = false;
 
@@ -1840,9 +1971,10 @@ export class SshExecutorService {
           tryKeyboard: true,
           readyTimeout: Math.min(timeoutMs, 20000),
           keepaliveInterval: 10000,
-          keepaliveCountMax: 30
+          keepaliveCountMax: 30,
+          ...extra
         });
-    });
+    }));
   }
 
   private async queryJumpServerAssets(
@@ -1854,7 +1986,7 @@ export class SshExecutorService {
     const bastionServer = this.serverRegistry.getServer(bastionId);
     const bastionCredentials = this.credentialResolver.resolve(bastionServer);
 
-    return new Promise<JumpServerAssetCandidate[]>((resolve, reject) => {
+    return this.connectWithLegacyFallback<JumpServerAssetCandidate[]>((extra) => new Promise<JumpServerAssetCandidate[]>((resolve, reject) => {
       const client = this.createSshClient(bastionCredentials.password);
       let settled = false;
 
@@ -1927,9 +2059,10 @@ export class SshExecutorService {
           tryKeyboard: true,
           readyTimeout: Math.min(timeoutMs, 20000),
           keepaliveInterval: 10000,
-          keepaliveCountMax: 30
+          keepaliveCountMax: 30,
+          ...extra
         });
-    });
+    }));
   }
 
   private async enterJumpServerTarget(
@@ -2031,7 +2164,7 @@ export class SshExecutorService {
     const server = this.serverRegistry.getServer(bastionServerId);
     const credentials = this.credentialResolver.resolve(server);
 
-    return new Promise<ManagedSshConnection>((resolve, reject) => {
+    return this.connectWithLegacyFallback<ManagedSshConnection>((extra) => new Promise<ManagedSshConnection>((resolve, reject) => {
       const client = this.createSshClient(credentials.password);
       let settled = false;
 
@@ -2138,9 +2271,10 @@ export class SshExecutorService {
           tryKeyboard: true,
           readyTimeout: Math.min(timeoutMs, 20000),
           keepaliveInterval: 10000,
-          keepaliveCountMax: 30
+          keepaliveCountMax: 30,
+          ...extra
         });
-    });
+    }));
   }
 
   isJumpServerBastion(server: ReturnType<ServerRegistryService["getServer"]>) {

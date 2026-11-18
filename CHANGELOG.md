@@ -6,6 +6,15 @@
 - **`docs/版本修复归档-2026-04-14.md`** — 记录问题背景、根因、修改点、经验教训和防复发清单。
 - **维护约定** — 详细代码链、安装版资源命中、排查过程与复盘结论统一写入归档，不在 `CHANGELOG.md` 重复展开。
 
+## [0.3.338] — 2026-11-18
+
+老旧 sshd 算法兼容版本。
+
+### 修复
+
+- **连不上老服务器（XenServer 6.5 / CentOS 5 / RHEL 5 等）** — ssh2 的默认算法仅含 SHA-2 起步的现代算法（curve25519、ecdh-*、group14-sha256…），而这类机器的 sshd（OpenSSH 4.3 一代）只提供 `group*-sha1` 与 `ssh-rsa`，双方零交集，握手直接以 `no matching key exchange algorithm` 失败；FinalShell 能连是因为它自带老算法兜底。现补上同样的兜底：**先按默认现代算法连**（不让兼容档拉低所有机器的安全等级），只有首轮失败于算法协商时才追加老算法（`diffie-hellman-group*-sha1`、`ssh-rsa` / `ssh-dss`、CBC/3DES、`hmac-sha1` / `hmac-md5` 等）重试一次。追加列表从 ssh2 运行时 SUPPORTED 与 DEFAULT 取差集动态生成，避免写死命中「本机 OpenSSL 不支持该 cipher」（实测 blowfish-cbc / cast128-cbc 在 macOS 上不可用）。
+- **算法协商失败的错误提示更准确** — 该类失败原先落入通用「握手失败：目标端口可能不是 SSH 服务」，容易误导排查；现单独识别为「SSH 算法协商失败：对方 sshd 过旧或已禁用老算法，与服务端无共同算法」。
+
 ## [0.3.337] — 2026-11-18
 
 工作区满幅与滚动条权威归一版本。
