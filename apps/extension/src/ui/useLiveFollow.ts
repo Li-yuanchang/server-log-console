@@ -84,7 +84,23 @@ export function useLiveFollow(opts: UseLiveFollowOptions): UseLiveFollowReturn {
     const pending = pendingLiveChunkRef.current;
     if (!pending) return;
     pendingLiveChunkRef.current = "";
-    setLiveFollowContent((current) => trimLiveContent(`${current || sliceContentRef.current || ""}${pending}`));
+    /*
+     * 拼接前先各自裁剪（2026-11-19）。
+     *
+     * 原实现 `trimLiveContent(`${current}${pending}`)` 是「先拼再裁」：
+     * 大日志（实测 11 GB catalina.out）实时跟随下，若某一拍 pending 很大，
+     * 这一步会先构造一个巨大的临时字符串，再切掉前面 —— 单次超大分配会触发
+     * V8 Oilpan「Large allocation. Ran out of reservation」并直接杀掉渲染进程
+     * （实测 2026-11-19 14:40:26，renderer-gone crashed 5，JS 堆却只有 9.5 MB）。
+     *
+     * 改为先把 pending 限制在最大容量内，再与已裁剪的 current 合并，
+     * 保证任何时刻的临时字符串都不超过上限的两倍。
+     */
+    const boundedPending = trimLiveContent(pending);
+    setLiveFollowContent((current) => {
+      const base = current || sliceContentRef.current || "";
+      return trimLiveContent(`${base}${boundedPending}`);
+    });
   }
 
   function scheduleLiveFlush() {
@@ -214,7 +230,11 @@ export function useLiveFollow(opts: UseLiveFollowOptions): UseLiveFollowReturn {
         }
 
         if (payload.chunk) {
-          pendingLiveChunkRef.current += payload.chunk;
+          /* 累积上限（2026-11-19）：见 flushPendingLiveChunks 注释。
+             攒批期间若不设上限，突发大量数据会让 pending 无限增长，
+             下一拍拼接即触发超大分配。这里只保留最近的部分 ——
+             实时跟随本就只展示末尾窗口，丢掉更早的 chunk 不影响可用性。 */
+          pendingLiveChunkRef.current = trimLiveContent(pendingLiveChunkRef.current + payload.chunk);
           scheduleLiveFlush();
         }
       } catch (error) {

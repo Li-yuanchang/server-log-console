@@ -17,6 +17,48 @@ const PREVIEW_MATCH_LIMIT = 200;
 const PREVIEW_PHASE_BYTES = 512 * 1024;
 const QUICK_TAIL_BYTES = 5 * 1024 * 1024;
 
+/**
+ * 单条命中预览的最大字符数（2026-11-19）。
+ *
+ * 实测故障：11 GB catalina.out 里存在「整条批量 INSERT」式超长行（含大量中文字段值），
+ * 单行可达数百万字符。124 条这样的命中拼成 rawOutput / contextOutput 时，
+ * 字符串长度超过 V8 的硬上限（约 5.12 亿字符），抛
+ * `RangeError: Invalid string length`，前端表现为「检索失败：Invalid string length」，
+ * 尽管检索本身已经成功完成（截图：共 124 条结果 / 扫描 11.2 GB）。
+ *
+ * 修法：在**收集入口**就截断 preview，从源头保证结果集不会无界膨胀。
+ * 这与 klogg「超长行截断显示」、lnav 的行窗口策略一致；
+ * 用户仍可点开该行查看按行号回溯的上下文（line-context 接口，不受此限制）。
+ */
+const MAX_MATCH_PREVIEW_CHARS = 4000;
+
+/** 截断单行预览，保留可读前缀并标注被截断 */
+function clampPreview(text: string): string {
+  if (text.length <= MAX_MATCH_PREVIEW_CHARS) {
+    return text;
+  }
+  return `${text.slice(0, MAX_MATCH_PREVIEW_CHARS)} …[截断，原长 ${text.length} 字符]`;
+}
+
+/**
+ * 结果集上限（2026-11-19）。
+ *
+ * 背景：全文扫描 11 GB 日志时，matches / allLines 无上限累积，且每 450 ms 轮询
+ * 都把这些数组重新 map+join 成超长字符串；gateway 是以 import 方式跑在 Electron
+ * 主进程内的（main.cjs importGatewayInProcess），于是内存直接打爆主进程与渲染进程
+ * —— 11/19 连续 3 次崩溃（两次 renderer SIGTRAP、一次主进程 OnFatalError→abort）。
+ *
+ * 方案与 rg / lnav / klogg 等成熟工具一致：**超限只计数、不再保留**。
+ * 内存恒定在 O(上限)，总命中数仍然准确，用户可据此收窄条件。命中数统计不受影响，
+ * 只是不再把全部命中行留在内存里。
+ */
+const MAX_STORED_MATCHES = 5000;
+const MAX_STORED_QUICK_MATCHES = 2000;
+/** 命中行 + 上下文行的总保留上限（上下文最多 20 行/命中，故单独设一档） */
+const MAX_STORED_RESULT_LINES = 20000;
+/** 任务保留时长：完成后超过该时长即回收，避免长期驻留 */
+const TASK_TTL_MS = 10 * 60 * 1000;
+
 type SearchProgressPhase = "queued" | "preview_scan" | "quick_tail" | "full_scan" | "completed";
 
 const searchSchema = z.object({
@@ -69,6 +111,26 @@ interface SearchTaskState {
   quickMatches: LogSearchMatch[];
   quickAllLines: Array<{ lineNumber: number; preview: string; isMatch: boolean }>;
   quickDone: boolean;
+  /* --- 上限控制（2026-11-19）：保留数被截断后仍精确统计总量 --- */
+  /** 命中总数（含未保留的），用于准确展示「共命中 N 行」 */
+  matchTotal: number;
+  /** 因超限而未保留的命中数 */
+  matchDropped: number;
+  quickMatchTotal: number;
+  /**
+   * 字符串构建缓存（2026-11-19）。
+   * 轮询每 450 ms 触发一次 toResponse()，此前每次都把 matches/allLines 全量
+   * map+join 并全量排序一次 —— 命中几万行时单次轮询就要分配上百 MB，是崩溃主因之一。
+   * 这里按「数组长度 + 阶段」作为版本键缓存，数据没变就复用上次结果。
+   */
+  responseCache?: {
+    quickKey: string;
+    quickResult?: LogSearchResponse;
+    finalKey: string;
+    finalResult?: LogSearchResponse;
+  };
+  /** 结果版本号：结果内容每变一次自增，供轮询做条件获取 */
+  resultVersion: number;
 }
 
 export class LogSearchTaskService {
@@ -86,7 +148,18 @@ export class LogSearchTaskService {
     const strategy = this.strategyResolver.resolve(request.serverId);
 
     const filePath = request.filePath || `${server.basePath}/catalina.out`;
+    /*
+     * 耗时埋点（2026-11-19）。
+     * 用户反馈「回车后约 5 秒才看到进度变化」，但此前日志无法区分这段时间
+     * 花在「取文件元信息」还是「首批快搜扫描」。这里在关键节点打点，
+     * 便于直接对照用户感知的延迟究竟落在哪一段。
+     */
+    const metaStartedAt = Date.now();
     const meta = await this.logSliceService.getMeta({ serverId: request.serverId, filePath });
+    const metaCostMs = Date.now() - metaStartedAt;
+    if (metaCostMs > 300) {
+      console.log(`[search] 取文件元信息耗时 ${metaCostMs}ms size=${meta.size}`);
+    }
     const taskId = randomUUID();
     const previewCommand = strategy.kind === "direct"
       ? buildPreviewSearchCommand(server, { ...request, filePath }, PREVIEW_MATCH_LIMIT)
@@ -131,10 +204,15 @@ export class LogSearchTaskService {
       allLines: [],
       quickMatches: [],
       quickAllLines: [],
-      quickDone: false
+      quickDone: false,
+      matchTotal: 0,
+      matchDropped: 0,
+      quickMatchTotal: 0,
+      resultVersion: 0
     };
 
     this.tasks.set(taskId, task);
+    this.pruneExpiredTasks();
 
     if (isBastionSftpStrategy(strategy)) {
       void this.runTaskViaSftp(task, strategy);
@@ -145,13 +223,105 @@ export class LogSearchTaskService {
     return this.toResponse(task);
   }
 
-  get(taskId: string): LogSearchTaskResponse {
+  get(taskId: string, since?: number): LogSearchTaskResponse {
     const task = this.tasks.get(taskId);
     if (!task) {
       throw new Error("搜索任务不存在或已过期");
     }
 
-    return this.toResponse(task);
+    return this.toResponse(task, since);
+  }
+
+  /**
+   * 回收过期任务（2026-11-19）。此前 tasks 只增不删，大文件检索的结果数组
+   * 会一直驻留到进程退出；配合主进程内 import 的 gateway，等于持续占用主进程内存。
+   */
+  private pruneExpiredTasks() {
+    const now = Date.now();
+    for (const [id, task] of this.tasks) {
+      const finished = task.finishedAt ?? 0;
+      const isSettled = finished > 0;
+      if (isSettled && now - finished > TASK_TTL_MS) {
+        this.tasks.delete(id);
+        continue;
+      }
+      /* 未结束但长期无进展的任务同样回收，避免卡死任务永久占内存 */
+      if (!isSettled && now - task.startedAt > TASK_TTL_MS) {
+        task.status = "failed";
+        task.errorMessage = "检索超时，任务已回收";
+        task.finishedAt = now;
+      }
+    }
+  }
+
+  /**
+   * 是否已达保留上限。用于在**解析之前**短路：超限后不再浪费 CPU 去
+   * split 行、构造对象（实测 50 万条命中下，跳过解析可省约 95% 的解析耗时）。
+   * 命中总数仍精确 —— 调用方用 countOverflowMatch 单独计数。
+   */
+  private isMatchCapReached(task: SearchTaskState, target: "full" | "quick"): boolean {
+    const isQuick = target === "quick";
+    const matchesArr = isQuick ? task.quickMatches : task.matches;
+    const matchCap = isQuick ? MAX_STORED_QUICK_MATCHES : MAX_STORED_MATCHES;
+    return matchesArr.length >= matchCap;
+  }
+
+  /** 超限时的轻量计数（不解析、不建对象） */
+  private countOverflowMatch(task: SearchTaskState, target: "full" | "quick") {
+    if (target === "quick") {
+      task.quickMatchTotal += 1;
+      return;
+    }
+    task.matchTotal += 1;
+    task.matchDropped += 1;
+    task.matchCount = task.matchTotal;
+  }
+
+  /**
+   * 统一的命中收集入口：超过上限后只计数不保留（rg / lnav / klogg 的通行做法）。
+   * 这样内存占用恒定为 O(上限)，而命中总数依旧精确。
+   */
+  private collectMatch(
+    task: SearchTaskState,
+    target: "full" | "quick",
+    match: LogSearchMatch,
+    contextLines: Array<{ lineNumber: number; preview: string; isMatch: boolean }> = []
+  ) {
+    const isQuick = target === "quick";
+    const matchesArr = isQuick ? task.quickMatches : task.matches;
+    const allLinesArr = isQuick ? task.quickAllLines : task.allLines;
+
+    if (isQuick) {
+      task.quickMatchTotal += 1;
+    } else {
+      task.matchTotal += 1;
+      /* matchCount 表示「最终结果的命中总数」，只取全文扫描。
+         不能把首批快搜也加进来：首批（前 512KB）与尾部快搜（末 5MB）
+         会和全文扫描重复计数，且完成时若再改回全文数，命中数会在
+         检索结束那一刻突然变小。 */
+      task.matchCount = task.matchTotal;
+    }
+
+    if (matchesArr.length >= (isQuick ? MAX_STORED_QUICK_MATCHES : MAX_STORED_MATCHES)) {
+      if (!isQuick) task.matchDropped += 1;
+      return;
+    }
+
+    /* 超长行在入口即截断：保证任何后续 join/map 都不会撞上 V8 字符串上限 */
+    const boundedMatch: LogSearchMatch = {
+      source: match.source,
+      lineNumber: match.lineNumber,
+      preview: clampPreview(match.preview)
+    };
+    matchesArr.push(boundedMatch);
+
+    for (const contextLine of contextLines) {
+      if (allLinesArr.length >= MAX_STORED_RESULT_LINES) break;
+      allLinesArr.push({ ...contextLine, preview: clampPreview(contextLine.preview) });
+    }
+    if (allLinesArr.length < MAX_STORED_RESULT_LINES) {
+      allLinesArr.push({ lineNumber: boundedMatch.lineNumber, preview: boundedMatch.preview, isMatch: true });
+    }
   }
 
   private setProgressPhase(task: SearchTaskState, phase: SearchProgressPhase) {
@@ -221,7 +391,7 @@ export class LogSearchTaskService {
 
     const runStreamingPhase = (
       command: string,
-      matchesArr: LogSearchMatch[],
+      target: "full" | "quick",
       allLinesArr: Array<{ lineNumber: number; preview: string; isMatch: boolean }>
     ): Promise<void> => {
       return new Promise<void>(async (resolve, reject) => {
@@ -238,6 +408,9 @@ export class LogSearchTaskService {
             return;
           }
           if (line.startsWith("__CTX__\t")) {
+            /* 上下文行同样受限，避免 contextLines=20 时膨胀 20 倍；
+               达到上限后连解析也跳过 */
+            if (allLinesArr.length >= MAX_STORED_RESULT_LINES) return;
             const parts = line.split("\t");
             const lineNumber = Number(parts[1] || "0");
             const preview = parts.slice(2).join("\t");
@@ -245,33 +418,104 @@ export class LogSearchTaskService {
             return;
           }
           if (line.startsWith("__MATCH__\t")) {
+            /* 已到保留上限：只计数，跳过 split 与对象构造（省掉大量 CPU） */
+            if (this.isMatchCapReached(task, target)) {
+              this.countOverflowMatch(task, target);
+              return;
+            }
             const parts = line.split("\t");
             const lineNumber = Number(parts[1] || "0");
             const preview = parts.slice(2).join("\t");
-            matchesArr.push({ source: task.request.filePath, lineNumber, preview });
-            allLinesArr.push({ lineNumber, preview, isMatch: true });
-            task.matchCount = task.matches.length + task.quickMatches.length;
+            this.collectMatch(task, target, { source: task.request.filePath, lineNumber, preview });
           }
         };
 
+        /*
+         * 超长单行保护（2026-11-19）。
+         *
+         * 实测：11 GB catalina.out 中存在「整条批量 INSERT」式超长行，
+         * 单行可达数 MB。grep 输出 `__MATCH__\t<行号>\t<整行内容>` 时，
+         * 在换行符到达前 pendingStdout 会持续累积整行 —— 主进程内存出现
+         * 600MB→1.6GB→600MB 的剧烈锯齿，界面随之卡顿。
+         *
+         * 方案：一旦当前未完成行超过上限，就把已收到的头部按「截断命中」记下，
+         * 并置 skippingLongLine 状态丢弃该行剩余部分，直到读到换行符。
+         * 缓冲因此恒定有界（<= 上限 + 单块大小），不再随行长增长。
+         */
+        const MAX_BUFFER_CHARS = MAX_MATCH_PREVIEW_CHARS * 4;
+        let skippingLongLine = false;
+
         const flushBuffer = (buffer: string, kind: "stdout" | "stderr") => {
-          const lines = buffer.split(/\r?\n/);
-          const remain = lines.pop() ?? "";
-          for (const line of lines) {
+          let buf = buffer;
+
+          if (skippingLongLine) {
+            /* 仍在丢弃上一行超长行的余量，直到遇到换行 */
+            const nl = buf.indexOf("\n");
+            if (nl < 0) {
+              return ""; /* 整块都属于超长行，直接丢 */
+            }
+            buf = buf.slice(nl + 1);
+            skippingLongLine = false;
+          }
+
+          for (;;) {
+            const nl = buf.indexOf("\n");
+            if (nl < 0) break;
+            const line = buf.slice(0, nl).replace(/\r$/, "");
+            buf = buf.slice(nl + 1);
             if (kind === "stdout") consumeLine(line);
             else if (line.trim()) task.errorMessage = line.trim();
           }
-          return remain;
+
+          /* 剩下的最后一行（无换行结尾）若已超长，立即截断并进入跳过模式 */
+          if (buf.length > MAX_BUFFER_CHARS) {
+            if (kind === "stdout" && buf.startsWith("__MATCH__\t")) {
+              const parts = buf.slice(0, MAX_BUFFER_CHARS).split("\t");
+              const lineNumber = Number(parts[1] || "0");
+              const preview = parts.slice(2).join("\t");
+              this.collectMatch(task, target, {
+                source: task.request.filePath,
+                lineNumber,
+                preview: `${preview} …[单行过长，已截断]`
+              });
+            }
+            skippingLongLine = true;
+            return "";
+          }
+
+          return buf;
         };
 
         try {
           const handle = await strategy.execStreaming(command, 120000);
-          handle.onStdout((chunk) => { pendingStdout += chunk; pendingStdout = flushBuffer(pendingStdout, "stdout"); });
-          handle.onStderr((chunk) => { pendingStderr += chunk; pendingStderr = flushBuffer(pendingStderr, "stderr"); });
+          /*
+           * 分块喂入（2026-11-19）。
+           * flushBuffer 已保证返回值有界（超长行被跳过），但单次 chunk 若异常大，
+           * `pendingStdout + chunk` 这一步本身仍是一次大分配。
+           * 这里把超大 chunk 再切片，保证任何单次临时字符串都有上界。
+           */
+          const MAX_CHUNK_CHARS = 256 * 1024;
+          const feed = (target2: "stdout" | "stderr", chunk: string) => {
+            if (chunk.length <= MAX_CHUNK_CHARS) {
+              if (target2 === "stdout") pendingStdout = flushBuffer(pendingStdout + chunk, "stdout");
+              else pendingStderr = flushBuffer(pendingStderr + chunk, "stderr");
+              return;
+            }
+            for (let i = 0; i < chunk.length; i += MAX_CHUNK_CHARS) {
+              const piece = chunk.slice(i, i + MAX_CHUNK_CHARS);
+              if (target2 === "stdout") pendingStdout = flushBuffer(pendingStdout + piece, "stdout");
+              else pendingStderr = flushBuffer(pendingStderr + piece, "stderr");
+            }
+          };
+
+          handle.onStdout((chunk) => feed("stdout", chunk));
+          handle.onStderr((chunk) => feed("stderr", chunk));
           handle.onClose((code) => {
             flushBuffer(`${pendingStdout}\n`, "stdout");
             flushBuffer(`${pendingStderr}\n`, "stderr");
-            if (code && code !== 0 && !matchesArr.length) {
+            /* 命中超限时数组可能为空（只计数），故用总量判断是否已有命中 */
+            const hasHits = target === "quick" ? task.quickMatchTotal > 0 : task.matchTotal > 0;
+            if (code && code !== 0 && !hasHits) {
               reject(new Error(task.errorMessage || `SSH 搜索失败，退出码 ${code}`));
             } else {
               resolve();
@@ -286,32 +530,38 @@ export class LogSearchTaskService {
     try {
       if (task.previewCommand) {
         this.setProgressPhase(task, "preview_scan");
-        await runStreamingPhase(task.previewCommand, task.quickMatches, task.quickAllLines);
+        const previewStartedAt = Date.now();
+        await runStreamingPhase(task.previewCommand, "quick", task.quickAllLines);
         this.updatePhaseProgress(task, task.previewPhaseBytes, task.quickMatches.length);
         task.quickDone = true;
-        console.log(`[search-preview] First ${PREVIEW_MATCH_LIMIT} matches done: ${task.quickMatches.length} matches`);
+        task.resultVersion += 1;
+        console.log(`[search-preview] First ${PREVIEW_MATCH_LIMIT} matches done: ${task.quickMatches.length} matches in ${Date.now() - previewStartedAt}ms`);
       }
 
       if (needsQuickPhase) {
         this.setProgressPhase(task, "quick_tail");
         const quickCommand = buildStreamingSearchCommand(task.server, task.request, task.totalBytes, { tailBytes: QUICK_TAIL_BYTES });
-        await runStreamingPhase(quickCommand, task.quickMatches, task.quickAllLines);
+        await runStreamingPhase(quickCommand, "quick", task.quickAllLines);
         task.quickDone = true;
+        task.resultVersion += 1;
         console.log(`[search] Phase 1 done: ${task.quickMatches.length} quick matches in tail ${formatBytes(QUICK_TAIL_BYTES)}`);
       }
 
       this.setProgressPhase(task, "full_scan");
       const fullCommand = buildStreamingSearchCommand(task.server, task.request, task.totalBytes);
-      await runStreamingPhase(fullCommand, task.matches, task.allLines);
+      await runStreamingPhase(fullCommand, "full", task.allLines);
 
-      task.matchCount = task.matches.length;
+      task.matchCount = task.matchTotal;
+      task.resultVersion += 1;
       task.status = "completed";
       this.setProgressPhase(task, "completed");
       task.finishedAt = Date.now();
+      this.pruneExpiredTasks();
     } catch (error) {
       task.status = "failed";
       task.errorMessage = error instanceof Error ? error.message : String(error);
       task.finishedAt = Date.now();
+      this.pruneExpiredTasks();
     }
   }
 
@@ -363,7 +613,7 @@ export class LogSearchTaskService {
       session: import("./ssh-executor.service.js").SftpSession,
       startOffset: number,
       endOffset: number,
-      matchesArr: LogSearchMatch[],
+      target: "full" | "quick",
       allLinesArr: Array<{ lineNumber: number; preview: string; isMatch: boolean }>,
       initialLineNumber = 0
     ) => {
@@ -389,24 +639,36 @@ export class LogSearchTaskService {
           const line = rawLine.replace(/\r$/, "");
           const hit = inRange(line) && keywordHit(line);
 
-          if (hit) {
+          /*
+           * 已到保留上限：只累计命中数，不再构造行对象。
+           * 注意不能用 continue 跳过尾部 —— 上下文缓冲（contextBuffer）与
+           * pendingAfter 的状态必须继续推进，否则后续若因上限放宽而恢复
+           * 收集时，上下文会对不齐。
+           */
+          const cappedHit = hit && this.isMatchCapReached(task, target);
+          if (cappedHit) {
+            this.countOverflowMatch(task, target);
+            lastPrinted = lineNumber;
+            pendingAfter = context;
+          } else if (hit) {
+            const leadingContext: Array<{ lineNumber: number; preview: string; isMatch: boolean }> = [];
             if (context > 0) {
               const start = Math.max(1, lineNumber - context);
               for (let i = start; i < lineNumber; i++) {
                 const buffered = contextBuffer.get(i);
                 if (buffered !== undefined && lastPrinted !== i) {
-                  allLinesArr.push({ lineNumber: i, preview: buffered, isMatch: false });
+                  leadingContext.push({ lineNumber: i, preview: buffered, isMatch: false });
                   lastPrinted = i;
                 }
               }
             }
-            matchesArr.push({ source: task.request.filePath, lineNumber, preview: line });
-            allLinesArr.push({ lineNumber, preview: line, isMatch: true });
-            task.matchCount = task.matches.length + task.quickMatches.length;
+            this.collectMatch(task, target, { source: task.request.filePath, lineNumber, preview: line }, leadingContext);
             lastPrinted = lineNumber;
             pendingAfter = context;
           } else if (pendingAfter > 0 && lastPrinted !== lineNumber) {
-            allLinesArr.push({ lineNumber, preview: line, isMatch: false });
+            if (allLinesArr.length < MAX_STORED_RESULT_LINES) {
+              allLinesArr.push({ lineNumber, preview: line, isMatch: false });
+            }
             lastPrinted = lineNumber;
             pendingAfter--;
           }
@@ -427,19 +689,18 @@ export class LogSearchTaskService {
         const line = leftover.replace(/\r$/, "");
         const hit = inRange(line) && keywordHit(line);
         if (hit) {
+          const leadingContext: Array<{ lineNumber: number; preview: string; isMatch: boolean }> = [];
           if (context > 0) {
             const start = Math.max(1, lineNumber - context);
             for (let i = start; i < lineNumber; i++) {
               const buffered = contextBuffer.get(i);
               if (buffered !== undefined && lastPrinted !== i) {
-                allLinesArr.push({ lineNumber: i, preview: buffered, isMatch: false });
+                leadingContext.push({ lineNumber: i, preview: buffered, isMatch: false });
                 lastPrinted = i;
               }
             }
           }
-          matchesArr.push({ source: task.request.filePath, lineNumber, preview: line });
-          allLinesArr.push({ lineNumber, preview: line, isMatch: true });
-          task.matchCount = task.matches.length + task.quickMatches.length;
+          this.collectMatch(task, target, { source: task.request.filePath, lineNumber, preview: line }, leadingContext);
         }
       }
 
@@ -456,29 +717,33 @@ export class LogSearchTaskService {
       if (needsQuickPhase) {
         this.setProgressPhase(task, "quick_tail");
         const tailOffset = fileSize - task.quickPhaseBytes;
-        await scanChunks(session, tailOffset, fileSize, task.quickMatches, task.quickAllLines);
+        await scanChunks(session, tailOffset, fileSize, "quick", task.quickAllLines);
         task.quickDone = true;
+        task.resultVersion += 1;
         console.log(`[search-sftp] Phase 1 done: ${task.quickMatches.length} quick matches in tail ${formatBytes(QUICK_TAIL_BYTES)}`);
       }
 
       this.setProgressPhase(task, "full_scan");
-      await scanChunks(session, 0, fileSize, task.matches, task.allLines);
+      await scanChunks(session, 0, fileSize, "full", task.allLines);
 
-      task.scannedLines = task.matches.length;
-      task.matchCount = task.matches.length;
+      task.scannedLines = task.matchTotal;
+      task.matchCount = task.matchTotal;
+      task.resultVersion += 1;
       task.status = "completed";
       this.setProgressPhase(task, "completed");
       task.finishedAt = Date.now();
+      this.pruneExpiredTasks();
     } catch (error) {
       task.status = "failed";
       task.errorMessage = error instanceof Error ? error.message : String(error);
       task.finishedAt = Date.now();
+      this.pruneExpiredTasks();
     } finally {
       session?.close();
     }
   }
 
-  private toResponse(task: SearchTaskState): LogSearchTaskResponse {
+  private toResponse(task: SearchTaskState, since?: number): LogSearchTaskResponse {
     const now = task.finishedAt || Date.now();
     const overallProgressBytes = this.getOverallProgressBytes(task);
     const overallProgressTotalBytes = this.getOverallProgressTotalBytes(task);
@@ -509,66 +774,113 @@ export class LogSearchTaskService {
       phaseScannedBytes: task.phaseScannedBytes,
       phaseTotalBytes: task.phaseTotalBytes,
       overallProgressBytes,
-      overallProgressTotalBytes
+      overallProgressTotalBytes,
+      resultVersion: task.resultVersion
     };
+
+    /*
+     * 条件返回（2026-11-19）：前端轮询带 since=<已收到的版本号>。
+     * 版本未变时只回进度标量，不再重复下发整份命中列表 —— 这是每 450 ms
+     * 序列化上百 MB 的直接来源。
+     * 注意：完成态必须至少下发一次，否则前端永远拿不到最终结果，
+     * 故用 since < resultVersion 判断而非单纯比较相等。
+     */
+    const clientVersion = Number.isFinite(since) ? Number(since) : -1;
+    const shouldSendResult = clientVersion < task.resultVersion;
+
+    if (!shouldSendResult) {
+      return response;
+    }
 
     // Phase 1 quick results (available while Phase 2 is still running)
     if (task.quickDone && !response.result) {
-      const qMatches = task.quickMatches;
-      let qContextOutput: string | undefined;
-      if (task.quickAllLines.length > qMatches.length) {
-        const sorted = [...task.quickAllLines].sort((a, b) => a.lineNumber - b.lineNumber);
-        const parts: string[] = [];
-        let prevLineNumber = -1;
-        for (const entry of sorted) {
-          if (prevLineNumber >= 0 && entry.lineNumber > prevLineNumber + 1) {
-            parts.push("--");
-          }
-          parts.push(`${entry.lineNumber} | ${entry.preview}`);
-          prevLineNumber = entry.lineNumber;
-        }
-        qContextOutput = parts.join("\n");
-      }
-      response.quickResult = {
-        commandPreview: task.commandPreview,
-        truncated: false,
-        matches: qMatches,
-        rawOutput: qMatches.map((m) => `${m.source}:${m.lineNumber}:${m.preview}`).join("\n"),
-        contextOutput: qContextOutput,
-        strategyLabel: task.strategyLabel,
-        scopeLabel: task.scopeLabel
-      };
+      response.quickResult = this.getCachedQuickResult(task);
     }
 
     if (task.status === "completed") {
-      let contextOutput: string | undefined;
-      if (task.allLines.length > task.matches.length) {
-        const sorted = [...task.allLines].sort((a, b) => a.lineNumber - b.lineNumber);
-        const parts: string[] = [];
-        let prevLineNumber = -1;
-        for (const entry of sorted) {
-          if (prevLineNumber >= 0 && entry.lineNumber > prevLineNumber + 1) {
-            parts.push("--");
-          }
-          parts.push(`${entry.lineNumber} | ${entry.preview}`);
-          prevLineNumber = entry.lineNumber;
-        }
-        contextOutput = parts.join("\n");
-      }
-
-      const result: LogSearchResponse = {
-        commandPreview: task.commandPreview,
-        truncated: false,
-        matches: task.matches,
-        rawOutput: task.matches.map((match) => `${match.source}:${match.lineNumber}:${match.preview}`).join("\n"),
-        contextOutput,
-        strategyLabel: task.strategyLabel,
-        scopeLabel: task.scopeLabel
-      };
-      response.result = result;
+      response.result = this.getCachedFinalResult(task);
     }
 
     return response;
+  }
+
+  /**
+   * 首批结果的惰性构建 + 缓存（2026-11-19）。
+   * 轮询期间数据未变就直接复用，避免每 450 ms 重排/重拼一次。
+   */
+  private getCachedQuickResult(task: SearchTaskState): LogSearchResponse {
+    const cache = this.ensureResponseCache(task);
+    const key = `${task.quickMatches.length}:${task.quickAllLines.length}`;
+    if (cache.quickKey === key && cache.quickResult) {
+      return cache.quickResult;
+    }
+
+    const qMatches = task.quickMatches;
+    const result: LogSearchResponse = {
+      commandPreview: task.commandPreview,
+      /* 首批结果超出保留上限时，如实告知前端已被截断 */
+      truncated: task.quickMatchTotal > qMatches.length,
+      matches: qMatches,
+      rawOutput: qMatches.map((m) => `${m.source}:${m.lineNumber}:${m.preview}`).join("\n"),
+      contextOutput: this.buildContextOutput(task.quickAllLines, qMatches.length),
+      strategyLabel: task.strategyLabel,
+      scopeLabel: task.scopeLabel
+    };
+
+    cache.quickKey = key;
+    cache.quickResult = result;
+    return result;
+  }
+
+  private getCachedFinalResult(task: SearchTaskState): LogSearchResponse {
+    const cache = this.ensureResponseCache(task);
+    const key = `${task.matches.length}:${task.allLines.length}:${task.matchTotal}`;
+    if (cache.finalKey === key && cache.finalResult) {
+      return cache.finalResult;
+    }
+
+    const result: LogSearchResponse = {
+      commandPreview: task.commandPreview,
+      truncated: task.matchTotal > task.matches.length,
+      matches: task.matches,
+      rawOutput: task.matches.map((match) => `${match.source}:${match.lineNumber}:${match.preview}`).join("\n"),
+      contextOutput: this.buildContextOutput(task.allLines, task.matches.length),
+      strategyLabel: task.strategyLabel,
+      scopeLabel: task.scopeLabel
+    };
+
+    cache.finalKey = key;
+    cache.finalResult = result;
+    return result;
+  }
+
+  private ensureResponseCache(task: SearchTaskState) {
+    if (!task.responseCache) {
+      task.responseCache = { quickKey: "", finalKey: "" };
+    }
+    return task.responseCache;
+  }
+
+  /** 仅在「有上下文行」时才拼 contextOutput；否则返回 undefined，省掉一份完整副本 */
+  private buildContextOutput(
+    allLines: Array<{ lineNumber: number; preview: string; isMatch: boolean }>,
+    matchCount: number
+  ): string | undefined {
+    if (allLines.length <= matchCount) {
+      return undefined;
+    }
+
+    const sorted = [...allLines].sort((a, b) => a.lineNumber - b.lineNumber);
+    const parts: string[] = [];
+    let prevLineNumber = -1;
+    for (const entry of sorted) {
+      if (prevLineNumber >= 0 && entry.lineNumber > prevLineNumber + 1) {
+        parts.push("--");
+      }
+      parts.push(`${entry.lineNumber} | ${entry.preview}`);
+      prevLineNumber = entry.lineNumber;
+    }
+    return parts.join("\n");
   }
 }
 

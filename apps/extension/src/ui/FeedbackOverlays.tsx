@@ -26,14 +26,22 @@ export interface UploadProgressState {
 
 export interface DownloadProgressState {
   fileName: string;
+  /** 裸文件名（2026-11-24）：批量下载时 fileName 带 "(i/n) " 前缀给人看，
+      文件表行内进度按裸名匹配行 —— 直接拿带前缀的 fileName 比对永远不等。 */
+  currentFileName?: string;
   /** 完整远程路径（2026-11-07）：行内/表头按「父目录 === 当前目录」判定，防跨目录误命中 */
   filePath?: string;
   fileSize: number;
+  /** 已传字节。批量下载时是**整批**已传量（fileSize 也是批次总量），
+      不是当前文件自己的字节数 —— 进度卡是批次级的。 */
   bytesDownloaded: number;
   speed: number;
   percent: number;
   /** 暂停态（2026-11-07）：闸门挂起后置位，抽屉显示「已暂停」并隐藏过期速度 */
   paused?: boolean;
+  /** 批量 / 目录下载（2026-11-24）：当前批次第几个文件 / 共几个，用于抽屉显示 "3/128" */
+  fileIndex?: number;
+  totalFiles?: number;
 }
 
 export interface ToastState {

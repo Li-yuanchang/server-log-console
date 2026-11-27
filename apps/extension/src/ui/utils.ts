@@ -218,13 +218,24 @@ export function stripAnsi(value: string): string {
   return value.replace(ANSI_RE, "");
 }
 
+/**
+ * HTML 转义（2026-11-19 优化）。
+ *
+ * 原实现串行做 5 次 replaceAll，每次都生成一份完整新字符串：
+ * 对超长日志行（实测有单行数十万字符的 SQL 语句）意味着 5 倍内存峰值，
+ * 是 V8 Oilpan「Large allocation」OOM 的诱因之一。
+ * 改为单次正则扫描 + 映射替换，只分配一次结果字符串。
+ */
+const HTML_ESCAPE_MAP: Record<string, string> = {
+  "&": "&amp;",
+  "<": "&lt;",
+  ">": "&gt;",
+  '"': "&quot;",
+  "'": "&#39;",
+};
+
 export function escapeHtml(value: string) {
-  return stripAnsi(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
+  return stripAnsi(value).replace(/[&<>"']/g, (char) => HTML_ESCAPE_MAP[char]);
 }
 
 export function escapeRegExp(value: string) {
@@ -268,10 +279,41 @@ export function buildHighlightHtml(content: string, terms: string[], useRegex: b
   }
 }
 
+/**
+ * 渲染拼接的安全上限（2026-11-19）。
+ *
+ * V8 单个字符串硬上限约 5.12 亿字符，超过即抛
+ * `RangeError: Invalid string length` —— 实测在 11 GB 日志检索时出现
+ * （124 条命中，每条是超长 INSERT 语句），前端表现为「检索失败」，
+ * 而实际上服务端检索已经成功。
+ *
+ * 服务端现已从收集入口截断单条预览；这里再加一道前端兜底，
+ * 防止历史任务或其他调用路径仍传入超长数据。
+ */
+const MAX_JOINED_CONTENT_CHARS = 64 * 1024 * 1024; // 64M 字符，远低于 V8 硬上限
+
+function joinMatchesSafely(
+  matches: Array<{ lineNumber: number; preview: string }>
+): string {
+  const parts: string[] = [];
+  let size = 0;
+  for (const match of matches) {
+    const line = `${match.lineNumber} | ${match.preview}`;
+    /* 预留分隔符的开销，保证累计不超过上限 */
+    if (size + line.length + 1 > MAX_JOINED_CONTENT_CHARS) {
+      parts.push(`…[结果过多，已省略剩余 ${matches.length - parts.length} 条，请收窄检索条件]`);
+      break;
+    }
+    parts.push(line);
+    size += line.length + 1;
+  }
+  return parts.join("\n");
+}
+
 export function formatSearchViewerContent(results: LogSearchResponse | null, fallbackSlice: string | undefined) {
   if (results) {
     if (results.matches.length) {
-      return results.matches.map((match) => `${match.lineNumber} | ${match.preview}`).join("\n");
+      return joinMatchesSafely(results.matches);
     }
 
     if (results.strategyLabel === "本地文件" && results.rawOutput) {

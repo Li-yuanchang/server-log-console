@@ -1,4 +1,4 @@
-import type { LogFileEntry } from "@server-log-console/shared";
+import type { FileTreeEntry, LogFileEntry } from "@server-log-console/shared";
 import type { SftpSession } from "../ssh-executor.service.js";
 
 export interface FileStat {
@@ -41,6 +41,13 @@ export interface ConnectionStrategy {
 
   /** 列出目录内容 */
   listDirectory(directoryPath: string): Promise<LogFileEntry[]>;
+
+  /** 递归列出目录下全部子孙项（批量下载用）。
+      maxEntries：采集上限，命中即停并标 truncated，避免超大目录把内存吃穿。 */
+  listDirectoryTree(
+    directoryPath: string,
+    opts?: { maxEntries?: number }
+  ): Promise<{ entries: FileTreeEntry[]; truncated: boolean }>;
 
   /** 下载完整文件到 Buffer */
   downloadFile(filePath: string): Promise<Buffer>;

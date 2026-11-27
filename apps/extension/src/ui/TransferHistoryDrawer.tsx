@@ -430,11 +430,16 @@ export function TransferHistoryDrawer(props: Props) {
                 <span className="xrow-ic xrow-ic-dn"><Download size={13} strokeWidth={1.9} /></span>
                 <span className="xrow-meta">
                   {(() => {
-                    const DnIcon = fileKindIcon(props.downloadProgress?.fileName || "");
+                    const DnIcon = fileKindIcon(props.downloadProgress?.currentFileName || props.downloadProgress?.fileName || "");
                     return (
                       <span className="xrow-fn">
                         <DnIcon size={13} strokeWidth={1.9} className="xrow-fn-ic" />
-                        <span className="xrow-fn-text" title={props.downloadProgress?.fileName}>{props.downloadProgress?.fileName}</span>
+                        <span className="xrow-fn-text" title={props.downloadProgress?.fileName}>{props.downloadProgress?.currentFileName || props.downloadProgress?.fileName}</span>
+                        {/* 批量 / 目录下载（2026-11-24）：标出第几个文件，否则只看单行进度
+                            无法判断整批还剩多少 */}
+                        {props.downloadProgress?.totalFiles ? (
+                          <em className="xtag xtag-chunk">批次 {props.downloadProgress.fileIndex ?? 1}/{props.downloadProgress.totalFiles}</em>
+                        ) : null}
                       </span>
                     );
                   })()}

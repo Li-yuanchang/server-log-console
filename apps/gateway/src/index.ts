@@ -903,7 +903,10 @@ app.post("/api/logs/search/tasks", async (req, res) => {
 app.get("/api/logs/search/tasks/:taskId", (req, res) => {
   try {
     res.set("Cache-Control", "no-store");
-    const result = logSearchTaskService.get(req.params.taskId);
+    /* since：前端已持有的结果版本号，版本未变则不下发结果体（避免轮询重复序列化） */
+    const sinceParam = req.query.since;
+    const since = typeof sinceParam === "string" ? Number(sinceParam) : undefined;
+    const result = logSearchTaskService.get(req.params.taskId, since);
     res.json(result);
   } catch (error) {
     res.status(404).json({ message: error instanceof Error ? error.message : "Unknown error" });
@@ -1285,6 +1288,16 @@ app.post("/api/files/upload/finish", async (req, res) => {
 app.post("/api/logs/files", async (req, res) => {
   try {
     const result = await fileBrowserService.list(req.body);
+    res.json(result);
+  } catch (error) {
+    res.status(400).json({ message: error instanceof Error ? error.message : "Unknown error" });
+  }
+});
+
+/* 递归列目录（2026-11-24 批量下载）：一次取整棵树，避免前端逐层往返 */
+app.post("/api/files/tree", async (req, res) => {
+  try {
+    const result = await fileBrowserService.tree(req.body);
     res.json(result);
   } catch (error) {
     res.status(400).json({ message: error instanceof Error ? error.message : "Unknown error" });

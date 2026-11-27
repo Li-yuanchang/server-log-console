@@ -33,6 +33,8 @@ type Props = {
   onOpenContextMenu: (entry: LogFileEntry, clientX: number, clientY: number) => void;
   onToggleSelection: (path: string, checked: boolean) => void;
   onDownload: (path: string) => void;
+  /** 目录下载（2026-11-24）：目录行尾的下载按钮走递归下载通道 */
+  onDownloadDirectory?: (entry: LogFileEntry) => void;
   onMove: (entry: LogFileEntry) => void;
   onRename: (entry: LogFileEntry) => void;
   /* 批量条提示 ③：拖拽移动 —— 文件行拖到「目录树节点 / 列表内文件夹行」上完成移动。
@@ -72,7 +74,11 @@ function resolveRowTransferProgress(
     : "";
   const downloadInDir = !directoryPath
     || (downloadDir || "").replace(/\/+$/, "") === directoryPath.replace(/\/+$/, "");
-  if (downloadProgress && downloadInDir && downloadProgress.fileName === entry.name) {
+  /* 批量下载（2026-11-24）同样带 "(${i}/${n}) " 前缀：按裸文件名匹配，
+     否则批次下载时行内进度条一行都挂不上。 */
+  const downloadName = downloadProgress?.currentFileName
+    || (downloadProgress?.fileName || "").replace(/^\(\d+\/\d+\)\s*/, "");
+  if (downloadProgress && downloadInDir && downloadName && downloadName === entry.name) {
     const percent = Math.min(100, Math.max(0, downloadProgress.percent));
     return { percent, label: formatTransferMeta(percent, downloadProgress.speed, formatBytes) };
   }
@@ -277,7 +283,19 @@ export function FileBrowserTableRows(props: Props) {
                 >
                   <Download size={13} strokeWidth={1.8} />
                 </button>
-              ) : null}
+              ) : (
+                /* 目录行也提供下载（2026-11-24 用户反馈「勾选目录无法下载」）：
+                   递归取整棵树后按原结构落盘，见 useBatchDownload。 */
+                <button
+                  type="button"
+                  className="file-action-icon"
+                  title="下载目录到…"
+                  aria-label={`下载目录 ${entry.name}`}
+                  onClick={(event) => { event.stopPropagation(); props.onDownloadDirectory?.(entry); }}
+                >
+                  <Download size={13} strokeWidth={1.8} />
+                </button>
+              )}
               <button
                 type="button"
                 className="file-action-icon"

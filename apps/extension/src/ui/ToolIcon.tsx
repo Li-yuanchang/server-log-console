@@ -22,9 +22,10 @@ import {
   Pencil,
   TextCursorInput,
   FolderPlus,
+  X,
 } from "lucide-react";
 
-type IconKind = "search" | "tail" | "files" | "more" | "open" | "refresh" | "filter" | "highlight" | "context" | "settings" | "terminal" | "sparkle" | "undo" | "history" | "transfer" | "download" | "upload" | "delete" | "edit" | "rename" | "folder" | "folder-plus" | "folder-up" | "folder-move";
+type IconKind = "search" | "tail" | "files" | "more" | "open" | "refresh" | "filter" | "highlight" | "context" | "settings" | "terminal" | "sparkle" | "undo" | "history" | "transfer" | "download" | "upload" | "delete" | "edit" | "rename" | "folder" | "folder-plus" | "folder-up" | "folder-move" | "clear";
 
 export function ToolIcon({ kind, theme }: { kind: IconKind; theme?: "classic" | "modern" }) {
   if (theme === "classic") return <ClassicIcon kind={kind} />;
@@ -241,6 +242,14 @@ function ClassicIcon({ kind }: { kind: IconKind }) {
           <path d="M8.3 4.3L10 6L11.7 4.3" />
         </svg>
       );
+    case "clear":
+      /* 「清空选择」用叉：取消勾选是撤销选择，不是删除文件（delete 是垃圾桶） */
+      return (
+        <svg {...common}>
+          <path d="M4.2 4.2L11.8 11.8" />
+          <path d="M11.8 4.2L4.2 11.8" />
+        </svg>
+      );
   }
 }
 
@@ -304,5 +313,7 @@ function ModernIcon({ kind }: { kind: IconKind }) {
       return <FolderUp {...LUCIDE_PROPS} />;
     case "folder-move":
       return <FolderInput {...LUCIDE_PROPS} />;
+    case "clear":
+      return <X {...LUCIDE_PROPS} />;
   }
 }

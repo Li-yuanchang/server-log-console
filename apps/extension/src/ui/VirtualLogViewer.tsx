@@ -120,6 +120,37 @@ function getLogLineTimePrefixLength(line: string): number {
  */
 const RESULT_LINE_NUM_RE = /^(\d+)(\s*\|\s?)/;
 
+/**
+ * 单行渲染字符上限（2026-11-19）。
+ *
+ * 实测崩溃：11 GB catalina.out 中单条 SQL 语句可达数十万字符，整行进
+ * dangerouslySetInnerHTML 后会构造超长 HTML 字符串并由解析器建出巨型文本节点，
+ * 触发 V8 Oilpan「Large allocation. Ran out of reservation」直接杀掉渲染进程
+ * （JS 堆仅 9.5 MB，故不是普通内存泄漏）。
+ *
+ * 与 klogg / lnav 一致：超长行**截断显示**并给出截断标记，
+ * 数据本身不丢（复制/导出仍走完整 lines，不受此限制）。
+ */
+const MAX_RENDER_LINE_CHARS = 20000;
+
+function clampLineForRender(text: string): { text: string; truncated: boolean } {
+  if (text.length <= MAX_RENDER_LINE_CHARS) {
+    return { text, truncated: false };
+  }
+  return {
+    text: `${text.slice(0, MAX_RENDER_LINE_CHARS)} …[本行共 ${text.length.toLocaleString()} 字符，已截断显示]`,
+    truncated: true,
+  };
+}
+
+/**
+ * 视图层规模上限（2026-11-19）。
+ * 高亮统计原实现会对整份内容逐行 line.match(正则) 并建两个等长数组，
+ * 大结果集下单次渲染即扫描全文并分配大量小数组，是渲染进程 OOM 的推手之一。
+ * 这里把逐行扫描封顶，超限部分不再参与计数（界面仍可正常浏览）。
+ */
+const MAX_HIGHLIGHT_SCAN_LINES = 20000;
+
 function getResultLinePrefixLength(line: string): number {
   const match = RESULT_LINE_NUM_RE.exec(line);
   return match ? match[0].length : 0;
@@ -341,18 +372,33 @@ const VirtualLogViewerImpl = forwardRef<VirtualLogViewerHandle, Props>(
       }
     }, [keywordTerms, useRegex]);
 
+    /*
+     * 高亮计数上限（2026-11-19）。
+     * 原实现对本视图全部行逐行执行 line.match(正则) 并建两个等长数组，
+     * 大结果集（数万行）下单次渲染就要扫描整份文本并分配大量小数组，
+     * 是渲染进程崩溃（SIGTRAP / OOM）的推手之一。
+     * 现限制为只对前 N 行做统计：超限后高亮计数不再精确递增，但界面保持可用，
+     * 且结果集本身已被服务端限制在 5000 条，正常场景不会触及该阈值。
+     */
     const { lineMatchCounts, cumulativeOffsets, totalMatches } = useMemo(() => {
       if (!rawHighlightRegex || !lines.length) {
         return { lineMatchCounts: [] as number[], cumulativeOffsets: [] as number[], totalMatches: 0 };
       }
-      const counts: number[] = [];
-      const offsets: number[] = [];
+      const scanLimit = Math.min(lines.length, MAX_HIGHLIGHT_SCAN_LINES);
+      const counts: number[] = new Array(scanLimit);
+      const offsets: number[] = new Array(scanLimit);
       let cumulative = 0;
-      for (const line of lines) {
-        offsets.push(cumulative);
-        const matches = line.match(rawHighlightRegex);
+      for (let index = 0; index < scanLimit; index += 1) {
+        offsets[index] = cumulative;
+        /* 超长行只扫描前 MAX_RENDER_LINE_CHARS 个字符：
+           与渲染侧同一上限，避免对数十万字符的单行做全文正则匹配。 */
+        const line = lines[index];
+        const scanTarget = line.length > MAX_RENDER_LINE_CHARS
+          ? line.slice(0, MAX_RENDER_LINE_CHARS)
+          : line;
+        const matches = scanTarget.match(rawHighlightRegex);
         const count = matches?.length ?? 0;
-        counts.push(count);
+        counts[index] = count;
         cumulative += count;
       }
       return { lineMatchCounts: counts, cumulativeOffsets: offsets, totalMatches: cumulative };
@@ -446,17 +492,24 @@ const VirtualLogViewerImpl = forwardRef<VirtualLogViewerHandle, Props>(
     const renderLine = useCallback(
       (index: number, item: VirtualLogViewerLineItem) => {
         const isResults = variant === "results";
+        /*
+         * 超长单行截断显示（2026-11-19）。
+         * 只影响「渲染成 HTML」这一步：鼠标选区/复制/导出仍基于完整的 lines，
+         * 因此截断不会造成数据丢失，只避免巨型文本节点撑爆 Oilpan 堆。
+         */
+        const clamped = clampLineForRender(item.text);
+        const lineText = clamped.text;
         // 行首 meta 前缀解析（单次锚定正则，O(行长)；渲染期间无副作用，非 global 正则）：
         // log 视图 = 时间戳列；results 视图 = 检索结果行号列（"N | "），无时间戳不再保留 170px 时间列留白
-        const timeMatch = isResults ? null : LOG_LINE_TIME_RE.exec(item.text);
+        const timeMatch = isResults ? null : LOG_LINE_TIME_RE.exec(lineText);
         const hasTimeColumn = Boolean(timeMatch);
         const timeText = timeMatch ? timeMatch[0] : "";
-        const bodyText = timeMatch ? item.text.slice(timeText.length) : item.text;
+        const bodyText = timeMatch ? lineText.slice(timeText.length) : lineText;
 
-        const resultNumMatch = isResults && !isHardBlockBoundary(item.text) ? RESULT_LINE_NUM_RE.exec(item.text) : null;
+        const resultNumMatch = isResults && !isHardBlockBoundary(lineText) ? RESULT_LINE_NUM_RE.exec(lineText) : null;
         const hasNumColumn = Boolean(resultNumMatch);
         const resultNumText = resultNumMatch ? resultNumMatch[1] : "";
-        const resultBodyText = resultNumMatch ? item.text.slice(resultNumMatch[0].length) : item.text;
+        const resultBodyText = resultNumMatch ? lineText.slice(resultNumMatch[0].length) : lineText;
 
         const isFocused = index === focusLineIndex;
         const rangeStart = effectiveLineRange ? Math.min(effectiveLineRange.start, effectiveLineRange.end) : -1;
@@ -522,7 +575,7 @@ const VirtualLogViewerImpl = forwardRef<VirtualLogViewerHandle, Props>(
             if (hasNumColumn) {
               return renderNumColumn(escapeHtml(resultNumText), escapeHtml(resultBodyText) || "\u00A0");
             }
-            const escaped = escapeHtml(item.text);
+            const escaped = escapeHtml(lineText);
             return <div {...lineProps} dangerouslySetInnerHTML={{ __html: bookmarkIcon + focusBadge + (escaped || "\u00A0") }} />;
           }
           // log 视图统一两列结构：无时间戳行（堆栈/续行）渲染空时间占位，正文与上一条记录的内容列对齐；

@@ -606,13 +606,31 @@ export function useLogViewer(params: LogViewerParams): LogViewerAPI {
       callbacks.pushActivity(`搜索任务已启动：${currentTask.strategyLabel || "分片扫描"} / ${currentTask.scopeLabel || state.filePath}`);
       let quickResultShown = false;
       let quickResultMatchCount = -1;
+      /* 已收到的结果版本号：轮询时带给服务端，版本不变就不会重复下发命中列表 */
+      let lastResultVersion = typeof currentTask.resultVersion === "number" ? currentTask.resultVersion : -1;
       while (currentTask.status === "queued" || currentTask.status === "running") {
         if (searchStopTokenRef.current !== stopToken || stopToken.stopped) break;
         await new Promise((resolve) => window.setTimeout(resolve, 450));
         if (searchStopTokenRef.current !== stopToken || stopToken.stopped) break;
-        currentTask = await apiPollSearchTask(currentTask.taskId);
+        const polled = await apiPollSearchTask(currentTask.taskId, lastResultVersion);
+        if (typeof polled.resultVersion === "number") lastResultVersion = polled.resultVersion;
+        /* 服务端按版本号省略结果体时，沿用上一拍的任务快照，避免把已有结果清空 */
+        currentTask = polled.result || polled.quickResult
+          ? polled
+          : { ...polled, result: currentTask.result, quickResult: currentTask.quickResult };
         setters.setSearchTask(currentTask);
-        if (currentTask.quickResult && currentTask.quickResult.matches.length !== quickResultMatchCount) {
+        /*
+         * 首批结果只在「确有命中」时展示（2026-11-19 修正）。
+         *
+         * 此前只要 quickResult 存在就无条件 setResults，于是首批快搜 0 命中时，
+         * 界面会在全文扫描仍在进行（顶部仍显示「检索中」）的同时弹出
+         * 「没有匹配的日志」——两个状态互相矛盾，用户会误以为检索已失败。
+         *
+         * 首批结果只是「预览」，它的 0 命中不代表全文没有命中：
+         * 首批只扫前 512KB + 末尾 5MB，中间 11GB 尚未扫描。
+         */
+        const hasQuickHits = Boolean(currentTask.quickResult && currentTask.quickResult.matches.length > 0);
+        if (hasQuickHits && currentTask.quickResult && currentTask.quickResult.matches.length !== quickResultMatchCount) {
           quickResultMatchCount = currentTask.quickResult.matches.length;
           setters.setResults(currentTask.quickResult);
           if (quickResultShown) {
@@ -623,6 +641,9 @@ export function useLogViewer(params: LogViewerParams): LogViewerAPI {
           }
           callbacks.setActionStatus(`已先返回 ${currentTask.quickResult.matches.length} 条命中，全文扫描继续中...`);
           callbacks.pushActivity(`搜索首批结果：命中 ${currentTask.quickResult.matches.length} 行，全文扫描继续中...`);
+        } else if (!hasQuickHits && currentTask.progressPhase === "full_scan") {
+          /* 首批无命中、全文仍在扫描：明确告知「还在扫」，不要下「没有匹配」的结论 */
+          callbacks.setActionStatus("首批快速预览未命中，正在扫描全文...");
         }
       }
       /* 被更新的检索取代：什么都不写，避免覆盖新检索的任务态 */
@@ -635,12 +656,27 @@ export function useLogViewer(params: LogViewerParams): LogViewerAPI {
       }
       if (!currentTask) return;
       if (currentTask.status === "failed") throw new Error(currentTask.errorMessage || "搜索任务失败");
+      /* 兜底：若最后一拍因版本号相同被省略了结果体（服务端未下发 result），
+         完成态必须补拉一次，否则会拿到空结果。 */
+      if (!currentTask.result) {
+        currentTask = await apiPollSearchTask(currentTask.taskId);
+        setters.setSearchTask(currentTask);
+      }
       const finalResult = currentTask.result || null;
       setters.setResults(finalResult);
       if (finalResult) { quickResultShown ? replaceLastResultTab(finalResult) : appendResultTab(finalResult, selectedFileName || state.filePath || "当前文件"); }
       pushSearchHistory(normalizedInput);
-      callbacks.setActionStatus(`检索完成，命中 ${finalResult?.matches.length ?? 0} 行。`);
-      callbacks.pushActivity(`检索完成：${selectedServer?.name || state.serverId} / ${state.filePath} / 命中 ${finalResult?.matches.length ?? 0} 行。`);
+      /* 命中数用服务端总量（matchCount），保留行数可能因上限而少于总量 */
+      const totalHits = Math.max(currentTask.matchCount || 0, finalResult?.matches.length ?? 0);
+      const shownHits = finalResult?.matches.length ?? 0;
+      const truncationHint = finalResult?.truncated && totalHits > shownHits
+        ? `（已显示前 ${shownHits} 条，请收窄条件查看其余）`
+        : "";
+      callbacks.setActionStatus(`检索完成，命中 ${totalHits} 行${truncationHint}。`);
+      callbacks.pushActivity(`检索完成：${selectedServer?.name || state.serverId} / ${state.filePath} / 命中 ${totalHits} 行。`);
+      if (truncationHint) {
+        callbacks.showToast("success", `命中 ${totalHits} 行，结果过大仅保留前 ${shownHits} 条${truncationHint}`);
+      }
     } catch (error) {
       const detail = error instanceof Error ? error.message : "未知错误";
       /* 轮询中途死掉（网关重启后任务 404 / 网络闪断）时任务停在最后一张

@@ -374,9 +374,11 @@ export class SshExecutorService {
 
   private sftpCache = new Map<string, { client: Client; sftp: SFTPWrapper; idleTimer: ReturnType<typeof setTimeout>; maxTimer: ReturnType<typeof setTimeout> }>();
   private execCache = new Map<string, { connection: ManagedSshConnection; idleTimer: ReturnType<typeof setTimeout>; maxTimer: ReturnType<typeof setTimeout>; busy: number; evictPending?: boolean }>();
-  /* 在途 SFTP 下载流计数（serverId → 条数）：evict 定时器到点时若有在途流则顺延，
-     否则 IDLE_TTL=120s/MAX_LIFETIME=600s 会强拆超过 2 分钟/10 分钟的长传输 */
-  private sftpStreams = new Map<string, number>();
+  /* 在途 SFTP 传输计数（serverId → 条数）：下载流与上传句柄都算在内。
+     evict 定时器到点时若有在途传输则顺延，否则 IDLE_TTL=120s/MAX_LIFETIME=600s
+     会强拆超过 2 分钟/10 分钟的长传输。此前只统计了下载流，上行长传没被保护 ——
+     单个大文件传过 10 分钟必被 MAX_LIFETIME 腰斩，重传还得从零开始。 */
+  private sftpActive = new Map<string, number>();
 
   constructor(
     private readonly serverRegistry: ServerRegistryService,
@@ -456,15 +458,15 @@ export class SshExecutorService {
   }
 
   private evictSftp(serverId: string): void {
-    /* 在途下载流保护：定时器到点但仍有流在读 → 顺延两个定时器，等流结束后再回收 */
-    if ((this.sftpStreams.get(serverId) || 0) > 0) {
+    /* 在途传输保护：定时器到点但仍有下载流/上传句柄在传 → 顺延两个定时器 */
+    if ((this.sftpActive.get(serverId) || 0) > 0) {
       const entry = this.sftpCache.get(serverId);
       if (entry) {
         clearTimeout(entry.idleTimer);
         clearTimeout(entry.maxTimer);
         entry.idleTimer = setTimeout(() => this.evictSftp(serverId), SshExecutorService.IDLE_TTL);
         entry.maxTimer = setTimeout(() => this.evictSftp(serverId), SshExecutorService.MAX_LIFETIME);
-        sshLog(`sftp 池跳过回收 server=${serverId}（在途下载流 ${this.sftpStreams.get(serverId)} 条）`);
+        sshLog(`sftp 池跳过回收 server=${serverId}（在途传输 ${this.sftpActive.get(serverId)} 条）`);
       }
       return;
     }
@@ -474,6 +476,9 @@ export class SshExecutorService {
       clearTimeout(entry.maxTimer);
       try { entry.client.end(); } catch {}
       this.sftpCache.delete(serverId);
+      /* 通道已废弃：在途计数一并归零，否则残留计数会让该 server 永远跳过回收。
+         在途传输自身的 release 幂等，事后再调用也只是空操作。 */
+      this.sftpActive.delete(serverId);
     }
   }
 
@@ -1010,34 +1015,42 @@ export class SshExecutorService {
     return stream;
   }
 
-  /* 下载流计数：evict 定时器见到在途流会顺延；close 与 error 可能先后触发，settled 防双扣 */
-  private trackSftpStream(serverId: string, stream: import("ssh2").ReadStream): void {
-    this.sftpStreams.set(serverId, (this.sftpStreams.get(serverId) || 0) + 1);
+  /* 在途传输计数：evict 定时器见到在途传输会顺延。
+     返回的 release 幂等（下载流的 close 与 error 可能先后触发，防双扣）。 */
+  private beginSftpTransfer(serverId: string): () => void {
+    this.sftpActive.set(serverId, (this.sftpActive.get(serverId) || 0) + 1);
     let settled = false;
-    const done = () => {
+    return () => {
       if (settled) return;
       settled = true;
-      const remaining = (this.sftpStreams.get(serverId) || 1) - 1;
+      const remaining = (this.sftpActive.get(serverId) || 1) - 1;
       if (remaining > 0) {
-        this.sftpStreams.set(serverId, remaining);
+        this.sftpActive.set(serverId, remaining);
         return;
       }
-      this.sftpStreams.delete(serverId);
-      /* 流结束后重置空闲基准，回收计时从传输结束起算 */
+      this.sftpActive.delete(serverId);
+      /* 传输结束后重置空闲基准，回收计时从传输结束起算 */
       const entry = this.sftpCache.get(serverId);
       if (entry) {
         clearTimeout(entry.idleTimer);
         entry.idleTimer = setTimeout(() => this.evictSftp(serverId), SshExecutorService.IDLE_TTL);
       }
     };
-    stream.on("close", done);
-    stream.on("error", done);
+  }
+
+  private trackSftpStream(serverId: string, stream: import("ssh2").ReadStream): void {
+    const release = this.beginSftpTransfer(serverId);
+    stream.on("close", release);
+    stream.on("error", release);
   }
 
   async sftpOpenSession(serverId: string): Promise<SftpSession> {
     const sftp = await this.acquireSftp(serverId);
     const self = this;
     function createWriteHandle(handle: Buffer): SftpWriteHandle {
+      /* 写句柄存活期间算作在途传输：分片上传是「开句柄 → 多批写入 → 关闭」，
+         整个会话可能远超 MAX_LIFETIME，不保护会被回收定时器强拆。 */
+      const release = self.beginSftpTransfer(serverId);
       return {
         writeChunk(data: Buffer, offset: number): Promise<void> {
           return new Promise<void>((res, rej) => {
@@ -1056,7 +1069,7 @@ export class SshExecutorService {
           });
         },
         close(): Promise<void> {
-          return new Promise<void>((res) => sftp.close(handle, () => res()));
+          return new Promise<void>((res) => sftp.close(handle, () => { release(); res(); }));
         }
       };
     }
@@ -1103,12 +1116,16 @@ export class SshExecutorService {
         });
       },
       fastPut(localPath: string, remotePath: string, onProgress?: (transferred: number, chunkBytes: number, totalBytes: number) => void) {
+        /* 上行长传纳入在途保护：否则传超过 MAX_LIFETIME(10min) 会被回收定时器
+           强拆通道，fastPut 直接失败，用户只能整文件重传。 */
+        const release = self.beginSftpTransfer(serverId);
         return new Promise<void>((resolve, reject) => {
           sftp.fastPut(localPath, remotePath, {
             concurrency: 8,
             chunkSize: 128 * 1024,
             step: (total, chunkBytes, totalBytes) => onProgress?.(total, chunkBytes, totalBytes),
           }, (error) => {
+            release();
             if (error) {
               self.evictSftp(serverId);
               reject(new Error(`SFTP fastPut 失败 (${remotePath})：${error.message}`));

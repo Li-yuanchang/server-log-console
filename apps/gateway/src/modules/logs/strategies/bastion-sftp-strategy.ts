@@ -1,4 +1,4 @@
-import type { LogFileEntry } from "@server-log-console/shared";
+import type { FileTreeEntry, LogFileEntry } from "@server-log-console/shared";
 import type { BastionSftpConnectionStrategy, FileStat, UploadHandle } from "./connection-strategy.js";
 import type { SftpSession, SftpWriteHandle, SshExecutorService } from "../ssh-executor.service.js";
 
@@ -36,6 +36,65 @@ export class BastionSftpStrategy implements BastionSftpConnectionStrategy {
       size: entry.size,
       modifiedTime: entry.modifiedTime
     }));
+  }
+
+  /* 递归列目录（2026-11-24 批量下载）：堡垒机只有 SFTP 通道、没有 shell，
+     只能逐层 readdir。这里走广度优先 + 单次深度保护：
+     - 用 sftpListDirectory（readdir 的 attrs 自带 size），避免每项再 stat 一次往返；
+     - 采集上限用 maxEntries 卡住，命中即停并标 truncated；
+     - 软链接环由 visited 集合兜住（JumpServer 的文件树里出现环会无限展开）。 */
+  async listDirectoryTree(
+    directoryPath: string,
+    opts?: { maxEntries?: number }
+  ): Promise<{ entries: FileTreeEntry[]; truncated: boolean }> {
+    const maxEntries = Math.max(1, Math.floor(opts?.maxEntries ?? 20000));
+    const root = directoryPath.replace(/\/+$/, "") || "/";
+    const entries: FileTreeEntry[] = [];
+    const visited = new Set<string>([root]);
+    let truncated = false;
+
+    /* 队列元素带相对路径前缀，逐层展开 */
+    let queue: Array<{ dirPath: string; relativePrefix: string }> = [{ dirPath: root, relativePrefix: "" }];
+    while (queue.length > 0 && !truncated) {
+      const next: Array<{ dirPath: string; relativePrefix: string }> = [];
+      for (const current of queue) {
+        let children: Awaited<ReturnType<typeof this.listDirectory>>;
+        try {
+          children = await this.listDirectory(current.dirPath);
+        } catch {
+          /* 单个子目录读不到（权限）不应让整棵树失败：跳过它继续 */
+          continue;
+        }
+        for (const child of children) {
+          if (entries.length >= maxEntries) {
+            truncated = true;
+            break;
+          }
+          /* 环上已访问过的目录连条目一起跳过：只拦住「再入队」的话，环本身仍会
+             作为一条记录出现在结果里（同一路径出现两次，前端会重复下载同一目录）。 */
+          if (child.kind === "directory" && visited.has(child.path)) {
+            continue;
+          }
+          const relativePath = current.relativePrefix
+            ? `${current.relativePrefix}/${child.name}`
+            : child.name;
+          entries.push({
+            path: child.path,
+            relativePath,
+            kind: child.kind,
+            size: child.kind === "file" ? child.size : undefined
+          });
+          if (child.kind === "directory" && !visited.has(child.path)) {
+            visited.add(child.path);
+            next.push({ dirPath: child.path, relativePrefix: relativePath });
+          }
+        }
+        if (truncated) break;
+      }
+      queue = next;
+    }
+
+    return { entries, truncated };
   }
 
   async openSession(): Promise<SftpSession> {

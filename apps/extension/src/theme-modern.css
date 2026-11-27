@@ -1667,15 +1667,16 @@
 .theme-modern .viewer-console-markup .log-highlight {
   padding: 1px 3px;
   border-radius: 3px;
-  background: #fbbf24;
-  color: #1c1917;
-  box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.3);
+  /* 2026-11-19：原为写死 #fbbf24/#1c1917，改走语义 token，随主题切换 */
+  background: var(--amber-soft);
+  color: var(--ink);
+  box-shadow: inset 0 -1px 0 var(--amber);
 }
 
 .theme-modern .viewer-console-markup .log-highlight-active {
-  background: var(--accent);
-  color: #ffffff;
-  box-shadow: 0 0 4px rgba(0, 112, 243, 0.4);
+  background: var(--amber);
+  color: var(--panel);
+  box-shadow: none;
 }
 
 .theme-modern .viewer-content-shell-with-rail {
@@ -2262,7 +2263,7 @@ body.is-resizing-tree .theme-modern .browser-resizer::after {
 }
 
 .theme-modern .drop-zone-overlay {
-  background: rgba(0, 112, 243, 0.04);
+  background: color-mix(in srgb, var(--accent) 4%, transparent);
   border-color: var(--accent);
 }
 
@@ -2435,11 +2436,14 @@ body.is-resizing-tree .theme-modern .browser-resizer::after {
 }
 
 .theme-modern .file-row-selected {
-  background: rgba(59, 130, 246, 0.08);
+  /* 跟随主题（2026-11-24）：原 rgba(59,130,246,.08) 是固定 Tailwind 蓝。
+     本层会被 theme-modern-v2.css 末段的 var(--accent-soft) !important 覆盖，
+     这里同步归一，避免样式链里留一处与主题无关的蓝色来源。 */
+  background: var(--accent-soft);
 }
 
 .theme-modern .file-row-select-mode:hover:not(:disabled) {
-  background: rgba(0, 112, 243, 0.055);
+  background: color-mix(in srgb, var(--accent) 5.5%, transparent);
 }
 
 .theme-modern .file-row-active {
@@ -2538,12 +2542,13 @@ body.is-resizing-tree .theme-modern .browser-resizer::after {
   border-radius: var(--r-m);
 }
 
-.theme-modern .file-select-cell:hover {
-  background: rgba(0, 112, 243, 0.08);
-}
-
+/* 复选框所在单元格：完全不着色（2026-11-24 用户两轮反馈「checkbox 还有阴影 / hover 还有问题」）。
+   这一格此前有两层着色：选中态一次、hover 再一次，叠加在「整行已有底色」之上，
+   加上 border-radius 就变成一个独立的灰色小方块 —— 视觉上像给复选框加了阴影。
+   整行 hover/选中的底色已足够表达状态，单元格零装饰才是干净的做法。 */
+.theme-modern .file-select-cell:hover,
 .theme-modern .file-row-selected .file-select-cell {
-  background: rgba(0, 112, 243, 0.12);
+  background: transparent;
 }
 
 .theme-modern .table-head-button {

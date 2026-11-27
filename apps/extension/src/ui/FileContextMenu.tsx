@@ -16,6 +16,9 @@ interface FileContextMenuProps {
   onOpen: (entry: LogFileEntry) => void;
   onPreview: (entry: LogFileEntry) => void;
   onDownload: (path: string) => void;
+  /** 目录递归下载（2026-11-24）：用户反馈「勾选目录无法下载」，
+      目录项不再只能压缩后下，直接支持按原结构下到本地文件夹。 */
+  onDownloadDirectory: (entry: LogFileEntry) => void;
   onRename: (entry: LogFileEntry) => void;
   onMove: (entry: LogFileEntry) => void;
   onExtractHere: (path: string) => void;
@@ -39,6 +42,7 @@ export function FileContextMenu(props: FileContextMenuProps) {
     onOpen,
     onPreview,
     onDownload,
+    onDownloadDirectory,
     onRename,
     onMove,
     onExtractHere,
@@ -73,7 +77,11 @@ export function FileContextMenu(props: FileContextMenuProps) {
             下载
             <span className="context-menu-key">{formatKeyHint("⌘D")}</span>
           </div>
-        ) : null}
+        ) : (
+          <div role="button" className="context-menu-item" onClick={() => { onClose(); onDownloadDirectory(menu.entry); }}>
+            下载到…
+          </div>
+        )}
         <div className="context-menu-separator" role="separator" />
         {/* 组②：编辑 · 移动 · 重命名 · 复制 · 压缩 */}
         {isFile ? (

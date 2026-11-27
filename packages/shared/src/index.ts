@@ -75,6 +75,12 @@ export interface LogSearchTaskResponse {
   phaseTotalBytes?: number;
   overallProgressBytes?: number;
   overallProgressTotalBytes?: number;
+  /**
+   * 结果版本号（2026-11-19）：result / quickResult 每变化一次即自增。
+   * 轮询可带 ?since=<version>，服务端在版本未变时省略结果体，
+   * 避免每 450 ms 重复序列化整份命中列表（大日志检索的崩溃主因之一）。
+   */
+  resultVersion?: number;
   /** Phase 1 quick results from tail search (available while status is still "running") */
   quickResult?: LogSearchResponse;
   result?: LogSearchResponse;
@@ -493,6 +499,30 @@ export interface LogFileListRequest {
 export interface LogFileListResponse {
   directoryPath: string;
   entries: LogFileEntry[];
+}
+
+/* 目录树（2026-11-24 批量下载）：一次性取回某目录下的全部子孙项，
+   供前端「递归下载原样目录树」按 relativePath 还原本地结构。
+
+   不让前端逐层调 /api/logs/files 的原因：直连每层都是一次 SSH exec，
+   深目录会叠成几十次往返；这里直连走单条 find、堡垒机走一次 SFTP 会话，
+   往返次数与树深度无关。 */
+export interface FileTreeEntry {
+  /** 远端绝对路径 */
+  path: string;
+  /** 相对请求目录的路径（不含前导分隔符），本地落盘按它还原结构 */
+  relativePath: string;
+  kind: "file" | "directory";
+  size?: number;
+}
+
+export interface FileTreeResponse {
+  rootPath: string;
+  entries: FileTreeEntry[];
+  /** 命中采集上限被截断（前端必须提示，否则用户以为下载不全却无感知） */
+  truncated: boolean;
+  fileCount: number;
+  totalBytes: number;
 }
 
 export interface LogFileMetaRequest {

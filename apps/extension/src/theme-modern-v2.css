@@ -1316,26 +1316,27 @@
 .theme-modern .log-line-hit {
   box-shadow: inset 2px 0 0 var(--accent);
 }
-/* 命中词：无背景色 + accent 文字 + 下划线（prototype .ll mark） */
+/* 命中词：amber-soft 浅底 + 加粗（2026-11-19）
+   原实现「无底色 + accent 文字 + 下划线」在密集日志正文里几乎看不出命中，
+   用户反馈「不明显」。改用语义 token --amber-soft 做浅底，
+   与日志级别色（error=red / warn=amber）同族但不冲突，且随主题自动切换。 */
 .theme-modern .viewer-console-markup .log-highlight {
-  padding: 0;
-  border-radius: 0;
-  background: transparent;
-  color: var(--accent, #0070f3);
+  padding: 0 1px;
+  border-radius: 2px;
+  background: var(--amber-soft);
+  color: var(--ink);
   font-weight: 600;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-  box-shadow: none;
+  text-decoration: none;
+  box-shadow: inset 0 -1px 0 var(--amber);
 }
-/* 当前命中：accent-soft 底保持可辨识（prototype .ll.cur 的行级处理收拢到词级） */
+/* 当前命中：实心 amber 底 + 反色字，一眼锁定当前位置 */
 .theme-modern .viewer-console-markup .log-highlight-active {
   padding: 0 2px;
   border-radius: 2px;
-  background: var(--accent-soft);
-  color: var(--accent, #0070f3);
+  background: var(--amber);
+  color: var(--panel);
   font-weight: 600;
-  text-decoration: underline;
-  text-underline-offset: 2px;
+  text-decoration: none;
   box-shadow: none;
 }
 
@@ -1893,7 +1894,9 @@
 .theme-modern .server-item .server-item-main {
   margin-left: 0 !important;
 }
-/* 批量条：摘要居左占满，操作按钮整组靠右 */
+/* 批量条：摘要居左占满，操作按钮整组靠右。
+   无边框方案下按钮之间只剩文字间距，太紧会糊成一段；gap 8 + 各自 8px 内边距
+   = 相邻文字间隔 16px，视觉上仍是一串但可分组。 */
 .theme-modern .file-batch-span .file-batch-actions { gap: 8px !important; }
 .theme-modern .file-batch-span .file-batch-summary { flex: 1 1 auto !important; min-width: 0 !important; }
 
@@ -2266,30 +2269,71 @@
    此前实现写 650，比原型轻一档。 */
 .theme-modern .file-batch-title { font-size: var(--fs-xs); font-weight: 700; color: var(--ink); white-space: nowrap; }
 .theme-modern .file-batch-mut { font-size: var(--fs-2xs); color: var(--ink-soft); white-space: nowrap; }
+/* 纯文字 + 图标 · 无边框（2026-11-24 用户决策「纯 icon+文字 不带边框」）。
+   这排是「选中后做什么」的动作提示，不是表单控件；描边白底会和下方文件表的
+   白底打架，四个框并排也把 34px 的动作条压得过重。改为零装饰：
+   - 常态：无边框、无底色，图标用 accent 提一点可点性
+   - hover：浮 soft 底，表示可按
+   - 删除：只保留红字（破坏性靠颜色区分，不靠色块）
+   padding 收到 8px 让四个按钮更紧地贴成一串。 */
 .theme-modern .file-batch-text-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
   height: 26px;
-  /* 宽度按内容自适应，「移动到…」不被固定宽度挤压裁切 */
   min-width: 0;
   /* !important：theme-modern.css 的 .theme-modern .ghost-button 在本文件之后加载，
-     同等特异性下会覆盖 padding，导致「移动到…」贴边被裁 */
-  padding: 0 14px !important;
+     同等特异性下会覆盖 padding，导致文字贴边 */
+  padding: 0 8px !important;
   box-sizing: border-box;
   flex: 0 0 auto;
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  background: var(--panel);
+  border: none;
+  border-radius: 4px;
+  background: transparent;
   color: var(--ink);
   font-size: var(--fs-xs);
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
+  transition: background 150ms ease, color 150ms ease;
 }
-.theme-modern .file-batch-text-button:hover { background: var(--panel-muted); }
-.theme-modern .file-batch-text-button:disabled { opacity: 0.5; cursor: not-allowed; }
+/* 图标不再是灰描边的重色块，跟着文字走主题色 */
+.theme-modern .file-batch-text-button svg {
+  color: var(--accent);
+  opacity: 0.9;
+}
+.theme-modern .file-batch-text-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
+  border-color: transparent;
+}
+.theme-modern .file-batch-text-button:active:not(:disabled) {
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+}
+.theme-modern .file-batch-text-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+/* 清空选择 = 取消选择，不作用于文件本身：文字弱化，图标同步跟随文字色
+   （否则会沿用通用 svg 规则的 accent，图标比文字抢眼） */
+.theme-modern .file-batch-text-button.file-batch-quiet,
+.theme-modern .file-batch-text-button.file-batch-quiet svg {
+  color: var(--ink-soft);
+}
+.theme-modern .file-batch-text-button.file-batch-quiet:hover:not(:disabled),
+.theme-modern .file-batch-text-button.file-batch-quiet:hover:not(:disabled) svg {
+  color: var(--ink);
+}
 .theme-modern .file-batch-danger { color: var(--red); }
+/* 删除：唯一致命操作，只靠红字（含图标）区分，不再垫红底 —— 无边框方案里
+   色块会重新变成"这排里有个突兀的方块"。 */
+.theme-modern .file-batch-text-button.file-batch-danger,
+.theme-modern .file-batch-text-button.file-batch-danger svg {
+  color: var(--red);
+}
+.theme-modern .file-batch-text-button.file-batch-danger:hover:not(:disabled) {
+  color: var(--red);
+  background: color-mix(in srgb, var(--red) 8%, transparent);
+}
 .theme-modern .file-batch-spacer { flex: 1; }
 .theme-modern .file-batch-hint { font-size: var(--fs-2xs); color: var(--ink-soft); opacity: 0.85; white-space: nowrap; }
 /* 两列第 1 行表头齐平（用户决策 2026-09-30）：

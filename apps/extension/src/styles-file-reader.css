@@ -703,7 +703,9 @@
 
 .file-row-selected {
   background: #eef4fb;
-  box-shadow: inset 2px 0 0 #9eb9d4;
+  /* 选中行左侧指示条也要跟随主题（2026-11-24）：原 #9eb9d4 是固定蓝灰，
+     在暖灰/墨绿主题下与选中底色互相打架。 */
+  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--accent) 55%, transparent);
 }
 
 .file-row-select-mode {
@@ -944,10 +946,26 @@
   right: 2px;
   height: 2px;
   border-radius: 999px;
-  background: rgba(255, 205, 86, 0.9);
-  box-shadow: 0 0 0 1px rgba(68, 44, 12, 0.18);
+  /* 2026-11-19：改走语义 token（原写死 rgba(255,205,86,.9)），随主题切换；
+     并允许接收指针事件 —— 旧值 pointer-events:none 导致刻度无法点击。 */
+  background: var(--amber);
+  box-shadow: 0 0 0 1px var(--line);
   transform: translateY(-50%);
-  pointer-events: none;
+  pointer-events: auto;
+  cursor: pointer;
+  transition: transform 0.12s ease, background 0.12s ease;
+}
+
+.reader-rail-marker:hover {
+  background: var(--accent);
+  transform: translateY(-50%) scaleY(1.8);
+}
+
+/* 命中聚集处（同一刻度内含多条命中）：加宽并提高对比，避免被当成噪点 */
+.reader-rail-marker-cluster {
+  left: 1px;
+  right: 1px;
+  box-shadow: 0 0 0 1px var(--line-strong);
 }
 
 .reader-rail-overview-viewport {

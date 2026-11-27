@@ -88,6 +88,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
     return () => ipcRenderer.removeListener("pip-state-update", handler);
   },
   saveFile: (buffer, defaultName) => ipcRenderer.invoke("save-file", buffer, defaultName),
+  /* 批量 / 目录下载（2026-11-24）：选一次落点 + 分段流式落盘。
+   内容分片走 IPC 而不是一次传整份 buffer —— GB 级文件一次性传会把
+   渲染进程整个驻留一遍（见 main.cjs download-file-open 上方的说明）。 */
+  pickDownloadDirectory: () => ipcRenderer.invoke("pick-download-directory"),
+  openDownloadFile: (request) => ipcRenderer.invoke("download-file-open", request),
+  writeDownloadFile: (handleId, chunk) => ipcRenderer.invoke("download-file-write", { handleId, chunk }),
+  closeDownloadFile: (handleId, keep) => ipcRenderer.invoke("download-file-close", { handleId, keep }),
   revealLocalPath: (targetPath) => ipcRenderer.invoke("reveal-local-path", targetPath),
   localBrowse: (dirPath) => ipcRenderer.invoke("local-browse", dirPath),
   localReadFile: (filePath) => ipcRenderer.invoke("local-read-file", filePath),

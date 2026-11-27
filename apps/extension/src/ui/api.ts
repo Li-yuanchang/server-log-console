@@ -3,6 +3,7 @@ import type {
   FinalShellSettingsResponse,
   ImportApplyRequest,
   ImportApplyResponse,
+  FileTreeResponse,
   ImportPreviewResponse,
   JumpServerAssetSearchResponse,
   LogFileListResponse,
@@ -301,6 +302,20 @@ export async function apiGetDirectoryListing(params: {
 
 export type DirectoryListingTarget = { serverId?: string; bastionId?: string };
 
+/* 递归列目录（2026-11-24 批量下载）：一次取回整棵树，
+   由调用方按 relativePath 还原本地结构。 */
+export async function apiGetDirectoryTree(params: DirectoryListingTarget & {
+  directoryPath: string;
+  maxEntries?: number;
+}): Promise<FileTreeResponse> {
+  const response = await gatewayFetch(`${localServiceBase}/api/files/tree`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params)
+  });
+  return readPayload<FileTreeResponse>(response, "读取远程目录树失败");
+}
+
 // S6 文件树：单目录子目录懒加载封装（复用现有列目录接口，只取 kind === "directory"）
 export async function apiListSubdirectories(params: DirectoryListingTarget & {
   directoryPath: string;
@@ -372,8 +387,9 @@ export async function apiCreateSearchTask(params: {
   return readPayload<LogSearchTaskResponse>(response, "日志搜索任务创建失败");
 }
 
-export async function apiPollSearchTask(taskId: string): Promise<LogSearchTaskResponse> {
-  const response = await gatewayFetch(`${localServiceBase}/api/logs/search/tasks/${encodeURIComponent(taskId)}`, { cache: "no-store" });
+export async function apiPollSearchTask(taskId: string, since?: number): Promise<LogSearchTaskResponse> {
+  const query = Number.isFinite(since) ? `?since=${encodeURIComponent(String(since))}` : "";
+  const response = await gatewayFetch(`${localServiceBase}/api/logs/search/tasks/${encodeURIComponent(taskId)}${query}`, { cache: "no-store" });
   return readPayload<LogSearchTaskResponse>(response, "读取搜索进度失败");
 }
 

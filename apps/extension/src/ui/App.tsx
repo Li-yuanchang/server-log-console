@@ -86,6 +86,7 @@ import { useServerConnection } from "./useServerConnection.js";
 import { useSliceCache } from "./useSliceCache.js";
 import { useImportSettings } from "./useImportSettings.js";
 import { useFileTransfer } from "./useFileTransfer.js";
+import { useBatchDownload } from "./useBatchDownload.js";
 import { isSpecialPreviewFile, useFileOperations } from "./useFileOperations.js";
 import { useServerManagement } from "./useServerManagement.js";
 import { useLogRecording } from "./useLogRecording.js";
@@ -292,7 +293,11 @@ export function App() {
   const [resultTabs, setResultTabs] = useState<ViewerResultTab[]>([]);
   const [searchTask, setSearchTask] = useState<LogSearchTaskResponse | null>(null);
   const [activeLogView, setActiveLogView] = useState<"search" | "files">(isStandaloneViewerWindow ? "search" : ((pipUrlParams.get("activeLogView") as "search" | "files") || "files"));
-  const [terminalPanelOpen, setTerminalPanelOpen] = useState(false);
+  /* 终端独立窗口（pip terminal）一进来就该展开终端面板。原实现靠下方
+     「服务器重置」effect 在挂载时 setTerminalPanelOpen(isStandaloneTerminalWindow)，
+     而该 effect 现在只对 serverId 变化做破坏性重置，首次挂载不再执行那一步，
+     因此把初始值直接给对，不依赖 effect 时机。 */
+  const [terminalPanelOpen, setTerminalPanelOpen] = useState(isStandaloneTerminalWindow);
   const [terminalDetached, setTerminalDetached] = useState(false);
   /* 旧单会话 id：迁移来源 + openPipWindow 弹窗协议参数（新模型见 terminalTabs） */
   const [terminalSessionId, setTerminalSessionId] = useState(pipUrlParams.get("terminalSessionId") || "");
@@ -709,6 +714,10 @@ export function App() {
   const viewerOverviewRailRef = useRef<HTMLDivElement | null>(null);
   const initializedRef = useRef(false);
   const autoConnectServerRef = useRef("");
+  /* 「连接中空态却没有请求在飞」的自愈节流（2026-11-27）。
+     见下方 stalledConnectRetryRef 的使用处：同一台服务器最多自动补救一次，
+     避免真失败（网络确实不通）时每帧重试把网关打爆。 */
+  const stalledConnectRetryRef = useRef("");
   const sliceScrollAnchorRef = useRef<"top" | "bottom" | null>(null);
   const wheelSliceLockRef = useRef(false);
   /* 行选区是否已过期（内容变化后快照对不上）：供 Shift 点击回调即时读取 */
@@ -1170,7 +1179,15 @@ export function App() {
       return;
     }
 
-    if (!isRestoringFromCache) {
+    /* 清空连接态只在「真的换了服务器」时做（2026-11-27）。
+       本 effect 的依赖里带着 servers，而 fetchServers() 每次都 setServers(全新数组)，
+       所以任何一次刷新服务器清单（保存凭证后、服务恢复后、手动刷新）都会重跑这里。
+       原实现无条件 setConnectionTestStatus(null) + setFileEntries([])，于是：
+       设置中心改完密码 → 保存成功 → fetchServers() → 状态被清成 null →
+       既不重连也没有请求在飞 → isConnectingWorkspace 恒为 true，
+       主界面永远停在「正在连接 / 等待建立 SSH 连接」，只有手动重连才恢复。
+       同一次 serverId 内的刷新不该抹掉已建立的连接结果与目录内容。 */
+    if (!isRestoringFromCache && serverIdChanged) {
       setConnectionTestStatus(null);
       setIsDirectoryLoading(false);
     }
@@ -1182,34 +1199,43 @@ export function App() {
         setTerminalTabs([]);
         setActiveTerminalTabId("");
       }
-      stopLiveFollow();
-      setCredentialStatus(null);
-      setCredentialUsername("");
-      setCredentialPassword("");
-      setCredentialPrivateKey("");
-      setServerRouteConfig(null);
-      setPreferredBastionId("");
-      setJumpMode("auto");
-      setJumpSearchKeyword("");
-      setJumpAssetId("");
-      setJumpAssetOptions([]);
+      /* 以下都是破坏性重置（清目录、清文件列表、停 live follow、清凭证态）。
+         只应在 serverId 真的变了时执行 —— 原因同上：本 effect 依赖 servers，
+         而 fetchServers() 每次给新数组，刷新清单会让这里重跑一遍。
+         原实现无条件执行，导致保存凭证后目录与连接结果被清空且无人重连，
+         主界面卡在「正在连接」。 */
+      if (serverIdChanged) {
+        stopLiveFollow();
+        setCredentialStatus(null);
+        setCredentialUsername("");
+        setCredentialPassword("");
+        setCredentialPrivateKey("");
+        setServerRouteConfig(null);
+        setPreferredBastionId("");
+        setJumpMode("auto");
+        setJumpSearchKeyword("");
+        setJumpAssetId("");
+        setJumpAssetOptions([]);
         jumpAssetAutoSearchKeyRef.current = "";
-      if (!pipMode) {
-        setDirectoryPath(defaultDirectoryPath);
-        setStatusContextPath("");
-        setDirectoryNavBackStack([]);
-        setDirectoryNavForwardStack([]);
-        setFilePath("");
-        setFileEntries([]);
-        setResults(null);
-        setResultTabs([]);
-        setSearchTask(null);
-        setSearchStartedAt(null);
-        resetFileReaderState();
-        setActiveLogView("files");
-        setActiveViewerTabId("file");
+        if (!pipMode) {
+          setDirectoryPath(defaultDirectoryPath);
+          setStatusContextPath("");
+          setDirectoryNavBackStack([]);
+          setDirectoryNavForwardStack([]);
+          setFilePath("");
+          setFileEntries([]);
+          setResults(null);
+          setResultTabs([]);
+          setSearchTask(null);
+          setSearchStartedAt(null);
+          resetFileReaderState();
+          setActiveLogView("files");
+          setActiveViewerTabId("file");
+        }
+        /* 换服务器时收起终端面板（它属于上一台）。同样只在真换了服务器时做，
+           否则每次刷新服务器清单都会把用户打开的终端收起来。 */
+        setTerminalPanelOpen(isStandaloneTerminalWindow);
       }
-      setTerminalPanelOpen(isStandaloneTerminalWindow);
     } else {
       restoringWorkspaceStateRef.current = null;
       restoringWorkspaceFromCacheRef.current = false;
@@ -2597,6 +2623,39 @@ export function App() {
     Boolean(selectedServer) && connectionTestStatus !== null && !connectionTestStatus.connected && !isBusy;
   const canOpenTerminal = Boolean(selectedServer) && !terminalConnectionBlocked;
   const isFileMode = activeLogView === "files";
+
+  /* 兜底自愈：主界面显示「正在连接」但实际没有任何请求在跑（2026-11-27）。
+     ------------------------------------------------------------
+     isConnectingWorkspace 的判定是「未连上且没有目录内容」，它同时把
+     connectionTestStatus === null（还没测过 / 被清空）也算作连接中。
+     一旦某条路径把状态清空却没有接着发起连接（本次故障：保存凭证 →
+     fetchServers 触发重置 effect → 状态被清 → 无人重连），界面就永久停在
+     「正在连接 xxx / 等待建立 SSH 连接」，且没有任何办法自行恢复。
+
+     这里在「看似连接中 + 没有任何请求在跑」时补一次。每台服务器只补一次：
+     真失败（网关/网络不通）会正常落到失败态并渲染失败占位，不会循环重试。 */
+  useEffect(() => {
+    if (!isFileMode || !serverId || !selectedServer) return;
+    if (connectionTestStatus !== null) return;      // 已有明确结果，交给正常分支渲染
+    if (isBusy || isDirectoryLoading) return;       // 真的有请求在跑，不是僵死态
+    if (stalledConnectRetryRef.current === serverId) return;  // 本台已补过
+
+    const timer = window.setTimeout(() => {
+      /* 二次确认：定时器触发时可能已经连上了 */
+      if (connectionTestStatus !== null) return;
+      stalledConnectRetryRef.current = serverId;
+      pushActivity("检测到连接状态异常（显示连接中但无请求进行），已自动重试一次。");
+      void testServerConnection(undefined, { auto: true });
+    }, 1500);
+
+    return () => window.clearTimeout(timer);
+  }, [isFileMode, serverId, selectedServer, connectionTestStatus, isBusy, isDirectoryLoading, testServerConnection, pushActivity]);
+
+  /* 切换服务器时重置自愈节流 */
+  useEffect(() => {
+    stalledConnectRetryRef.current = "";
+  }, [serverId]);
+
   const effectiveResults = results ?? lastSearchResultsRef.current;
   const hasSearchResults = Boolean(
     resultTabs.length > 0 ||
@@ -3221,17 +3280,47 @@ export function App() {
   // S4: 文件预览的竖向定位条已由一行式切片条取代，rail 占位只剩结果总览
   const showViewerRail = !showCompactViewerChrome && showSearchResultsOverviewRail;
   const viewerOverviewTotalLines = viewerScrollState?.totalLines ?? 0;
-  const viewerOverviewMarkerPositions = useMemo(() => {
+  /*
+   * 右侧命中分布刻度（2026-11-19 重做）。
+   *
+   * 旧实现：按全文 220 个桶聚合，把命中行号映射成百分比后画线。
+   * 问题（用户实测反馈）：
+   *   ① 命中集中在文件某一段时（如 120 条都在末尾 5%），220 个桶里只能占
+   *      十来个，多根 2px 线挤在一起重叠成一坨，看不出「分布」；
+   *   ② 只能看、不能点，点了只是按百分比滚动到大概位置，跳不到命中处。
+   *
+   * 新实现：
+   *   · 刻度上限压到 OVERVIEW_MAX_MARKERS（见下），保证线条不重叠；
+   *   · 每个刻度记录它代表的「最近一条命中行号」，点击可精确跳转到该行；
+   *   · 线条粗细由该刻度范围内的命中数量决定，密集处更明显。
+   */
+  const OVERVIEW_MAX_MARKERS = 40;
+  const viewerOverviewMarkers = useMemo(() => {
     if (viewerOverviewTotalLines <= 1 || !viewerMatchLineIndices.length) {
-      return [] as number[];
+      return [] as Array<{ top: number; lineIndex: number; count: number }>;
     }
 
-    const bucketCount = Math.max(1, Math.min(220, viewerOverviewTotalLines - 1));
-    const buckets = new Set<number>();
+    const markerCount = Math.min(OVERVIEW_MAX_MARKERS, viewerMatchLineIndices.length);
+    const perMarker = (viewerOverviewTotalLines - 1) / markerCount;
+    const grouped = new Map<number, { lineIndex: number; count: number }>();
+
     for (const lineIndex of viewerMatchLineIndices) {
-      buckets.add(Math.round((lineIndex / (viewerOverviewTotalLines - 1)) * bucketCount));
+      const slot = Math.min(markerCount - 1, Math.floor(lineIndex / Math.max(1, perMarker)));
+      const existing = grouped.get(slot);
+      if (existing) {
+        existing.count += 1;
+      } else {
+        grouped.set(slot, { lineIndex, count: 1 });
+      }
     }
-    return Array.from(buckets, (bucket) => clampPercent((bucket / bucketCount) * 100));
+
+    return Array.from(grouped.entries())
+      .sort((a, b) => a[0] - b[0])
+      .map(([slot, info]) => ({
+        top: clampPercent((slot / Math.max(1, markerCount - 1)) * 100),
+        lineIndex: info.lineIndex,
+        count: info.count,
+      }));
   }, [viewerMatchLineIndices, viewerOverviewTotalLines]);
   const viewerOverviewViewportHeight = viewerScrollState
     ? Math.min(100, Math.max(6, (viewerScrollState.clientHeight / Math.max(1, viewerScrollState.scrollHeight)) * 100))
@@ -3252,6 +3341,27 @@ export function App() {
     ? `${formatNumber(viewerOverviewCurrentLine)}/${formatNumber(viewerOverviewTotalLines)}`
     : "--";
   const searchElapsedLabel = searchStartedAt ? formatDurationLabel(searchStartedAt, searchNow) : "";
+  /*
+   * 检索进度文案（2026-11-19）。
+   *
+   * 实测问题：对 11 GB 文件检索一个命中稀疏的关键词时，界面显示
+   * 「检索中 · 15s · 5.5MB/11.3GB」并长时间不动，看起来完全像卡死。
+   * 根因是 grep 全文扫描只在「命中行」出现时才上报字节进度，
+   * 而 5.5MB 正是首批快搜(512KB)+尾部快搜(5MB) 的固定基数 ——
+   * 全文扫描阶段即使已扫过数 GB，只要没命中就不会刷新。
+   *
+   * 这里改为：全文扫描阶段尚无真实字节进展时，只显示阶段名，
+   * 不给出一个会长期静止、引人误解的具体数字。
+   */
+  const searchProgressText = (() => {
+    const task = searchTask;
+    if (!task || task.totalBytes <= 0) return "";
+    const phaseBytes = typeof task.phaseScannedBytes === "number" ? task.phaseScannedBytes : 0;
+    if (task.progressPhase === "full_scan" && phaseBytes <= 0) {
+      return "全文扫描中";
+    }
+    return `${formatBytes(task.scannedBytes)}/${formatBytes(task.totalBytes)}`;
+  })();
   const isSearchView = activeLogView === "search";
   const activeSearchResultCount = activeViewerTabId === "file" ? (results?.matches.length ?? 0) : activeViewerMatchCount;
   const activeHighlightSummary = highlightCount ? `${Math.min(activeHighlightIndex + 1, highlightCount)} / ${highlightCount}` : "";
@@ -3750,6 +3860,23 @@ export function App() {
        文件工具行的传输活动 chip（常驻可见、点击开抽屉）+ 文件表行内进度。 */
   });
 
+  /* 批量 / 目录下载（2026-11-24）：勾选多项或勾选目录时走这条通道 ——
+     递归列树 → 选一次落点 → 逐文件流式落盘。与上面单文件下载各自持有闸门。 */
+  const {
+    downloadEntries: downloadSelectedEntries,
+    cancelBatchDownload,
+    batchDownloadPaused,
+    pauseBatchDownload,
+    resumeBatchDownload,
+  } = useBatchDownload({
+    serverId,
+    setDownloadProgress,
+    setActionStatus,
+    pushActivity,
+    showToast,
+    appendTransferHistory,
+  });
+
   /* 传输活动 chip（2026-11-07，对标 Termius tab 角标 / 百度网盘计数徽标）：
      有活动传输才出现，显示各方向任务计数（↑n ↓m），详情（百分比/速度）进
      tooltip；点击打开传输记录抽屉。completed 是完成卡 8s 驻留态不算活动中。
@@ -3760,16 +3887,19 @@ export function App() {
     const dnActive = Boolean(downloadProgress && downloadProgress.percent < 100);
     if (!upActive && !dnActive) return null;
     const paused = Boolean(upActive && uploadPaused);
+    /* 批量下载的暂停态挂在独立 hook 上（它有自己的闸门），单文件下载的
+       downloadPaused 此时恒为 false —— 两者都要看，否则暂停了徽标却显示在跑。 */
+    const dnPaused = Boolean(dnActive && (downloadPaused || batchDownloadPaused));
     const parts: string[] = [];
     if (upActive) parts.push(`上传 ${Math.max(2, uploadProgress!.current)}%${paused ? "（已暂停）" : ""}`);
-    if (dnActive) parts.push(`下载 ${Math.max(2, downloadProgress!.percent)}%${downloadPaused ? "（已暂停）" : ""}`);
+    if (dnActive) parts.push(`下载 ${Math.max(2, downloadProgress!.percent)}%${dnPaused ? "（已暂停）" : ""}`);
     return {
       up: upActive ? 1 : 0,
       dn: dnActive ? 1 : 0,
       paused,
       detail: parts.join(" · "),
     };
-  }, [uploadProgress, downloadProgress, uploadPaused, downloadPaused]);
+  }, [uploadProgress, downloadProgress, uploadPaused, downloadPaused, batchDownloadPaused]);
 
   const downloadAllMulti = useCallback(async () => {
     const done = multiRec.targets.filter((t) => t.status === "done" && t.outPath);
@@ -4442,9 +4572,7 @@ export function App() {
                 onFilePatternChange={setFilePattern}
                 searching={Boolean(searchStartedAt)}
                 /* 原型 S13：检索进度内联在输入组右端（如 340MB/1.2GB），不锁界面 */
-                searchProgressLabel={searchTask && searchTask.totalBytes > 0
-                  ? `${formatBytes(searchTask.scannedBytes)}/${formatBytes(searchTask.totalBytes)}`
-                  : ""}
+                searchProgressLabel={searchProgressText}
               />
               ) : null}
               {serverId ? (
@@ -5245,8 +5373,23 @@ export function App() {
                               }
                             }}
                           >
-                            {viewerOverviewMarkerPositions.map((top, index) => (
-                              <span key={`${index}-${top}`} className="reader-rail-marker" style={{ top: `${top}%` }} />
+                            {viewerOverviewMarkers.map((marker, index) => (
+                              <span
+                                key={`${index}-${marker.top}`}
+                                className={`reader-rail-marker${marker.count > 1 ? " reader-rail-marker-cluster" : ""}`}
+                                style={{
+                                  top: `${marker.top}%`,
+                                  /* 命中越密集，刻度越粗，一眼看出聚集区 */
+                                  height: marker.count > 3 ? 4 : marker.count > 1 ? 3 : 2,
+                                }}
+                                title={`点击跳转到第 ${marker.lineIndex + 1} 行（本段共 ${marker.count} 条命中）`}
+                                onPointerDown={(event) => {
+                                  /* 点击刻度直接跳到命中行，不再按百分比盲跳 */
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                  virtualViewerRef.current?.scrollToLine(marker.lineIndex, "auto");
+                                }}
+                              />
                             ))}
                             <span
                               className={`reader-rail-slice reader-rail-overview-viewport${viewerOverviewDragging ? " reader-rail-overview-viewport-dragging" : ""}`}
@@ -5291,7 +5434,7 @@ export function App() {
                     liveBar
                     title="检索中"
                     sub="正在按关键字扫描，完成后自动打开结果页签，期间可继续浏览当前文件。"
-                    chip={<>{searchTask && searchTask.totalBytes > 0 ? `${formatBytes(searchTask.scannedBytes)}/${formatBytes(searchTask.totalBytes)}` : "正在扫描"}<span className="lp3-sep">·</span>已用时 {searchElapsedLabel || "0 秒"}<i className="lp3-ellip" aria-hidden="true" /></>}
+                    chip={<>{searchProgressText || "正在扫描"}<span className="lp3-sep">·</span>已用时 {searchElapsedLabel || "0 秒"}<i className="lp3-ellip" aria-hidden="true" /></>}
                   />
                 ) : liveFollowEnabled && filePath.trim() ? (
                   /* ③ 实时等待（v4.1）：相位映射真实字段（F7）——已连接 / 连接中 / 重连中 N；
@@ -5403,6 +5546,16 @@ export function App() {
                           <button
                             type="button"
                             className="ghost-button file-batch-text-button"
+                            onClick={() => { void downloadSelectedEntries(selectedFileEntries); }}
+                            disabled={isBusy}
+                            title="批量下载（选择保存位置后按原目录结构落盘）"
+                          >
+                            <ToolIcon theme={uiTheme} kind="download" />
+                            下载…
+                          </button>
+                          <button
+                            type="button"
+                            className="ghost-button file-batch-text-button"
                             onClick={() => openBatchMoveDialog()}
                             disabled={isBusy}
                             title="批量移动"
@@ -5422,11 +5575,12 @@ export function App() {
                           </button>
                           <button
                             type="button"
-                            className="ghost-button file-batch-text-button"
+                            className="ghost-button file-batch-text-button file-batch-quiet"
                             onClick={() => clearSelectedFiles()}
                             disabled={isBusy}
                             title="清空选择"
                           >
+                            <ToolIcon theme={uiTheme} kind="clear" />
                             清空选择
                           </button>
                           <span className="file-batch-spacer" />
@@ -5529,6 +5683,7 @@ export function App() {
                           onOpenContextMenu={(entry, clientX, clientY) => { openContextMenu(entry, clientX, clientY); }}
                           onToggleSelection={toggleFileSelection}
                           onDownload={(path) => { void downloadFile(path); }}
+                          onDownloadDirectory={(entry) => { void downloadSelectedEntries([entry]); }}
                           onMove={openMoveDialog}
                           onRename={openRenameDialog}
                           onDropMove={handleTreeDropMove}
@@ -5859,6 +6014,7 @@ export function App() {
         onOpen={openFileBrowserEntry}
         onPreview={(entry) => { void previewFile(entry); }}
         onDownload={(path) => { void downloadFile(path); }}
+        onDownloadDirectory={(entry) => { void downloadSelectedEntries([entry]); }}
         onRename={openRenameDialog}
         onMove={openMoveDialog}
         onExtractHere={(path) => { void extractZipFile(path); }}
@@ -6173,10 +6329,10 @@ export function App() {
         onResumeUpload={resumeUpload}
         onCancelUpload={cancelUpload}
         onOpenTransferWindow={() => { void openTransferWindow(); }}
-        onCancelDownload={cancelDownload}
-        downloadPaused={downloadPaused}
-        onPauseDownload={pauseDownload}
-        onResumeDownload={resumeDownload}
+        onCancelDownload={downloadProgress?.totalFiles ? cancelBatchDownload : cancelDownload}
+        downloadPaused={downloadProgress?.totalFiles ? batchDownloadPaused : downloadPaused}
+        onPauseDownload={downloadProgress?.totalFiles ? pauseBatchDownload : pauseDownload}
+        onResumeDownload={downloadProgress?.totalFiles ? resumeBatchDownload : resumeDownload}
         uploadFileQueue={uploadFileQueue}
       />
       {toolDrawerNode}

@@ -3,10 +3,35 @@ const { spawn } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 const http = require("http");
+const net = require("net");
 const crypto = require("crypto");
 const { pathToFileURL } = require("url");
 
 if (app && app.setName) app.setName("日志控制台");
+
+/* ============================================================
+   单实例锁（2026-11-27）
+   ------------------------------------------------------------
+   历史故障：本次修复前本文件从未调用 requestSingleInstanceLock，两个桌面实例
+   可以并存。第二个实例启动时 checkHealth() 探到第一个实例的网关，于是跳过
+   自启；第一个实例退出带走 4040 后，第二个实例就成了「有界面、无后端」的空壳。
+   加锁后第二个实例直接退出，并把已有窗口拉到前台。
+   ============================================================ */
+const hasSingleInstanceLock = app.requestSingleInstanceLock();
+if (!hasSingleInstanceLock) {
+  console.log("Another SLC instance is running, quitting this one");
+  /* 第二个实例不能留在后台：它既拿不到窗口，又只会污染探针日志。 */
+  app.quit();
+} else {
+  /* 第二个实例被调度到前台时，把已有窗口亮出来（macOS 托盘隐藏时也能唤回）。 */
+  app.on("second-instance", () => {
+    probe("second-instance, focusing existing window");
+    if (BrowserWindow.getAllWindows().length === 0) {
+      createWindow();
+    }
+    showMainWindow();
+  });
+}
 
 const PORT = 4040;
 const HOST = "127.0.0.1";
@@ -179,9 +204,12 @@ function hideMainWindowToTray() {
   }
 }
 
+/* 带 PID：桌面端曾出现两个主进程并存、往同一文件交替 append，
+   排查时必须能按进程切开时间线，否则「gateway already running」之后
+   还冒出别的网关日志，根本分不清是谁的。 */
 function probe(message) {
   try {
-    fs.appendFileSync("/tmp/slc-main-probe.txt", `${new Date().toISOString()} ${message}\n`);
+    fs.appendFileSync("/tmp/slc-main-probe.txt", `${new Date().toISOString()} pid=${process.pid} ${message}\n`);
   } catch {}
 }
 
@@ -371,8 +399,10 @@ async function startGateway() {
   }
 
   if (await checkHealth()) {
+    /* 注意：这里不能置 gatewayOwned —— 网关是**别的进程**的。
+       历史故障正是这一步被当成了「我也有网关」，导致对方退出后无人兜底。 */
     console.log("Gateway already running");
-    probe("gateway already running");
+    probe("gateway already running (not owned by this process)");
     return true;
   }
 
@@ -384,19 +414,138 @@ async function startGateway() {
     try {
       const imported = await importGatewayInProcess(entry);
       if (imported) {
+        gatewayOwned = true;
+        probe("gateway owned=true via import");
         return true;
       }
       probe("gateway import path unhealthy, falling back to spawn");
-      return await spawnGatewayProcess(entry, cwd);
+      const spawned = await spawnGatewayProcess(entry, cwd);
+      gatewayOwned = spawned === true;
+      probe(`gateway owned=${gatewayOwned} via spawn`);
+      return spawned;
     } catch (error) {
       probe(`gateway import failed ${error && error.stack ? error.stack : String(error)}`);
-      return await spawnGatewayProcess(entry, cwd);
+      const spawned = await spawnGatewayProcess(entry, cwd);
+      gatewayOwned = spawned === true;
+      probe(`gateway owned=${gatewayOwned} via spawn(fallback)`);
+      return spawned;
     } finally {
       gatewayStartPromise = null;
     }
   })();
 
   return gatewayStartPromise;
+}
+
+/* ============================================================
+   网关存活看护（2026-11-27）
+   ------------------------------------------------------------
+   故障现场：0.3.338 桌面版里，实例 A 先起网关（PID 56295 占着 4040），
+   实例 B 随后启动 —— startGateway() 的 checkHealth() 探到 A 的网关健康，
+   打一句 `gateway already running` 就 return 了，从此 B 的生命周期里
+   再没有任何一行网关代码。A 退出时把 4040 带走，B 的主进程还活着、
+   窗口照常显示，但所有 /api 请求都变成 `Failed to fetch`（ECONNREFUSED），
+   用户看到的就是「连接不上堡垒机，账密明明是对的」。
+
+   两处根因各自独立，所以两条修复也各自独立：
+     · 本函数：把「一次性启动」改成「持续看护」，端口掉线就自己补。
+     · 单实例锁（见文件末尾）：从源头避免两个主进程共用一个端口。
+
+   看护策略偏保守：
+     - 连续 3 次探测失败才动手，避免一次 GC/事件循环抖动就误重启；
+     - 只在本进程确实「应该」持有一个网关时补（gatewayOwned），否则
+       站外部署 / 用户手工起的网关会被抢；
+     - 重启前先确认端口真的没人监听：若被别的进程占着，说明不是我们该管的，
+       只记录不抢（抢了会打出 EADDRINUSE，且对方的网关本来在工作）。
+   ============================================================ */
+const GATEWAY_WATCHDOG_INTERVAL_MS = 15_000;
+const GATEWAY_WATCHDOG_FAIL_THRESHOLD = 3;
+
+let gatewayWatchdogTimer = null;
+let gatewayWatchdogFailures = 0;
+/** 本进程是否成功持有过网关（仅用于日志与诊断）。
+ *  看护**不**据此决定是否重启：真正的判断是「端口是否已被别人监听」——
+ *  那比「我曾经起过网关」更能反映当前该不该补。 */
+let gatewayOwned = false;
+
+function probePortListening(port, host, timeoutMs = 1200) {
+  return new Promise((resolve) => {
+    const socket = new net.Socket();
+    let settled = false;
+    const finish = (listening) => {
+      if (settled) return;
+      settled = true;
+      socket.destroy();
+      resolve(listening);
+    };
+    socket.setTimeout(timeoutMs);
+    socket.once("connect", () => finish(true));
+    socket.once("timeout", () => finish(false));
+    socket.once("error", () => finish(false));
+    try {
+      socket.connect(port, host);
+    } catch {
+      finish(false);
+    }
+  });
+}
+
+async function startGatewayWatchdog() {
+  if (gatewayWatchdogTimer) {
+    return;
+  }
+
+  gatewayWatchdogTimer = setInterval(async () => {
+    if (isQuitting) {
+      return;
+    }
+    /* 已在重启流程里：跳过本轮，由 gatewayStartPromise 收敛 */
+    if (gatewayStartPromise) {
+      return;
+    }
+
+    if (await checkHealth()) {
+      if (gatewayWatchdogFailures > 0) {
+        probe(`gateway watchdog recovered after ${gatewayWatchdogFailures} failure(s)`);
+      }
+      gatewayWatchdogFailures = 0;
+      return;
+    }
+
+    gatewayWatchdogFailures += 1;
+    probe(`gateway watchdog health fail count=${gatewayWatchdogFailures}`);
+
+    if (gatewayWatchdogFailures < GATEWAY_WATCHDOG_FAIL_THRESHOLD) {
+      return;
+    }
+
+    /* 端口仍有人监听、但 /health 不健康：可能是别的进程占着，或者对端正在启动。
+       一律不抢端口 —— 抢了只会打出 EADDRINUSE，且对方网关本来在工作时反而会
+       把可用服务打断。下轮再看。 */
+    if (await probePortListening(PORT, HOST)) {
+      probe("gateway watchdog: port listening but health failing, wait");
+      return;
+    }
+
+    probe(`gateway watchdog restarting gateway (owned=${gatewayOwned})`);
+    gatewayWatchdogFailures = 0;
+    try {
+      const ok = await startGateway();
+      gatewayOwned = ok === true;
+      probe(`gateway watchdog restart result=${ok === true ? "ok" : "failed"}`);
+    } catch (error) {
+      probe(`gateway watchdog restart threw ${error && error.stack ? error.stack : String(error)}`);
+    }
+  }, GATEWAY_WATCHDOG_INTERVAL_MS);
+
+  probe(`gateway watchdog started interval=${GATEWAY_WATCHDOG_INTERVAL_MS}ms`);
+}
+
+function stopGatewayWatchdog() {
+  if (gatewayWatchdogTimer) {
+    clearInterval(gatewayWatchdogTimer);
+    gatewayWatchdogTimer = null;
+  }
 }
 
 // --- Desktop auto update ---
@@ -922,6 +1071,120 @@ ipcMain.handle("save-file", async (_event, buffer, defaultName) => {
   if (canceled || !filePath) return { ok: false, canceled: true };
   fs.writeFileSync(filePath, Buffer.from(buffer));
   return { ok: true, filePath };
+});
+
+/* ============================================================
+   批量 / 目录下载的本地落盘（2026-11-24）
+   ------------------------------------------------------------
+   为什么不在渲染层用 showDirectoryPicker：Electron 里该 API 的可用性随版本
+   和运行协议（file: / localhost）漂移，且用户已在桌面端，走原生对话框更稳。
+
+   三段式流式落盘（open → write* → close/abort），而**不是**一次性写 buffer：
+   批量下载的目标里可能有 GB 级日志，把整份内容作为一条 IPC 消息传过来
+   就等于在渲染进程里把它整个驻留一遍 —— 与本项目 0.3.339「大日志检索打爆
+   主进程」属于同一类事故（网关也跑在主进程里）。所以内容分片进来、边到边写。
+
+   安全：relativePath 来自远端目录树，必须当不可信输入处理 ——
+   resolve 后不允许逃逸出目标根，否则远端一个叫 "../../.ssh/authorized_keys"
+   的条目就能覆盖用户家目录里的文件。
+   ============================================================ */
+ipcMain.handle("pick-download-directory", async () => {
+  const win = BrowserWindow.getFocusedWindow() || mainWindow;
+  const { canceled, filePaths } = await dialog.showOpenDialog(win, {
+    title: "选择下载保存位置",
+    properties: ["openDirectory", "createDirectory"],
+  });
+  if (canceled || !filePaths.length) return { ok: false, canceled: true };
+  return { ok: true, path: filePaths[0] };
+});
+
+/** 在已存在的落点里找一个不冲突的文件名：name.ext → name (1).ext → name (2).ext */
+function resolveAvailablePath(dirPath, fileName) {
+  const dot = fileName.lastIndexOf(".");
+  const base = dot > 0 ? fileName.slice(0, dot) : fileName;
+  const ext = dot > 0 ? fileName.slice(dot) : "";
+  let candidate = path.join(dirPath, fileName);
+  let index = 1;
+  while (fs.existsSync(candidate)) {
+    candidate = path.join(dirPath, `${base} (${index})${ext}`);
+    index += 1;
+    if (index > 9999) {
+      throw new Error(`同名文件过多，无法为 ${fileName} 找到可用文件名`);
+    }
+  }
+  return candidate;
+}
+
+/** 进行中的落盘句柄：handleId → { fd, filePath, bytesWritten } */
+const downloadFileHandles = new Map();
+let downloadFileHandleSeq = 0;
+
+ipcMain.handle("download-file-open", async (_event, request) => {
+  const rootDir = String(request?.rootDir || "").trim();
+  const relativePath = String(request?.relativePath || "").trim();
+  if (!rootDir || !relativePath) {
+    return { ok: false, message: "缺少保存目录或相对路径" };
+  }
+
+  const resolvedRoot = path.resolve(rootDir);
+  const normalizedRelative = path.normalize(relativePath).replace(/^([/\\])+/, "");
+  const targetPath = path.resolve(resolvedRoot, normalizedRelative);
+  /* 逃逸校验：resolve 之后必须仍在根目录之内。注意 targetPath === resolvedRoot
+     也拒绝 —— 那说明相对路径是 "."，会试图把目录当文件写。 */
+  if (targetPath === resolvedRoot || !targetPath.startsWith(resolvedRoot + path.sep)) {
+    return { ok: false, message: `非法的保存路径：${relativePath}` };
+  }
+
+  try {
+    const targetDir = path.dirname(targetPath);
+    fs.mkdirSync(targetDir, { recursive: true });
+    const finalPath = resolveAvailablePath(targetDir, path.basename(targetPath));
+    const fd = fs.openSync(finalPath, "w");
+    downloadFileHandleSeq += 1;
+    const handleId = `dl-${downloadFileHandleSeq}`;
+    downloadFileHandles.set(handleId, { fd, filePath: finalPath, bytesWritten: 0 });
+    return { ok: true, handleId, filePath: finalPath };
+  } catch (error) {
+    return { ok: false, message: error && error.message ? error.message : "无法创建目标文件" };
+  }
+});
+
+ipcMain.handle("download-file-write", async (_event, request) => {
+  const handleId = String(request?.handleId || "");
+  const session = downloadFileHandles.get(handleId);
+  if (!session) return { ok: false, message: "落盘句柄已失效" };
+  const chunk = request?.chunk;
+  if (!chunk) return { ok: true, bytesWritten: session.bytesWritten };
+  try {
+    /* 分片可能以 Uint8Array / ArrayBuffer / Node Buffer 三种形态抵达（IPC 会做转换） */
+    const buf = Buffer.isBuffer(chunk)
+      ? chunk
+      : ArrayBuffer.isView(chunk)
+        ? Buffer.from(chunk.buffer, chunk.byteOffset, chunk.byteLength)
+        : Buffer.from(chunk);
+    fs.writeSync(session.fd, buf);
+    session.bytesWritten += buf.length;
+    return { ok: true, bytesWritten: session.bytesWritten };
+  } catch (error) {
+    return { ok: false, message: error && error.message ? error.message : "写入文件失败" };
+  }
+});
+
+ipcMain.handle("download-file-close", async (_event, request) => {
+  const handleId = String(request?.handleId || "");
+  const keep = Boolean(request?.keep);
+  const session = downloadFileHandles.get(handleId);
+  if (!session) return { ok: false, message: "落盘句柄已失效" };
+  downloadFileHandles.delete(handleId);
+  try {
+    fs.closeSync(session.fd);
+  } catch { /* 已关闭 */ }
+  if (!keep) {
+    /* 取消 / 失败：删掉半截文件，不给用户留一个看起来完整的坏文件 */
+    try { fs.unlinkSync(session.filePath); } catch { /* 已删除 */ }
+    return { ok: true, removed: true, filePath: session.filePath };
+  }
+  return { ok: true, filePath: session.filePath, bytesWritten: session.bytesWritten };
 });
 
 ipcMain.handle("reveal-local-path", async (_event, targetPath) => {
@@ -1532,6 +1795,12 @@ function createTray() {
 }
 
 app.whenReady().then(() => {
+  /* 没抢到锁：本进程正在 quit，绝不能再建窗口 / 起网关，否则会和主实例抢 4040。 */
+  if (!hasSingleInstanceLock) {
+    probe("whenReady without single-instance lock, skip init");
+    return;
+  }
+
   probe("whenReady");
   buildMenu();
   probe("buildMenu done");
@@ -1545,6 +1814,9 @@ app.whenReady().then(() => {
   // 2. Start gateway in background — frontend's health check auto-connects when ready
   startGateway();
   probe("startGateway called");
+
+  // 3. 持续看护：网关掉线（含被别的进程带走）时自动补起来
+  void startGatewayWatchdog();
 
   startMemoryProbe();
 
@@ -1568,6 +1840,7 @@ app.on("window-all-closed", () => {
 app.on("before-quit", () => {
   isQuitting = true;
   probe("before-quit");
+  stopGatewayWatchdog();
   if (gatewayProcess) {
     gatewayProcess.kill();
     gatewayProcess = null;

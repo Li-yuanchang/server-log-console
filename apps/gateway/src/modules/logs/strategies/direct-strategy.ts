@@ -1,4 +1,4 @@
-import type { LogFileEntry } from "@server-log-console/shared";
+import type { FileTreeEntry, LogFileEntry } from "@server-log-console/shared";
 import type { DirectConnectionStrategy, FileStat, StreamingExecHandle, UploadHandle } from "./connection-strategy.js";
 import type { SshExecutorService } from "../ssh-executor.service.js";
 import { shellEscape } from "../remote-shell.js";
@@ -17,11 +17,27 @@ export class DirectStrategy implements DirectConnectionStrategy {
 
   async fileStat(filePath: string): Promise<FileStat> {
     const fileArg = shellEscape(filePath);
+    /*
+     * 取文件大小不要用 wc -c（2026-11-19）。
+     *
+     * 原实现 `size=$(wc -c < "$target")` 会**完整读取整个文件**来数字节。
+     * 对 11 GB 的 catalina.out 而言，这一步在远端要跑数秒到数十秒，
+     * 而它是检索创建流程的阻塞前置（getMeta → 才能建任务），
+     * 于是用户回车后长时间没有任何进度反馈。
+     *
+     * 改用 stat 从 inode 元数据直接取大小：O(1)，与文件体积无关。
+     * GNU stat 用 -c %s，BSD/macOS stat 用 -f %z，两者都尝试以兼容老发行版。
+     */
     const script = [
       "target=" + fileArg,
       'if [ ! -e "$target" ]; then echo "file-not-found" >&2; exit 1; fi',
-      'size=$(wc -c < "$target" | tr -d " ")',
-      'mtime=$(stat -c %Y "$target")',
+      'if size=$(stat -c %s "$target" 2>/dev/null); then',
+      '  mtime=$(stat -c %Y "$target" 2>/dev/null)',
+      'else',
+      '  size=$(stat -f %z "$target" 2>/dev/null)',
+      '  mtime=$(stat -f %m "$target" 2>/dev/null)',
+      'fi',
+      'if [ -z "$size" ] || [ -z "$mtime" ]; then echo "stat-unsupported" >&2; exit 1; fi',
       'readable=0; if [ -r "$target" ]; then readable=1; fi',
       'printf "%s\\t%s\\t%s\\n" "$size" "$mtime" "$readable"'
     ].join("\n");
@@ -83,6 +99,51 @@ export class DirectStrategy implements DirectConnectionStrategy {
     }
 
     return entries;
+  }
+
+  /* 递归列目录（2026-11-24 批量下载）：单条 find 取全树，往返次数与深度无关。
+     沿用 listDirectory 的 GNU `-printf` 约定（%P = 相对 target 的路径，正好是
+     本地还原目录结构所需的 relativePath），不额外 fork stat。
+     采集上限放在 awk 侧：超过上限立刻 exit，find 因管道关闭提前收场，
+     不会白算完整个超大目录。 */
+  async listDirectoryTree(
+    directoryPath: string,
+    opts?: { maxEntries?: number }
+  ): Promise<{ entries: FileTreeEntry[]; truncated: boolean }> {
+    const dirArg = shellEscape(directoryPath);
+    const maxEntries = Math.max(1, Math.floor(opts?.maxEntries ?? 20000));
+    const script = [
+      "target=" + dirArg,
+      'if [ ! -d "$target" ]; then echo "directory-not-found" >&2; exit 1; fi',
+      'if [ ! -r "$target" ]; then echo "directory-not-readable" >&2; exit 1; fi',
+      'find "$target" -mindepth 1 \\( -type d -o -type f \\) -printf "%y\\t%P\\t%s\\t%p\\n"',
+      `| awk -F "\\t" -v limit=${maxEntries} 'BEGIN{OFS="\\t"} { if (NR > limit) { print "tree-truncated"; exit } print }'`
+    ].join("\n");
+    const command = `bash -lc ${shellEscape(script)}`;
+    /* 大目录 find 可能跑很久：比 listDirectory 的 30s 放宽到 5 分钟 */
+    const output = await this.sshExecutor.exec(this.serverId, command, 300000);
+    const lines = output.split(/\r?\n/).filter(Boolean);
+    const entries: FileTreeEntry[] = [];
+    let truncated = false;
+
+    for (const line of lines) {
+      if (line === "tree-truncated") {
+        truncated = true;
+        continue;
+      }
+      const [kindToken = "", relativePath = "", sizeToken = "", path = ""] = line.split("\t");
+      if (!relativePath || !path) continue;
+      const kind = kindToken === "d" ? "directory" : kindToken === "f" ? "file" : null;
+      if (!kind) continue;
+      entries.push({
+        path,
+        relativePath,
+        kind,
+        size: kind === "file" && /^\d+$/.test(sizeToken) ? Number(sizeToken) : undefined
+      });
+    }
+
+    return { entries, truncated };
   }
 
   async exec(command: string, timeoutMs = 45000): Promise<string> {
@@ -195,10 +256,18 @@ export class DirectStrategy implements DirectConnectionStrategy {
           return;
         }
 
-        /* 无数据看门狗：扫描命令会持续吐 __PROGRESS__ 行（每 256KB 一条），
-           静默超过 timeoutMs 说明通道已死（sshd 半开 / 链路假活）。
-           不强杀的话流永远不 close，搜索任务永远停在 running，
-           前端工作区切换锁随之死锁（用户反馈 2026-11-04）。 */
+        /* 无数据看门狗（2026-11-19 修正）。
+           原注释假设「扫描命令会持续吐 __PROGRESS__（每 256KB 一条）」，
+           但 grep 快扫路径只在该行**命中**时才 emitProgress —— 命中稀疏时
+           （实测 11GB 文件 0 命中）全文扫描数分钟不吐一行，于是这个看门狗
+           把仍在正常扫描的流 destroy 掉，检索被误报失败。
+
+           现在语义明确为「**连接**是否还活着」：
+           SSH 层已启用 keepalive（keepaliveInterval=10s，countMax=30~60），
+           通道真死时 TCP 会在分钟级内报错并触发 close。
+           因此这里只作为「进程层面彻底僵死」的最后兜底，阈值放宽到
+           与 keepalive 容忍度匹配，不再用「无输出」推断「连接已死」。 */
+        const IDLE_WATCHDOG_MS = Math.max(timeoutMs, 10 * 60 * 1000);
         let watchdog: ReturnType<typeof setTimeout> | null = null;
         let finished = false;
         const finish = (code: number | undefined) => {
@@ -213,7 +282,7 @@ export class DirectStrategy implements DirectConnectionStrategy {
           watchdog = setTimeout(() => {
             stream.destroy();
             finish(-1);
-          }, timeoutMs);
+          }, IDLE_WATCHDOG_MS);
         };
         armWatchdog();
 
